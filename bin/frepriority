@@ -1,0 +1,504 @@
+#!/usr/bin/perl
+# -*- cperl -*-
+
+# $Id: frepriority,v 18.0 2010/03/02 23:25:50 fms Exp $
+# ------------------------------------------------------------------------------
+# FMS/FRE Project: Program to Control Experiment Production Runs
+# ------------------------------------------------------------------------------
+# vb/arl Ver   1.00  Initial version                                ???
+# afy -------------- Branch 15.2.6 -------------------------------- September 09
+# afy    Ver   1.00  Reformatting, cosmetics                        September 09
+# afy    Ver   1.01  Don't use the "Config" module                  September 09
+# afy    Ver   1.02  Replace module Util.pm by FREUtil.pm           September 09
+# afy    Ver   1.03  Add option --platform                          September 09
+# afy    Ver   1.04  Replace module Getopt::Std by Getopt::Long     September 09
+# afy    Ver   1.05  Add constants/utilities                        September 09
+# afy    Ver   1.06  Use module FRE.pm (!!!)                        September 09
+# afy    Ver   1.07  Add option --info                              September 09
+# afy    Ver   1.08  Rename numSubmissions => jobsPerSimulation     September 09
+# afy    Ver   1.09  Rename runsPerScript => segmentsPerJob         September 09
+# afy    Ver   1.10  Change FRE::new calling conventions            September 09
+# afy    Ver   1.11  Add option --Version                           September 09
+# afy    Ver   1.12  Use new FREExperiment.pm module (!!!)          September 09
+# afy    Ver   1.13  Add option --target                            September 09
+# afy    Ver   1.14  Redesigned using subroutines                   September 09
+# afy    Ver   1.15  Cosmetics in subroutine calls                  September 09
+# afy    Ver   2.00  Cosmetics in help                              October 09
+# afy    Ver   2.01  Don't append $name to archive directory        October 09
+# afy    Ver   2.02  Add errors processing                          October 09
+# afy    Ver   3.00  Use new FRE module (setCurrentExperimentName)  October 09
+# afy    Ver   4.00  Use new FREDefaults module                     October 09
+# afy    Ver   5.00  Replace prints by calls to FREMsg::out         November 09
+# afy    Ver   6.00  Modify Help subroutine                         December 09
+# ------------------------------------------------------------------------------
+# Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2000-2009
+# Designed and written by V. Balaji, Amy Langenhorst and Aleksey Yakovlev
+#
+
+use strict;
+
+use Date::Manip();
+use File::Basename();
+use Getopt::Long(':config', 'no_ignore_case');
+
+use FRE();
+use FREDefaults();
+use FREExperiment();
+use FREMsg();
+use FREUtil();
+
+# //////////////////////////////////////////////////////////////////////////////
+# ////////////////////////////////////////////////////////// Global constants //
+# //////////////////////////////////////////////////////////////////////////////
+
+{
+
+  package frepriority;
+
+  use constant VERSION => '$Id: frepriority,v 18.0 2010/03/02 23:25:50 fms Exp $';
+
+  use constant OPTLIST =>
+  (
+    'allocate=s',
+    'go',
+    'info',
+    'Project=s',
+    'platform=s',
+    'suspend',
+    'target=s',
+    'xmlfile=s',
+    'help',
+    'Version',
+    'verbose+'
+  );
+  
+  use constant QUEUE_FILENAME => 'queue_commands';
+  
+  use constant STATE_NORMAL => 'normal';
+  use constant STATE_SUSPENDED => 'suspended';
+  
+  use constant ACTION_SUSPENDING => 'suspending';
+  use constant ACTION_RESTARTING => 'restarting';
+  
+}
+
+# //////////////////////////////////////////////////////////////////////////////
+# /////////////////////////////////////////////////// SGE-Dependent Utilities //
+# //////////////////////////////////////////////////////////////////////////////
+
+{
+
+  package frepriority;
+
+  sub jobInfoSGE($$)
+  # ------ arguments: $user $expName
+  # ------ return list of references to hash records, containing job info, sorted by job timestamps
+  {
+
+    my ($u, $e) = @_;
+    my @results = ();
+    my @qstatLines = split /\n/, qx(qstat -r -u $u | egrep '^[0-9]|jobname');
+
+    while (scalar(@qstatLines) > 0)
+    {
+      my @qstatLineMainParts = split ' ', shift @qstatLines;
+      my @qstatLineJobNameParts = split ' ', shift @qstatLines;
+      if ($qstatLineJobNameParts[2] eq $e)
+      {
+        my %qstatLineMainParts = ();
+	$qstatLineMainParts{id} = $qstatLineMainParts[0];
+	$qstatLineMainParts{state} = $qstatLineMainParts[4];
+	$qstatLineMainParts{timestamp} = Date::Manip::ParseDate("$qstatLineMainParts[5] $qstatLineMainParts[6]");
+	push @results, \%qstatLineMainParts;
+      }
+    }
+
+    return sort {$a->{timestamp} cmp $b->{timestamp}} @results;
+
+  }
+
+}
+
+# //////////////////////////////////////////////////////////////////////////////
+# ///////////////////////////////////////////////////////////////// Utilities //
+# //////////////////////////////////////////////////////////////////////////////
+
+{
+
+  package frepriority;
+
+  use Cwd();
+  
+  my $self = File::Basename::basename($0);
+
+  sub Usage()
+  # ------ arguments: none
+  {
+    my $cwd = Cwd::getcwd();
+    my $xml = FREDefaults::XMLFile();
+    my $pfm = FREDefaults::Platform();
+    my $tgt = FREDefaults::Target();
+    return
+    (
+      "\n",
+      "  Usage: $self [options] experiment [experiment ...]\n\n",
+      "  Options:\n\n",
+      "      --allocate=STRING      the STRING must have format QUEUE=NUMBER, is used to set the NUMBER of jobs for this QUEUE\n",
+      "      --go                   is used to restart the job if it's in the stop state\n",
+      "      --info                 is used to get information about the current state of the job\n",
+      "      --Project=STRING       the STRING is a project name, which is used to control job priorities\n",
+      "      --platform=STRING      hardware and software platform STRING (default is '$pfm')\n",
+      "      --suspend              is used to prevent the job from resubmitting itself\n", 
+      "      --target=STRING        use compilation directives, targeted by STRING (default is '$tgt')\n", 
+      "      --xmlfile=FILE         experiment suite configuration FILE (default is '$cwd/$xml')\n\n", 
+      "      --help                 print help message and exit\n",
+      "      --Version              print the tool version and exit\n",
+      "      --verbose              get verbose messages (repeat the option to increase verbosity level)\n\n", 
+      "  All the option names may be abbreviated, a single leading dash is also acceptable.\n",
+      "  At least one experiment from the xmlfile must be listed as an argument.\n\n"
+    );
+  }
+
+  sub Help()
+  # ------ arguments: none
+  {
+    my @usage = frepriority::Usage();
+    return
+    (
+      "\n",
+      "   Synopsis: $self implements job control for FRE production runs.\n",
+      "@usage",
+      "   Use --allocate to specify a new queue and a number of remaining jobs for this queue.\n",
+      "      Only 'alloc' and 'windf' queues are allowed at GFDL.\n",
+      "   Use --Project to specify a new project for all remaining jobs.\n",
+      "      Projects are used to control job priorities.\n",
+      "   Use --platform to pick a platform for experiment(s).\n", 
+      "      The <platform> node in the experiment suite configuration file is used\n", 
+      "      to set platform-specific data and instructions.\n",
+      "   Use --target to define compilation and linkage directives for experiment(s).\n",
+      "      Predefined targets refer to groups of directives, existing in the 'mkmf' template file.\n",
+      "      You can also use <compile> nodes with the 'target' attribute, defined in the experiment suite configuration file.\n", 
+      "      Multiple targets are separated by comma or dash. All the directives, referred by multiple targets, are merged.\n\n" 
+    );
+  }
+  
+  sub runScriptName($)
+  # ------ arguments: $exp
+  # ------ return the absolute runscript name
+  {
+    my $z = shift;
+    my ($expName, $scriptsDir) = ($z->name, $z->scriptsDir());
+    return "$scriptsDir/run/$expName";
+  }
+
+  sub queueFileName($)
+  # ------ arguments: $exp
+  # ------ return the absolute queue file name
+  {
+    my $z = shift;
+    my ($expName, $archiveDir) = ($z->name, $z->archiveDir());
+    return "$archiveDir/ascii/" . QUEUE_FILENAME;
+  }
+
+  sub jobState($)
+  # ------ arguments: $exp
+  # ------ return the experiment current state code plus the job id (if available):
+  # ------   0 - runscript not found
+  # ------   1 - runscript found, job wasn't submitted yet
+  # ------   2 - runscript found, job submitted and is waiting
+  # ------   3 - runscript found, job submitted and is running
+  # ------   4 - runscript found, job finished
+  # ------  -1 - unknown state
+  {
+
+    my $z = shift;
+    my $runScriptName = frepriority::runScriptName($z);
+
+    if (-f $runScriptName)
+    {
+      my ($fre, $expName) = ($z->fre(), $z->name());
+      my @jobInfos = frepriority::jobInfoSGE($ENV{USER}, $expName);
+      if (scalar(@jobInfos) > 0)
+      {
+        $fre->out(1, "There are more than one job with name '$expName' - we will process the latest one only") if scalar(@jobInfos) > 1;
+	my %jobInfo = %{$jobInfos[$#jobInfos]};
+	if ($jobInfo{state} eq 'r')
+	{
+	  return (3, $jobInfo{id});
+	}
+	elsif ($jobInfo{state} eq 'qw')
+	{
+	  return (2, $jobInfo{id});
+	}
+	else
+	{
+	  return (-1, 0);
+	}
+      }
+      else
+      {
+        my $stdoutDir = $z->stdoutDir();
+        my @stdoutNames = <$stdoutDir/run/$expName.o[0-9][0-9][0-9][0-9][0-9][0-9][0-9]>;
+        if (scalar(@stdoutNames) > 0)
+	{
+	  my $jobIdMax = 0;
+	  foreach my $stdoutName (@stdoutNames)
+	  {
+	    $stdoutName =~ m/(\d{7})$/;
+	    $jobIdMax = $1 if $jobIdMax < $1;
+	  }
+	  return (4, $jobIdMax);
+	}
+	else
+	{
+          return (1, 0);
+	}
+      }
+    }
+    else
+    {
+      return (0, 0);
+    }
+
+  }
+  
+  sub initialParams($)
+  # ------ arguments: $exp
+  # ------ get some initial parameter values from the runscript 
+  {
+
+    my $z = shift;
+    my ($fre, $runScriptName) = ($z->fre(), frepriority::runScriptName($z));
+    
+    if (-f $runScriptName)
+    {
+      chomp(my $jobsPerSimulationLine = qx(grep 'set -r jobsPerSimulation' $runScriptName));
+      my $jobsPerSimulationValue = (split ' ', $jobsPerSimulationLine)[4];
+      chomp(my $segmentsPerJobLine = qx(grep 'set -r segmentsPerJob' $runScriptName));
+      my $segmentsPerJobValue = (split ' ', $segmentsPerJobLine)[4];
+      chomp(my $projectLine = qx(grep '^#.*FRE_PROJECT' $runScriptName));
+      my $projectValue = (split '=', $projectLine)[1];
+      return ($jobsPerSimulationValue, $segmentsPerJobValue, $projectValue);
+    }
+    else
+    {
+      $fre->out(1, "The runscript '$runScriptName' is not found - using default values");
+      return (0, 0, '');
+    }
+
+  }
+  
+  sub currentParams($$)
+  # ------ arguments: $exp $jobId
+  # ------ get some current parameter values from the stdout file
+  {
+  
+    my ($z, $j) = @_;
+    my ($fre, $expName, $stdoutDir) = ($z->fre(), $z->name(), $z->stdoutDir());
+    my $stdoutName = "$stdoutDir/run/$expName.o$j";
+
+    if (-f $stdoutName)
+    {
+      chomp(my $jobLine = qx(grep 'echo @ ireload' $stdoutName | tail -1));
+      my $jobValue = ($jobLine) ? (split ' ', $jobLine)[4] : 1;
+      chomp(my $segmentLine = qx(grep 'echo @ irun' $stdoutName | tail -1));
+      my $segmentValue = ($segmentLine) ? (split ' ', $segmentLine)[4] : 1;
+      return ($jobValue, $segmentValue);
+    }
+    else
+    {
+      $fre->out(1, "The stdout file '$stdoutName' is not found - using default values");
+      return (1, 1);
+    }
+
+  }
+
+  sub queueParams($)
+  # ------ arguments: $exp
+  # ------ get some current parameter values from the queue file 
+  {
+  
+    my $z = shift;
+    my ($fre, $qcName) = ($z->fre(), frepriority::queueFileName($z));
+    
+    if (-f $qcName)
+    {
+      chomp(my $allocLine = qx(grep alloc $qcName));
+      my $allocValue = ($allocLine) ? (split ' ', $allocLine)[3] : '';
+      chomp(my $windfLine = qx(grep windf $qcName));
+      my $windfValue = ($windfLine) ? (split ' ', $windfLine)[3] : '';
+      chomp(my $projectLine = qx(grep project $qcName));
+      my $projectValue = ($projectLine) ? (split ' ', $projectLine)[3] : '';
+      chomp(my $stateLine = qx(grep stop $qcName));
+      my $stateValue = ($stateLine) ? STATE_SUSPENDED : STATE_NORMAL;
+      return ($allocValue, $windfValue, $projectValue, $stateValue);
+    }
+    else
+    {
+      $fre->out(1, "The queue file '$qcName' isn't found - using initial values from the XML configuration file");
+      my ($jobsPerSimulationValue, $segmentsPerJobValue, $projectValue) = initialParams($z);
+      return ($jobsPerSimulationValue - 1, 0, $projectValue, 'normal');
+    }
+
+  }
+  
+  sub queueParamsSet($$$$$$)
+  # ------ arguments: $exp $alloc $windf $project $state $verbose
+  # ------ rewrite the queue file using input arguments 
+  {
+  
+    my ($z, $a, $w, $p, $s, $v) = @_;
+    my $qcName = frepriority::queueFileName($z);
+    
+    my $cmd = '';
+    $cmd .= "echo '@ alloc     = $a'  > $qcName;";
+    $cmd .= "echo '@ windf     = $w' >> $qcName;"; 
+    $cmd .= "echo 'set project = $p' >> $qcName;"; 
+    $cmd .= "echo 'set stop        ' >> $qcName;" if $s eq ACTION_SUSPENDING;
+    if (FREUtil::createDir(File::Basename::dirname($qcName), $v))
+    {
+      unless (FREUtil::execute('ac-arch', $cmd))
+      {
+        FREMsg::out($v, 2, "The queue file '$qcName' has been rewritten");
+	return 1;
+      }
+      else
+      {
+	FREMsg::out($v, 0, "Can't rewrite the queue file '$qcName'");
+	return 0;
+      }
+    }
+    else
+    {
+      FREMsg::out($v, 0, "A problem with filesystem access");
+      return 0;
+    }
+    
+  }
+  
+}
+
+# //////////////////////////////////////////////////////////////////////////////
+# ////////////////////////////////////////////////////////////////////// Main //
+# //////////////////////////////////////////////////////////////////////////////
+
+{
+
+  my %opt =
+  (
+    'platform'	=> FREDefaults::Platform(),
+    'target'	=> FREDefaults::Target(),
+    'xmlfile'	=> FREDefaults::XMLFile()
+  );
+
+  Getopt::Long::GetOptions(\%opt, frepriority::OPTLIST) or (print frepriority::Usage() and exit(1));
+  
+  if ($opt{suspend} and $opt{go})
+  {
+    FREMsg::out($opt{verbose}, 0, "Incompatible options --suspend and --go");
+    exit(1);
+  }
+  
+  if ($opt{allocate} && $opt{allocate} !~ m/(?:alloc|windf)=\d+/)
+  {
+    FREMsg::out($opt{verbose}, 0, "Option --allocate must have syntax QUEUE=NUMBER, where QUEUE is either 'alloc' or 'windf'");
+    exit(1);
+  }
+  
+  if ($opt{Version}) {print frepriority::VERSION,"\n" and exit(0);}
+  if ($opt{help} or "$#ARGV" eq "-1") {print frepriority::Help() and exit(0);}
+
+  my $fre = FRE->new('frepriority', %opt) or exit(1);
+
+  my @exps = ();
+  foreach my $expName (@ARGV)
+  {
+    my $exp = FREExperiment->new($fre, $expName) or exit(1);
+    push @exps, $exp;
+  }
+
+  foreach my $exp (@exps)
+  {
+
+    my $expName = $exp->name();
+    $fre->setCurrentExperimentName($expName);
+    my ($stateId, $jobId) = frepriority::jobState($exp);
+    
+    if ($stateId > 0)
+    {
+   
+      my ($oldAlloc, $oldWindf, $oldProject, $oldState) = frepriority::queueParams($exp);
+
+      my ($newAlloc, $newWindf) = ($oldAlloc, $oldWindf);
+      if ($opt{allocate})
+      {
+        my ($queue, $num) = split '=', $opt{allocate};
+	if ($queue eq 'alloc')
+	{
+	  $newAlloc = $num;
+	}
+	elsif ($queue eq 'windf')
+	{
+	  $newWindf = $num;
+	}
+      }
+
+      my $newProject = $opt{Project} || $oldProject;
+
+      my $newState = $oldState;
+      if ($opt{go} && $oldState eq frepriority::STATE_SUSPENDED)
+      {
+        $newState = frepriority::ACTION_RESTARTING;
+      }
+      elsif ($opt{suspend} && $oldState eq frepriority::STATE_NORMAL)
+      {
+        $newState = frepriority::ACTION_SUSPENDING;
+      }
+
+      if ($newAlloc eq $oldAlloc && $newWindf eq $oldWindf && $newProject eq $oldProject && $newState eq $oldState)
+      {
+        print " current settings for '$expName': alloc=$oldAlloc, windf=$oldWindf, project=$oldProject, state=$oldState\n";
+      }
+      else
+      {
+
+        print "original settings for '$expName': alloc=$oldAlloc, windf=$oldWindf, project=$oldProject, state=$oldState\n";
+        print "     new settings for '$expName': alloc=$newAlloc, windf=$newWindf, project=$newProject, state=$newState\n";
+
+	frepriority::queueParamsSet($exp, $newAlloc, $newWindf, $newProject, $newState, $opt{verbose});
+
+	if ($newState eq frepriority::ACTION_RESTARTING)
+	{
+	  my $runScriptName = frepriority::runScriptName($exp);
+	  my $qsubCmd = "qsub -P $newProject -v FRE_PROJECT=$newProject $runScriptName";
+	  print "Executing: $qsubCmd\n";
+	  my $qsubOut = qx($qsubCmd);
+	  print "$qsubOut";
+	}
+
+      }
+	
+      if ($opt{info})
+      {
+        my $qcName = frepriority::queueFileName($exp);
+	my ($job, $segment) = frepriority::currentParams($exp, $jobId);
+	my ($jobsPerSimulation, $segmentsPerJob) = frepriority::initialParams($exp);
+	print "           status for '$expName': job=$job/$jobsPerSimulation, segment=$segment/$segmentsPerJob\n";
+	print "       queue file for '$expName': $qcName\n";
+      }
+
+    }
+    else
+    {
+
+      my $runScriptName = frepriority::runScriptName($exp);
+      $fre->out(0, "The runscript '$runScriptName' is not found, skipping the experiment '$expName'...");
+      next;
+          
+    }
+
+    $fre->unsetCurrentExperimentName();
+
+  }
+
+}

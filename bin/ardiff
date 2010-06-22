@@ -1,0 +1,252 @@
+#!/bin/csh -f
+#
+# TEST FOR REPRODUCIBILITY BY DIFFING RESTART FILES.
+#    See help message below.
+#                                                        (arl, 10/2001)
+ 
+#HOW TO PROCESS INPUT IN CSH, AS WITH "<"
+#while ( 1 )
+#  set line = "$<"
+#  if ( "$line" == "" ) break
+#  echo "$line"
+#end
+
+set extraoptions = ""
+set argv = (`getopt qshfgx:v: $*`)
+while ("$argv[1]" != "--")
+    switch ($argv[1])
+        case -q:
+            set quiet; breaksw
+        case -s:
+            set do_not_delete; breaksw
+        case -h:
+            set help; breaksw
+        case -f:
+            set extraoptions = "-f $extraoptions"; set diffall; breaksw
+        case -g:
+            set extraoptions = "-g $extraoptions"; breaksw
+        case -x:
+            set extraoptions = "-x $argv[2] $extraoptions"; shift argv; breaksw
+        case -v:
+            set extraoptions = "-v $argv[2] $extraoptions"; shift argv; breaksw
+    endsw
+    shift argv
+end
+shift argv
+#if ( $?DEBUG ) echo extraoptions is $extraoptions
+
+if ( $?help ) then
+HELP:
+cat << EOF
+
+Name:     ardiff
+
+Synopsis: ardiff is a utility for diffing cpio or tar archives containing
+          netcdf files and text files.
+
+          It takes a list of *cpio or *tar files as input. It extracts them
+          into a temporary folder and compares the files in the first
+          archive to the corresponding files in the second archive.
+          It then compares the first archive to the third, etc.
+
+Usage:    ls -1 */history/00010101.nc.cpio | ardiff
+
+          -s   save temporary directory containing the restart
+                    files extracted from the archives.
+          -q   quiet: do not print cpio warnings
+          -h   help: print this help message
+
+          ardiff compares first with cmp, and if that fails, it uses
+          the nccmp utility written by Remik Ziemlinski.
+
+          By default, ardiff calls nccmp with the options -mdq (compare
+          metadata, data, and quiet).  You can add these options:
+
+          -f   Forcefully compare, do not stop after first difference
+          -g   Compare global attributes  
+          -v   Compare variable(s) var1[,...] only
+          -x   Exclude variable(s) var1[,...]
+
+          You may want more control over the order of the files since
+          the first archive file will be compared to all the rest:
+ 
+          ls -1 */history/00010101.nc.cpio > input
+          ardiff < input
+
+EOF
+exit 1
+endif
+
+unalias *
+set top = $cwd
+set mystat = 0
+
+#get first cpio filename  
+set file1 = "$<"
+if ( "$file1" == "" ) goto HELP
+if ( ! -f $file1 ) goto HELP
+set firstchar = `echo $file1 | cut -c1`
+if ( "$firstchar" != "/" ) set file1 = "$top/$file1"
+
+#set up temporary directory
+if ( ! $?TMPDIR ) set TMPDIR = /tmp
+set thisdate = `date '+%Y%m%d_%H%M%S'`
+set TMP = $TMPDIR/$USER/ardiff_${USER}_$thisdate
+if ( -d $TMP ) then
+   rm -rf $TMP/* >& /dev/null
+else
+   mkdir -p $TMP
+endif
+
+cd $TMP
+mkdir first
+mkdir second
+
+#extract first cpio file
+cd first 
+set type = $file1:e
+if ( "$type" == "cpio" ) then
+   if ( $?quiet ) then
+      cpio -i < $file1 >& /dev/null
+      set thisstatus = $status
+   else
+      cpio -i < $file1
+      set thisstatus = $status
+   endif
+   if ( $thisstatus ) echo "WARNING: cpio returned error status for $file1"
+else if ( "$type" == "tar" ) then
+   if ( $?quiet ) then
+      tar -xf $file1
+      set thisstatus = $status
+   else
+      tar -xvf $file1
+      set thisstatus = $status
+   endif
+   if ( $thisstatus ) then
+      echo "WARNING: tar returned error status for $file1"
+   endif
+else
+   echo ERROR: only tar or cpio supported
+endif
+#convert netcdf4 to netcdf3 format so that nccmp can be used
+foreach ncfile (`ls -1 *nc`)        
+   set is_netcdf4 = `ncinfo $ncfile | grep -c 'format=NC_FORMAT_NETCDF4_CLASSIC'`
+   if ( $is_netcdf4 ) then
+      if ( ! $?quiet ) echo "Converting $ncfile to netCDF3 for use with nccmp"
+      mv $ncfile VERSION4_$ncfile
+      ncks -3 VERSION4_$ncfile -o $ncfile
+      rm VERSION4_$ncfile
+   endif
+end
+
+set list = ( `ls -1 *` )
+cd ../second
+
+#loop over remaining cpio files, do diffs
+while ( 1 )
+  set file2 = "$<"
+  if ( "$file2" == "" ) then
+    if ( $?DID_SOMETHING ) then
+      break
+    else
+      cd ../..
+      rm -rf $TMP >& /dev/null
+      goto HELP
+    endif
+  endif
+  set firstchar = `echo $file2 | cut -c1`
+  if ( "$firstchar" != "/" ) set file2 = "$top/$file2"
+
+  rm -rf * >& /dev/null
+  set type = $file2:e
+  if ( "$type" == "cpio" ) then
+     if ( $?quiet ) then
+        cpio -i < $file2 >& /dev/null
+        set thisstatus = $status
+     else
+        cpio -i < $file2
+        set thisstatus = $status
+     endif
+     if ( $thisstatus ) echo "WARNING: cpio returned error status for $file2"
+  else if ( "$type" == "tar" ) then
+     if ( $?quiet ) then
+        tar -xf $file2
+        set thisstatus = $status
+     else
+        tar -xvf $file2
+        set thisstatus = $status
+     endif
+     if ( $thisstatus ) then
+        echo "WARNING: tar returned error status for $file2"
+     endif
+   else
+     echo ERROR: only tar or cpio supported
+   endif
+
+#convert netcdf4 to netcdf3 format so that nccmp can be used
+   foreach ncfile (`ls -1 *nc`)
+      set is_netcdf4 = `ncinfo $ncfile | grep -c 'format=NC_FORMAT_NETCDF4_CLASSIC'`
+      if ( $is_netcdf4 ) then
+         if ( ! $?quiet ) echo "Converting $ncfile to netCDF3 for use with nccmp"
+         mv $ncfile VERSION4_$ncfile
+         ncks -3 VERSION4_$ncfile -o $ncfile
+         rm VERSION4_$ncfile
+      endif
+   end
+
+  echo "/// $file1"
+  echo '\\\' $file2
+
+  foreach ncfile ( $list ) 
+    if ( ! $?quiet ) echo "      Comparing $ncfile..."
+    cmp ../first/$ncfile ../second/$ncfile >& /dev/null
+    set cmpstatus = $status
+    if ( $cmpstatus == 2 ) then
+       if ( "$ncfile:e" == 'nc' ) then
+          echo "DIFFER : FILE NOT FOUND : $ncfile"
+          set mystat = 1
+        else
+          echo "WARNING : FILE NOT FOUND : $ncfile"
+        endif
+    else if ( $cmpstatus != 0 ) then
+       if ( "$ncfile:e" == 'nc' ) then
+          if ( $?quiet ) then
+             nccmp -dmq $extraoptions ../first/$ncfile ../second/$ncfile >& /dev/null
+             if ( $status != 0 ) then
+                set mystat = 1
+                echo "DIFFER : $ncfile"
+             endif
+          else 
+             nccmp -dmq $extraoptions ../first/$ncfile ../second/$ncfile
+             if ( $status == 0 ) then
+                echo "nccmp shows the $ncfile files are equivalent"
+             else 
+                set mystat = 1
+             endif
+          endif
+       else 
+          set ftype = `file ../first/$ncfile | grep text`
+          if ( "$ftype" != '' && $?diffall ) then
+             echo "WARNING : ASCII FILES DIFFER : $ncfile"
+             diff ../first/$ncfile ../second/$ncfile | head
+          else
+             if ( "$ncfile" != "input.nml" ) then 
+                echo "WARNING : FILES DIFFER : $ncfile"
+             endif
+          endif
+          #set mystat = 1
+       endif
+    endif
+  end
+  set DID_SOMETHING
+
+end
+
+cd ../..
+if ( $?do_not_delete ) then
+   echo Files left in $TMP
+else
+   rm -rf $TMP
+endif
+
+exit $mystat

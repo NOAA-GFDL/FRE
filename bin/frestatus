@@ -1,0 +1,325 @@
+#!/usr/bin/perl
+# -*- cperl -*-
+
+# $Id: frestatus,v 18.0 2010/03/02 23:25:56 fms Exp $
+# ------------------------------------------------------------------------------
+# FMS/FRE Project: Program to Check Model Status
+# ------------------------------------------------------------------------------
+# vb/arl Ver   1.00  Initial version (copied from 15.1.4.1)         ???
+# afy -------------- Branch 17.0.4 -------------------------------- August 09
+# afy    Ver   1.00  Copied from 15.1.4.2.2.1                       August 09
+# afy    Ver   2.00  Replace FRE_quebec_compatible => FRE           August 09
+# afy    Ver   3.00  Use new FREExperiment.pm module (!!!)          September 09
+# afy    Ver   3.01  Add option --target                            September 09
+# afy    Ver   4.00  Don't append $name to archive directory        October 09
+# afy    Ver   4.01  Handle the case with no history files          October 09
+# afy    Ver   4.02  Add errors processing                          October 09
+# afy    Ver   5.00  Use new FRE module (setCurrentExperimentName)  October 09
+# afy    Ver   6.00  Use new FREDefaults module                     October 09
+# afy    Ver   7.00  Replace prints by calls to FREMsg::out         November 09
+# afy    Ver   8.00  Modify Help subroutine                         December 09
+# ------------------------------------------------------------------------------
+# Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2000-2009
+# Designed and written by V. Balaji, Amy Langenhorst and Aleksey Yakovlev
+#
+
+use strict;
+
+use File::Basename();
+use Getopt::Long(':config', 'no_ignore_case');
+
+use FRE();
+use FREDefaults();
+use FREExperiment();
+use FREMsg();
+
+# //////////////////////////////////////////////////////////////////////////////
+# ////////////////////////////////////////////////////////// Global constants //
+# //////////////////////////////////////////////////////////////////////////////
+
+{
+
+  package frestatus;
+
+  use constant VERSION => '$Id: frestatus,v 18.0 2010/03/02 23:25:56 fms Exp $';
+  
+  use constant OPTLIST =>
+  (
+    'compile',
+    'long',
+    'Production',
+    'platform=s',
+    'query',
+    'run',
+    'target=s',
+    'xmlfile=s',
+    'help',
+    'Version',
+    'verbose+'
+  );
+  
+}
+
+# //////////////////////////////////////////////////////////////////////////////
+# ///////////////////////////////////////////////////////////////// Utilities //
+# //////////////////////////////////////////////////////////////////////////////
+
+{
+
+  package frestatus;
+
+  use Cwd();
+  
+  my $self = File::Basename::basename($0);
+
+  sub Usage()
+  # ------ arguments: none
+  {
+    my $cwd = Cwd::getcwd();
+    my $xml = FREDefaults::XMLFile();
+    my $pfm = FREDefaults::Platform();
+    my $tgt = FREDefaults::Target();
+    return
+    (
+      "\n",
+      "  Usage: $self [options] experiment [experiment ...]\n\n",
+      "  Options:\n\n",
+      "      --compile              show compile status only (i.e. - don't show run status)\n",
+      "      --long                 show production statistics in the long format (from batch tailsheets)\n",
+      "      --Production           show production statistics only, don't show compile and run status\n",
+      "      --platform=STRING      hardware and software platform STRING (default is '$pfm')\n",
+      "      --run                  show run status only (i.e. - don't show compile status)\n",
+      "      --target=STRING        use compilation directives, targeted by STRING (default is '$tgt')\n", 
+      "      --xmlfile=FILE         experiment suite configuration FILE (default is '$cwd/$xml')\n\n", 
+      "      --help                 print help message\n",
+      "      --Version              print the tool version and exit\n",
+      "      --verbose              get verbose messages (repeat the option to increase verbosity level)\n\n", 
+      "  All the option names may be abbreviated, a single leading dash is also acceptable.\n",
+      "  At least one experiment from the xmlfile must be listed as an argument.\n\n"
+    );
+  }
+
+  sub Help()
+  # ------ arguments: none
+  {
+    my @usage = frestatus::Usage();
+    return
+    (
+      "\n",
+      "   Synopsis: $self parses batch script standard output to relay the status\n", 
+      "             of your fremake and frerun shell scripts.\n",
+      "             Note that if you ran the scripts interactively, no status information\n",
+      "             will be found since there will be no batch script stdout files.\n",
+      "@usage",
+      "   Use --platform to pick a platform for experiment(s).\n", 
+      "      The <platform> node in the experiment suite configuration file is used\n", 
+      "      to set platform-specific data and instructions.\n",
+      "   Use --target to define compilation and linkage directives for experiment(s).\n",
+      "      Predefined targets refer to groups of directives, existing in the 'mkmf' template file.\n",
+      "      You can also use <compile> nodes with the 'target' attribute, defined in the experiment suite configuration file.\n", 
+      "      Multiple targets are separated by comma or dash. All the directives, referred by multiple targets, are merged.\n\n" 
+    );
+  }
+
+  sub printInfo($$$$)
+  # ------ arguments: $filename $long $verbose $refToStatus
+  # ------ get and print information about a compile or run from a stdout file
+  {
+
+    my ($f, $l, $v, $r) = @_;
+    my $modtime = time - int((-M $f) * 86400);
+    my $mt = scalar(localtime($modtime));
+    print ">>> $f <<< $mt\n";
+    
+    my $info;
+
+    if ($l)
+    {
+      $info = qx(egrep -B3 "HPCS BATCH|^jobnumber|^failed|^cpuset|^hostname" $f | egrep -v "HPCS BATCH|======================|^pe|^slots|^io");
+    }
+    else
+    {
+      $info = qx(egrep -B1 "BELOW ADDED FOR DUAL-RUN; USER CAN IGNORE OR NOT, AS DESIRED" $f | head -1);
+      $info = qx(egrep -B3 "HPCS BATCH" $f | egrep -v "HPCS BATCH" | egrep -v "======================") if !$info;
+    }
+
+    $info =~ s/^--\n//mg;
+    $info =~ s/^\s*\n//mg;
+    $info =~ s/^(hostname.*)$/$1\n/mg;
+
+    my $ll = qx(tail -4 $f);
+    
+    if ($info)
+    {
+      $info .= $ll if $ll !~ m/ru_nivcsw/;
+      if ($info !~ /NOTE: make succeeded/ and $info !~ /NOTE: Natural end-of-script/)
+      {
+        FREMsg::out($v, 2, "Changing status to 1");
+        ${$r} = 1;
+      }
+      $info =~ s/(\w)\n*$/$1\n/;
+      print "$info";
+    }
+    else
+    {
+      if ($ll !~ /NOTE: make succeeded/ and $ll !~ /NOTE: Natural end-of-script/)
+      {
+        FREMsg::out($v, 2, "Changing status to 1");
+        ${$r} = 1;
+      }
+      $ll =~ s/(\w)\n*$/$1\n/;
+      print "$ll";
+    }
+
+  }
+
+}
+
+# //////////////////////////////////////////////////////////////////////////////
+# ////////////////////////////////////////////////////////////////////// Main //
+# //////////////////////////////////////////////////////////////////////////////
+
+{
+
+  my %opt =
+  (
+    'platform'	=> FREDefaults::Platform(),
+    'target'	=> FREDefaults::Target(),
+    'xmlfile'	=> FREDefaults::XMLFile()
+  );
+
+  Getopt::Long::GetOptions(\%opt, frestatus::OPTLIST) or (print frestatus::Usage() and exit(1));
+  if ($opt{Version}) {print frestatus::VERSION,"\n" and exit(0);}
+  if ($opt{help} or "$#ARGV" eq "-1") {print frestatus::Help() and exit(0);}
+  ($opt{compile}, $opt{run}) = (!$opt{run}, !$opt{compile});
+
+  my $fre = FRE->new('frestatus', %opt) or exit(1);
+
+  my @exps = ();
+  foreach my $expName (@ARGV)
+  {
+    my $exp = FREExperiment->new($fre, $expName) or exit(1);
+    push @exps, $exp;
+  }
+
+  my $exitstatus = 0;
+
+  foreach my $exp (@exps)
+  {
+  
+    my $expName = $exp->name(); 
+    $fre->setCurrentExperimentName($expName);
+
+    if ($opt{Production})
+    {
+
+      my $archiveDir = $exp->archiveDir();
+      my @histFiles = <$archiveDir/history/????????.nc.cpio>;
+      if (scalar(@histFiles) > 0)
+      {
+
+	my $cpiolist = qx(cd $archiveDir/history; ls -1rt ????????.nc.cpio); 
+	my @cpios = split "\n", $cpiolist;
+	my @sortcpios = sort {$a cmp $b} @cpios;
+
+	chomp(my $oldest = $cpios[0]);              #$firsthistfile
+	chomp(my $newest = $cpios[$#cpios]);        #$lasthistfile
+	chomp(my $first = $sortcpios[0]);           #$fhistfile
+	chomp(my $last = $sortcpios[$#sortcpios]);  #$lhistfile
+
+	$oldest =~ s/^\s*//;
+	my $modtime = time - int((-M "$archiveDir/history/$oldest") * 86400);
+	my $mt = scalar(localtime($modtime));
+	my @pieces = split ' ', $mt;
+	my $mon  = $pieces[1];
+	my $day  = $pieces[2];
+	my $year = $pieces[4];
+	my $fmodelyr = substr($first, 0, 4);
+	my $firstmod = "$mon $day, $year";
+
+	$newest =~ s/^\s*//;
+	$modtime = time - int((-M "$archiveDir/history/$newest") * 86400);
+	$mt = scalar(localtime($modtime));
+	@pieces = split ' ', $mt;
+	$mon  = $pieces[1];
+	$day  = $pieces[2];
+	$year = $pieces[4];
+
+	my $lmodelyr = substr($last, 0, 4);
+	my $lastmod = "$mon $day, $year";
+	my $desc = $exp->description();
+
+	if ($opt{query})
+	{
+          my $analysisDir = $exp->analysisDir();
+          print "$fmodelyr-$lmodelyr\n$firstmod\n$lastmod\n$analysisDir\n$desc\n";
+	}
+	else
+	{
+          print "$expName:\n";
+          print "   Years $fmodelyr-$lmodelyr completed.\n";
+          print "   First archive data created: $firstmod\n";
+          print "   Archive data last modified: $lastmod\n";
+          print "   Description: $desc\n";
+	}
+
+      }
+      else
+      {
+        print "$expName:\n";
+        print "   No history files found\n";
+      }
+      
+    }
+    else
+    {
+
+      if ($opt{compile})
+      {
+
+         my $stdoutDir = $exp->execDir();
+      
+	 if ($opt{verbose})
+	 {
+           print "Status of '$expName' batch compiles\n";
+           print "==================================================================\n";
+	 }
+
+	 my @files = <$stdoutDir/compile_${expName}.csh.*>;
+	 foreach my $file (@files)
+	 {
+	   frestatus::printInfo($file, $opt{long}, $opt{verbose}, \$exitstatus);
+	   print "\n";
+	 }
+
+      }
+
+      if ($opt{run})
+      {
+
+         my $stdoutDir = $exp->stdoutDir() . '/run';
+      
+	 if ($opt{verbose})
+	 {
+           print "Status of '$expName' batch model runs\n";
+           print "==================================================================\n";
+	 }
+
+	 my @files = <$stdoutDir/${expName}_*pe.*>;
+	 foreach my $file (@files)
+	 {
+	   frestatus::printInfo($file, $opt{long}, $opt{verbose}, \$exitstatus);
+	   print "\n";
+	 }
+
+      }
+
+    }
+
+    $fre->unsetCurrentExperimentName();
+
+  }
+
+  exit $exitstatus;
+
+}

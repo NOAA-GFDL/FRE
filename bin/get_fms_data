@@ -1,0 +1,682 @@
+#!/bin/csh -f
+#---------------------------------------------------
+#          opts = amip1,amip2,oldrad,seaesf,albedo,land,isccp,lad,topog,sst...
+#      default: get_module_data -x isccp,lad,seaesf  amip1,oldrad,albedo,land,topog
+#
+
+#set echo
+
+set argv = (`getopt hd:x:r:x:m:x: $*`)
+#---------------------------------------------------
+while ("$argv[1]" != "--")
+    switch ($argv[1])
+        case -h:
+            set help; breaksw
+        case -d:
+            set datadir = $argv[2]; shift argv; breaksw
+        case -r:
+            set release = $argv[2]; shift argv; breaksw
+        case -m:
+            set target_machine = $argv[2]; shift argv; breaksw
+    endsw
+    shift argv
+end
+shift argv
+#---------------------------------------------------
+#---- set on data sets ----
+set extra = ()
+
+if ($#argv > 0) then
+   foreach opt (`echo $argv | sed -e "s/,/ /g"`)
+      if ($opt == "amip1" ) then
+          set amip1
+      else if ($opt == "amip2" ) then
+          set amip2
+      else if ($opt == "oldrad") then
+          set oldrad
+      else if ($opt == "seaesf") then
+          set seaesf
+      else if ($opt == "isccp" ) then
+          set isccp
+      else if ($opt == "albedo") then
+          set albedo
+      else if ($opt == "land"  ) then
+          set land
+      else if ($opt == "lad"   ) then
+          set lad
+      else if ($opt == "topog" ) then
+          set topog
+      else if ($opt == "pctwater" ) then
+          set pctwater
+      else if ($opt == "ggrpsst" ) then
+          set ggrpsst
+      else if ($opt == "hurrell" ) then
+          set hurrell
+      else if ($opt == "hadisst" ) then
+          set hadisst
+      else if ($opt == "mcm" ) then
+          set mcm
+      else if ($opt == "topo_drag" ) then
+          set topo_drag
+      else if ($opt == "amip1fix" ) then
+          set amip1fix
+      else if ($opt == "mom4" ) then
+          set mom4
+      else if ($opt == "him" ) then
+          set him
+      else 
+         set extra = ( $extra $opt )
+      endif
+   end
+else 
+    set help
+endif
+
+#----------------------------------------------------
+# DEFAULTS
+#----------------------------------------------------
+#----- set up default release for help message    ---
+ set default_release = "quebec"
+#----- if machine not specified, use hpcs ia64    ---
+ if ( ! $?target_machine ) set target_machine = "ia64"
+#----- if datadir not specified, use INPUT        ---
+ if ( ! $?datadir )        set datadir = INPUT
+#----- output ascii file for log information      ---
+ set output_file = get_fms_data.out
+#----------------------------------------------------
+if ($?help) then
+
+   if ( $?release ) then
+      echo "Changes to datasets for ${release}:"
+      echo "========================================================="
+      cat /archive/fms/module_data/$release/README
+      exit 0
+   endif
+
+set name = `basename $0`
+cat << EOF
+
+Name:     $name
+
+Synopsis: Sets up/copies data sets used by various FMS modules.
+          The data sets will be placed in sub-directory INPUT, or
+          whichever directory you specify (see below.)
+          The sub-directories INPUT and RESTART will be created if
+          they do not exist.
+          
+Usage:    $name [-h] [-d datadir] [-r release] [-m machine] 
+                       [datasets] [files]
+
+          -h          = help (this message with no execution)
+          -d datadir  = sub-directory for data (default: $datadir)
+          -r release  = get files associated with a certain FMS release.  
+                        "-r latest" is also accepted. (default: $default_release).
+          -m machine  = machine where get_fms_data will run (default: $target_machine)
+          datasets    = name of the data set(s) to be copied
+          files       = full paths to files to copy to datadir.
+
+          Available data sets include:
+             albedo   climap albedos 
+             amip1    amip 1 sst 
+             amip1fix amip 1 sst with reyoi bugfix (damascus-jakarta only) 
+             amip2    amip 2 sst 
+             ggrpsst  Climate group's sst, used for mixed layer tests
+             him      HIM datasets
+             hurrell  SST/sea ice data from Jim Hurrell at NCAR
+             hadisst  SST/sea ice data from Hadley Center
+             isccp    isccp climatological cloud amounts 
+             lad      LAD model data
+             land     simple land model, deep soil moisture
+             mcm      for MCM: topography, ss_albedo, zonal_ozone, and mg_drag
+             mom4     chl and tideamp, currently only avail with -r ipcc_ar4
+             oldrad   original radiation data 
+             pctwater Navy 1/6 degree percent water
+             seaesf   sea-esf radiation data 
+             topog    Navy 1/6 degree topography
+             topo_drag N45 topo_drag.res file
+   
+          Any other string will be expected to be the full path to a data
+          file you want copied to your data directory.  Compressed cpio
+          files will be extracted into datadir.  You may use the format
+          "/full/path/my_data_file=newname" to rename the data file (note
+          that you cannot rename cpio'ed files.)
+   
+          Specifying a release along with "-h" prints a list of changes and
+          additions to data files for that release.
+
+Examples: To get the data for the simple land model with predicted clouds:
+          $name -r galway amip1 oldrad albedo land topog
+
+          To print a message about what datasets were new for galway:
+          $name -r galway -h
+          
+EOF
+exit 1
+endif
+
+#----------------------------------------------------
+#----- if release not specified, use most current ---
+ if ( ! $?release )        set release = "$default_release"
+#---------------------------------------------------
+
+if ($?oldrad && $?seaesf) then
+   echo WARNING in get_module_data
+   echo both oldrad and seaesf selected: seaesf used
+   unset oldrad
+endif
+
+if ($?amip1fix && "$release" == "khartoum" ) then
+      echo WARNING in get_module_data
+      echo amip1fix dataset does not exist for khartoum: amip1 used.
+      unset amip1fix
+      set amip1
+endif
+#---------------------------------------------------
+
+if ( ! -d RESTART ) then
+    echo Creating sub-directory RESTART
+    mkdir RESTART
+endif
+if ( ! -d $datadir ) then
+    echo Creating sub-directory $datadir
+    mkdir $datadir
+endif
+
+#---------------------------------------------------
+#----- define filenames for those which differ by release -----
+#---- data ----
+ if ( $release == damascus || $release == eugene || $release == fez || $release == galway || $release == havana || $release == inchon || $release == jakarta || $release == ipcc_ar4 ) then
+   set isccpfile = isccp.climo.data
+   set albedofile = albedo.data
+   set amip1file = amip1_sst.data
+   set amip2file = amip2_sst.data
+   set hurrellfile = hurrell_sst.data
+   set seaesffile = cns_2250_12001400
+   set ladfile = cover_type_field
+ else
+   set isccpfile = isccp.climo.data.nc
+   set albedofile = albedo.data.nc
+   set amip1file = amip1_sst.data.nc
+   set amip2file = amip2_sst.data.nc
+   set hurrellfile = hurrell_sst.data.nc
+   set seaesffile = cns_2250_12001400.nc
+   set ladfile = cover_type_field.nc
+ endif
+#---- data ----
+ if ($release == eugene || $release == fez) then
+   set topogfile = hires_navy_topography.data
+   set pctwaterfile = hires_navy_pctwater.data
+ else if ($release == galway || $release == havana || $release == inchon || $release == jakarta || $release == ipcc_ar4 ) then
+   set topogfile = navy_topography.data
+   set pctwaterfile = navy_pctwater.data
+ else
+   set topogfile = navy_topography.data.nc
+   set pctwaterfile = navy_pctwater.data.nc
+ endif 
+#---- data ----
+ if ( $release == havana || $release == inchon || $release == jakarta || $release == ipcc_ar4 ) then
+   set topodragfile = topo_drag.res
+ else
+   set topodragfile = topo_drag.res.nc
+ endif
+
+#---------------------------------------------------
+#----- turn off flags if data exists -----
+
+ if (-e $datadir/$amip1file)           unset amip1
+ if (-e $datadir/$amip2file)           unset amip2
+ if (-e $datadir/$hurrellfile)         unset hurrell
+ if (-e $datadir/$topodragfile)        unset topo_drag
+ if (-e $datadir/$seaesffile)          unset seaesf
+ if (-e $datadir/$albedofile)          unset albedo
+ if (-e $datadir/$ladfile)             unset lad
+ if (-e $datadir/$topogfile)           unset topog
+ if (-e $datadir/$pctwaterfile)        unset pctwater
+ if (-e $datadir/sst_ice_clim.nc )     unset ggrpsst
+ if (-e $datadir/ss_albedo.data )      unset mcm
+ if (-e $datadir/chl.nc )              unset mom4
+ if (-e $datadir/cns_600_670850 )      unset oldrad
+ if (-e $datadir/cloud_obs.data )      unset isccp
+ if (-e $datadir/soil_water_diff.data) unset land
+ if (-e $datadir/amip1_sst.data)       unset amip1fix
+ if (-e $datadir/Global_HIM_IC.nc)     unset him
+ if (-e $datadir/hadisst_sst.data.nc)  unset hadisst
+
+#---------------------------------------------------
+#---- machine dependent stuff ------
+
+ set machine = `uname -m`
+
+ if ("$machine" == "$target_machine") then
+   set ardir = /archive/fms/module_data/$release
+ else 
+    echo "ERROR: current platform ($machine) does not match intended run platform ($target_machine)"
+    exit 1
+ endif
+
+#---- set up variable for copy command ----
+
+# set arcopy = "cp "
+ if ("$machine" == "IP22") set arcopy = "rcp t94:"
+ if ("$machine" == "ia64") set arcopy = "/usr/cluster/bin/cxfscp "
+
+#---- dmget all of the data at one time -----
+                 set list = ( )
+ if ($?amip1)    set list = ($list $ardir/sst_data.cpio)
+ if ($?amip2)    set list = ($list $ardir/amip2_sst.cpio)
+ if ($?lad)      set list = ($list $ardir/lad_data.cpio)
+ if ($?oldrad)   set list = ($list $ardir/co2_data.cpio)
+ if ($?seaesf)   set list = ($list $ardir/sea_esf.cpio)
+ if ($?ggrpsst)  set list = ($list $ardir/sst_ice_clim.nc)
+ if ($?hurrell)  set list = ($list $ardir/hurrell_sst.cpio)
+ if ($?hadisst)  set list = ($list $ardir/hadisst.cpio)
+ if ($?mcm)      set list = ($list $ardir/mcm.cpio)
+ if ($?mom4)     set list = ($list $ardir/mom4.cpio)
+ if ($?isccp)    set list = ($list $ardir/$isccpfile)
+ if ($?albedo)   set list = ($list $ardir/$albedofile)
+ if ($?land)     set list = ($list $ardir/soil_water_diff.data)
+ if ($?topog)    set list = ($list $ardir/$topogfile)
+ if ($?pctwater) set list = ($list $ardir/$pctwaterfile)
+ if ($?amip1fix) set list = ($list $ardir/sst_data_fix.cpio)
+ if ($?him)      set list = ($list $ardir/HIM.cpio)
+
+ if ( $#extra > 0 )  set list = ($list `echo $extra | sed 's;=[^ ]*; ;g;s;/home/[^ ]*;;g;s;/net/[^ ]*;;g'`)
+
+ if ($#list > 0) then
+   if ( -e /home/gfdl/flags/block.dm || -e /home/gfdl/flags/block.dmget ) then
+      echo "WARNING: get_fms_data: dmgets currently blocked"
+   else
+      dmget $list
+   endif
+ endif
+
+#if (-e $output_file) rm -f $output_file
+
+#---- amip1 sst ----
+ if ($?amip1) then
+   ${arcopy}$ardir/sst_data.cpio $datadir/sst_data.cpio
+   if ( $status != 0 ) then
+      echo "ERROR: Copy failed in get_fms_data: '${arcopy}$ardir/sst_data.cpio $datadir/sst_data.cpio'"
+      exit 1
+   else
+      echo "${arcopy}$ardir/sst_data.cpio $datadir/sst_data.cpio" >> $output_file
+   endif
+   cd $datadir
+   cpio -miv < sst_data.cpio >& .cpio.out
+   if ( $status != 0 ) then
+      echo "ERROR: cpio failed in get_fms_data: 'cpio -mi < sst_data.cpio'"
+      exit 1
+   else
+      echo "cpio -miv < sst_data.cpio" >> ../$output_file
+      cat .cpio.out >> ../$output_file; rm -f .cpio.out
+   endif
+   rm -f     sst_data.cpio
+   cd ..
+ endif
+
+#---- amip1 sst fix ----
+ if ($?amip1fix) then
+   ${arcopy}$ardir/sst_data_fix.cpio $datadir/sst_data_fix.cpio
+   if ( $status != 0 ) then
+      echo "ERROR: Copy failed in get_fms_data: '${arcopy}$ardir/sst_data_fix.cpio $datadir/sst_data_fix.cpio'"
+      exit 1
+   else
+      echo "${arcopy}$ardir/sst_data_fix.cpio $datadir/sst_data_fix.cpio" >> $output_file
+   endif
+   cd $datadir
+   cpio -miv < sst_data_fix.cpio >& .cpio.out
+   if ( $status != 0 ) then
+      echo "ERROR: cpio failed in get_fms_data: 'cpio -mi < sst_data_fix.cpio'"
+      exit 1
+   else
+      echo "cpio -miv < sst_data_fix.cpio" >> ../$output_file
+      cat .cpio.out >> ../$output_file; rm -f .cpio.out
+   endif
+   rm -f     sst_data_fix.cpio
+   cd ..
+ endif
+
+#---- amip2 sst ----
+ if ($?amip2) then
+   ${arcopy}$ardir/amip2_sst.cpio $datadir/amip2_sst.cpio
+   if ( $status != 0 ) then
+      echo "ERROR: Copy failed in get_fms_data: '${arcopy}$ardir/amip2_sst.cpio $datadir/amip2_sst.cpio'"
+      exit 1
+   else
+      echo " ${arcopy}$ardir/amip2_sst.cpio $datadir/amip2_sst.cpio" >> $output_file
+   endif
+   cd $datadir
+   cpio -miv < amip2_sst.cpio >& .cpio.out
+   if ( $status != 0 ) then
+      echo "ERROR: cpio failed in get_fms_data: 'cpio -mi < amip2_sst.cpio'"
+      exit 1
+   else
+      echo "cpio -miv < amip2_sst.cpio" >> ../$output_file
+      cat .cpio.out >> ../$output_file; rm -f .cpio.out
+   endif
+   rm -f     amip2_sst.cpio
+   cd ..
+ endif
+
+#---- HIM ----
+ if ($?him) then
+   ${arcopy}$ardir/HIM.cpio $datadir/HIM.cpio
+   if ( $status != 0 ) then
+      echo "ERROR: Copy failed in get_fms_data: '${arcopy}$ardir/HIM.cpio $datadir/HIM.cpio'"
+      exit 1
+   else
+      echo "${arcopy}$ardir/HIM.cpio $datadir/HIM.cpio" >> $output_file
+   endif
+   cd $datadir
+   cpio -miv < HIM.cpio >& .cpio.out
+   if ( $status != 0 ) then
+      echo "ERROR: cpio failed in get_fms_data: 'cpio -mi < HIM.cpio'"
+      exit 1
+   else
+      echo "cpio -miv < HIM.cpio" >> ../$output_file
+      cat .cpio.out >> ../$output_file; rm -f .cpio.out
+   endif
+   rm -f     HIM.cpio
+   cd ..
+ endif
+
+#---- isccp cloud data ----
+ if ($?isccp) then
+   ${arcopy}$ardir/$isccpfile $datadir/cloud_obs.data
+   if ( $status != 0 ) then
+      echo "ERROR: Copy failed in get_fms_data: '${arcopy}$ardir/$isccpfile $datadir/cloud_obs.data'"
+      exit 1
+   else
+      echo "${arcopy}$ardir/$isccpfile $datadir/cloud_obs.data" >> $output_file
+   endif
+ endif
+
+#---- albedo data ----
+ if ($?albedo) then
+   ${arcopy}$ardir/$albedofile $datadir/$albedofile
+   if ( $status != 0 ) then
+      echo "ERROR: Copy failed in get_fms_data: '${arcopy}$ardir/$albedofile $datadir/$albedofile'"
+      exit 1
+   else
+      echo "${arcopy}$ardir/$albedofile $datadir/$albedofile" >> $output_file
+   endif
+ endif
+
+#---- lad model data ----
+ if ($?lad) then
+   ${arcopy}$ardir/lad_data.cpio   $datadir/lad_data.cpio
+   if ( $status != 0 ) then
+      echo "ERROR: Copy failed in get_fms_data: '${arcopy}$ardir/lad_data.cpio   $datadir/lad_data.cpio'"
+      exit 1
+   else
+      echo "${arcopy}$ardir/lad_data.cpio   $datadir/lad_data.cpio" >> $output_file
+   endif
+   cd $datadir
+   cpio -miv < lad_data.cpio >& .cpio.out
+   if ( $status != 0 ) then
+      echo "ERROR: cpio failed in get_fms_data: 'cpio -mi < lad_data.cpio'"
+      exit 1
+   else
+      echo "cpio -miv < lad_data.cpio" >> ../$output_file
+      cat .cpio.out >> ../$output_file; rm -f .cpio.out
+   endif
+   rm -f     lad_data.cpio
+   cd ..
+ endif
+
+#---- land model (v197 data) ----
+ if ($?land) then
+   ${arcopy}$ardir/soil_water_diff.data $datadir/soil_water_diff.data
+   if ( $status != 0 ) then
+      echo "ERROR: Copy failed in get_fms_data: '${arcopy}$ardir/soil_water_diff.data $datadir/soil_water_diff.data'"
+      exit 1
+   else
+      echo "${arcopy}$ardir/soil_water_diff.data $datadir/soil_water_diff.data" >> $output_file
+   endif
+ endif
+
+#---- Navy 1/6 degree topography ----
+ if ($?topog) then
+   ${arcopy}$ardir/$topogfile $datadir/$topogfile
+   if ( $status != 0 ) then
+      echo "ERROR: Copy failed in get_fms_data: '${arcopy}$ardir/$topogfile $datadir/$topogfile'"
+      exit 1
+   else
+      echo "${arcopy}$ardir/$topogfile $datadir/$topogfile" >> $output_file
+   endif
+ endif
+
+#---- Navy 1/6 degree topography ----
+ if ($?pctwater) then
+   ${arcopy}$ardir/$pctwaterfile $datadir/$pctwaterfile
+   if ( $status != 0 ) then
+      echo "ERROR: Copy failed in get_fms_data: '${arcopy}$ardir/$pctwaterfile $datadir/$pctwaterfile'"
+      exit 1
+   else
+      echo "${arcopy}$ardir/$pctwaterfile $datadir/$pctwaterfile" >> $output_file
+   endif
+ endif
+
+#---- radiation data ----
+ if ($?oldrad) then
+   ${arcopy}$ardir/co2_data.cpio $datadir/co2_data.cpio
+   if ( $status != 0 ) then
+      echo "ERROR: Copy failed in get_fms_data: '${arcopy}$ardir/co2_data.cpio $datadir/co2_data.cpio'"
+      exit 1
+   else
+      echo "${arcopy}$ardir/co2_data.cpio $datadir/co2_data.cpio" >> $output_file
+   endif
+   cd $datadir
+   if (-e cns_2250_12001400) rm -f cns*
+   cpio -miv < co2_data.cpio >& .cpio.out
+   if ( $status != 0 ) then
+      echo "ERROR: cpio failed in get_fms_data: 'cpio -mi < co2_data.cpio'"
+      exit 1
+   else
+      echo "cpio -miv < co2_data.cpio" >> ../$output_file
+      cat .cpio.out >> ../$output_file; rm -f .cpio.out
+   endif
+   rm -f     co2_data.cpio
+   cd ..
+ endif
+
+#---- sea-esf radiation data ----
+ if ($?seaesf) then
+   ${arcopy}$ardir/sea_esf.cpio $datadir/sea_esf.cpio
+   if ( $status != 0 ) then
+      echo "ERROR: Copy failed in get_fms_data: '${arcopy}$ardir/sea_esf.cpio $datadir/sea_esf.cpio'"
+      exit 1
+   else
+      echo "${arcopy}$ardir/sea_esf.cpio $datadir/sea_esf.cpio" >> $output_file
+   endif
+   cd $datadir
+   if (-e cns_600_670850) rm -f cns*
+   cpio -miv < sea_esf.cpio >& .cpio.out
+   if ( $status != 0 ) then
+      echo "ERROR: cpio failed in get_fms_data: 'cpio -mi < sea_esf.cpio'"
+      exit 1
+   else
+      echo "cpio -miv < sea_esf.cpio" >> ../$output_file
+      cat .cpio.out >> ../$output_file; rm -f .cpio.out
+   endif
+   rm -f     sea_esf.cpio
+   cd ..
+ endif
+
+#---- g grp sst data ----
+ if ($?ggrpsst) then
+   ${arcopy}$ardir/sst_ice_clim.nc $datadir/sst_ice_clim.nc
+   if ( $status != 0 ) then
+      echo "ERROR: Copy failed in get_fms_data: '${arcopy}$ardir/sst_ice_clim.nc $datadir/sst_ice_clim.nc'"
+      exit 1
+   else
+      echo "${arcopy}$ardir/sst_ice_clim.nc $datadir/sst_ice_clim.nc" >> $output_file
+   endif
+ endif
+
+#---- hurrell sst ----
+ if ($?hurrell) then
+   ${arcopy}$ardir/hurrell_sst.cpio $datadir/hurrell_sst.cpio
+   if ( $status != 0 ) then
+      echo "ERROR: Copy failed in get_fms_data: '${arcopy}$ardir/hurrell_sst.cpio $datadir/hurrell_sst.cpio'"
+      exit 1
+   else
+      echo "${arcopy}$ardir/hurrell_sst.cpio $datadir/hurrell_sst.cpio" >> $output_file
+   endif
+   cd $datadir
+   cpio -miv < hurrell_sst.cpio >& .cpio.out
+   if ( $status != 0 ) then
+      echo "ERROR: cpio failed in get_fms_data: 'cpio -mi < hurrell_sst.cpio'"
+      exit 1
+   else
+      echo "cpio -miv < hurrell_sst.cpio" >> ../$output_file
+      cat .cpio.out >> ../$output_file; rm -f .cpio.out
+   endif
+   rm -f     hurrell_sst.cpio
+   cd ..
+ endif
+
+#---- hadisst sst ----
+ if ($?hadisst) then
+   ${arcopy}$ardir/hadisst.cpio $datadir/hadisst.cpio
+   if ( $status != 0 ) then
+      echo "ERROR: Copy failed in get_fms_data: '${arcopy}$ardir/hadisst.cpio $datadir/hadisst.cpio'"
+      exit 1
+   else
+      echo "${arcopy}$ardir/hadisst.cpio $datadir/hadisst.cpio" >> $output_file
+   endif
+   cd $datadir
+   cpio -miv < hadisst.cpio >& .cpio.out
+   if ( $status != 0 ) then
+      echo "ERROR: cpio failed in get_fms_data: 'cpio -mi < hadisst.cpio'"
+      exit 1
+   else
+      echo "cpio -miv < hadisst.cpio" >> ../$output_file
+      cat .cpio.out >> ../$output_file; rm -f .cpio.out
+   endif
+   rm -f     hadisst.cpio
+   cd ..
+endif
+
+#---- mcm sst ----
+ if ($?mcm) then
+   ${arcopy}$ardir/mcm.cpio $datadir/mcm.cpio
+   if ( $status != 0 ) then
+      echo "ERROR: Copy failed in get_fms_data: '${arcopy}$ardir/mcm.cpio $datadir/mcm.cpio'"
+      exit 1
+   else
+      echo "${arcopy}$ardir/mcm.cpio $datadir/mcm.cpio" >> $output_file
+   endif
+   cd $datadir
+   cpio -miv < mcm.cpio >& .cpio.out
+   if ( $status != 0 ) then
+      echo "ERROR: cpio failed in get_fms_data: 'cpio -mi < mcm.cpio'"
+      exit 1
+   else
+      echo "cpio -miv < mcm.cpio" >> ../$output_file
+      cat .cpio.out >> ../$output_file; rm -f .cpio.out
+   endif
+   rm -f     mcm.cpio
+   cd ..
+ endif
+
+#---- topo_drag data ----
+ if ($?topo_drag) then
+   ${arcopy}$ardir/$topodragfile $datadir/$topodragfile
+   if ( $status != 0 ) then
+      echo "ERROR: Copy failed in get_fms_data: '${arcopy}$ardir/$topodragfile $datadir/$topodragfile'"
+      exit 1
+   else
+      echo "${arcopy}$ardir/$topodragfile $datadir/$topodragfile" >> $output_file
+   endif
+ endif
+
+#---- mom4 ----
+ if ($?mom4) then
+   ${arcopy}$ardir/mom4.cpio $datadir/mom4.cpio
+   if ( $status != 0 ) then
+      echo "ERROR: Copy failed in get_fms_data: '${arcopy}$ardir/mom4.cpio $datadir/mom4.cpio'"
+      exit 1
+   else
+      echo "${arcopy}$ardir/mom4.cpio $datadir/mom4.cpio" >> $output_file
+   endif
+   cd $datadir
+   cpio -miv < mom4.cpio >& .cpio.out
+   if ( $status != 0 ) then
+      echo "ERROR: cpio failed in get_fms_data: 'cpio -mi < mom4.cpio'"
+      exit 1
+   else
+      echo "cpio -miv < mom4.cpio" >> ../$output_file
+      cat .cpio.out >> ../$output_file; rm -f .cpio.out
+   endif
+   rm -f     mom4.cpio
+   cd ..
+ endif
+
+#---- extra datasets ----
+ if ( $#extra > 0 ) then
+   foreach file ($extra)
+      set is_cpio = `echo $file | grep -c cpio`
+      set rename = `echo $file | grep -c =`
+      if ( $is_cpio ) then
+         ${arcopy}$file $datadir
+         if ( $status != 0 ) then
+            echo "ERROR: Copy failed in get_fms_data: '${arcopy}$file $datadir'"
+            exit 1
+         else
+            echo "${arcopy}$file $datadir" >> $output_file
+         endif
+         cd $datadir
+         cpio -miv < $file:t >& .cpio.out
+         if ( $status != 0 ) then
+            echo "ERROR: cpio failed in get_fms_data: 'cpio -mi < $file:t'"
+            exit 1
+         else
+            echo " cpio -miv < $file:t" >> ../$output_file
+            cat .cpio.out >> ../$output_file; rm -f .cpio.out
+         endif
+         rm -f     $file:t
+         cd ..
+      else if ( $rename ) then
+         set f1 = `echo $file | cut -f1 -d=`
+         set f2 = `echo $file | cut -f2 -d=`
+         set f1_fc = `echo $f1 | cut -c 1`
+         set f2_fc = `echo $f2 | cut -c 1`
+         if ( "$f1_fc" == '/' && "$f2_fc" != '/' ) then
+            set from = $f1
+            set to = $f2
+         else if ( "$f2_fc" == '/' && "$f1_fc" != '/' ) then
+            set from = $f2
+            set to = $f1
+         else
+            echo "Invalid dataset: $file"
+            echo 'Use the format "/full/path/my_data_file=newname"'
+            exit 1
+         endif
+         if ( ! -e $from ) dmget $from
+         if ( ! -e $from ) then
+            echo "Invalid dataset: $from"
+            echo 'Use the format "/full/path/my_data_file=newname"'
+            exit 1
+         endif
+         $arcopy $from $datadir/$to
+         if ( $status != 0 ) then
+            echo "ERROR: Copy failed in get_fms_data: '$arcopy $from $datadir/$to'"
+            exit 1
+         else
+            echo "$arcopy $from $datadir/$to" >> $output_file
+         endif
+      else
+         $arcopy $file $datadir
+         if ( $status != 0 ) then
+            echo "ERROR: Copy failed in get_fms_data: '$arcopy $file $datadir'"
+            exit 1
+         else
+            echo "$arcopy $file $datadir" >> $output_file
+         endif
+      endif
+   end
+ endif
+
+
+

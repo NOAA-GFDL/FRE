@@ -1,0 +1,291 @@
+#!/usr/bin/perl
+# -*- cperl -*-
+# $Id: frerts,v 15.1.2.8 2010/06/30 15:59:13 fms Exp $
+# ------------------------------------------------------------------------------
+# FMS/FRE Project: Automated launch of fremake, frerun and frecheck.
+# ------------------------------------------------------------------------------
+# Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2000-2010
+# Designed and written by V. Balaji, Amy Langenhorst and Aleksey Yakovlev
+
+
+use strict;
+use Getopt::Long(':config', 'no_ignore_case');
+use XML::LibXML;
+use FRE();
+use FREExperiment();
+use lib (File::Basename::fileparse(File::Spec->rel2abs($0)))[1] . "../lib";
+use Date::Manip();
+
+
+{
+package frerts;
+
+use constant VERSION => '$Id: frerts,v 15.1.2.8 2010/06/30 15:59:13 fms Exp $';
+use constant OPTLIST =>
+  (
+      'help|h',
+      'datestr|d=s',
+      'execute|e',
+      'platform|Platform|P',
+      'regtype|r=s',
+      'submit|s',
+      'verbose|v',
+      'xmlfile|x=s'
+  );
+}
+
+{
+#get a datestring to use to create a unique path
+my $thisdate = `date '+%Y%m%d_%H%M%S'`;
+chomp $thisdate;
+
+#get options
+my %opt = (
+     'datestr'   => $thisdate,
+     'platform'  => FREDefaults::Platform(),
+     'regtype'   => 'suite',
+     'xmlfile'   => FREDefaults::XMLFile()
+  );
+Getopt::Long::GetOptions(\%opt,frerts::OPTLIST) or die "FATAL: can't parse command line options\n";
+
+my $xmlfile = '';
+if ( -f $opt{xmlfile} ) {
+   $xmlfile = File::Spec->rel2abs($opt{xmlfile});
+} elsif ( defined $ENV{FRE_XML_HOME} and -f "$ENV{FRE_XML_HOME}/$opt{xmlfile}" ) {
+   $xmlfile = "$ENV{FRE_XML_HOME}/$opt{xmlfile}";
+} elsif (! $opt{help} ) {
+  print "FATAL: XML file does not exist: $opt{xmlfile}\n";
+  $opt{help}=1;
+}
+$opt{xmlfile} = $xmlfile;
+print "Using xml file $xmlfile\n" if $opt{verbose};
+my $xml = $xmlfile;
+$xml =~ s/.*\///;
+
+#help message
+if( $opt{help} ) {
+   print <<EOF;
+
+Synopsis: Creates a script to launch fremake, frerun and frecheck automatically.
+          All the experiments in the xml file will be compiled, and the suite
+          of regression tests (all basic, restarts, and scaling regression 
+          runs) will be run.  Then frecheck will be called.  Source, executables,
+          and stdout will be written to \$HOME/autoRTS/date-string/.
+          This tool does not take an experiment name.
+
+Usage: frerts [ options ]
+       -d STR, --datestr=STR   Optional string to use in output directory paths.
+                               Default is a unique date string.
+       -h,     --help          Show this help message, then exit.
+       -p STR, --platform=STR  Platform. GFDL site default is hpcs.hpcs.
+       -s,     --submit        Automatically submit the script with qsub.
+       -v,     --verbose       Verbose flag.
+       -x STR, --xmlfile=STR   Specify xml file. Default is ./rts.xml.
+
+Example: frerts -x fv_am2.xml
+
+EOF
+   exit 1;
+}
+#       -r STR, --regtype=STR   Regression type. STR can be "basic" or "suite".
+
+#get info for script...
+my $rtsscript = "$ENV{HOME}/autoRTS/$opt{datestr}/autoRTS.$thisdate";
+my $rtsstdoutdir = "$ENV{HOME}/autoRTS/$opt{datestr}";
+print "Script: $rtsscript\nStdoutdir: $rtsstdoutdir\n" if $opt{verbose};
+mkdir "$ENV{HOME}/autoRTS" if not -d "$ENV{HOME}/autoRTS";
+
+#get root node of xml file
+my $fre = FRE->new('frerts', %opt) or exit(1);
+my $root = $fre->{rootNode};
+
+#platform csh
+my $platformcsh = $root->findvalue("setup/platform[\@name='$opt{platform}']/csh");
+
+#ttlruntime=2hrs for compiles+sum of regression test times
+#npes=max pes used in regression tests in file
+my $ttlruntime = '0';
+my $npes = '0';
+my $err;
+
+#get max npes and total runtime from regression nodes
+my $regxpath = "\@name='basic' or \@label='basic'";
+if ( $opt{regtype} eq "suite" ) {
+   $regxpath .= " or \@name='scaling' or \@label='scaling' or \@name='restarts' or \@label='restarts'";
+}
+print "Using $regxpath\n" if $opt{verbose};
+
+my @regnodes = $root->findnodes("experiment/runtime/regression[$regxpath]/run");
+foreach my $node ( @regnodes ) {
+  my $runnpes = $node->findvalue('@npes');
+  if ( $runnpes > $npes ) { $npes = $runnpes; }
+  print "  Testing for max npes: $npes ($runnpes)\n" if $opt{verbose};
+
+  my $runtime = $node->findvalue('@runTimePerJob');
+  $ttlruntime = Date::Manip::DateCalc($ttlruntime,'+'."$runtime",\$err);
+  if ( "$err" ne "" ) { print STDERR "ERROR: DateCalc: $err\n"; }
+  print "  Sum of runtime: $ttlruntime ($runtime)\n" if $opt{verbose};
+  
+}
+
+#how to count compiles...? for now, randomly add 2 hours?
+$ttlruntime = Date::Manip::DateCalc($ttlruntime,'+ 2 hours',\$err);
+if ( "$err" ne "" ) { print STDERR "ERROR: DateCalc: $err\n"; }
+$ttlruntime =~ s/^\+0:0:0:0://; #need error checking on this?
+print "Total npes: $npes\n" if $opt{verbose};
+print "Total runtime: $ttlruntime\n" if $opt{verbose};
+
+if ( $npes > 40 ) {
+   print "WARNING: This script uses $npes processors. It is too large to be\n";
+   print "         run interactively on ic0.  Please use qsub.\n";
+}
+
+#set csh script content
+my $csh = <<EOF;
+#!/bin/csh -f
+# 
+# This automated regression test script was created by frerts.
+#
+#\$ -l h_cpu=$ttlruntime
+#\$ -pe ic.alloc $npes
+#\$ -o $rtsstdoutdir
+#\$ -l cpuset
+#\$ -r y
+
+set xmlpath = $xmlfile
+set xml = $xml
+set label = $opt{datestr}
+set regtype = $opt{regtype}
+set thisdate = $thisdate
+set platform = $opt{platform}
+
+#platform csh from xml
+$platformcsh
+
+EOF
+
+$csh .= gettemplate();
+
+#write script...
+writescript($csh,$rtsscript,"qsub",$opt{submit},$opt{verbose});
+
+
+}
+
+sub gettemplate {
+   my $csh = <<'EOF';
+if ( ! -f $xmlpath ) then
+  echo FATAL: Cannot find xml file $xmlpath
+  exit 1
+endif
+
+cd $TMPDIR
+echo Starting from $xmlpath
+echo Temporary files in $TMPDIR
+
+fretransform -d $label -x $xmlpath > $xml
+
+set list = ( `frelist -p $platform -x $xml |grep -v INHERITS` )
+set list = ( $list `frelist -p $platform -x $xml |grep INHERITS |cut -f1 -d\ ` )
+echo Experiments: $list
+
+foreach expt ( $list )
+  set cmd = "fremake -p $platform -t repro -x $xml $expt"
+  set stdoutdir = `frelist -p $platform -dir=stdout -t repro -x $xml $expt`
+  mkdir -p $stdoutdir
+  set out = $stdoutdir/compile_$expt.stdout
+  echo ---------------------------------------------------
+  echo $cmd
+  $cmd >& $out
+  set mystatus = $status
+  if ( $mystatus == 0 ) then
+     set compile = `tail -1 $out |awk '{print $NF}'`
+     echo Compiling $compile
+     $compile >>& $out
+     set mystatus = $status
+     if ( $mystatus == 0 ) then
+        echo $expt compiled OK
+     else
+        echo Compile failed for $expt
+        tail $out
+        echo See $out
+     endif
+  else if ( $mystatus == 41 ) then
+     echo "$expt does not need to be compiled (status $mystatus)"
+  else
+     echo "fremake failed for $expt (status $mystatus)"
+     tail $out
+     echo See $out
+  endif
+end
+
+foreach expt ( $list )
+  set cmd = "frerun -p $platform -t repro -r $regtype -x $xml $expt"
+  set dirs = (`frelist -p $platform -dir -t repro -x $xml $expt | egrep '^root:|^stdout:|^work:'`)
+  set rootdir = (`echo $dirs | awk '{print $2}'`)
+  set stdoutdir = (`echo $dirs | awk '{print $4}'`)
+  set workdir = (`echo $dirs | awk '{print $6}'`)
+  set out = $stdoutdir/run_$expt.stdout
+  set runs = () 
+  echo ---------------------------------------------------
+  echo $cmd
+  $cmd >& $out 
+  set mystatus = $status
+  if ( $mystatus == 0 ) then
+     set runs = ( `grep 'TO SUBMIT' $out | awk '{print $NF}'` )
+     foreach run ( $runs )
+        echo Running $run
+        $run >>& $out
+        set mystatus = $status
+        if ( $mystatus == 0 ) then
+           echo $expt ran OK
+        else
+           echo Run failed for $expt
+           tail $out
+           echo See $out
+        endif
+        rm -rf $workdir
+     end
+  else
+     echo "frerun failed for $expt (status $mystatus)"
+     tail $out
+     echo See $out
+  endif
+  cp $xml $rootdir/$expt/$xml
+end
+
+( frecheck -p $platform -t repro -x $xml $list > stdoutfile ) >& stderrfile
+cat stdoutfile
+cat stderrfile stdoutfile > $rootdir/autoRTS.$thisdate.frecheck
+Mail -s "frerts results for $thisdate" $USER < $rootdir/autoRTS.$thisdate.frecheck
+sleep 30
+
+EOF
+   return $csh;
+}
+
+sub writescript {
+   #my $script = $_[0];
+   my $outscript = $_[1];
+   my $batchCmd = $_[2];
+   my $submit = $_[3];
+   my $verbose = $_[4];
+
+   (my $volume,my $directory,my $filename) = File::Spec->splitpath( $outscript );
+   if( ! -e $directory ) { mkdir $directory || die "Cannot make directory $directory\n"; }
+
+   open(OUT,"> $outscript");
+   print OUT $_[0];
+   close(OUT);
+
+   my $status = system("chmod 755 $outscript");
+   if( $status ) { die "Sorry, I couldn't chmod $outscript"; }
+
+   if( $submit ) {
+      if($verbose){print "\nExecuting '$batchCmd $outscript'\n";}
+      my $qsub_msg = `$batchCmd $outscript`;
+      print "\n$qsub_msg";
+   } else {
+      print "\nTO SUBMIT: $batchCmd $outscript\n";
+   }
+}

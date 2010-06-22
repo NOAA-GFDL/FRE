@@ -1,0 +1,322 @@
+#!/usr/bin/perl
+# -*- cperl -*-
+#
+# $Id: frelist,v 18.0.2.2 2010/03/19 20:25:00 afy Exp $
+# ------------------------------------------------------------------------------
+# FMS/FRE Project: Program to List Experiments from the XML File
+# ------------------------------------------------------------------------------
+# arl    Ver   0.00  Merged revision 17.0.4.10 onto trunk           March 10
+# afy -------------- Branch 18.0.2 -------------------------------- March 10
+# afy    Ver   1.00  Add --directory=* to request all directories   March 10
+# afy    Ver   1.01  Add alias "d" for the --description option     March 10
+# afy    Ver   1.02  Modify Help subroutine (list targets)          March 10
+# afy    Ver   2.00  Add option --validate                          March 10
+# ------------------------------------------------------------------------------
+# Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2000-2010
+# Designed and written by V. Balaji, Amy Langenhorst and Aleksey Yakovlev
+#
+
+use strict;
+
+use Cwd();
+use File::Basename();
+use Getopt::Long(':config', 'no_ignore_case');
+
+use FRE();
+use FREDefaults();
+use FREExperiment();
+use FREMsg();
+use FRETargets();
+
+# //////////////////////////////////////////////////////////////////////////////
+# ////////////////////////////////////////////////////////// Global constants //
+# //////////////////////////////////////////////////////////////////////////////
+
+{
+
+  package frelist;
+
+  use constant VERSION => '$Id: frelist,v 18.0.2.2 2010/03/19 20:25:00 afy Exp $';
+
+  use constant OPTLIST =>
+  (
+    'description|d',
+    'directory:s',
+    'evaluate=s',
+    'platform=s',
+    'target=s',
+    'quiet',
+    'Xml',
+    'xmlfile=s',
+    'help',
+    'Version',
+    'validate',
+    'verbose|v+'
+  );
+  
+  use constant DIRECTORIES => FREDefaults::ExperimentDirs();
+  
+}
+
+# //////////////////////////////////////////////////////////////////////////////
+# ///////////////////////////////////////////////////////////////// Utilities //
+# //////////////////////////////////////////////////////////////////////////////
+
+{
+
+  package frelist; 
+
+  my $self = File::Basename::basename($0);
+
+  sub Usage()
+  # ------ arguments: none
+  {
+    my $cwd = Cwd::getcwd();
+    my $xml = FREDefaults::XMLFile();
+    my $pfm = FREDefaults::Platform();
+    my $tgt = FREDefaults::Target();
+    return
+    (
+      "\n",
+      "  Usage: $self [options] [experiment ...]\n\n",
+      "  Options:\n\n",
+      "      --description          include experiment descriptions\n",
+      "      --directory=STRING     list experiment directories, defined in the STRING\n",
+      "      --evaluate=STRING      evaluate STRING expression (in XPath syntax) to retrieve experiment information, following inherits\n",
+      "      --platform=STRING      hardware and software platform STRING (default is '$pfm')\n", 
+      "      --target=STRING        use compilation directives, targeted by STRING (default is '$tgt')\n", 
+      "      --quiet                include less information (don't print inheritance information)\n",
+      "      --Xml                  print the experiment suite configuration FILE with entities expanded and exit\n",
+      "      --xmlfile=FILE         experiment suite configuration FILE (default is '$cwd/$xml')\n\n", 
+      "      --help                 print help message and exit\n",
+      "      --Version              print the tool version and exit\n",
+      "      --validate             validate the FILE before processing\n",
+      "      --verbose              verbose messages\n\n",
+      "  All the option names may be abbreviated, a single leading dash is also acceptable.\n",
+      "  If no experiments defined on the command line, then all the experiments in the FILE will be processed.\n",
+      "  Experiments are listed in their natural order (as in the FILE).\n\n"
+    );
+  }
+  
+  sub Help()
+  # ------ arguments: none
+  {
+    my @usage = frelist::Usage();
+    my $dirs = join(', ', frelist::DIRECTORIES);
+    my $tgts = join(', ', FRETargets::all());
+    return
+    (
+      "\n",
+      "   Synopsis: $self lists experiments and other information from your XML file.\n",
+      "@usage",
+      "   Use --directory to request a listing of experiment directories, separated by comma.\n",
+      "      Possible directories are: $dirs.\n",
+      "      Any number of directories from this list can be requested, the empty string (or symbol '*') request all of them.\n",
+      "   Use --platform to pick a platform for experiment(s).\n", 
+      "      The <platform> node in the experiment suite configuration file is used\n", 
+      "      to set platform-specific data and instructions.\n",
+      "   Use --target to define compilation and linkage directives for experiment(s).\n",
+      "      Predefined targets refer to groups of directives, existing in the 'mkmf' template file.\n",
+      "      Possible predefined targets are: $tgts.\n",
+      "      Any number of targets from this list can be used here, and you can also add your own target (but not more than one).\n",
+      "      Your own target should refer to a <compile> node with the corresponding value of its 'target' attribute.\n", 
+      "      Multiple targets are separated by comma or dash. All the directives, referred by multiple targets, are merged.\n", 
+      "   Use --evaluate to retrieve various experiment information, following inherits.\n",
+      "      An example: --evaluate input/dataFile[\@label=\"gridSpec\"]\n\n"
+    );
+  }
+  
+  sub Dir($$)
+  # ------ arguments: $exp $dirType
+  {
+    my ($z, $t) = @_;
+    if ($t eq 'root')
+    {
+      return $z->rootDir();
+    }
+    elsif ($t eq 'src')
+    {
+      return $z->srcDir();
+    }
+    elsif ($t eq 'exec')
+    {
+      return $z->execDir();
+    }
+    elsif ($t eq 'scripts')
+    {
+      return $z->scriptsDir();
+    }
+    elsif ($t eq 'stdout')
+    {
+      return $z->stdoutDir();
+    }
+    elsif ($t eq 'work')
+    {
+      return $z->workDir();
+    }
+    elsif ($t eq 'ptmp')
+    {
+      return $z->ptmpDir();
+    }
+    elsif ($t eq 'archive')
+    {
+      return $z->archiveDir();
+    }
+    elsif ($t eq 'postProcess')
+    {
+      return $z->postProcessDir();
+    }
+    elsif ($t eq 'analysis')
+    {
+      return $z->analysisDir();
+    }
+    else
+    {
+      return '';
+    }
+  }
+
+}
+
+# //////////////////////////////////////////////////////////////////////////////
+# ////////////////////////////////////////////////////////////////////// Main //
+# //////////////////////////////////////////////////////////////////////////////
+
+{
+
+  my %opt =
+  (
+    'platform'	=> FREDefaults::Platform(),
+    'target'	=> FREDefaults::Target(),
+    'xmlfile'	=> FREDefaults::XMLFile()
+  );
+
+  Getopt::Long::GetOptions(\%opt, frelist::OPTLIST) or (print frelist::Usage() and exit(1));
+
+  if ($opt{Xml} and ($opt{'description'} or $opt{directory} or $opt{evaluate} or $opt{quiet}))
+  {
+    FREMsg::out($opt{verbose}, 2, "The --Xml option makes other options ignored: --description, --directory, --evaluate, --quiet");
+  }
+  
+  if ($opt{directory} and ($opt{'description'} or $opt{evaluate} or $opt{quiet}))
+  {
+    FREMsg::out($opt{verbose}, 2, "The --directory option makes other options ignored: --description, --evaluate, --quiet");
+  }
+  
+  if ($opt{evaluate} and ($opt{'description'} or $opt{quiet}))
+  {
+    FREMsg::out($opt{verbose}, 2, "The --evaluate option makes other options ignored: --description, --quiet");
+  }
+  
+  if ($opt{Version}) {print frelist::VERSION,"\n" and exit(0);}
+  if ($opt{help}) {print frelist::Help() and exit(0);}
+
+  my $fre = FRE->new('frelist', %opt) or exit(1);
+  
+  if ($opt{Xml}) {print ($fre->xmlAsString(), "\n") and exit(0);}
+
+  my @dirList = ();
+  my @dirListDefault = frelist::DIRECTORIES;
+  if (exists($opt{directory}) and (!$opt{directory} or $opt{directory} eq '*'))
+  {
+    @dirList = @dirListDefault;
+  }
+  elsif ($opt{directory})
+  {
+    foreach my $dir (split(',', $opt{directory}))
+    {
+      if (scalar(grep($_ eq $dir, @dirListDefault)) > 0)
+      {
+        push @dirList, $dir if scalar(grep($_ eq $dir, @dirList)) == 0;
+      }
+      else
+      {
+        $fre->out(0, "The --directory option contains unknown '$dir' directory");
+	exit (1);
+      }
+    }
+  }
+
+  my @expNamesAll = $fre->experimentNames();
+  my @expNames = (scalar(@ARGV) > 0) ? @ARGV : @expNamesAll;
+
+  my @exps = ();
+  foreach my $expName (@expNames)
+  {
+    my $exp = FREExperiment->new($fre, $expName) or exit(1);
+    push @exps, $exp;
+  }
+
+  foreach my $exp (@exps)
+  {
+
+    my ($expName, $expParent) = ($exp->name(), $exp->parent());
+    $fre->setCurrentExperimentName($expName);
+
+    if (scalar(@dirList) > 0)
+    {
+
+      my $expNamePrefix = (scalar(@expNames) > 1) ? "$expName " : '';
+      
+      if (scalar(@dirList) > 1)
+      {
+        foreach my $dir (@dirList) {print $expNamePrefix, $dir, ': ', frelist::Dir($exp, $dir), "\n";}
+      }
+      else
+      {
+        print $expNamePrefix, frelist::Dir($exp, $dirList[0]), "\n";
+      }
+
+    }
+    elsif ($opt{evaluate})
+    {
+
+      my $xpathData = $exp->extractValue($opt{evaluate});
+      
+      if (scalar(@expNames) > 1)
+      {
+        print "$expName '$xpathData'\n";
+      }
+      else
+      {
+        print "$xpathData\n";
+      }
+
+    }
+    else
+    {
+
+      my $expParent = $exp->parent();
+
+      if ($expParent and !$opt{quiet})
+      {
+        my $expParentName = $expParent->name();
+        print "$expName INHERITS FROM $expParentName\n";
+      }
+      else
+      {
+        print "$expName\n";
+      }
+
+      if ($opt{description})
+      {
+	my $desc = $exp->description();
+	$desc =~ m/^\s*(.*)\s*$/s;
+	if ($1)
+	{
+	  print "---------------------------------------------------------------------\n";
+	  print "$desc\n\n";
+	}
+	else
+	{
+	  print "\n";
+	}
+      }
+
+    }
+
+    $fre->unsetCurrentExperimentName();
+
+  }
+
+}

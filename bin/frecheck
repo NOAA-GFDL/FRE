@@ -1,0 +1,693 @@
+#!/usr/bin/perl
+# -*- cperl -*-
+
+# $Id: frecheck,v 18.0 2010/03/02 23:25:36 fms Exp $
+# ------------------------------------------------------------------------------
+# FMS/FRE Project: Program to Check Model Restart Files
+# ------------------------------------------------------------------------------
+# vb/arl Ver   1.00  Initial version                                ???
+# afy -------------- Branch 17.0.4 -------------------------------- August 09
+# afy    Ver   1.00  Copied from 15.1.6.1.2.4                       August 09
+# afy    Ver   2.00  Rename archDir => archiveDir                   August 09
+# afy    Ver   2.01  Use FRE::properties() to access properties     August 09
+# afy    Ver   3.00  Use new FREExperiment.pm module (!!!)          September 09
+# afy    Ver   3.01  Add option --target                            September 09
+# afy    Ver   4.00  Add option --start-date                        September 09
+# afy    Ver   5.00  Separate crossover/referential comparing       September 09
+# afy    Ver   6.00  Don't append $name to archive directory        October 09
+# afy    Ver   6.01  Allow local reference experiments only         October 09
+# afy    Ver   6.02  Don't pass the option --platform to subs       October 09
+# afy    Ver   6.03  Add errors processing                          October 09
+# afy    Ver   7.00  Use new FRE module (setCurrentExperimentName)  October 09
+# afy    Ver   8.00  Use new FREDefaults module                     October 09
+# arl    Ver   9.00  Add option --force (to pass -f to ardiff)      October 09
+# afy    Ver  10.00  Replace prints by calls to FREMsg::out         November 09
+# afy    Ver  11.00  Fix loop over reference experiments            November 09
+# afy    Ver  11.01  Call ardiff without path                       November 09
+# afy    Ver  12.00  Modify Help subroutine                         December 09
+# afy    Ver  13.00  Use new FREDefaults module (Site/SiteGFDL)     January 10
+# afy    Ver  14.00  Add target option alias "t"                    February 10
+# ------------------------------------------------------------------------------
+# Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2000-2010
+# Designed and written by V. Balaji, Amy Langenhorst and Aleksey Yakovlev
+#
+
+use strict;
+
+use Date::Manip();
+use File::Basename();
+use GD::Graph::mixed();
+use Getopt::Long(':config', 'no_ignore_case');
+
+use FRE();
+use FREDefaults();
+use FREExperiment();
+use FREUtil();
+
+# //////////////////////////////////////////////////////////////////////////////
+# ////////////////////////////////////////////////////////// Global constants //
+# //////////////////////////////////////////////////////////////////////////////
+
+{
+
+  package frecheck;
+
+  use constant VERSION => '$Id: frecheck,v 18.0 2010/03/02 23:25:36 fms Exp $';
+  
+  use constant OPTLIST =>
+  (
+    'force',
+    'Longlist',
+    'list',
+    'platform=s',
+    'Save',
+    'start-date=s',
+    'target|t=s',
+    'timing',
+    'xmlfile=s',
+    'help',
+    'Version',
+    'verbose+'
+  );
+  
+}
+
+# //////////////////////////////////////////////////////////////////////////////
+# ///////////////////////////////////////////////////////////////// Utilities //
+# //////////////////////////////////////////////////////////////////////////////
+
+{
+
+  package frecheck;
+
+  use Cwd();
+  
+  my $self = File::Basename::basename($0);
+
+  sub Usage()
+  # ------ arguments: none
+  {
+    my $cwd = Cwd::getcwd();
+    my $xml = FREDefaults::XMLFile();
+    my $pfm = FREDefaults::Platform();
+    my $tgt = FREDefaults::Target();
+    return
+    (
+      "\n",
+      "  Usage: $self [options] experiment [experiment ...]\n\n",
+      "  Options:\n\n",
+      "      --force                do not stop comparing netcdf files after the first difference\n",
+      "      --Longlist             list all the restart files in the long format, do not compare them\n",
+      "      --list                 list all the restart files in the short format, do not compare them\n", 
+      "      --platform=STRING      hardware and software platform STRING (default is '$pfm')\n",
+      "      --Save                 save all the temporary files, created by the ardiff command\n",
+      "      --start-date=STRING    start date STRING to override the date from the configuration file\n",
+      "      --target=STRING        use compilation directives, targeted by STRING (default is '$tgt')\n", 
+      "      --timing               print timings only, do not compare restart files\n",
+      "      --xmlfile=FILE         experiment suite configuration FILE (default is '$cwd/$xml')\n\n", 
+      "      --help                 print help message and exit\n",
+      "      --Version              print the tool version and exit\n",
+      "      --verbose              get verbose messages (repeat the option to increase verbosity level)\n\n", 
+      "  All the option names may be abbreviated, a single leading dash is also acceptable.\n",
+      "  At least one experiment from the xmlfile must be listed as an argument.\n\n"
+    );
+  }
+
+  sub Help()
+  # ------ arguments: none
+  {
+    my @usage = frecheck::Usage();
+    return
+    (
+      "\n",
+      "   Synopsis: $self runs the ardiff command to compare restart files on\n",
+      "          the output, produced by frerun-generated runs and prints a report\n",
+      "          (the ardiff command must be findable via the current user PATH).\n", 
+      "          It can also generate a table listing of the runtime for different\n",
+      "          processor counts by parsing standard output files.\n",
+      "@usage",
+      "   Use --Longlist or --list to produce a list of available restart files.\n", 
+      "      These options supress the comparison of restart files and timing analysis.\n",
+      "   Use --start-date to define a new start date for the files comparison.\n",
+      "      If this option is not used, then the start date will be looked for inside following namelists:\n",
+      "      coupler_nml(current_date), ocean_solo_nml(date_init), standalone_rad_nml(rad_date).\n",
+      "      The date in this option must be valid date string, for example - '20090909' or '9th Sep 2009'.\n", 
+      "   Use --platform to pick a platform for experiment(s).\n", 
+      "      The <platform> node in the experiment suite configuration file is used\n", 
+      "      to set platform-specific data and instructions.\n",
+      "   Use --target to define compilation and linkage directives for experiment(s).\n",
+      "      Predefined targets refer to groups of directives, existing in the 'mkmf' template file.\n",
+      "      You can also use <compile> nodes with the 'target' attribute, defined in the experiment suite configuration file.\n", 
+      "      Multiple targets are separated by comma or dash. All the directives, referred by multiple targets, are merged.\n", 
+      "   Use --timing to produce a table, listing runtimes for different processor counts.\n",
+      "      This option supresses the comparison of restart files.\n\n"
+    );
+  }
+  
+  sub calendarType(%)
+  # ------ arguments: %namelist
+  {
+    my %n = @_;
+    my $result = 'no_calendar';
+    foreach my $listName ('coupler_nml', 'main_nml', 'ocean_solo_nml', 'standalone_rad_nml')
+    {
+      my $value = $n{$listName};
+      if ($value =~ m/calendar\s*=\s*'?(\w+)'?/s)
+      {
+        $result = $1;
+	last;
+      }
+    }
+    return $result;
+  }
+  
+  sub endDate($$$)
+  # ------ arguments: $start $length $calendarType
+  {
+    my ($s, $d, $c) = @_;
+    if ($c ne 'no_calendar')
+    {
+      return FREUtil::graindate(FREUtil::modifydate($s, "+ $d days"), 'day');
+    }
+    else
+    {
+      return FREUtil::pad8digits($d);
+    }
+  }
+  
+  sub startDate($%)
+  # ------ arguments: $startDate %namelist
+  {
+    my ($s, %n) = @_;
+    if ($s)
+    {
+      return Date::Manip::ParseDate($s);
+    }
+    else
+    {
+      my $baseDate = '0,1,1,0,0,0';
+      foreach my $listRef (['coupler_nml', 'current_date'], ['ocean_solo_nml', 'date_init'], ['standalone_rad_nml', 'rad_date'])
+      {
+	my ($listName, $tag) = @{$listRef};
+	my $value = $n{$listName};
+	if ($value =~ m/$tag\s*=\s*(\d+\s*,\s*\d+\s*,\s*\d+\s*,\s*\d+\s*,\s*\d+\s*,\s*\d+)/s)
+	{
+          $baseDate = $1;
+	  last;
+	}
+      }
+      return FREUtil::parseFortranDate($baseDate);
+    }
+  }
+  
+  sub timestampsToCompare($$$$)
+  # ------ arguments: $exp $start $calendarType $refToCompFiles
+  {
+
+    my ($z, $s, $c, $f) = @_;
+    my ($fre, %timestamps) = ($z->fre(), {});
+   
+    my @runNodes = $z->extractNodes('runtime', 'regression/run');
+    foreach my $runNode (@runNodes)
+    {
+
+      $fre->out(2, $runNode->toString());
+      
+      my $days = $runNode->findvalue('@days');
+      if ($days)
+      {
+
+        my @lens = ();
+
+        if ($days =~ / /)
+	{
+	  my $len = 0;
+	  foreach my $restart (split / /, $days) {$len += $restart; push @lens, $len;}
+	}
+	else
+	{
+	  push @lens, $days;
+	}
+
+	foreach my $len (@lens)
+	{
+	  my $enddate = frecheck::endDate($s, $len, $c);
+	  $timestamps{$enddate}++;
+	  foreach my $compFile (@{$f})
+	  {
+	    if ($compFile =~ m/$enddate/)
+	    {
+	      $fre->out(2, "Found enddate $enddate matching $compFile");
+	      $timestamps{$enddate}++;
+	    }
+	  }
+	}
+
+      }
+        
+    }
+    
+    return grep($timestamps{$_} > 1, keys %timestamps);
+
+  }
+  
+  sub make_gif($$@)
+  # ------ arguments: $outputDirectory $title @data
+  # ------ create speedup graphs file using @data and save it into $directory  
+  {
+
+    my ($o, $t, @d) = @_;
+    my (@sortdata, @xdata, @ydata);
+
+    my $graph = GD::Graph::mixed->new();
+    $graph->set_legend($t);
+
+    my @sortdata0 = @{$d[0]};
+    my @sortdata1 = @{$d[1]};
+
+    my $xpoints = -99;
+
+    for (my $i = 0; $i < @sortdata0; $i++)
+    {
+      if ($sortdata0[$i] > $xpoints) {$xpoints = $sortdata0[$i];}
+    }
+
+    for (my $i = 0; $i <= $xpoints; $i++)
+    {
+      $xdata[$i] = $i;
+    }
+
+    for (my $i = 0; $i <= @sortdata0; $i++)
+    {
+      my $j = $sortdata0[$i];
+      $xdata[$j] = $sortdata0[$i];
+      $ydata[$j] = $sortdata1[$i];
+    }
+
+    $xdata[0] = 0; 
+    @{$sortdata[0]} = @xdata;
+    @{$sortdata[1]} = @ydata;
+
+    $graph->set
+    (
+      title             => $t,
+      types             => [qw(linespoints )],
+      x_label           => 'Number of Processors',
+      y1_label          => 'Number of model years/day ',
+      x_label_position  => 1/2,
+      x_labels_vertical => 1,
+      x_label_skip      => $xpoints/20,
+      t_margin          => 10,
+      b_margin          => 10,
+      r_margin          => 10,
+      l_margin          => 10,
+      legend_placement  => 'None',
+      transparent       => 0
+    );
+
+    my $gd_image = $graph->plot(\@sortdata);
+    my $timeStr = FREUtil::timeString();
+    my $filename = "$o/$t.png.$timeStr";
+    FREMsg::out(1, 2, "Writing speedup graphs to '$filename'");
+    open (IMG, "> $filename") or die $!;
+    binmode IMG;
+    print IMG $gd_image->png();
+    close IMG;
+
+  }
+  
+}
+
+# //////////////////////////////////////////////////////////////////////////////
+# ////////////////////////////////////////////////////////////////////// Main //
+# //////////////////////////////////////////////////////////////////////////////
+
+{
+
+  my %opt =
+  (
+    'platform'	=> FREDefaults::Platform(),
+    'target'	=> FREDefaults::Target(),
+    'xmlfile'	=> FREDefaults::XMLFile()
+  );
+
+  Getopt::Long::GetOptions(\%opt, frecheck::OPTLIST) or (print frecheck::Usage() and exit(1));
+  
+  if ($opt{'start-date'} and !Date::Manip::ParseDate($opt{'start-date'}))
+  {
+    FREMsg::out($opt{verbose}, 0, "The option --start-date defines date '$opt{'start-date'}' in a wrong format or with wrong value");
+    exit(1);
+  }
+  
+  if ($opt{Version}) {print frecheck::VERSION,"\n" and exit(0);}
+  if ($opt{help} or "$#ARGV" eq "-1") {print frecheck::Help() and exit(0);}
+
+  my $fre = FRE->new('frecheck', %opt) or exit(1);
+  
+  my $siteIsGFDL = (FREDefaults::Site() eq FREDefaults::SiteGFDL());
+  my $archExt = ($siteIsGFDL) ? 'cpio' : 'tar';
+
+  my (@drnPassed, @drnFailed) = ((), ());
+  my (@crsPassed, @crsFailed) = ((), ());
+  my (@refPassed, @refFailed) = ((), ());
+  my (@crashed, @notTested) = ((), ());
+
+  my @exps = ();
+  foreach my $expName (@ARGV)
+  {
+    my $exp = FREExperiment->new($fre, $expName) or exit(1);
+    push @exps, $exp;
+  }
+
+  foreach my $exp (@exps)
+  {
+
+    my $expName = $exp->name();
+    $fre->setCurrentExperimentName($expName);
+
+    if (!$opt{Longlist} and !$opt{list})
+    {
+      print "\n/// $expName\n";
+      print "////////////////////////////////////////////////////////////////////////////////\n";
+    }
+
+    my $archiveDir = $exp->archiveDir();
+
+    if ($opt{Longlist})
+    {
+      if ($siteIsGFDL)
+      {
+        print qx(dmls -l $archiveDir/\*/restart/\*.$archExt);
+      }
+      else
+      {
+        print qx(ls -l $archiveDir/\*/restart/\*.$archExt);
+      }
+    }
+    elsif ($opt{list})
+    {
+      print qx(ls $archiveDir/\*/restart/\*.$archExt);
+    }
+    elsif ($opt{timing})
+    {
+
+      my %stats = ();
+      my %years = ();
+      my %nodes = ();
+
+      my @data = ();
+      my $dataForPlotting = 0;
+
+      # ------------------------------------------------ collect runtime statistics
+
+      my $stdoutDir = $exp->stdoutDir() . '/run';
+      chomp (my $fileList = qx(ls -1d $stdoutDir/${expName}_1x*));
+
+      foreach my $file (split /\n/, $fileList)
+      {
+
+	if ($file =~ m/(1x.+pe)/)
+	{
+        
+	  my $label = $1;
+
+          my $npes = $label;
+          my $runlen = $label;
+          $npes =~ s/.*_//;
+          $runlen =~ s/_.*//;
+          $runlen =~ s/^1x//;
+
+          chomp (my $runtime = qx(fgrep "Total runtime" $file | awk '{print \$5}'));
+	  next unless $runtime;
+	  
+          my $statistics = sprintf "%7.1f", $runtime;
+          $stats{$label} = "$statistics";
+
+          my $months = $runlen;
+          my $days = $runlen;
+          $days =~ s/.*m//;
+          $months =~ s/$days//;
+          $days =~ s/d//;
+          $months =~ s/m//;
+          my $length = 30.0 * $months + $days;
+
+          chomp (my $runtime1 = qx(fgrep "Main loop  " $file | awk '{print \$5}'));
+
+          if ($runtime1)
+	  {
+            $runtime = $runtime1;
+          }
+	  else
+	  {
+            $fre->out(1, "Using Total runtime to calculate speedup graphics $runtime1");
+          }
+
+          my $statistics = sprintf "%7.1f     %7.1f", $stats{$label}, $runtime;
+          my $tmp = $npes;
+          $tmp =~ s/pe.*//;
+          $fre->out(2, "npes $tmp, length $length, runtime $runtime");
+          my $yrs_per_day = 0.00;
+
+          if ($runtime > 0.0)
+	  {
+            push @{$data[0]}, $tmp;
+            $yrs_per_day = sprintf "%7.2f ", ($length * 86400.0) / (365.0 * $runtime);
+            push @{$data[1]}, $yrs_per_day;
+            $dataForPlotting += 1;
+          }
+
+          chomp (my $node = qx(fgrep "hostname" $file | awk '{print \$2}'));
+
+          $stats{$label} = "$statistics";
+          $years{$label} = "$yrs_per_day";
+          $nodes{$label} = "$node";
+
+        }
+
+      } 
+
+      # ------------------------------------------------ output runtime statistics
+
+      my $numstats = keys %stats;
+      if ($numstats)
+      {
+	print "LENGTH_NPES  TOTAL(sec)  MAIN LOOP(sec)  Model-yrs/day HOST\n";
+	print "--------------------------------------------------------------------------------\n";
+	foreach my $npes (sort {$a <=> $b} keys %stats)
+	{
+          printf ("%-13s %-25s %-14s %-40s\n", $npes, $stats{$npes}, $years{$npes}, $nodes{$npes});
+	}
+	print "--------------------------------------------------------------------------------\n";
+      }
+
+      if ($dataForPlotting)
+      {   
+        my $dir = $exp->tmpDir();
+        if (FREUtil::createDir($dir, $opt{verbose}))
+	{
+	  frecheck::make_gif($dir, $expName, @data);
+	}
+	else
+	{
+	  $fre->out(0, "A problem with filesystem access");
+	  $fre->out(0, "Skipping the experiment '$expName'...");
+	  next;
+	}
+      }
+      else
+      {
+	print "No 1x data for plotting for $expName.\n";
+      }
+
+    }
+    else
+    {
+
+      my $crashed = 0;
+      chomp (my $outdirs = qx(ls -1d $archiveDir/\* | grep -c '_crash'));
+      $crashed++ if $outdirs;
+
+      my @compExpNames = $exp->extractReferenceExperiments();
+      my @compFiles = $exp->extractReferenceFiles();
+
+      # ----------------------------------------------- get timestamps to compare
+
+      my $resdiff = 'ardiff -q';
+      $resdiff .= ' -s' if $opt{Save};
+      $resdiff .= ' -f' if $opt{force};
+
+      my %nml = $exp->extractNamelists();
+
+      my $caltype = frecheck::calendarType(%nml);
+      $fre->out(2, "caltype is $caltype");
+
+      my $sim0 = frecheck::startDate($opt{'start-date'}, %nml);
+      $fre->out(2, "sim0 is $sim0");
+
+      my @timestamps = frecheck::timestampsToCompare($exp, $sim0, $caltype, \@compFiles);   
+      $fre->out(2, "timestamps: @timestamps");
+
+      # --------------------------------------------------------------------- compare production dual runs
+
+      my ($drnPassed, $drnTested) = (0, 0);
+      my @prodres = <$archiveDir/restart/\*.$archExt>;
+      foreach my $res (@prodres)
+      {
+	my $resfile = $res;
+	$resfile =~ s/.*\///;
+	my @dualres = <$archiveDir/\*/restart/$resfile>;
+	if (scalar(@dualres) > 0)
+	{
+          my $filestr = join ' ', @dualres;
+          my $status = system "ls -1f $res $filestr | $resdiff";
+          $drnPassed++ if !$status;
+          $drnTested++;
+	}
+      }
+
+      # ------------------------------------------------------------------------------- compare regression runs
+
+      my ($crsPassed, $crsTested) = (0, 0);
+      my ($refPassed, $refTested) = (0, 0);
+
+      foreach my $timestamp (@timestamps)
+      {
+
+	my @crsFiles = <$archiveDir/\*/restart/$timestamp.$archExt>;
+
+	if (scalar(@crsFiles) > 1)
+	{
+	  if ($opt{verbose})
+	  { 
+            print "Crossover comparing files with timestamp $timestamp:\n";
+            print "--------------------------------------------------------------------------------\n";
+            foreach my $n (@crsFiles) {print "$n\n";} 
+            print "--------------------------------------------------------------------------------\n";
+          }
+          my $filestr = join ' ', @crsFiles;
+          my $status = system "ls -1f $filestr | $resdiff";
+          $crsPassed++ if !$status;
+	  $crsTested++;
+	}
+	else
+	{
+          $fre->out(1, "Not enough files in '$archiveDir' with timestamp '$timestamp' for crossover comparing");
+	}
+
+        if (scalar(@crsFiles) > 0)
+	{
+
+	  my @refFiles = ($crsFiles[0]);
+
+	  foreach my $compExpName (@compExpNames)
+	  {
+	    my $expNameSaved = $fre->unsetCurrentExperimentName();
+	    my $compExp = FREExperiment->new($fre, $compExpName);
+	    my $compExpArchiveDir = $compExp->archiveDir(); 
+            my @compExpResFiles = <$compExpArchiveDir/\*/restart/$timestamp.$archExt>;
+            foreach my $compExpResFile (@compExpResFiles) {push @refFiles, $compExpResFile;}
+	    $fre->setCurrentExperimentName($expNameSaved);
+	  }
+
+	  foreach my $compFile (@compFiles)
+	  { 
+            if ($compFile =~ /$timestamp/)
+	    { 
+              push @refFiles, $compFile; 
+            }
+	  }
+
+	  if (scalar(@refFiles) > 1)
+	  {
+	    if ($opt{verbose})
+	    { 
+              print "Referential comparing files with timestamp $timestamp:\n";
+              print "--------------------------------------------------------------------------------\n";
+              foreach my $n (@refFiles) {print "$n\n";} 
+              print "--------------------------------------------------------------------------------\n";
+            }
+            my $filestr = join ' ', @refFiles;
+            my $status = system "ls -1f $filestr | $resdiff";
+            $refPassed++ if !$status;
+	    $refTested++;
+	  }
+	  else
+	  {
+            $fre->out(1, "Not enough files in '$archiveDir' with timestamp '$timestamp' for referential comparing");
+	  }
+
+	}
+	else
+	{
+          $fre->out(1, "No files in '$archiveDir' with timestamp '$timestamp' for referential comparing");
+	}
+	
+      } 
+
+      # ------------------------------------------------------------------------------------------------- save test results
+
+      if ($crashed > 0)
+      {
+	push @crashed, $expName;
+      }
+      
+      if ($drnTested > 0 && $drnPassed >= $drnTested)
+      {
+        push @drnPassed, $expName;
+      }
+      elsif ($drnTested > 0)
+      {
+        push @drnFailed, $expName;
+      }
+      
+      if ($crsTested > 0 && $crsPassed >= $crsTested)
+      {
+        push @crsPassed, $expName;
+      }
+      elsif ($crsTested > 0)
+      {
+        push @crsFailed, $expName;
+      }
+      
+      if ($refTested > 0 && $refPassed >= $refTested)
+      {
+        push @refPassed, $expName;        
+      }
+      elsif ($refTested > 0)
+      {
+        push @refFailed, $expName;
+      }
+
+      if ($crsTested == 0 && $refTested == 0) 
+      {
+        my @anyResFiles = <$archiveDir/\*/restart/\*.$archExt>;
+        $fre->out
+	(
+	  1,
+	  "Restart files exist for experiment '$expName' but no test could be made for runs starting in '$sim0'.",
+	  "Check the date in your namelists or manually enter the date (with option --start-date)."
+	) if scalar(@anyResFiles) > 1;
+	push @notTested, $expName;
+      }
+      
+    }
+
+    $fre->unsetCurrentExperimentName();
+
+  }
+
+  if (!$opt{Longlist} and !$opt{list} and !$opt{timing})
+  {
+    print "\n";
+    print '    CROSSOVER PASSED:'; foreach my $e (@crsPassed) {print " $e";} print "\n";
+    print '    CROSSOVER FAILED:'; foreach my $e (@crsFailed) {print " $e";} print "\n";
+    print 'REFERENTIALLY PASSED:'; foreach my $e (@refPassed) {print " $e";} print "\n";
+    print 'REFERENTIALLY FAILED:'; foreach my $e (@refFailed) {print " $e";} print "\n";
+    print '    DUAL RUNS PASSED:'; foreach my $e (@drnPassed) {print " $e";} print "\n";
+    print '    DUAL RUNS FAILED:'; foreach my $e (@drnFailed) {print " $e";} print "\n";
+    print '      CRASH DETECTED:'; foreach my $e (@crashed)   {print " $e";} print "\n";
+    print '  NO RUNS TO COMPARE:'; foreach my $e (@notTested) {print " $e";} print "\n";
+    print "\n";
+  }
+
+}
