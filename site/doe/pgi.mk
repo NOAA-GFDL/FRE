@@ -22,9 +22,9 @@ NETCDF_ROOT = $(NETCDF_DIR)
 MPI_ROOT    = $(MPICH_DIR)
 INCLUDE = -I$(NETCDF_ROOT)/include
 
-FPPFLAGS = $(INCLUDE) -Wp,-D_F2000
+FPPFLAGS = $(INCLUDE)
 FFLAGS = -i4 -r8 -byteswapio -Mcray=pointer
-FFLAGS_OPT = -O2 -Mflushz -Mvect=nosse -Mnoscalarsse -Mallocatable=03
+FFLAGS_OPT = -O2 -Mflushz -Mvect=nosse -Mnoscalarsse -Mallocatable=03 -D_F2000
 FFLAGS_DEBUG = -g -traceback -Ktrap=fp
 FFLAGS_OPENMP = -mp
 FFLAGS_VERBOSE = -v

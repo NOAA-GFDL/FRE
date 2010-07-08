@@ -1,23 +1,11 @@
 #
-# $Id: FREProperties.pm,v 18.0 2010/03/02 23:58:54 fms Exp $
+# $Id: FREProperties.pm,v 18.0.2.1 2010/06/25 22:48:08 afy Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: Properties Management Module
 # ------------------------------------------------------------------------------
-# afy -------------- Branch 1.1.4 --------------------------------- August 09
-# afy    Ver   1.00  Initial version                                August 09
-# afy    Ver   2.00  Cosmetics                                      August 09
-# afy    Ver   3.00  Restrict location of internal properties       August 09
-# afy    Ver   3.01  Add verbose global variable                    August 09
-# afy    Ver   4.00  Module removed                                 September 09
-# afy    Ver   5.00  Copied from the FREInternalProperties module   January 10
-# afy    Ver   6.04  Modify treeProcess* (use new FREDefaults)      January 10
-# afy    Ver   6.05  Don't store verbose flag in the object         January 10
-# afy    Ver   7.00  Add extractExternalProperties subroutine       January 10
-# afy    Ver   7.01  Integrate external and internal properties     January 10
-# afy    Ver   7.02  Modify treeProcessPlatform (directories)       January 10
-# afy    Ver   7.03  Modify new (add platformSite)                  January 10
-# afy    Ver   7.04  Modify propertiesList (use level 3/4)          January 10
-# afy    Ver   8.00  Modify treeProcessCompile (no "*" target)      January 10
+# arl    Ver   0.00  Merged revision 1.1.4.8 onto trunk             March 10
+# afy -------------- Branch 18.0.2 -------------------------------- June 10
+# afy    Ver   1.00  Modify externalPropertiesExtract (allow '=')   June 10
 # ------------------------------------------------------------------------------
 # Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2009-2010
 # Designed and written by V. Balaji, Amy Langenhorst and Aleksey Yakovlev
@@ -182,7 +170,7 @@ my $externalPropertiesExtract = sub($$$)
       {
 	next;
       }
-      elsif ($line =~ m/^\s*((?:\w|\.)+)\s*=\s*([^=]*)\s*$/)
+      elsif ($line =~ m/^\s*((?:\w|\.)+)\s*=\s*(.*)\s*$/)
       {
         my ($key, $value) = ($1, $2);
 	if (FREUtil::propertyNameCheck($key))

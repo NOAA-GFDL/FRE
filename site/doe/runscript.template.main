@@ -1,7 +1,7 @@
 #!/bin/csh -f
 #FRE scheduler-options
 # 
-# $Id: runscript.template.main,v 18.0.2.4 2010/06/01 15:48:29 afy Exp $
+# $Id: runscript.template.main,v 18.0.2.6 2010/06/28 18:08:32 afy Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: Runscript Template - DOE Version
 # ------------------------------------------------------------------------------
@@ -23,6 +23,12 @@
 # afy    Ver   3.00  Don't allow to redefine the FRE_COMMANDS_HOME  May 10
 # afy    Ver   3.01  Set the FREROOT variable (temporarily?)        May 10
 # afy    Ver   4.00  Don't remove the workDir in case of errors     June 10
+# afy    Ver   5.00  Add timeStampFormat settable constant          June 10
+# afy    Ver   5.01  Modify alias "time_stamp"                      June 10
+# afy    Ver   6.00  Process variables FRE_STAGE/FRE_INPUT_DIR      June 10
+# afy    Ver   6.01  Add modules initialization                     June 10
+# afy    Ver   6.02  Modify system aliases (use `which`)            June 10
+# afy    Ver   6.03  Modify 'aprun' call (save stderr as well)      June 10
 # ------------------------------------------------------------------------------
 # Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2000-2010
 # Designed and written by V. Balaji, Amy Langenhorst and Aleksey Yakovlev
@@ -32,6 +38,7 @@
 #FRE version-info
 #===============================================================================
 
+  echo "Starting on `date`"
   echo $HOST $HOSTNAME
   set echo
   unalias *
@@ -54,9 +61,7 @@
   set freCommandsHomeDir
   set stdoutDir
   set workDir
-  set ptmpDir
   set archiveDir
-  set hsmDir
   set scriptName
   set executable
   set npes
@@ -66,6 +71,7 @@
   set monthslist
   set dayslist
   set combineFreq
+  set timeStampFormat
   set baseDate
 
   set flagRunType
@@ -75,21 +81,42 @@
   set flagTransferAscii
   set flagTransferRestart    
 
+  set ptmpDir
   set outputDir
   set gridSpec
   set initCond
 
 ################################################################################
+#-------------- global variables adjustment for input data staging -------------
+################################################################################
+
+  if ( $?FRE_STAGE ) then
+    if ( $?FRE_INPUT_DIR ) then
+      if ( "$FRE_INPUT_DIR" != "" ) then
+        set ptmpDir = $FRE_INPUT_DIR
+      endif
+    endif
+  endif
+
+################################################################################
 #------------------------ global environment settings --------------------------
 ################################################################################
+
+  # ---------------- initialize environment modules
+
+  source $MODULESHOME/init/tcsh
 
   # ---------------- commands, copied from XML (setup/platform/csh)
 
   #FRE setup-platform-csh
 
+  # ---------------- the settings below aren't changeable (FREROOT is for compatibility only)
+
   setenv FRE_COMMANDS_HOME $freCommandsHomeDir
   setenv PATH $FRE_COMMANDS_HOME/bin:$PATH
-  setenv FREROOT $FRE_COMMANDS_HOME		# <--- for compatibility only
+  setenv FREROOT $FRE_COMMANDS_HOME
+
+  # ---------------- temporarily while we don't have fre-transfer/fre-nctools modules
 
   if ( ! $?FRE_TRANSFER_HOME ) then
     setenv FRE_TRANSFER_HOME $freCommandsHomeDir
@@ -97,13 +124,8 @@
   endif
 
   if ( ! $?FRE_NCTOOLS_HOME ) then
-    setenv FRE_NCTOOLS_HOME $freCommandsHomeDir
+    setenv FRE_NCTOOLS_HOME /ccs/home/alangenh/local
     setenv PATH $FRE_NCTOOLS_HOME/bin:$PATH
-  endif
-
-  if ( ! $?FRE_ANALYSIS_HOME ) then
-    setenv FRE_ANALYSIS_HOME $freCommandsHomeDir
-    setenv PATH $FRE_ANALYSIS_HOME/bin:$PATH
   endif
 
 ################################################################################
@@ -133,10 +155,8 @@
   # ---------------- HSM site-dependent directory
   set -r hsmSiteDir = $FRE_TRANSFER_HOME/site/doe
 
-  # ---------------- root directories
-  set -r fmsroot = /autofs/na1_home/alangenh/local
-  set -r pbsroot = /opt/torque/default
-  set -r hsiroot = /opt/public
+  # ---------------- top directory for all the HSM-copied files
+  set -r hsmDir = $workDir/hsm
 
   # ---------------- selection patterns for grep
   set -r patternGrepTail = '\.[0-9]{4}$'
@@ -153,27 +173,27 @@
   alias hsmget `which hsmget` -q -t -m $hsmSiteDir/hsmget.mk -w $hsmDir -p '$ptmpDir' -a /
 
   # ---------------- netCDF files combining utilities
-  alias mppnccombine $fmsroot/bin/mppnccombine-2.1.4 -64
-  alias slmnccombine $fmsroot/bin/combine-ncc 
+  alias mppnccombine `which mppnccombine-2.1.4` -64
+  alias slmnccombine `which combine-ncc` 
 
   # ---------------- string date generation for file name labels
-  alias time_stamp `which time_stamp.csh`
+  alias time_stamp `which time_stamp.csh` -f $timeStampFormat
 
   # ---------------- directory making/cleaning utility
   alias prepare_dir `which prepare_dir.csh`
 
   # ---------------- history files offline combining script (saves to HPSS and sends to GFDL too) 
-  alias combine_parallel $fmsroot/bin/combine_parallel_parse.csh
+  alias combine_parallel `which combine_parallel_parse.csh`
 
   # ---------------- for sending files to GFDL
-  alias send_file $fmsroot/bin/send_file_parse
+  alias send_file `which send_file_parse`
 
   # ---------------- DOE-specific aliases
-  alias qsub $pbsroot/bin/qsub -q $PBS_QUEUE
-  alias hsi $hsiroot/bin/hsi
+  alias qsub `which qsub` -q $PBS_QUEUE
+  alias hsi `which hsi`
 
 ################################################################################
-#--------------- only highly premeditated user changes below here --------------
+#------------------------------ environment checks -----------------------------
 ################################################################################
 
   # ---------------- some global configuration
@@ -193,6 +213,22 @@
   endif
 
   unset machine
+
+  # ---------------- exit if no fre-transfer module is loaded
+
+  if ( ! $?FRE_TRANSFER_HOME ) then
+    unset echo
+    echo "ERROR: The script '$scriptName' must load a 'fre-transfer' module"
+    exit 1
+  endif
+
+  # ---------------- exit if no fre-nctools module is loaded
+
+  if ( ! $?FRE_NCTOOLS_HOME ) then
+    unset echo
+    echo "ERROR: The script '$scriptName' must load a 'fre-nctools' module"
+    exit 1
+  endif
 
   # ---------------- exit if number of days/months/hours is not equal to number of segments per job
 
@@ -348,7 +384,18 @@
   ls -l INPUT/*
   set echo
 
-  # ---------------- data copying to working directory
+  # ---------------- normal exit if in the input data staging mode
+
+  if ( $?FRE_STAGE ) then
+    if ( $FRE_STAGE == 'INPUT' ) then
+      unset echo
+      echo end_of_input
+      echo "NOTE: Natural end-of-input for $scriptName."
+      exit 0
+    endif
+  endif 
+
+  # ---------------- executable and tables loading
 
   cp -p $executable $executable:t
 
@@ -391,7 +438,7 @@
 
     # ---------------- prepare MPI call, execute it, analyze results
 
-    aprun -n $npes ./$executable:t | tee fms.out
+    aprun -n $npes ./$executable:t |& tee fms.out
 
     if ( $status ) then
       @ cores_dumped = 0
@@ -420,9 +467,9 @@
 
     # ---------------- generate date for file names
 
-    set begindate = `time_stamp -bf digital`
+    set begindate = `time_stamp -b`
     if ( $begindate == 'no_time_stamp' ) set begindate = tmp`date '+%j%H%M%S'`
-    set enddate = `time_stamp -ef digital`
+    set enddate = `time_stamp -e`
     if ( $enddate == 'no_time_stamp' ) set enddate = tmp`date '+%j%H%M%S'`
     set fyear = `echo $enddate | cut -c -4`
 

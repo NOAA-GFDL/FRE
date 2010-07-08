@@ -1,11 +1,12 @@
 #
-# $Id: FREDefaults.pm,v 18.0.2.1 2010/06/18 20:45:45 afy Exp $
+# $Id: FREDefaults.pm,v 18.0.2.2 2010/06/22 22:28:18 afy Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: System Defaults Module
 # ------------------------------------------------------------------------------
 # arl    Ver  18.00  Merged revision 1.1.2.4 onto trunk             March 10
 # afy -------------- Branch 18.0.2 -------------------------------- June 10
-# afy    Ver   1.00  Add status constants                           June 10
+# afy    Ver   1.00  Add status constants for fremake               June 10
+# afy    Ver   2.00  Add status constants for frerun                June 10
 # ------------------------------------------------------------------------------
 # Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2009-2010
 # Designed and written by V. Balaji, Amy Langenhorst and Aleksey Yakovlev
@@ -41,6 +42,10 @@ use constant STATUS_FRE_COMPILE_GENERIC_PROBLEM		=> 50;
 use constant STATUS_FRE_COMPILE_NOT_EXISTS		=> 51;
 use constant STATUS_FRE_COMPILE_PROBLEM			=> 52;
 use constant STATUS_FRE_COMPILE_NO_MATCH		=> 53;
+
+use constant STATUS_FRE_RUN_GENERIC_PROBLEM		=> 60;
+use constant STATUS_FRE_RUN_NO_TEMPLATE			=> 61;
+use constant STATUS_FRE_RUN_EXECUTION_PROBLEM		=> 62;
 
 # //////////////////////////////////////////////////////////////////////////////
 # ////////////////////////////////////////////////////////// Global Constants //

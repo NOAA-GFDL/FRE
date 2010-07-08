@@ -1,7 +1,7 @@
 #!/bin/csh -f
 #FRE scheduler-options
 # 
-# $Id: runscript.template.main,v 18.0.2.6 2010/05/26 22:42:54 afy Exp $
+# $Id: runscript.template.main,v 18.0.2.8 2010/06/28 18:07:26 afy Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: Runscript Template - GFDL Version
 # ------------------------------------------------------------------------------
@@ -29,6 +29,12 @@
 # afy    Ver   5.04  Add environment settings for FRE submodules    May 10
 # afy    Ver   6.00  Don't allow to redefine the FRE_COMMANDS_HOME  May 10
 # afy    Ver   6.01  Set the FREROOT variable (temporarily?)        May 10
+# afy    Ver   7.00  Add timeStampFormat settable constant          June 10
+# afy    Ver   7.01  Modify alias "time_stamp"                      June 10
+# afy    Ver   8.00  Process variables FRE_STAGE/FRE_INPUT_DIR      June 10
+# afy    Ver   8.01  Add modules initialization                     June 10
+# afy    Ver   8.02  Add check for 'fre-transfer' module            June 10
+# afy    Ver   8.03  Add check for 'fre-nctools' module             June 10
 # ------------------------------------------------------------------------------
 # Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2000-2010
 # Designed and written by V. Balaji, Amy Langenhorst and Aleksey Yakovlev
@@ -38,6 +44,7 @@
 #FRE version-info
 #===============================================================================
 
+  echo "Starting on `date`"
   echo $HOST $HOSTNAME
   set echo
   unalias *
@@ -51,9 +58,7 @@
   set freCommandsHomeDir
   set stdoutDir
   set workDir
-  set ptmpDir
   set archiveDir
-  set hsmDir
   set scriptName
   set ppRefineDiagScriptNames
   set executable
@@ -65,6 +70,7 @@
   set monthslist
   set dayslist
   set combineFreq
+  set timeStampFormat
   set baseDate
 
   set flagRunType
@@ -76,36 +82,40 @@
   set flagOutputArchive
   set flagOutputPostProcess
 
+  set ptmpDir
   set outputDir
   set gridSpec
   set initCond
 
 ################################################################################
+#-------------- global variables adjustment for input data staging -------------
+################################################################################
+
+  if ( $?FRE_STAGE ) then
+    if ( $?FRE_INPUT_DIR ) then
+      if ( "$FRE_INPUT_DIR" != "" ) then
+        set ptmpDir = $FRE_INPUT_DIR
+      endif
+    endif
+  endif
+
+################################################################################
 #------------------------ global environment settings --------------------------
 ################################################################################
+
+  # ---------------- initialize environment modules
+
+  source $MODULESHOME/init/tcsh
 
   # ---------------- commands, copied from XML (setup/platform/csh)
 
   #FRE setup-platform-csh
 
+  # ---------------- the settings below aren't changeable (FREROOT is for compatibility only)
+
   setenv FRE_COMMANDS_HOME $freCommandsHomeDir
   setenv PATH $FRE_COMMANDS_HOME/bin:$PATH
-  setenv FREROOT $FRE_COMMANDS_HOME		# <--- for compatibility only
-
-  if ( ! $?FRE_TRANSFER_HOME ) then
-    setenv FRE_TRANSFER_HOME $freCommandsHomeDir
-    setenv PATH $FRE_TRANSFER_HOME/bin:$PATH
-  endif
-
-  if ( ! $?FRE_NCTOOLS_HOME ) then
-    setenv FRE_NCTOOLS_HOME $freCommandsHomeDir
-    setenv PATH $FRE_NCTOOLS_HOME/bin:$PATH
-  endif
-
-  if ( ! $?FRE_ANALYSIS_HOME ) then
-    setenv FRE_ANALYSIS_HOME $freCommandsHomeDir
-    setenv PATH $FRE_ANALYSIS_HOME/bin:$PATH
-  endif
+  setenv FREROOT $FRE_COMMANDS_HOME
 
 ################################################################################
 #------------------------ global constants and aliases -------------------------
@@ -116,6 +126,9 @@
 
   # ---------------- HSM site-dependent directory
   set -r hsmSiteDir = $FRE_TRANSFER_HOME/site/hpcs
+
+  # ---------------- top directory for all the HSM-copied files
+  set -r hsmDir = $workDir/hsm
 
   # ---------------- selection patterns for grep
   set -r patternGrepTail = '\.[0-9]{4}$'
@@ -161,7 +174,7 @@
   alias get_fms_data $getFmsData
 
   # ---------------- string date generation for file name labels
-  alias time_stamp `which time_stamp.csh`
+  alias time_stamp `which time_stamp.csh` -f $timeStampFormat
 
   # ---------------- fast CXFS copy command
   alias cp `which cxfscp` -t 1 -b 8 -s 65000
@@ -170,7 +183,7 @@
   alias prepare_dir `which prepare_dir.csh`
 
 ################################################################################
-#--------------- only highly premeditated user changes below here --------------
+#------------------------------ environment checks -----------------------------
 ################################################################################
 
   # ---------------- some global configuration
@@ -188,6 +201,22 @@
   endif
 
   unset machine
+
+  # ---------------- exit if no fre-transfer module is loaded
+
+  if ( ! $?FRE_TRANSFER_HOME ) then
+    unset echo
+    echo "ERROR: The script '$scriptName' must load a 'fre-transfer' module"
+    exit 1
+  endif
+
+  # ---------------- exit if no fre-nctools module is loaded
+
+  if ( ! $?FRE_NCTOOLS_HOME ) then
+    unset echo
+    echo "ERROR: The script '$scriptName' must load a 'fre-nctools' module"
+    exit 1
+  endif
 
   # ---------------- exit if number of days/months/hours is not equal to number of segments per job
 
@@ -375,7 +404,18 @@
   ls -l INPUT/*
   set echo
 
-  # ---------------- data copying to working directory
+  # ---------------- normal exit if in the input data staging mode
+
+  if ( $?FRE_STAGE ) then
+    if ( $FRE_STAGE == 'INPUT' ) then
+      unset echo
+      echo end_of_input
+      echo "NOTE: Natural end-of-input for $scriptName."
+      exit 0
+    endif
+  endif 
+
+  # ---------------- executable and tables loading
 
   cp -p $executable $executable:t
 
@@ -547,9 +587,9 @@ END
 
     # ---------------- generate date for file names
 
-    set begindate = `time_stamp -bf digital`
+    set begindate = `time_stamp -b`
     if ( $begindate == 'no_time_stamp' ) set begindate = tmp`date '+%j%H%M%S'`
-    set enddate = `time_stamp -ef digital`
+    set enddate = `time_stamp -e`
     if ( $enddate == 'no_time_stamp' ) set enddate = tmp`date '+%j%H%M%S'`
     set fyear = `echo $enddate | cut -c -4`
 

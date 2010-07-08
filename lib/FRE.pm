@@ -1,5 +1,5 @@
 #
-# $Id: FRE.pm,v 18.0.2.3 2010/05/26 20:48:27 afy Exp $
+# $Id: FRE.pm,v 18.0.2.4 2010/06/22 22:31:51 afy Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: Main Library Module
 # ------------------------------------------------------------------------------
@@ -10,6 +10,7 @@
 # afy    Ver   2.00  Modify xmlLoadAndValidate (no load_xml)        March 10
 # afy    Ver   3.00  Add home subroutine (to get rid of FREROOT)    May 10
 # afy    Ver   3.01  Add platformSite subroutine                    May 10
+# afy    Ver   4.00  Modify new (no default for getFmsData)         June 10
 # ------------------------------------------------------------------------------
 # Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2000-2010
 # Designed and written by V. Balaji, Amy Langenhorst and Aleksey Yakovlev
@@ -295,7 +296,7 @@ sub new
 	      if ($baseCshCompatibleWithTargets->($fre))
 	      {
 		# -------------------------------------------------------------------------- read setup-based info (for compatibility only)
-		$fre->{getFmsData} = $infoGet->($fre, 'setup/getFmsData', $o{verbose}) || $fre->property('FRE.tool.getFmsData.default');
+		$fre->{getFmsData} = $infoGet->($fre, 'setup/getFmsData', $o{verbose});
 		$fre->{fmsRelease} = $infoGet->($fre, 'setup/fmsRelease', $o{verbose});
 		# -------------------------------------------------------------------- read experiment nodes, save their names and nodes
 		my (%counter, %expNode, $expNames);

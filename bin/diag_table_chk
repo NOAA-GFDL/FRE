@@ -1,8 +1,8 @@
 #! /usr/bin/perl
 
 # $Author: sdu $
-# $Revision: 17.0.2.4 $
-# $Date: 2010/04/08 22:06:37 $
+# $Revision: 17.0.2.6 $
+# $Date: 2010/07/07 15:51:55 $
 
 # Perl script to parse the diag_table.  Count the number of files to
 # be used, and the max number of fields per file used.
@@ -21,15 +21,24 @@ use FREExperiment;
 my $help = 0;
 my $verbose = 0;
 my $xmlFile = '';
+my $scriptFile = '';
 GetOptions ("help|h" => \$help,
 	    "verbose|v" => \$verbose,
-	    "xml|x=s" => \$xmlFile) or pod2usage(2);
+	    "xml|x=s" => \$xmlFile,
+	    "script|s=s" => \$scriptFile) or pod2usage(2);
 pod2usage(1) if $help;
 
-# diag_table_chk can be called one of two ways.  Either, the
-# diag_table file is given on the command line, or we will extract the
-# information from an XML file and experiment.
-if ( ! $xmlFile ) { # If no XML file specified.
+# diag_table_chk can be called one of three ways:  
+# 1) The diag_table file is given on the command line
+# 2) Extract the information from an XML file and experiment
+# 3) Use an existing run script to get the diag_table
+
+if ( $xmlFile and $scriptFile ) { # Make sure both -x and -s were not specified
+  pod2usage( { -message => "$0: cannot specify both '-s' and '-x'.",
+	       -verbose => 0,
+	     } );
+}
+if ( ! $xmlFile and ! $scriptFile ) { # If no XML or script file specified.
   if ( $#ARGV < 0 ) {
     pod2usage( { -message => "$0: diag_table file must be given as an argument.",
 		 -verbose => 0,
@@ -48,18 +57,31 @@ if ( ! $xmlFile ) { # If no XML file specified.
     # Open the file handler for the filename.
     open(DIAG_TABLE, "<", $diag_table_file);
   }
-} else { # We are using an XML file.
-  if ( $#ARGV < 0 ) {
-    pod2usage( { -message => "$0: experiment must be given as an argument.",
-		 -verbose => 0,
-	       } );
-  } else {
-    my $inputExperiment = $ARGV[0];
+} else { # We are using an XML or script file.
+  if ( $xmlFile ) {
+    if ( $#ARGV < 0 ) {
+      pod2usage( { -message => "$0: experiment must be given as an argument.",
+		   -verbose => 0,
+		 } );
+    } else {
+      my $inputExperiment = $ARGV[0];
 
-    my %freOps = ( xmlfile => $xmlFile );
-    my $fre = FRE -> new('diag_table_chk',%freOps) or exit(1);
-    my $freExp = FREExperiment -> new($fre, $inputExperiment) or exit(1);
-    my $diagTableString = $freExp -> extractTable('diagTable');
+      my %freOps = ( xmlfile => $xmlFile );
+      my $fre = FRE -> new('diag_table_chk',%freOps) or exit(1);
+      my $freExp = FREExperiment -> new($fre, $inputExperiment) or exit(1);
+      my $diagTableString = $freExp -> extractTable('diagTable');
+
+      # Treat the return string as a file.
+      open(DIAG_TABLE, "<", \$diagTableString);
+    }
+  } else {
+    # Check if the diag table file exists, is not a directory and is readable.
+    die "*FATAL*: File $scriptFile does not exist.\n" unless ( -e $scriptFile );
+    die "*FATAL*: File $scriptFile exists, but is unreadable.\n" unless ( -r $scriptFile );
+    die "*FATAL*: $scriptFile is not a file.\n" unless ( -f $scriptFile );
+
+    my $diagTableString = getDiagTableFromScript($scriptFile);
+    die "*FATAL*: Could not find the diag_table in the script $scriptFile.\n" unless ( $diagTableString );
 
     # Treat the return string as a file.
     open(DIAG_TABLE, "<", \$diagTableString);
@@ -446,6 +468,22 @@ if ( $#warnings ) {
   }
 }
 
+sub getDiagTableFromScript {
+  my $myScriptFile = $_[0];
+
+  open(RUNSCRIPT, "<", $myScriptFile);
+  local $/;
+  my $runscript = <RUNSCRIPT>;
+  close(RUNSCRIPT);
+
+  my $diagTable = '';
+  if ( $runscript =~ m/cat >> diag_table <<EOF\n(.*?)EOF/s ) {
+    $diagTable = $1;
+  }
+
+  return $diagTable;
+}
+
 sub invalid_timeSample {
   my $timeSample = $_[0];
 
@@ -474,31 +512,6 @@ sub find_unit_ivalue {
     case (/months/) { return 5; }
     case (/years/) { return 6; }
     else { return -1 }
-  }
-}
-
-sub experimentExistsInXML {
-  my $experiment = shift(@_);
-  my $experimentNode =  $::root -> findnodes("experiment[\@label='$experiment' or \@name='$experiment']") -> get_node(1);
-
-  return $experimentNode;
-}
-
-sub getDiagTableFromXML {
-  my $experiment = shift(@_);
-  my $diagTableNode = $::root -> findnodes("experiment[\@label='$experiment' or \@name='$experiment']/input/diagTable") -> get_node(1);
-  my $myXMLFile = $::xmlFile;
-
-  # If the diagTable node is empty, then recursivly check the parent experiment until it is found.
-  if ( $diagTableNode ) {
-    return $diagTableNode -> findvalue("\@file");
-  } else {
-    my $parent = $::root -> findvalue("experiment[\@label='$experiment' or \@name='$experiment]/\@inherit");
-    if ( $parent) {
-      &getDiagTable($parent);
-    } else {
-      die "$0: Cannot find diagTable tag in the XML file $::xmlFile.\n"
-    }
   }
 }
 
@@ -624,6 +637,8 @@ diag_table_chk [-h|--help]
 
 diag_table_chk [-v|--verbose] I<<diag_table>>
 
+diag_table_chk [-v|--verbose] -s I<<run_script>>
+
 diag_table_chk [-v|--verbose] -x I<<xml_file>> I<<experiment>>
 
 =head1 DESCRIPTION
@@ -644,6 +659,10 @@ Display usage information
 
 Display the files and fields that were found.
 
+=item B<-s>, B<--script> <run_script>
+
+Read the I<diag_table> file from a FRE created runscript.
+
 =item B<-x>, B<--xml> <xml_file> <experiment>
 
 Read the diagnostic table file from I<<experiment>> from the I<<xml_file>>.
@@ -651,6 +670,14 @@ Read the diagnostic table file from I<<experiment>> from the I<<xml_file>>.
 =item I<<diag_table>>
 
 The file name of the diagnostic table to check
+
+=item I<<xml_file>>
+
+A FRE XML formatted file.
+
+=item I<<run_script>>
+
+A runscript created using the I<frerun> FRE command.
 
 =back
 

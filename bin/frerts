@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 # -*- cperl -*-
-# $Id: frerts,v 15.1.2.8 2010/06/30 15:59:13 fms Exp $
+# $Id: frerts,v 15.1.2.12 2010/07/08 00:11:47 fms Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: Automated launch of fremake, frerun and frecheck.
 # ------------------------------------------------------------------------------
@@ -20,7 +20,7 @@ use Date::Manip();
 {
 package frerts;
 
-use constant VERSION => '$Id: frerts,v 15.1.2.8 2010/06/30 15:59:13 fms Exp $';
+use constant VERSION => '$Id: frerts,v 15.1.2.12 2010/07/08 00:11:47 fms Exp $';
 use constant OPTLIST =>
   (
       'help|h',
@@ -113,25 +113,39 @@ my $regxpath = "\@name='basic' or \@label='basic'";
 if ( $opt{regtype} eq "suite" ) {
    $regxpath .= " or \@name='scaling' or \@label='scaling' or \@name='restarts' or \@label='restarts'";
 }
-print "Using $regxpath\n" if $opt{verbose};
+#print "Using $regxpath\n" if $opt{verbose};
+print "Calculating total npes/runtime ...\n" if $opt{verbose};
 
 my @regnodes = $root->findnodes("experiment/runtime/regression[$regxpath]/run");
 foreach my $node ( @regnodes ) {
   my $runnpes = $node->findvalue('@npes');
   if ( $runnpes > $npes ) { $npes = $runnpes; }
-  print "  Testing for max npes: $npes ($runnpes)\n" if $opt{verbose};
 
   my $runtime = $node->findvalue('@runTimePerJob');
   $ttlruntime = Date::Manip::DateCalc($ttlruntime,'+'."$runtime",\$err);
   if ( "$err" ne "" ) { print STDERR "ERROR: DateCalc: $err\n"; }
-  print "  Sum of runtime: $ttlruntime ($runtime)\n" if $opt{verbose};
-  
+
+  if ($opt{verbose}) {
+     my $runregname = $node->findvalue('../@name');
+        $runregname = $node->findvalue('../@label') if ("$runregname" eq '');
+     my $runexpt = $node->findvalue('../../../@name');
+     my $tmpttlruntime = $ttlruntime;
+     $tmpttlruntime =~ s/^\+0:0:0://;
+     print "  $runexpt $runregname run: $runnpes/$runtime  (Total: $npes/$tmpttlruntime)\n";
+  }
 }
 
 #how to count compiles...? for now, randomly add 2 hours?
 $ttlruntime = Date::Manip::DateCalc($ttlruntime,'+ 2 hours',\$err);
 if ( "$err" ne "" ) { print STDERR "ERROR: DateCalc: $err\n"; }
-$ttlruntime =~ s/^\+0:0:0:0://; #need error checking on this?
+
+if ( $ttlruntime =~ m/^\+0:0:0:0:/ ) {
+   $ttlruntime =~ s/^\+0:0:0:0:(\d+):/$1:/;
+   die "FATAL: This test will take more than 16 hours. ($1 hours)\n       Please remove some experiments from the xml file to use frerts with it.\n" if ( $1 > 16 );
+} else {
+   die "FATAL: This test will take more than 16 hours. (more than 24 hours)\n       Please remove some experiments from the xml file to use frerts with it.\n";
+}
+
 print "Total npes: $npes\n" if $opt{verbose};
 print "Total runtime: $ttlruntime\n" if $opt{verbose};
 
@@ -254,10 +268,28 @@ foreach expt ( $list )
   cp $xml $rootdir/$expt/$xml
 end
 
-( frecheck -p $platform -t repro -x $xml $list > stdoutfile ) >& stderrfile
+echo ---------------------------------------------------
+set cmd = "frecheck -p $platform -t repro -x $xml $list"
+echo $cmd
+( $cmd > stdoutfile; set mystatus = $status ) >& stderrfile
+if ( $mystatus == 0 ) then
+   set result = 'PASSED'
+else
+   set result = 'FAILED'
+endif
 cat stdoutfile
-cat stderrfile stdoutfile > $rootdir/autoRTS.$thisdate.frecheck
-Mail -s "frerts results for $thisdate" $USER < $rootdir/autoRTS.$thisdate.frecheck
+echo Result of frerts for ${thisdate}: $result
+
+cat > "$rootdir/autoRTS.$thisdate.frecheck" << END
+Result of frerts for ${thisdate}: $result
+Experiments tested: $list
+Output in $rootdir
+
+Results of frecheck:
+END
+cat stderrfile stdoutfile >> $rootdir/autoRTS.$thisdate.frecheck
+
+Mail -s "frerts results for ${thisdate}: $result" $USER < $rootdir/autoRTS.$thisdate.frecheck
 sleep 30
 
 EOF
