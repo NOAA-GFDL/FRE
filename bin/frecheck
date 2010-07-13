@@ -1,32 +1,13 @@
 #!/usr/bin/perl
 # -*- cperl -*-
 
-# $Id: frecheck,v 18.0 2010/03/02 23:25:36 fms Exp $
+# $Id: frecheck,v 18.0.4.1.2.2 2010/07/12 15:38:51 fms Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: Program to Check Model Restart Files
 # ------------------------------------------------------------------------------
-# vb/arl Ver   1.00  Initial version                                ???
-# afy -------------- Branch 17.0.4 -------------------------------- August 09
-# afy    Ver   1.00  Copied from 15.1.6.1.2.4                       August 09
-# afy    Ver   2.00  Rename archDir => archiveDir                   August 09
-# afy    Ver   2.01  Use FRE::properties() to access properties     August 09
-# afy    Ver   3.00  Use new FREExperiment.pm module (!!!)          September 09
-# afy    Ver   3.01  Add option --target                            September 09
-# afy    Ver   4.00  Add option --start-date                        September 09
-# afy    Ver   5.00  Separate crossover/referential comparing       September 09
-# afy    Ver   6.00  Don't append $name to archive directory        October 09
-# afy    Ver   6.01  Allow local reference experiments only         October 09
-# afy    Ver   6.02  Don't pass the option --platform to subs       October 09
-# afy    Ver   6.03  Add errors processing                          October 09
-# afy    Ver   7.00  Use new FRE module (setCurrentExperimentName)  October 09
-# afy    Ver   8.00  Use new FREDefaults module                     October 09
-# arl    Ver   9.00  Add option --force (to pass -f to ardiff)      October 09
-# afy    Ver  10.00  Replace prints by calls to FREMsg::out         November 09
-# afy    Ver  11.00  Fix loop over reference experiments            November 09
-# afy    Ver  11.01  Call ardiff without path                       November 09
-# afy    Ver  12.00  Modify Help subroutine                         December 09
-# afy    Ver  13.00  Use new FREDefaults module (Site/SiteGFDL)     January 10
-# afy    Ver  14.00  Add target option alias "t"                    February 10
+# arl    Ver  18.00  Merged revision 17.0.4.14 onto trunk           March 10
+# afy -------------- Branch 18.0.4 -------------------------------- July 10
+# afy    Ver   1.00  Use new FREDefaults module (SiteIsGFDL)        July 10
 # ------------------------------------------------------------------------------
 # Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2000-2010
 # Designed and written by V. Balaji, Amy Langenhorst and Aleksey Yakovlev
@@ -52,7 +33,7 @@ use FREUtil();
 
   package frecheck;
 
-  use constant VERSION => '$Id: frecheck,v 18.0 2010/03/02 23:25:36 fms Exp $';
+  use constant VERSION => '$Id: frecheck,v 18.0.4.1.2.2 2010/07/12 15:38:51 fms Exp $';
   
   use constant OPTLIST =>
   (
@@ -83,6 +64,8 @@ use FREUtil();
   use Cwd();
   
   my $self = File::Basename::basename($0);
+
+  my $status = 0;
 
   sub Usage()
   # ------ arguments: none
@@ -171,7 +154,7 @@ use FREUtil();
     }
     else
     {
-      return FREUtil::pad8digits($d);
+      return sprintf("%05d",$d);
     }
   }
   
@@ -344,7 +327,7 @@ use FREUtil();
 
   my $fre = FRE->new('frecheck', %opt) or exit(1);
   
-  my $siteIsGFDL = (FREDefaults::Site() eq FREDefaults::SiteGFDL());
+  my $siteIsGFDL = FREDefaults::SiteIsGFDL();
   my $archExt = ($siteIsGFDL) ? 'cpio' : 'tar';
 
   my (@drnPassed, @drnFailed) = ((), ());
@@ -506,6 +489,7 @@ use FREUtil();
       my $crashed = 0;
       chomp (my $outdirs = qx(ls -1d $archiveDir/\* | grep -c '_crash'));
       $crashed++ if $outdirs;
+      $frecheck::status++ if $outdirs;
 
       my @compExpNames = $exp->extractReferenceExperiments();
       my @compFiles = $exp->extractReferenceFiles();
@@ -540,6 +524,7 @@ use FREUtil();
 	{
           my $filestr = join ' ', @dualres;
           my $status = system "ls -1f $res $filestr | $resdiff";
+          $frecheck::status++ if $status;
           $drnPassed++ if !$status;
           $drnTested++;
 	}
@@ -566,12 +551,13 @@ use FREUtil();
           }
           my $filestr = join ' ', @crsFiles;
           my $status = system "ls -1f $filestr | $resdiff";
+          $frecheck::status++ if $status;
           $crsPassed++ if !$status;
 	  $crsTested++;
 	}
 	else
 	{
-          $fre->out(1, "Not enough files in '$archiveDir' with timestamp '$timestamp' for crossover comparing");
+          $fre->out(2, "Not enough files in '$archiveDir' with timestamp '$timestamp' for crossover comparing");
 	}
 
         if (scalar(@crsFiles) > 0)
@@ -593,7 +579,12 @@ use FREUtil();
 	  { 
             if ($compFile =~ /$timestamp/)
 	    { 
-              push @refFiles, $compFile; 
+              if ( -f $compFile ) {
+                 push @refFiles, $compFile; 
+              } else {
+                 $frecheck::status++;
+                 $refTested++;
+              }
             }
 	  }
 
@@ -608,18 +599,19 @@ use FREUtil();
             }
             my $filestr = join ' ', @refFiles;
             my $status = system "ls -1f $filestr | $resdiff";
+            $frecheck::status++ if $status;
             $refPassed++ if !$status;
 	    $refTested++;
 	  }
 	  else
 	  {
-            $fre->out(1, "Not enough files in '$archiveDir' with timestamp '$timestamp' for referential comparing");
+            $fre->out(2, "Not enough files in '$archiveDir' with timestamp '$timestamp' for referential comparing");
 	  }
 
 	}
 	else
 	{
-          $fre->out(1, "No files in '$archiveDir' with timestamp '$timestamp' for referential comparing");
+          $fre->out(2, "No files in '$archiveDir' with timestamp '$timestamp' for referential comparing");
 	}
 	
       } 
@@ -689,5 +681,8 @@ use FREUtil();
     print '  NO RUNS TO COMPARE:'; foreach my $e (@notTested) {print " $e";} print "\n";
     print "\n";
   }
+  
+  exit $frecheck::status;
 
 }
+

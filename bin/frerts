@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 # -*- cperl -*-
-# $Id: frerts,v 15.1.2.12 2010/07/08 00:11:47 fms Exp $
+# $Id: frerts,v 15.1.2.22 2010/07/14 16:13:26 fms Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: Automated launch of fremake, frerun and frecheck.
 # ------------------------------------------------------------------------------
@@ -20,7 +20,7 @@ use Date::Manip();
 {
 package frerts;
 
-use constant VERSION => '$Id: frerts,v 15.1.2.12 2010/07/08 00:11:47 fms Exp $';
+use constant VERSION => '$Id: frerts,v 15.1.2.22 2010/07/14 16:13:26 fms Exp $';
 use constant OPTLIST =>
   (
       'help|h',
@@ -49,16 +49,24 @@ my %opt = (
 Getopt::Long::GetOptions(\%opt,frerts::OPTLIST) or die "FATAL: can't parse command line options\n";
 
 my $xmlfile = '';
-if ( -f $opt{xmlfile} ) {
+if ( $ARGV[0] and "$opt{xmlfile}" eq FREDefaults::XMLFile() ) {
+   if ( -f $ARGV[0] ) {
+      $xmlfile = File::Spec->rel2abs($ARGV[0]);
+   } elsif ( -f "$ENV{FRE_XML_HOME}/$ARGV[0]") {
+      $xmlfile = File::Spec->rel2abs($ENV{FRE_XML_HOME}/$ARGV[0]);
+   } else {
+      print "FATAL: XML file does not exist: '$ARGV[0]'\n";
+      $opt{help}=1;
+   }
+} elsif ( -f $opt{xmlfile} ) {
    $xmlfile = File::Spec->rel2abs($opt{xmlfile});
 } elsif ( defined $ENV{FRE_XML_HOME} and -f "$ENV{FRE_XML_HOME}/$opt{xmlfile}" ) {
    $xmlfile = "$ENV{FRE_XML_HOME}/$opt{xmlfile}";
 } elsif (! $opt{help} ) {
-  print "FATAL: XML file does not exist: $opt{xmlfile}\n";
+  print "FATAL: XML file does not exist: '$opt{xmlfile}'\n";
   $opt{help}=1;
 }
 $opt{xmlfile} = $xmlfile;
-print "Using xml file $xmlfile\n" if $opt{verbose};
 my $xml = $xmlfile;
 $xml =~ s/.*\///;
 
@@ -89,15 +97,17 @@ EOF
 }
 #       -r STR, --regtype=STR   Regression type. STR can be "basic" or "suite".
 
-#get info for script...
-my $rtsscript = "$ENV{HOME}/autoRTS/$opt{datestr}/autoRTS.$thisdate";
-my $rtsstdoutdir = "$ENV{HOME}/autoRTS/$opt{datestr}";
-print "Script: $rtsscript\nStdoutdir: $rtsstdoutdir\n" if $opt{verbose};
-mkdir "$ENV{HOME}/autoRTS" if not -d "$ENV{HOME}/autoRTS";
-
 #get root node of xml file
 my $fre = FRE->new('frerts', %opt) or exit(1);
 my $root = $fre->{rootNode};
+my $autoRTSroot = $fre->property('FRE.autoRTS.root.prefix');
+my $autoRTSarchive = $fre->property('FRE.autoRTS.root.prefix');
+
+#get info for script...
+my $rtsstdoutdir = "$autoRTSroot/$opt{datestr}";
+print "Stdoutdir: $rtsstdoutdir\n" if $opt{verbose};
+print "Using xml file $xmlfile\n" if $opt{verbose};
+mkdir "$autoRTSroot" if not -d "$autoRTSroot";
 
 #platform csh
 my $platformcsh = $root->findvalue("setup/platform[\@name='$opt{platform}']/csh");
@@ -136,7 +146,7 @@ foreach my $node ( @regnodes ) {
 }
 
 #how to count compiles...? for now, randomly add 2 hours?
-$ttlruntime = Date::Manip::DateCalc($ttlruntime,'+ 2 hours',\$err);
+#$ttlruntime = Date::Manip::DateCalc($ttlruntime,'+ 2 hours',\$err);
 if ( "$err" ne "" ) { print STDERR "ERROR: DateCalc: $err\n"; }
 
 if ( $ttlruntime =~ m/^\+0:0:0:0:/ ) {
@@ -149,24 +159,73 @@ if ( $ttlruntime =~ m/^\+0:0:0:0:/ ) {
 print "Total npes: $npes\n" if $opt{verbose};
 print "Total runtime: $ttlruntime\n" if $opt{verbose};
 
-if ( $npes > 40 ) {
+if ( $npes > 40 and not $opt{submit} ) {
    print "WARNING: This script uses $npes processors. It is too large to be\n";
-   print "         run interactively on ic0.  Please use qsub.\n";
+   print "         run interactively on ic0.  Please use 'frerts -s'.\n";
 }
 
 #set csh script content
-my $csh = <<EOF;
-#!/bin/csh -f
-# 
-# This automated regression test script was created by frerts.
-#
-#\$ -l h_cpu=$ttlruntime
-#\$ -pe ic.alloc $npes
-#\$ -o $rtsstdoutdir
-#\$ -l cpuset
-#\$ -r y
 
-set xmlpath = $xmlfile
+my $schedprefix = $fre->property('FRE.scheduler.prefix');
+my $schedcputime = $fre->property('FRE.scheduler.option.time');
+my $schednpes = $fre->property('FRE.scheduler.option.npes');
+my $schedstdout = $fre->property('FRE.scheduler.option.stdout');
+my $schedcpuset = $fre->property('FRE.scheduler.option.cpuset');
+my $schedrerun = $fre->property('FRE.scheduler.option.rerun');
+my $schedname = $fre->property('FRE.scheduler.option.name');
+my $schedjobid = $fre->property('FRE.scheduler.variable.jobID');
+$schedcputime =~ s/\$//;
+$schednpes =~ s/\$//;
+$schedstdout = '-o '; #fre.properties doesn't allow specification of full path at DOE
+                      #luckily this option is always -o. This should be changed in
+                      #fre.properties to make it cleaner.
+$schedname =~ s/\$//;
+
+my $project = $fre->property('FRE.scheduler.project');
+if ( "$project" ne '' ) {
+   my $schedproject = $fre->property('FRE.scheduler.option.project');
+   $schedproject =~ s/\$/$project/;
+   $project = "$schedprefix $schedproject";
+}
+
+my $compiletime='02:00:00';
+my $compilenpes=8;
+
+my $mkscriptn = "autoRTS.mk.$thisdate.csh";
+my $runscriptn = "autoRTS.run.$thisdate.csh";
+my $mkscript = "$autoRTSroot/$opt{datestr}/$mkscriptn";
+my $runscript = "$autoRTSarchive/$opt{datestr}/$runscriptn";
+
+my $mkcsh = <<EOF;
+#!/bin/csh -f
+# This automated regression test script was created by frerts.
+
+$schedprefix $schedcputime$compiletime
+$schedprefix $schednpes$compilenpes
+$schedprefix $schedstdout$rtsstdoutdir/$mkscriptn.o\$$schedjobid
+$schedprefix $schedname frerts-mk,$xml,$opt{datestr}
+$schedprefix $schedcpuset
+$schedprefix $schedrerun
+$project
+EOF
+
+   my $runcsh = <<EOF;
+#!/bin/csh -f
+# This automated regression test script was created by frerts.
+
+$schedprefix $schedcputime$ttlruntime
+$schedprefix $schednpes$npes
+$schedprefix $schedstdout$rtsstdoutdir/$runscriptn.o\$$schedjobid
+$schedprefix $schedname frerts-run,$xml,$opt{datestr}
+$schedprefix $schedcpuset
+$schedprefix $schedrerun
+$project
+EOF
+
+   my $vars = <<EOF;
+
+set outdir = $rtsstdoutdir
+set origxml = $xmlfile
 set xml = $xml
 set label = $opt{datestr}
 set regtype = $opt{regtype}
@@ -178,30 +237,75 @@ $platformcsh
 
 EOF
 
-$csh .= gettemplate();
+my $batchvar = $fre->property('FRE.scheduler.variable.environment');
+my $batchval = $fre->property('FRE.scheduler.variable.environment.value.batch');
+my $runinter = <<EOF;
+if ( \$mkstatus == 0 ) then
+   if ( \$?$batchvar ) then
+      if ( "\$$batchvar" != '$batchval' ) then
+         $runscript
+      endif
+   else
+      $runscript
+   endif
+else
+   exit \$mkstatus
+endif
 
-#write script...
-writescript($csh,$rtsscript,"qsub",$opt{submit},$opt{verbose});
+EOF
+
+   $mkcsh .= "$vars".getmktemplate()."$runinter";
+   $runcsh .= "$vars".getruntemplate();
+
+   #write script...
+   print "Make script: $mkscript\n" if $opt{verbose};
+   print "Run script: $runscript\n" if $opt{verbose};
+   my $mkjob = writescript($mkcsh,$fre,$mkscript,"qsub",$opt{submit},$opt{verbose},0);
+
+   if ( $mkjob ) {
+      my $dependsOn = $fre->property('FRE.scheduler.option.dependsOn');
+      $dependsOn =~ s/\$/$mkjob/;
+      writescript($runcsh,$fre,$runscript,"qsub $dependsOn",$opt{submit},$opt{verbose},1);
+   } else {
+      die "Compile script submission failed, cannot submit runscript\n";
+   }
 
 
 }
 
-sub gettemplate {
+#################################################################
+
+sub getmktemplate {
    my $csh = <<'EOF';
-if ( ! -f $xmlpath ) then
-  echo FATAL: Cannot find xml file $xmlpath
+if ( ! -f $origxml ) then
+  echo FATAL: Cannot find xml file $origxml
   exit 1
 endif
 
+#set up temporary directory
+if ( ! $?TMPDIR ) set TMPDIR = "$outdir/mk.tmp.$thisdate"
+if ( -d $TMPDIR ) then
+   rm -rf $TMPDIR/* >& /dev/null
+else
+   mkdir -p $TMPDIR
+endif
+
 cd $TMPDIR
-echo Starting from $xmlpath
+echo Starting from $origxml
 echo Temporary files in $TMPDIR
 
-fretransform -d $label -x $xmlpath > $xml
+fretransform -d $label -x $origxml > $xml
 
 set list = ( `frelist -p $platform -x $xml |grep -v INHERITS` )
 set list = ( $list `frelist -p $platform -x $xml |grep INHERITS |cut -f1 -d\ ` )
 echo Experiments: $list
+
+set rootdir = `frelist -p $platform -dir=root -t repro -x $xml $list[1]`
+if ( ! -d $rootdir ) then
+  mkdir -p $rootdir || exit 1
+endif
+cp $xml $rootdir
+set mkstatus = 0
 
 foreach expt ( $list )
   set cmd = "fremake -p $platform -t repro -x $xml $expt"
@@ -223,6 +327,7 @@ foreach expt ( $list )
         echo Compile failed for $expt
         tail $out
         echo See $out
+        set mkstatus = 100
      endif
   else if ( $mystatus == 41 ) then
      echo "$expt does not need to be compiled (status $mystatus)"
@@ -230,13 +335,48 @@ foreach expt ( $list )
      echo "fremake failed for $expt (status $mystatus)"
      tail $out
      echo See $out
+     set mkstatus = 100
   endif
 end
+
+cd
+rm -rf $TMPDIR
+
+EOF
+   return $csh;
+}
+
+sub getruntemplate {
+   my $csh = <<'EOF';
+
+#set up temporary directory
+if ( ! $?TMPDIR ) set TMPDIR = "$outdir/run.tmp.$thisdate"
+if ( -d $TMPDIR ) then
+   rm -rf $TMPDIR/* >& /dev/null
+else
+   mkdir -p $TMPDIR
+endif
+
+cd $TMPDIR
+if ( -f $outdir/$xml ) then
+  cp $outdir/$xml .
+else
+  echo "FATAL: Cannot find xml file $outdir/$xml"
+  exit 1
+endif
+
+set list = ( `frelist -p $platform -x $xml |grep -v INHERITS` )
+set list = ( $list `frelist -p $platform -x $xml |grep INHERITS |cut -f1 -d\ ` )
+
+set rootdir = `frelist -p $platform -dir=root -t repro -x $xml $list[1]`
+if ( ! -d $rootdir ) then
+  mkdir -p $rootdir || exit 1
+endif
+cp $xml $rootdir
 
 foreach expt ( $list )
   set cmd = "frerun -p $platform -t repro -r $regtype -x $xml $expt"
   set dirs = (`frelist -p $platform -dir -t repro -x $xml $expt | egrep '^root:|^stdout:|^work:'`)
-  set rootdir = (`echo $dirs | awk '{print $2}'`)
   set stdoutdir = (`echo $dirs | awk '{print $4}'`)
   set workdir = (`echo $dirs | awk '{print $6}'`)
   set out = $stdoutdir/run_$expt.stdout
@@ -265,32 +405,43 @@ foreach expt ( $list )
      tail $out
      echo See $out
   endif
-  cp $xml $rootdir/$expt/$xml
 end
 
 echo ---------------------------------------------------
 set cmd = "frecheck -p $platform -t repro -x $xml $list"
 echo $cmd
-( $cmd > stdoutfile; set mystatus = $status ) >& stderrfile
-if ( $mystatus == 0 ) then
-   set result = 'PASSED'
+
+#temporary measure until next version of nccmp
+module unload nccmp
+
+$cmd > stdoutfile
+if ( $status == 0 ) then
+   set result = 'passed'
 else
    set result = 'FAILED'
 endif
 cat stdoutfile
 echo Result of frerts for ${thisdate}: $result
 
-cat > "$rootdir/autoRTS.$thisdate.frecheck" << END
+cat > "$rootdir/autoRTS.check.$thisdate" << END
 Result of frerts for ${thisdate}: $result
+
 Experiments tested: $list
+XML file: $rootdir/$xml
 Output in $rootdir
-
-Results of frecheck:
 END
-cat stderrfile stdoutfile >> $rootdir/autoRTS.$thisdate.frecheck
+tail -10 stdoutfile >> $rootdir/autoRTS.check.$thisdate
+echo "Full results of frecheck:" >> $rootdir/autoRTS.check.$thisdate
+cat stdoutfile >> $rootdir/autoRTS.check.$thisdate
+set logdir = $outdir:h
+touch $logdir/log
+echo "$thisdate $result $rootdir/$xml" >> $logdir/log
 
-Mail -s "frerts results for ${thisdate}: $result" $USER < $rootdir/autoRTS.$thisdate.frecheck
+Mail -s "frerts results for ${thisdate}: $result" $USER < $rootdir/autoRTS.check.$thisdate
 sleep 30
+
+cd
+rm -rf $TMPDIR
 
 EOF
    return $csh;
@@ -298,10 +449,12 @@ EOF
 
 sub writescript {
    #my $script = $_[0];
-   my $outscript = $_[1];
-   my $batchCmd = $_[2];
-   my $submit = $_[3];
-   my $verbose = $_[4];
+   my $fre = $_[1];
+   my $outscript = $_[2];
+   my $batchCmd = $_[3];
+   my $submit = $_[4];
+   my $verbose = $_[5];
+   my $batchonly = $_[6];
 
    (my $volume,my $directory,my $filename) = File::Spec->splitpath( $outscript );
    if( ! -e $directory ) { mkdir $directory || die "Cannot make directory $directory\n"; }
@@ -317,7 +470,12 @@ sub writescript {
       if($verbose){print "\nExecuting '$batchCmd $outscript'\n";}
       my $qsub_msg = `$batchCmd $outscript`;
       print "\n$qsub_msg";
+      my $qsubOutputPattern = $fre->property('FRE.scheduler.qsub.output.pattern');
+      return ($qsub_msg =~ m/$qsubOutputPattern/m) ? $1 : '';
    } else {
-      print "\nTO SUBMIT: $batchCmd $outscript\n";
+      unless ($batchonly) {
+         print "\nINTERACTIVE ONLY: $outscript\n";
+      }
    }
 }
+

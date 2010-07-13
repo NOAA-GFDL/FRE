@@ -14,6 +14,15 @@ DEBUG =
 REPRO =
 VERBOSE =
 
+##############################################
+# Need to use at least GNU Make version 3.81 #
+##############################################
+need := 3.81
+ok := $(filter $(need),$(firstword $(sort $(MAKE_VERSION) $(need))))
+ifneq ($(need),$(ok))
+$(error Need at least make version $(need).  Load module gmake/3.81)
+endif 
+
 MAKEFLAGS += --jobs=8
 
 NETCDF_ROOT = $(NETCDF_DIR)
@@ -22,15 +31,15 @@ INCLUDE = -I$(NETCDF_ROOT)/include
 
 FPPFLAGS := -fpp -Wp,-w $(INCLUDE)
 
-FFLAGS := -fno-alias -automatic -safe_cray_ptr -ftz -assume byterecl -i4 -r8 -nowarn -g -fp-model precise $(INCLUDE)
-FFLAGS_OPT = -O2
+FFLAGS := -fno-alias -automatic -safe-cray-ptr -ftz -assume byterecl -i4 -r8 -nowarn $(INCLUDE)
+FFLAGS_OPT = -O3 -debug minimal -fp-model precise -override-limits
 FFLAGS_VERBOSE = -v -V -what
-FFLAGS_REPRO = -fltconsistency
-FFLAGS_DEBUG = -O0 -check -check noarg_temp_created -check nopointer -warn -warn noerrors -debug variable_locations -fpe0 -traceback -ftrapuv
+FFLAGS_REPRO = -O2 -debug minimal -fp-model precise -override-limits
+FFLAGS_DEBUG = -g -O0 -check -check noarg_temp_created -check nopointer -warn -warn noerrors -fpe0 -traceback -ftrapuv
 
-CFLAGS := -D__IFC -g
-CFLAGS_OPT = -O2
-CFLAGS_DEBUG = -O0 -ftrapuv -traceback
+CFLAGS := -D__IFC 
+CFLAGS_OPT = -O2 -debug minimal
+CFLAGS_DEBUG = -O0 -g -ftrapuv -traceback
 
 LDFLAGS :=
 LDFLAGS_VERBOSE := -Wl,-V,--verbose,-cref,-M
@@ -38,14 +47,14 @@ LDFLAGS_VERBOSE := -Wl,-V,--verbose,-cref,-M
 ifneq ($(REPRO),)
 CFLAGS += $(CFLAGS_REPRO)
 FFLAGS += $(FFLAGS_REPRO)
-endif
-ifneq ($(DEBUG),)
+else ifneq ($(DEBUG),)
 CFLAGS += $(CFLAGS_DEBUG)
 FFLAGS += $(FFLAGS_DEBUG)
 else
 CFLAGS += $(CFLAGS_OPT)
 FFLAGS += $(FFLAGS_OPT)
 endif
+
 ifneq ($(VERBOSE),)
 CFLAGS += $(CFLAGS_VERBOSE)
 FFLAGS += $(FFLAGS_VERBOSE)

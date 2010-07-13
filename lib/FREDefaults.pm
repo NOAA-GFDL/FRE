@@ -1,5 +1,5 @@
 #
-# $Id: FREDefaults.pm,v 18.0.2.2 2010/06/22 22:28:18 afy Exp $
+# $Id: FREDefaults.pm,v 18.0.2.3 2010/07/08 19:27:33 afy Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: System Defaults Module
 # ------------------------------------------------------------------------------
@@ -7,6 +7,10 @@
 # afy -------------- Branch 18.0.2 -------------------------------- June 10
 # afy    Ver   1.00  Add status constants for fremake               June 10
 # afy    Ver   2.00  Add status constants for frerun                June 10
+# afy    Ver   3.00  Modify Site (use network domains)              July 10
+# afy    Ver   3.01  Modify Platform (call Site explicitly)         July 10
+# afy    Ver   3.02  Replace SiteGFDL => SiteIsGFDL                 July 10
+# afy    Ver   3.03  Replace SiteDOE => SiteIsCCS                   July 10
 # ------------------------------------------------------------------------------
 # Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2009-2010
 # Designed and written by V. Balaji, Amy Langenhorst and Aleksey Yakovlev
@@ -14,7 +18,9 @@
 
 package FREDefaults;
 
-use strict; 
+use strict;
+
+use Net::Domain();
 
 # //////////////////////////////////////////////////////////////////////////////
 # //////////////////////////////////////////////////// Global Return Statuses //
@@ -51,13 +57,14 @@ use constant STATUS_FRE_RUN_EXECUTION_PROBLEM		=> 62;
 # ////////////////////////////////////////////////////////// Global Constants //
 # //////////////////////////////////////////////////////////////////////////////
 
-use constant GFDL_PLATFORM_BIN	=> '/home/gfdl/bin/gfdl_platform';
+use constant DOMAIN_GFDL	=> 'gfdl.noaa.gov'; 
+use constant DOMAIN_CCS		=> 'ccs.ornl.gov'; 
+
 use constant SITE_GFDL		=> 'hpcs';
-use constant SITE_DOE		=> 'doe';
-use constant SITE		=> (-x FREDefaults::GFDL_PLATFORM_BIN) ? FREDefaults::SITE_GFDL : FREDefaults::SITE_DOE;
+use constant SITE_CCS		=> 'doe';
+use constant SITE_UNKNOWN	=> 'unknown';
 
 use constant XMLFILE_DEFAULT	=> 'rts.xml';
-use constant PLATFORM_DEFAULT	=> FREDefaults::SITE . '.' . FREDefaults::SITE;
 use constant TARGET_DEFAULT 	=> 'prod';
 
 use constant GLOBAL_NAMES	=> 'site,siteDir,suite,platform,target,name,root';
@@ -70,19 +77,35 @@ use constant EXPERIMENT_DIRS	=> 'root,src,exec,scripts,stdout,work,ptmp,archive,
 sub Site()
 # ------ arguments: none
 {
-  return FREDefaults::SITE;
+  my $domain = Net::Domain::hostdomain();
+  if ($domain eq FREDefaults::DOMAIN_GFDL)
+  {
+    return FREDefaults::SITE_GFDL;
+  }
+  elsif ($domain eq FREDefaults::DOMAIN_CCS)
+  {
+    return FREDefaults::SITE_CCS;
+  }
+  elsif ($domain)
+  {
+    return (split '.', $domain)[0];
+  }
+  else
+  {
+    return FREDefaults::SITE_UNKNOWN; 
+  }
 }
 
-sub SiteGFDL()
+sub SiteIsGFDL()
 # ------ arguments: none
 {
-  return FREDefaults::SITE_GFDL;
+  return (FREDefaults::Site() eq FREDefaults::SITE_GFDL);
 }
 
-sub SiteDOE()
+sub SiteIsCCS()
 # ------ arguments: none
 {
-  return FREDefaults::SITE_DOE;
+  return (FREDefaults::Site() eq FREDefaults::SITE_CCS);
 }
 
 sub XMLFile()
@@ -94,7 +117,7 @@ sub XMLFile()
 sub Platform()
 # ------ arguments: none
 {
-  return FREDefaults::PLATFORM_DEFAULT;
+  return FREDefaults::Site() . '.' . FREDefaults::Site();
 }
 
 sub Target()

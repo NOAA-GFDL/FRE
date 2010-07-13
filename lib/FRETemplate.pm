@@ -1,17 +1,13 @@
 #
-# $Id: FRETemplate.pm,v 18.0 2010/03/02 23:58:57 fms Exp $
+# $Id: FRETemplate.pm,v 18.0.2.1 2010/07/08 19:31:25 afy Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: Template Management Module
 # ------------------------------------------------------------------------------
-# afy    Ver   1.00  Initial version                                September 09
-# afy    Ver   2.00  Modify setSchedulerOptions (coresPerNode)      October 09
-# afy    Ver   3.00  Modify setSchedulerOptions (option -o)         October 09
-# afy    Ver   4.00  Modify setSchedulerOptions (keep placeholder)  November 09
-# afy    Ver   4.01  Add setSchedulerDualRuns subroutine            November 09
-# afy    Ver   5.00  Add setSchedulerMakeVerbose subroutine         January 10
-# afy    Ver   6.01  Use new FREDefaults module                     January 10
-# afy    Ver   6.02  Use new external property "FRE.site"           January 10
-# afy    Ver   7.00  Use new FRE (externalProperty => property)     January 10
+# arl    Ver  18.00  Merged revision 1.1.2.7 onto trunk             March 10
+# afy -------------- Branch 18.0.2 -------------------------------- July 10
+# afy    Ver   1.00  Modify setSchedulerOptions (properties)        July 10
+# afy    Ver   1.01  Modify setSchedulerDualRuns (properties)       July 10
+# afy    Ver   1.02  Modify setSchedulerMakeVerbose (properties)    July 10
 # ------------------------------------------------------------------------------
 # Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2009-2010
 # Designed and written by V. Balaji, Amy Langenhorst and Aleksey Yakovlev
@@ -30,13 +26,23 @@ use FREDefaults();
 # ////////////////////////////////////////////////////////// Global Constants //
 # //////////////////////////////////////////////////////////////////////////////
 
-use constant SITE_GFDL => FREDefaults::SiteGFDL();
-use constant SITE_DOE => FREDefaults::SiteDOE();
-
 use constant PRAGMA_PREFIX => '#FRE';
 use constant PRAGMA_SCHEDULER_OPTIONS => 'scheduler-options';
 use constant PRAGMA_SCHEDULER_MAKE_VERBOSE => 'scheduler-make-verbose';
 use constant PRAGMA_VERSION_INFO => 'version-info';
+
+# //////////////////////////////////////////////////////////////////////////////
+# ///////////////////////////////////////////////////////////////// Utilities //
+# //////////////////////////////////////////////////////////////////////////////
+
+my $option = sub($$;$)
+# ------ arguments: $fre $name $value
+{
+  my ($fre, $n, $v) = @_;
+  my $optionString = $fre->property($n);
+  $optionString =~ s/\$/$v/;
+  return $optionString;
+};
 
 # //////////////////////////////////////////////////////////////////////////////
 # //////////////////////////////////////////////////////// Exported Functions //
@@ -57,45 +63,33 @@ sub setSchedulerOptions($$$$$$%)
   my $prefix = $fre->property('FRE.scheduler.prefix');
   my $queue = $fre->property('FRE.scheduler.queue');
   my $coresPerNode = $fre->property('FRE.machine.coresPerNode');
-  my $site = $fre->property('FRE.site');
   
-  my $n = POSIX::ceil($n / $coresPerNode) * $coresPerNode;
-
-  if ($site eq FRETemplate::SITE_GFDL)
+  my %option =
+  (
+    npes	=> $option->($fre, 'FRE.scheduler.option.npes', POSIX::ceil($n / $coresPerNode) * $coresPerNode),
+    time	=> $option->($fre, 'FRE.scheduler.option.time', $t),
+    segmentTime	=> $option->($fre, 'FRE.scheduler.option.segmentTime', $g),
+    queue	=> $option->($fre, 'FRE.scheduler.option.queue', $queue),
+    stdout	=> $option->($fre, 'FRE.scheduler.option.stdout', $d),
+    join	=> $option->($fre, 'FRE.scheduler.option.join'),
+    cpuset	=> $option->($fre, 'FRE.scheduler.option.cpuset'),
+    rerun	=> $option->($fre, 'FRE.scheduler.option.rerun'),
+    mail	=> $option->($fre, 'FRE.scheduler.option.mail')
+  );
+  
+  %option =
+  (
+    %option,
+    project	=> $option->($fre, 'FRE.scheduler.option.project', $project),
+    projectAux	=> $option->($fre, 'FRE.scheduler.option.generic', "FRE_PROJECT=$project")
+  ) if $project;
+  
+  foreach my $key (sort keys %option)
   {
-
-    $s =~ s/($placeholder)/$1\n$prefix -r y/;
-    $s =~ s/($placeholder)/$1\n$prefix -l cpuset/;
-    $s =~ s/($placeholder)/$1\n$prefix -soft -l fre_info=runTimePerSegment\@$g -hard/ if $g;
-    $s =~ s/($placeholder)/$1\n$prefix -o $d\//;
-    $s =~ s/($placeholder)/$1\n$prefix -pe ic.alloc $n/;
-    $s =~ s/($placeholder)/$1\n$prefix -l h_cpu=$t/;
-
-    if ($project)
-    {
-      $s =~ s/($placeholder)/$1\n$prefix -P $project/;
-      $s =~ s/($placeholder)/$1\n$prefix -v FRE_PROJECT=$project/;
-    }
-
+    my $value = $option{$key}; 
+    $s =~ s/($placeholder)/$1\n$prefix $value/ if $value; 
   }
-  elsif ($site eq FRETemplate::SITE_DOE)
-  {
-
-    $s =~ s/($placeholder)/$1\n$prefix -q $queue/;
-    $s =~ s/($placeholder)/$1\n$prefix -m abe/;
-    $s =~ s/($placeholder)/$1\n$prefix -j oe/;
-    $s =~ s/($placeholder)/$1\n$prefix -o $d\/\${PBS_JOBNAME}.\${PBS_JOBID}/;
-    $s =~ s/($placeholder)/$1\n$prefix -l size=$n/;
-    $s =~ s/($placeholder)/$1\n$prefix -l walltime=$t/;
-
-    if ($project)
-    {
-      $s =~ s/($placeholder)/$1\n$prefix -A $project/;
-      $s =~ s/($placeholder)/$1\n$prefix -v FRE_PROJECT=$project/;
-    }
-
-  }
-
+  
   return $s;
 
 }
@@ -112,18 +106,10 @@ sub setSchedulerDualRuns($$)
 
   my $fre = $z->fre();
   my $prefix = $fre->property('FRE.scheduler.prefix');
-  my $site = $fre->property('FRE.site');
-  
-  if ($site eq FRETemplate::SITE_GFDL)
-  {
-    $s =~ s/($placeholder)/$1\n$prefix -A repro/;
-    $s =~ s/($placeholder)/$1\n$prefix -v nodual/;
-  }
-  elsif ($site eq FRETemplate::SITE_DOE)
-  {
-    # ------ ???
-  }
+  my $optionProjectDual = $option->($fre, 'FRE.scheduler.option.projectDual');
 
+  $s =~ s/($placeholder)/$1\n$prefix $optionProjectDual/ if $optionProjectDual; 
+  
   return $s;
 
 }
@@ -139,37 +125,21 @@ sub setSchedulerMakeVerbose($$)
   my $placeholder = qr/^[ \t]*$prefix[ \t]+$schedulerOptions[ \t]*$/mo;
 
   my $fre = $z->fre();
-  my $site = $fre->property('FRE.site');
+  my $variableEnv = $fre->property('FRE.scheduler.variable.environment');
+  my $variableEnvValueBatch = $fre->property('FRE.scheduler.variable.environment.value.batch');
   my $makeVerbose = '';
   
-  if ($site eq FRETemplate::SITE_GFDL)
-  {
-    $makeVerbose .= 'if ( $?ENVIRONMENT ) then' . "\n";
-    $makeVerbose .= '  if ( $ENVIRONMENT == "BATCH" ) then' . "\n";
-    $makeVerbose .= '    set aliasMake = `alias make`' . "\n";
-    $makeVerbose .= '    if ( $aliasMake != "" ) then' . "\n";
-    $makeVerbose .= '      alias make $aliasMake VERBOSE=on' . "\n";
-    $makeVerbose .= '    else' . "\n";
-    $makeVerbose .= '      alias make make VERBOSE=on' . "\n";
-    $makeVerbose .= '    endif' . "\n";
-    $makeVerbose .= '    unset aliasMake' . "\n";
-    $makeVerbose .= '  endif' . "\n";
-    $makeVerbose .= 'endif' . "\n";
-  }
-  elsif ($site eq FRETemplate::SITE_DOE)
-  {
-    $makeVerbose .= 'if ( $?PBS_ENVIRONMENT ) then' . "\n";
-    $makeVerbose .= '  if ( $PBS_ENVIRONMENT == "PBS_BATCH" ) then' . "\n";
-    $makeVerbose .= '    set aliasMake = `alias make`' . "\n";
-    $makeVerbose .= '    if ( $aliasMake != "" ) then' . "\n";
-    $makeVerbose .= '      alias make $aliasMake VERBOSE=on' . "\n";
-    $makeVerbose .= '    else' . "\n";
-    $makeVerbose .= '      alias make make VERBOSE=on' . "\n";
-    $makeVerbose .= '    endif' . "\n";
-    $makeVerbose .= '    unset aliasMake' . "\n";
-    $makeVerbose .= '  endif' . "\n";
-    $makeVerbose .= 'endif' . "\n";
-  }
+  $makeVerbose .= 'if ( $?' . $variableEnv . ' ) then' . "\n";
+  $makeVerbose .= '  if ( $' . $variableEnv . ' == "' . $variableEnvValueBatch . '" ) then' . "\n";
+  $makeVerbose .= '    set aliasMake = `alias make`' . "\n";
+  $makeVerbose .= '    if ( $aliasMake != "" ) then' . "\n";
+  $makeVerbose .= '      alias make $aliasMake VERBOSE=on' . "\n";
+  $makeVerbose .= '    else' . "\n";
+  $makeVerbose .= '      alias make make VERBOSE=on' . "\n";
+  $makeVerbose .= '    endif' . "\n";
+  $makeVerbose .= '    unset aliasMake' . "\n";
+  $makeVerbose .= '  endif' . "\n";
+  $makeVerbose .= 'endif' . "\n";
 
   $s =~ s/$placeholder/$makeVerbose/;
 

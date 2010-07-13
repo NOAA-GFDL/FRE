@@ -1,5 +1,5 @@
 #
-# $Id: FREExperiment.pm,v 18.1.2.3 2010/05/24 20:52:16 afy Exp $
+# $Id: FREExperiment.pm,v 18.1.2.3.2.1 2010/07/12 15:20:00 fms Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: Experiment Management Module
 # ------------------------------------------------------------------------------
@@ -915,7 +915,7 @@ sub extractCheckoutInfo($)
     ($codeBase{$name}	= $r->extractSourceValue('codeBase', $name, FREExperiment::REQUIRED)) =~ s/\s+/ /gm;
     ($codeTag{$name}	= $r->extractSourceValue('codeBase/@version', $name, FREExperiment::REQUIRED)) =~ s/\s+//gm;
     ($vcBrand{$name}	= $r->extractSourceValue('@versionControl', $name) || 'cvs') =~ s/\s+//gm;
-    ($vcRoot{$name}	= $r->extractSourceValue('@root', $name) || $ENV{CVSROOT}) =~ s/\s+//gm;
+    ($vcRoot{$name}	= $r->extractSourceValue('@root', $name) || $ENV{CVSROOT} || $fre->property('FRE.versioncontrol.cvs.root') ) =~ s/\s+//gm;
     ($sourceCsh{$name}	= $r->extractSourceValue('csh', $name));
     # ------------------------------------------------------------------------------------------------ print what we got
     $fre->out

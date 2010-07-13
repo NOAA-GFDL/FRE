@@ -1,5 +1,5 @@
 #
-# $Id: FRE.pm,v 18.0.2.4 2010/06/22 22:31:51 afy Exp $
+# $Id: FRE.pm,v 18.0.2.4.2.1 2010/07/12 15:19:44 fms Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: Main Library Module
 # ------------------------------------------------------------------------------
@@ -507,12 +507,12 @@ sub dataFilesMerged($$$$)
       push @results, $fileName;
       unless (-f $fileName and -r $fileName)
       {
-	$fre->out(1, "The filename '$fileName' isn't accessible or doesn't exist");
+	$fre->out(1, "The $l $a '$fileName' isn't accessible or doesn't exist");
       }
     }
     else
     {
-      $fre->out(1, "The filename '$fileName' is defined more than once - all the extra definitions are ignored");
+      $fre->out(1, "The $l $a '$fileName' is defined more than once - all the extra definitions are ignored");
     }
   }
   
