@@ -128,16 +128,6 @@ else if ( "$type" == "tar" ) then
 else
    echo ERROR: only tar or cpio supported
 endif
-#convert netcdf4 to netcdf3 format so that nccmp can be used
-foreach ncfile (`ls -1 *nc`)        
-   set is_netcdf4 = `ncinfo $ncfile | grep -c 'format=NC_FORMAT_NETCDF4_CLASSIC'`
-   if ( $is_netcdf4 ) then
-      if ( ! $?quiet ) echo "Converting $ncfile to netCDF3 for use with nccmp"
-      mv $ncfile VERSION4_$ncfile
-      ncks -3 VERSION4_$ncfile -o $ncfile
-      rm VERSION4_$ncfile
-   endif
-end
 
 set list = ( `ls -1 *` )
 cd ../second
@@ -183,17 +173,6 @@ while ( 1 )
      echo ERROR: only tar or cpio supported
    endif
 
-#convert netcdf4 to netcdf3 format so that nccmp can be used
-   foreach ncfile (`ls -1 *nc`)
-      set is_netcdf4 = `ncinfo $ncfile | grep -c 'format=NC_FORMAT_NETCDF4_CLASSIC'`
-      if ( $is_netcdf4 ) then
-         if ( ! $?quiet ) echo "Converting $ncfile to netCDF3 for use with nccmp"
-         mv $ncfile VERSION4_$ncfile
-         ncks -3 VERSION4_$ncfile -o $ncfile
-         rm VERSION4_$ncfile
-      endif
-   end
-
   echo "/// $file1"
   echo '\\\' $file2
 
@@ -211,13 +190,13 @@ while ( 1 )
     else if ( $cmpstatus != 0 ) then
        if ( "$ncfile:e" == 'nc' ) then
           if ( $?quiet ) then
-             nccmp -dmq $extraoptions ../first/$ncfile ../second/$ncfile >& /dev/null
+             nccmp -dmq $extraoptions -w format ../first/$ncfile ../second/$ncfile >& /dev/null
              if ( $status != 0 ) then
                 set mystat = 1
                 echo "DIFFER : $ncfile"
              endif
           else 
-             nccmp -dmq $extraoptions ../first/$ncfile ../second/$ncfile
+             nccmp -dmq $extraoptions -w format ../first/$ncfile ../second/$ncfile
              if ( $status == 0 ) then
                 echo "nccmp shows the $ncfile files are equivalent"
              else 

@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 # -*- cperl -*-
-# $Id: frerts,v 15.1.2.22 2010/07/14 16:13:26 fms Exp $
+# $Id: frerts,v 15.1.2.23 2010/07/15 21:00:20 fms Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: Automated launch of fremake, frerun and frecheck.
 # ------------------------------------------------------------------------------
@@ -20,7 +20,7 @@ use Date::Manip();
 {
 package frerts;
 
-use constant VERSION => '$Id: frerts,v 15.1.2.22 2010/07/14 16:13:26 fms Exp $';
+use constant VERSION => '$Id: frerts,v 15.1.2.23 2010/07/15 21:00:20 fms Exp $';
 use constant OPTLIST =>
   (
       'help|h',
@@ -283,7 +283,8 @@ if ( ! -f $origxml ) then
 endif
 
 #set up temporary directory
-if ( ! $?TMPDIR ) set TMPDIR = "$outdir/mk.tmp.$thisdate"
+if ( ! $?TMPDIR ) set TMPDIR = "$outdir"
+set TMPDIR = "$TMPDIR/mk.tmp.$thisdate"
 if ( -d $TMPDIR ) then
    rm -rf $TMPDIR/* >& /dev/null
 else
@@ -350,7 +351,8 @@ sub getruntemplate {
    my $csh = <<'EOF';
 
 #set up temporary directory
-if ( ! $?TMPDIR ) set TMPDIR = "$outdir/run.tmp.$thisdate"
+if ( ! $?TMPDIR ) set TMPDIR = "$outdir"
+set TMPDIR = "$TMPDIR/run.tmp.$thisdate"
 if ( -d $TMPDIR ) then
    rm -rf $TMPDIR/* >& /dev/null
 else
@@ -410,9 +412,6 @@ end
 echo ---------------------------------------------------
 set cmd = "frecheck -p $platform -t repro -x $xml $list"
 echo $cmd
-
-#temporary measure until next version of nccmp
-module unload nccmp
 
 $cmd > stdoutfile
 if ( $status == 0 ) then

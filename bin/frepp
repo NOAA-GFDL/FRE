@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 # -*- cperl -*-
-# $Id: frepp,v 18.0.2.14 2010/06/11 01:12:31 arl Exp $
+# $Id: frepp,v 18.0.2.19 2010/07/21 16:11:19 fms Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: History/diagnostics post-processing
 # ------------------------------------------------------------------------------
@@ -33,7 +33,7 @@ use vars qw( $maxyrs $maxdisk $cubic $nlat $nlon $interpMethod $getgridspec $bas
 
   package frepp;
 
-  use constant VERSION => '$Id: frepp,v 18.0.2.14 2010/06/11 01:12:31 arl Exp $';
+  use constant VERSION => '$Id: frepp,v 18.0.2.19 2010/07/21 16:11:19 fms Exp $';
 
 #Usage:    $relfrepp [ -AB:C:O:RY:Z:c:d:f:hlmMp:oqr:S:st:u:vx:z ] experiment [ experiment2 ... ]                 
   use constant OPTLIST =>
@@ -210,7 +210,7 @@ if ( $opt_M and not $opt_p ) { $opt_M = "#\$ -m e";} else { $opt_M = ""; }
 
 if ( $opt_O ) { print STDERR "NOTE: There has been a change to the behavior of the -O option. Your scripts will be written directly to '$opt_O' and not to '$opt_O/scripts/postProcess'\n"; }
 
-$versionId = ' $Id: frepp,v 18.0.2.14 2010/06/11 01:12:31 arl Exp $';
+$versionId = ' $Id: frepp,v 18.0.2.19 2010/07/21 16:11:19 fms Exp $';
 
 $perlerrors = "";
 $component = "";
@@ -220,6 +220,9 @@ $do_static = 1;
 $historyfiles="";
 %dtvars = (); 
 $basenpes = 4;
+
+#initialize hsmfiles string
+my $hsmfiles="";
 
 #begin generating version string
 my $abs_xml_path = File::Spec->rel2abs($opt_x);
@@ -864,6 +867,7 @@ EOF
       my @intervals = map { $_->findvalue('@interval') } @taNodes;
        my $diag_source  = " ";
       foreach my $taNode ( @taNodes ) {
+         $hsmfiles = $hsmfiles . jpkSrcFiles($taNode) . ",";
          (my $int,my $subint) = get_subint($taNode,@intervals);
          if ( $opt_v ) {
             print STDERR "      monthly av int=$int subint=$subint";
@@ -903,6 +907,7 @@ EOF
          $cshscript .= analysis( $taNode, $expt, $gridspec, $staticfile,"timeAverage",$diag_source,$ppRootDir,$component,\%dtvars,$analysisdir,$aoutscriptdir,$workdir,$archivedir,$opt_O,$opt_Y,$opt_Z,$opt_V,$sim0,$opt_R,$opt_s,$histDir,$nlat,$nlon,$abs_xml_path,$stdoutdir);
       }
       foreach my $taNode ( @taNodes ) {
+         $hsmfiles = $hsmfiles . jpkSrcFiles($taNode) . ",";
          (my $int,my $subint) = get_subint($taNode,@intervals);
          if ( $opt_v ) {
             print STDERR "      annual av int=$int subint=$subint";
@@ -921,6 +926,7 @@ EOF
       my @taNodes = sort by_interval $ppcNode->findnodes('timeAverage[@source="seasonal"]');
       my @intervals = map { $_->findvalue('@interval') } @taNodes;
       foreach my $taNode ( @taNodes ) {
+         $hsmfiles = $hsmfiles . jpkSrcFiles($taNode) . ",";
          (my $int,my $subint) = get_subint($taNode,@intervals);
 
          if (! $opt_A ) {
@@ -944,23 +950,28 @@ EOF
          my $newoutscript = "$outscript"."_av";
          $cshscript =~ s/set scriptName = .*/set scriptName = $newoutscript/;
          my @hf = dmget_files();
+         my @hsmf = jpk_hsmget_files();
          if ( scalar @hf ) {
             my $hsmget_history = <<EOF;
 cd $opt_d
 foreach h ( @hf )
  set historyyear = `echo \$h | cut -c 1-4`
- foreach historyfile ( `ls \$historyyear????.nc.*`)
+ foreach historyfile ( `ls \$historyyear????.nc.cpio \$historyyear????.nc.tar`)
   set hsmdate = \$historyfile:r
-  $time_hsmget hsmget -a $opt_d -p $ptmpDir/history -w $tmphistdir \$hsmdate/\\*
+  foreach hsmfile ( @hsmf ) 
+   $time_hsmget hsmget -t -q -a $opt_d -p $ptmpDir/history -w $tmphistdir \$hsmdate/\\*.\$hsmfile.\\*
+  end
  end
 end
 if ( -d $refinedir ) then
 cd $refinedir
 foreach h ( @hf )
  set historyyear = `echo \$h | cut -c 1-4`
- foreach historyfile ( `ls \$historyyear????.nc.*`)
+ foreach historyfile ( `ls \$historyyear????.nc.cpio \$historyyear????.nc.tar`)
   set hsmdate = \$historyfile:r
-  $time_hsmget hsmget -a $refinedir -p /$ptmpDir/history_refineDiag -w $tmphistdir \$hsmdate/\\*
+  foreach hsmfile ( @hsmf ) 
+   $time_hsmget hsmget -t -q -a $refinedir -p /$ptmpDir/history_refineDiag -w $tmphistdir \$hsmdate/\\*.\$hsmfile.\\*
+  end
  end
 end
 endif
@@ -982,6 +993,7 @@ EOF
          my @chunks = map { $_->findvalue('@chunkLength') } @tsNodes;
          my $diag_source = &FREUtil::diagfile($ppcNode,"$hrfreq"); 
          foreach my $tsNode ( @tsNodes ) {
+            $hsmfiles = $hsmfiles . jpkSrcFiles($tsNode) . ",";
             (my $cl,my $subchunk) = get_subint($tsNode,@chunks);
             if ( $opt_v ) {
                print STDERR "      $hrfreq ts chunklength=$cl subchunk=$subchunk";
@@ -1004,6 +1016,7 @@ EOF
       my @chunks = map { $_->findvalue('@chunkLength') } @tsNodes;
       my $diag_source = &FREUtil::diagfile($ppcNode,"daily");
       foreach my $tsNode ( @tsNodes ) {
+         $hsmfiles = $hsmfiles . jpkSrcFiles($tsNode) . ",";
          (my $cl,my $subchunk) = get_subint($tsNode,@chunks);
          if ( $opt_v ) {
             print STDERR "      daily ts chunklength=$cl subchunk=$subchunk";
@@ -1025,6 +1038,7 @@ EOF
       my @chunks = map { $_->findvalue('@chunkLength') } @tsNodes;
       my $diag_source = &FREUtil::diagfile($ppcNode,"monthly");
       foreach my $tsNode ( @tsNodes ) {
+         $hsmfiles = $hsmfiles . jpkSrcFiles($tsNode) . ",";
          (my $cl,my $subchunk) = get_subint($tsNode,@chunks);
          if ( $opt_v ) {
             print STDERR "      monthly ts chunklength=$cl subchunk=$subchunk";
@@ -1046,6 +1060,7 @@ EOF
       my @chunks = map { $_->findvalue('@chunkLength') } @tsNodes;
       my $diag_source = &FREUtil::diagfile($ppcNode,"annual","annual");
       foreach my $tsNode ( @tsNodes ) {
+         $hsmfiles = $hsmfiles . jpkSrcFiles($tsNode) . ",";
          (my $cl,my $subchunk) = get_subint($tsNode,@chunks);
          if ( $opt_v ) {
             print STDERR "      annual ts chunklength=$cl subchunk=$subchunk";
@@ -1067,6 +1082,7 @@ EOF
       my @chunks = map { $_->findvalue('@chunkLength') } @tsNodes;
       my $diag_source = &FREUtil::diagfile($ppcNode,"seasonal","seasonal");
       foreach my $tsNode ( @tsNodes ) {
+         $hsmfiles = $hsmfiles . jpkSrcFiles($tsNode) . ",";
          (my $cl,my $subchunk) = get_subint($tsNode,@chunks);
          if ( $opt_v ) {
             print STDERR "      seasonal ts chunklength=$cl subchunk=$subchunk";
@@ -1095,23 +1111,28 @@ EOF
          #set up dmget, set up to postprocess the following year if necessary, write script
          $mkdircommand = createdirs( $mkdircommand );
          my @hf = dmget_files();
+         my @hsmf = jpk_hsmget_files();
          if ( scalar @hf ) {
             my $hsmget_history = <<EOF;
 cd $opt_d
 foreach h ( @hf )
  set historyyear = `echo \$h | cut -c 1-4`
- foreach historyfile ( `ls \$historyyear????.nc.*`)
+ foreach historyfile ( `ls \$historyyear????.nc.cpio \$historyyear????.nc.tar`)
   set hsmdate = \$historyfile:r
-  $time_hsmget hsmget -a $opt_d -p $ptmpDir/history -w $tmphistdir \$hsmdate/\\*
+  foreach hsmfile ( @hsmf ) 
+   $time_hsmget hsmget -t -q -a $opt_d -p $ptmpDir/history -w $tmphistdir \$hsmdate/\\*.\$hsmfile.\\*
+  end
  end
 end
 if ( -d $refinedir ) then
 cd $refinedir
 foreach h ( @hf )
  set historyyear = `echo \$h | cut -c 1-4`
- foreach historyfile ( `ls \$historyyear????.nc.*`)
+ foreach historyfile ( `ls \$historyyear????.nc.cpio \$historyyear????.nc.tar`)
   set hsmdate = \$historyfile:r
-  $time_hsmget hsmget -a $refinedir -p $ptmpDir/history_refineDiag -w $tmphistdir \$hsmdate/\\*
+  foreach hsmfile ( @hsmf ) 
+   $time_hsmget hsmget -t -q -a $refinedir -p $ptmpDir/history_refineDiag -w $tmphistdir \$hsmdate/\\*.\$hsmfile.\\*
+  end
  end
 end
 endif
@@ -1141,7 +1162,7 @@ EOF
 cd $opt_d
 foreach h ( @hf )
  set historyyear = `echo \$h | cut -c 1-4`
- foreach historyfile ( `ls \$historyyear????.nc.*`)
+ foreach historyfile ( `ls \$historyyear????.nc.cpio \$historyyear????.nc.tar`)
   set hsmdate = \$historyfile:r
   $time_hsmget hsmget -a $opt_d -p $ptmpDir/history -w $tmphistdir \$hsmdate/\\*
  end
@@ -1150,7 +1171,7 @@ if ( -d $refinedir ) then
 cd $refinedir
 foreach h ( @hf )
  set historyyear = `echo \$h | cut -c 1-4`
- foreach historyfile ( `ls \$historyyear????.nc.*`)
+ foreach historyfile ( `ls \$historyyear????.nc.cpio \$historyyear????.nc.tar`)
   set hsmdate = \$historyfile:r
   $time_hsmget hsmget -a $refinedir -p $ptmpDir/history_refineDiag -w $tmphistdir \$hsmdate/\\*
  end
@@ -1175,6 +1196,37 @@ EOF
 ##############################################
 # SUBROUTINES
 ##############################################
+
+sub jpkSrcFiles {
+   my $jpkElem    = $_[0]->getName;
+   if ($jpkElem eq "timeAverage") {
+     my $jpkSrc = $_[0]->findvalue('../@source');
+     if ($jpkSrc eq "") {
+       print STDERR "WARNING: no diagnostic source file specified for ".$_[0]->toString()."\n";
+     }
+     return $jpkSrc;
+   } else {
+     my $jpkSrc     = $_[0]->findvalue('@source');
+     if ($jpkSrc eq "") { $jpkSrc = $_[0]->findvalue('../@source'); }
+     if ($jpkSrc eq "") {
+       print STDERR "WARNING: no diagnostic source file specified for ".$_[0]->toString()."\n";
+     }
+     return $jpkSrc;
+   }
+}
+
+sub jpk_hsmget_files {
+   my @hsmf = ();
+   my %seen = ();
+   my @hsmfilesa = split ',',$hsmfiles;
+   foreach (@hsmfilesa) { 
+      push(@hsmf, $_) unless ($seen{$_}++); #uniq
+   } 
+   if ($opt_v) {print "diagnostic files to be extracted: @hsmf\n\n";}
+   $hsmfiles = '';
+   return @hsmf;
+}
+
 
 #sort, uniq list of history files to dmget
 sub dmget_files {
@@ -1938,7 +1990,7 @@ cd $outdir
 set numfilestocpio = `ls $prefix.*.nc | wc -l`
 if ( \$numfilestocpio > 0 ) then
 ls -1 $prefix.*.nc | $time_mkcpio $cpio -oKvO $prefix.$abbrev.nc.cpio
-$time_dmput dmput $outdir/$prefix.$abbrev.nc.cpio
+$time_dmput dmput $outdir/$prefix.$abbrev.nc.cpio &
 endif
 #set filestorm = `ls $prefix.*.nc`
 #set filesize = `du -k $prefix.$abbrev.nc.cpio | cut -f1` #du -k should work on dmput files... Balaji
@@ -1949,7 +2001,7 @@ EOF
    if ( $dmputOnly ) {
       $csh = <<EOF;
 cd $outdir
-$time_dmput dmput "$prefix.*.nc"
+$time_dmput dmput "$prefix.*.nc" &
 cd \$work
 EOF
 
@@ -1992,8 +2044,8 @@ else
 endif
 
 cd $outdir
-$time_dmput dmput "$prefix.*.nc"
-$time_dmput dmput  $prefix.$abbrev.nc.cpio
+$time_dmput dmput "$prefix.*.nc" &
+$time_dmput dmput  $prefix.$abbrev.nc.cpio &
 
 endif
 cd \$work
@@ -2557,7 +2609,7 @@ $forloop
       $time_dmget dmget -d $reqpath "$component.*-$tENDprevf.mon.nc.cpio"
       $check_dmget
       $time_uncpio $uncpio -ivI $reqpath/$component.*-$tENDprevf.mon.nc.cpio '*12.*.nc'
-      $time_dmput dmput -d $reqpath "$component.*-$tENDprevf.mon.nc.cpio"
+      $time_dmput dmput -d $reqpath "$component.*-$tENDprevf.mon.nc.cpio" &
       set prev = (`ls ./$component.*-$tENDprevf.\$var`)
     endif
     if ( "\$prev" != "" ) then
@@ -2590,7 +2642,7 @@ EOF
                $check_dmget
                $time_uncpio $uncpio -ivI $opt_d/$prevhist '*.$diag_source.nc'
                $check_cpio
-               $time_dmput dmput "$opt_d/$prevhist"
+               $time_dmput dmput "$opt_d/$prevhist" &
                set string = `ncdump -h \${prevyear}0101.$diag_source.nc | grep UNLIMITED`
                set timename   = `echo \$string[1]`
                $convertDec
@@ -2793,7 +2845,7 @@ end
    $check_ncatted
    $time_mv $mvfile $component.$range.\$monthf.nc \$outdir/$component.$range.\$monthf.nc
    $time_rm rm $component.$range.\$monthf.nc
-   $time_dmput dmput \$outdir/$component.$range.\$monthf.nc
+   $time_dmput dmput \$outdir/$component.$range.\$monthf.nc &
 
 EOF
 
@@ -2804,7 +2856,7 @@ EOF
    $check_ncatted
    $time_mv $mvfile $component.$range.\$monthf$tile.nc \$outdir/$component.$range.\$monthf$tile.nc
    $time_rm rm $component.$range.\$monthf$tile.nc
-   $time_dmput dmput \$outdir/$component.$range.\$monthf$tile.nc
+   $time_dmput dmput \$outdir/$component.$range.\$monthf$tile.nc &
    @ i++
 end
 EOF
@@ -2858,7 +2910,7 @@ EOF
    $check_ncatted
    $time_mv $mvfile $component.$range.\$monthf.nc \$outdir/$component.$range.\$monthf.nc
    $time_rm rm $component.$range.\$monthf.nc
-   $time_dmput dmput \$outdir/$component.$range.\$monthf.nc
+   $time_dmput dmput \$outdir/$component.$range.\$monthf.nc &
 
    $time_rm rm -f month.nc
    @ month++
@@ -2995,7 +3047,7 @@ $time_ncatted ncatted -h -a long_name,lon,m,c,"longitude" -a long_name,lat,m,c,"
 $check_ncatted
 $time_mv $mvfile $component.$tENDf.ann.nc \$outdir/$component.$tENDf.ann.nc
 $time_rm rm $component.$tENDf.ann.nc
-$time_dmput dmput \$outdir/$component.$tENDf.ann.nc
+$time_dmput dmput \$outdir/$component.$tENDf.ann.nc &
 
 EOF
 
@@ -3006,7 +3058,7 @@ $time_ncatted ncatted -h -O -a filename,global,m,c,"$component.$tENDf.ann$tile.n
 $check_ncatted
 $time_mv $mvfile $component.$tENDf.ann$tile.nc \$outdir/$component.$tENDf.ann$tile.nc
 $time_rm rm $component.$tENDf.ann$tile.nc
-$time_dmput dmput \$outdir/$component.$tENDf.ann$tile.nc
+$time_dmput dmput \$outdir/$component.$tENDf.ann$tile.nc &
 @ i ++
 end
 EOF
@@ -3050,7 +3102,7 @@ $time_ncatted ncatted -h -O -a filename,global,m,c,"$component.$tENDf.ann.nc" $c
 $check_ncatted
 $time_mv $mvfile $component.$tENDf.ann.nc \$outdir/$component.$tENDf.ann.nc
 $time_rm rm $component.$tENDf.ann.nc
-$time_dmput dmput \$outdir/$component.$tENDf.ann.nc
+$time_dmput dmput \$outdir/$component.$tENDf.ann.nc &
 $time_rm rm -f annual.nc
 
 EOF
@@ -3147,7 +3199,7 @@ $time_ncatted ncatted -h -O -a filename,global,m,c,"$component.$first-$endinterv
 $check_ncatted
 $time_mv $mvfile $component.$first-$endinterval.ann.nc \$outdir/$component.$first-$endinterval.ann.nc
 $time_rm rm $component.$first-$endinterval.ann.nc
-$time_dmput dmput \$outdir/$component.$first-$endinterval.ann.nc
+$time_dmput dmput \$outdir/$component.$first-$endinterval.ann.nc &
 $time_rm rm -f xyears.nc
 EOF
    } else { # CUBIC
@@ -3172,7 +3224,7 @@ while ( \$i <= 6 )
    $check_ncatted
    $time_mv $mvfile $component.$first-$endinterval.ann$tile.nc \$outdir/$component.$first-$endinterval.ann$tile.nc
    $time_rm rm $component.$first-$endinterval.ann$tile.nc
-   $time_dmput dmput \$outdir/$component.$first-$endinterval.ann$tile.nc
+   $time_dmput dmput \$outdir/$component.$first-$endinterval.ann$tile.nc &
    $time_rm rm -f xyears.nc
    @ i++
 end
@@ -3263,7 +3315,7 @@ foreach var ( $variables )
       $check_dmget
       $time_uncpio $uncpio -ivI $indir/\$in.day.nc.cpio \$in.\$var.nc 
       $check_cpio
-      $time_dmput dmput "$indir/\$in.day.nc.cpio"
+      $time_dmput dmput "$indir/\$in.day.nc.cpio" &
       set indir = '.'
    else
       set indir = $indir
@@ -3357,8 +3409,8 @@ else
       $time_rm rm \$out.mon.nc.cpio
    endif
 endif
-$time_dmput dmput \$outdir/\$out.mon.nc.cpio
-$time_dmput dmput "\$outdir/\$out.*.nc"
+$time_dmput dmput \$outdir/\$out.mon.nc.cpio &
+$time_dmput dmput "\$outdir/\$out.*.nc" &
 
 endif
 
@@ -3777,7 +3829,7 @@ while (\$month <= 12)
    $check_ncatted
    $time_mv $mvfile $component.$start-$end.\$monthf.nc \$outdir
    $time_rm rm $component.$start-$end.\$monthf.nc
-   $time_dmput dmput \$outdir/$component.$start-$end.\$monthf.nc
+   $time_dmput dmput \$outdir/$component.$start-$end.\$monthf.nc &
    $time_rm rm -f month.nc
    @ month++
 end
@@ -4113,7 +4165,7 @@ if ( \$cpiosexist ) then
    set mylist = (`ls $cpiolist`)
    cd \$work
    foreach cpio ( \$mylist )
-      $time_uncpio $uncpio -ivI $reqpath/\$cpio || ( echo "$check_cpio_msg"; echo "$check_cpio_msg" > \$work/.errors ) ; $time_dmput dmput $reqpath/\$cpio 
+      $time_uncpio $uncpio -ivI $reqpath/\$cpio || ( echo "$check_cpio_msg"; echo "$check_cpio_msg" > \$work/.errors ) 
    end
    set varlist = `ls -1 $getlist | cut -f3- -d'.' | sort -u`
 else
@@ -4271,7 +4323,7 @@ if ( \$cpiosexist ) then
    set mylist = (`ls $cpiolist`)
    cd $workdir
    foreach cpio ( \$mylist )
-      $time_uncpio $uncpio -ivI $reqpath/\$cpio || ( echo "$check_cpio_msg"; echo "$check_cpio_msg" > \$work/.errors ) ; $time_dmput dmput $reqpath/\$cpio 
+      $time_uncpio $uncpio -ivI $reqpath/\$cpio || ( echo "$check_cpio_msg"; echo "$check_cpio_msg" > \$work/.errors ) 
    end
    $setvarlist
 else
@@ -4456,7 +4508,7 @@ if ( ! -e $seahist.$diag_source.tile1.nc ) then
       $time_dmget dmget $opt_d/$prevhist
       $time_uncpio $uncpio -ivI $opt_d/$prevhist '*.$diag_source.tile*.nc' 
       $check_cpio
-      $time_dmput dmput $opt_d/$prevhist
+      $time_dmput dmput $opt_d/$prevhist &
       set prevyear = $prevyear
       set i = 1
       while ( \$i <= 6 )
@@ -4638,7 +4690,7 @@ end
 
 $time_mv $mvfile $component.$dates.nc \$outdir/$component.$dates.nc
 $time_rm rm $component.$dates.nc
-$time_dmput dmput \$outdir/$component.$dates.nc
+$time_dmput dmput \$outdir/$component.$dates.nc &
 $time_rm rm -f sea1.nc sea2.nc sea3.nc sea4.nc sea5.nc sea6.nc
 EOF
    }
@@ -4691,7 +4743,7 @@ if ( ! -e $seahist.$diag_source.nc ) then
       $time_dmget dmget $opt_d/$prevhist
       $time_uncpio $uncpio -ivI $opt_d/$prevhist '*.$diag_source.nc' 
       $check_cpio
-      $time_dmput dmput $opt_d/$prevhist
+      $time_dmput dmput $opt_d/$prevhist &
       set prevyear = $prevyear
       $convertDec
    else 
@@ -4800,7 +4852,7 @@ $time_ncatted ncatted -h -O -a filename,global,m,c,"\$outdir/$component.$dates.n
 $check_ncatted 
 $time_mv $mvfile $component.$dates.nc \$outdir/$component.$dates.nc
 $time_rm rm $component.$dates.nc
-$time_dmput dmput \$outdir/$component.$dates.nc
+$time_dmput dmput \$outdir/$component.$dates.nc &
 $time_rm rm sea.nc
 EOF
    }
@@ -4903,7 +4955,7 @@ foreach sea (DJF MAM JJA SON)
      $check_ncatted
      $time_mv $mvfile $component.$start-$end.\$sea.nc \$outdir/$component.$start-$end.\$sea.nc
      $time_rm rm $component.$start-$end.\$sea.nc
-     $time_dmput dmput \$outdir/$component.$start-$end.\$sea.nc
+     $time_dmput dmput \$outdir/$component.$start-$end.\$sea.nc &
      $time_rm rm -f \$sea.nc 
 end
 
@@ -4934,32 +4986,37 @@ sub refineDiag {
 #make additional data available to the refineDiag user scripts
 set basedate = $basedate
 
-#set up refineDiag input data and output directory
-set refineDiagDir = "$tmphistdir/history_refineDiag/$opt_t.nc"
-mkdir -p \$refineDiagDir
+set historyyear = `echo $opt_t | cut -c 1-4`
+cd \$histDir
+foreach historyfile ( `ls \$historyyear????.nc.cpio \$historyyear????.nc.tar`)
+   set hsmdate = \$historyfile:r
 
-$time_hsmget hsmget -a $opt_d -p $ptmpDir/history -w \$work $opt_t.nc/\\*
-cd \$work/$opt_t.nc
+   #set up refineDiag input data and output directory
+   set refineDiagDir = "$tmphistdir/history_refineDiag/\$hsmdate"
+   mkdir -p \$refineDiagDir
 
-#source user refineDiag scripts
+   $time_hsmget hsmget -a $opt_d -p $ptmpDir/history -w \$work \$hsmdate/\\*
+   cd \$work/\$hsmdate
+
+   #source user refineDiag scripts
 EOF
 
    my @refineScripts = split ',',$opt_D;
    foreach my $s ( @refineScripts ) {
       if ( ! -e "$s" ) { die "ERROR: Your refineDiag script does not exist: $s\n"; } 
-      $csh .= "source $s\n";
+      $csh .= "   source $s\n";
    }
 
    $csh .= <<EOF;
 
-#save new refineDiag history file
-cd \$refineDiagDir
-foreach refinedFile ( `ls *nc` )
-   echo "$refinedir/$opt_t.nc.cpio,\$refinedFile" >> $stdoutdir/postProcess/refineDiag.log
-   \$NCVARS -st01234 \$refinedFile >> $stdoutdir/postProcess/refineDiag.log
+   #save new refineDiag history file
+   cd \$refineDiagDir
+   foreach refinedFile ( `ls *nc` )
+      echo "$refinedir/\$hsmdate.cpio,\$refinedFile" >> $stdoutdir/postProcess/refineDiag.log
+      \$NCVARS -st01234 \$refinedFile >> $stdoutdir/postProcess/refineDiag.log
+   end
+   $time_hsmput hsmput -s cpio -a $newhistorydir -p $ptmpDir/history_refineDiag -w $tmphistdir/history_refineDiag \$hsmdate
 end
-$time_hsmput hsmput -s cpio -a $newhistorydir -p $ptmpDir/history_refineDiag -w $tmphistdir/history_refineDiag $opt_t.nc
-
 EOF
 
    return $csh;
@@ -5041,7 +5098,7 @@ foreach suffix (data nc)
    cd $work
    foreach file ($suffixlist)
       set rawcpio = $histDir/$file
-      set rawfiles = `cpio -C 262144 -ivI $rawcpio; dmput -r $rawcpio`
+      set rawfiles = `cpio -C 262144 -ivI $rawcpio
       if ($#rawfiles == 0) continue
       set outlist = ($outlist `ls $rawfiles | grep .${suffix}$`)
       set status_combine = 0
