@@ -1,15 +1,17 @@
 #
-# $Id: FREExperiment.pm,v 18.1.2.3.2.1 2010/07/12 15:20:00 fms Exp $
+# $Id: FREExperiment.pm,v 18.1.2.5 2010/08/13 15:43:03 afy Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: Experiment Management Module
 # ------------------------------------------------------------------------------
-# arl    Ver   0.00  Merged revision 18.0.2.1 onto trunk            March 10
+# arl    Ver   18.1  Merged revision 18.0.2.1 onto trunk            March 10
 # afy -------------- Branch 18.1.2 -------------------------------- March 10
 # afy    Ver   1.00  Modify extractCheckoutInfo (add line numbers)  March 10
 # afy    Ver   1.01  Modify createCheckoutScript (keep order)       March 10
 # afy    Ver   2.00  Remove createCheckoutScript subroutine         May 10
 # afy    Ver   2.01  Remove createCompileScript subroutine          May 10
 # afy    Ver   3.00  Remove executable subroutine                   May 10
+# arl    Ver   4.00  Modify extractCheckoutInfo (read property)     August 10
+# afy    Ver   5.00  Modify extractCheckoutInfo (no CVSROOT)        August 10
 # ------------------------------------------------------------------------------
 # Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2009-2010
 # Designed and written by V. Balaji, Amy Langenhorst and Aleksey Yakovlev
@@ -915,7 +917,7 @@ sub extractCheckoutInfo($)
     ($codeBase{$name}	= $r->extractSourceValue('codeBase', $name, FREExperiment::REQUIRED)) =~ s/\s+/ /gm;
     ($codeTag{$name}	= $r->extractSourceValue('codeBase/@version', $name, FREExperiment::REQUIRED)) =~ s/\s+//gm;
     ($vcBrand{$name}	= $r->extractSourceValue('@versionControl', $name) || 'cvs') =~ s/\s+//gm;
-    ($vcRoot{$name}	= $r->extractSourceValue('@root', $name) || $ENV{CVSROOT} || $fre->property('FRE.versioncontrol.cvs.root') ) =~ s/\s+//gm;
+    ($vcRoot{$name}	= $r->extractSourceValue('@root', $name) || $fre->property('FRE.versioncontrol.cvs.root')) =~ s/\s+//gm;
     ($sourceCsh{$name}	= $r->extractSourceValue('csh', $name));
     # ------------------------------------------------------------------------------------------------ print what we got
     $fre->out

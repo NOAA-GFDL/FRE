@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 # -*- cperl -*-
-# $Id: frepp,v 18.0.2.19 2010/07/21 16:11:19 fms Exp $
+# $Id: frepp,v 18.0.2.30 2010/08/20 19:18:04 arl Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: History/diagnostics post-processing
 # ------------------------------------------------------------------------------
@@ -23,7 +23,7 @@ use FREUtil;
 
 
 use vars qw( $expt %nml $err $username %dtvars $root);
-use vars qw( $mkdircommand $hDate $t0 $tEND $ppRootDir $component $cpiomonTS $historyfiles);
+use vars qw( $mkdircommand $hDate $t0 $tEND $ppRootDir $component $cpiomonTS $aggregateTS $historyfiles);
 use vars qw( $do_static $segTime $segUnits $caltype);
 use vars qw( $analysisdir $absfrepp $relfrepp $perlerrors );
 use vars qw( $archivedir $rootdir $workdir $rtsVersion $platform $versionId );
@@ -33,7 +33,7 @@ use vars qw( $maxyrs $maxdisk $cubic $nlat $nlon $interpMethod $getgridspec $bas
 
   package frepp;
 
-  use constant VERSION => '$Id: frepp,v 18.0.2.19 2010/07/21 16:11:19 fms Exp $';
+  use constant VERSION => '$Id: frepp,v 18.0.2.30 2010/08/20 19:18:04 arl Exp $';
 
 #Usage:    $relfrepp [ -AB:C:O:RY:Z:c:d:f:hlmMp:oqr:S:st:u:vx:z ] experiment [ experiment2 ... ]                 
   use constant OPTLIST =>
@@ -62,6 +62,7 @@ use vars qw( $maxyrs $maxdisk $cubic $nlat $nlon $interpMethod $getgridspec $bas
       'platform|Platform|P',
 
       'refineDiag|D=s',
+      'refineDiagOnly|H',
       
       'unique|u=s',
       'month|m',
@@ -139,6 +140,7 @@ Usage:    $relfrepp [ -AB:C:O:RY:Z:c:d:f:hlmMp:oqr:S:st:u:vx:z ] experiment [ ex
 
           OPTIONS FOR REFINING HISTORY FILES BEFORE POSTPROCESSING
           -D script    = comma separated list of scripts to run on history data
+          -H           = refineDiag only: do not do regular frepp processing
 
           OPTIONS FOR POSTPROCESSING DATA
           -t time      = beginning of model year to process.  To process 1982, use
@@ -201,7 +203,7 @@ if ( ! -f $opt_x ) {
 }
 
 if ( !$opt_t or ("$opt_t" eq "") ) {
-   print STDERR "WARNING: You did not specify a model date\n";
+   print STDERR "WARNING: You did not specify a model date\n" unless $opt_A;
 }
 
 if ( $opt_V ) { $opt_v = 1; }
@@ -210,7 +212,7 @@ if ( $opt_M and not $opt_p ) { $opt_M = "#\$ -m e";} else { $opt_M = ""; }
 
 if ( $opt_O ) { print STDERR "NOTE: There has been a change to the behavior of the -O option. Your scripts will be written directly to '$opt_O' and not to '$opt_O/scripts/postProcess'\n"; }
 
-$versionId = ' $Id: frepp,v 18.0.2.19 2010/07/21 16:11:19 fms Exp $';
+$versionId = ' $Id: frepp,v 18.0.2.30 2010/08/20 19:18:04 arl Exp $';
 
 $perlerrors = "";
 $component = "";
@@ -220,6 +222,7 @@ $do_static = 1;
 $historyfiles="";
 %dtvars = (); 
 $basenpes = 4;
+$aggregateTS = 1;
 
 #initialize hsmfiles string
 my $hsmfiles="";
@@ -372,6 +375,10 @@ foreach $expt ( @ARGV ) {
 
    my $refinedir = "$opt_d"."_refineDiag";
    $ptmpDir .= $archivedir;
+
+   #set whether to aggregate time series files in archive
+   my $agg = FREUtil::getxpathval('postProcess/@archiveTimeSeries');
+   if ( "$agg" eq 'byVariable' ) { $aggregateTS = 0; }
 
    #get base number of pes, if specified
    my $prodnpes = FREUtil::getxpathval('runtime/production/@npes');
@@ -587,7 +594,7 @@ EOF
       $cshscripttmpl .= errorstr("$relfrepp had a problem creating next script $expt"."_$opt_t");
 
       if ( $opt_D and $opt_p ) {
-         $cshscripttmpl .= call_frepp($abs_xml_path, $outscript, $opt_c, "");
+         $cshscripttmpl .= call_frepp($abs_xml_path, $outscript, $opt_c, "") unless $opt{refineDiagOnly};
          $cshscripttmpl .= errorstr("$relfrepp had a problem creating next script $expt"."_$opt_t");
       }
 
@@ -690,8 +697,8 @@ unset echo
 foreach order1var ( $order1 )
   foreach modelvar ( `echo $interpvars | sed -e "s/,/ /g"` )
     if ( $modelvar == $order1var ) then
-      if ( `$NCEXISTS -f $fregrid_in.tile1.nc -v $order1var` ) then
-        if ( ! `$NCEXISTS -f $fregrid_in.tile1.nc -v $order1var -a interp_method` ) then
+      if ( `ncexists -f $fregrid_in.tile1.nc -v $order1var` ) then
+        if ( ! `ncexists -f $fregrid_in.tile1.nc -v $order1var -a interp_method` ) then
           set attCmds = ( $attCmds -a interp_method,$order1var,a,c,"conserve_order1" )
         endif
       endif
@@ -710,9 +717,14 @@ if (\$#attCmds > 0) then
    $time_ncatted ncatted -h -O \$attCmds \$fregrid_in.tile6.nc
 endif
 
+if ( "\$fregrid_wt" != '' ) then
+   $time_hsmget hsmget -t -q -a $opt_d -p $ptmpDir/history -w $tmphistdir \$fregrid_in_date.nc/\\*land_static\\*
+   ln -s \$histDir/\$fregrid_in_date.nc/*land_static.nc .
+endif
+
 EOF
     $call_fregrid .= $time_fregrid . <<'EOF';
- $FREGRID --input_mosaic $input_mosaic --input_file $fregrid_in --interp_method $interp_method --remap_file $fregrid_remap_file --nlon $nlon --nlat $nlat --scalar_field $interpvars
+ $FREGRID --input_mosaic $input_mosaic --input_file $fregrid_in --interp_method $interp_method --remap_file $fregrid_remap_file --nlon $nlon --nlat $nlat --scalar_field $interpvars $fregrid_wt
 EOF
 
    if ( $opt_A) {print STDERR "\n ANALYSIS ONLY mode, pp/ files will not be generated\n";}
@@ -771,6 +783,7 @@ EOF
       foreach (@dts) {
          push(@dtsources, $_) unless ($_=~/monthly/ or $_=~/annual/ or $_=~/seasonal/ or $seen{$_}++);
       }
+      push(@dtsources,'land_static') unless $seen{$_}++;
       if ($opt_v) {print STDERR "diag_table source files are '@dtsources'\n";}
 
       #get list of variables for each file from diag table information.
@@ -790,7 +803,7 @@ EOF
          my $varstr = join(',',@dtv);
          my $varstrall = join(',',@dtvall);
          my $srcfileall = "all_$srcfile";
-         if ( "$varstr" ne "" ) { 
+         if ( "$varstrall" ne "" ) { 
             $dtvars{$srcfile} = $varstr; 
             $dtvars{$srcfileall} = $varstrall; 
             if ($opt_V) {print "$srcfile vars, static/instant omitted: $dtvars{$srcfile}\n\n";}
@@ -860,7 +873,7 @@ EOF
       if ( ! $opt_l ) { $diag_source =~ s/_.*//; }
       my $staticfile = "$ppRootDir/$component/$component.static.nc";
       print STDERR "      static vars from '$diag_source'\n" if $opt_v;
-      if ( ! $opt_A ) { $cshscript .= staticvars ( $diag_source ); } 
+      if ( ! $opt_A ) { $cshscript .= staticvars ( $diag_source, $ptmpDir, $tmphistdir, $refinedir ); } 
 
       #TIMEAVERAGES - MONTHLY
       my @taNodes = sort by_interval $ppcNode->findnodes('timeAverage[@source="monthly"]');
@@ -882,7 +895,7 @@ EOF
                $cshscript .= monthlyAVfromhist( $taNode, $sim0 );
             }
          }
-         $cshscript .= analysis( $taNode, $expt, $gridspec, $staticfile,"timeAverage",$diag_source,$ppRootDir,$component," " ,$analysisdir,$aoutscriptdir,$workdir,$archivedir,$opt_O,$opt_Y,$opt_Z,$opt_V,$sim0,$opt_R,$opt_s,$histDir,$nlat,$nlon,$abs_xml_path,$stdoutdir);
+         $cshscript .= analysis( $taNode, $expt, $gridspec, $staticfile,"timeAverage",$diag_source,$ppRootDir,$component," " ,$analysisdir,$aoutscriptdir,$workdir,$archivedir,$opt_t,$opt_O,$opt_Y,$opt_Z,$opt_V,$sim0,$opt_R,$opt_s,$histDir,$nlat,$nlon,$abs_xml_path,$stdoutdir);
       }
 
       #TIMEAVERAGES - ANNUAL 
@@ -904,7 +917,7 @@ EOF
             print STDERR "      annual av int=1yr subint=history\n" if $opt_v;
             $cshscript .= annualAV1yrfromhist( $taNode, $sim0 );
          }
-         $cshscript .= analysis( $taNode, $expt, $gridspec, $staticfile,"timeAverage",$diag_source,$ppRootDir,$component,\%dtvars,$analysisdir,$aoutscriptdir,$workdir,$archivedir,$opt_O,$opt_Y,$opt_Z,$opt_V,$sim0,$opt_R,$opt_s,$histDir,$nlat,$nlon,$abs_xml_path,$stdoutdir);
+         $cshscript .= analysis( $taNode, $expt, $gridspec, $staticfile,"timeAverage",$diag_source,$ppRootDir,$component,\%dtvars,$analysisdir,$aoutscriptdir,$workdir,$archivedir,$opt_t,$opt_O,$opt_Y,$opt_Z,$opt_V,$sim0,$opt_R,$opt_s,$histDir,$nlat,$nlon,$abs_xml_path,$stdoutdir);
       }
       foreach my $taNode ( @taNodes ) {
          $hsmfiles = $hsmfiles . jpkSrcFiles($taNode) . ",";
@@ -920,7 +933,7 @@ EOF
                $cshscript .= annualAVxyrfromann( $taNode, $sim0 );
             }
          }
-         $cshscript .= analysis( $taNode, $expt, $gridspec, $staticfile,"timeAverage",$diag_source,$ppRootDir,$component,\%dtvars,$analysisdir,$aoutscriptdir,$workdir,$archivedir,$opt_O,$opt_Y,$opt_Z,$opt_V,$sim0,$opt_R,$opt_s,$histDir,$nlat,$nlon,$abs_xml_path,$stdoutdir);
+         $cshscript .= analysis( $taNode, $expt, $gridspec, $staticfile,"timeAverage",$diag_source,$ppRootDir,$component,\%dtvars,$analysisdir,$aoutscriptdir,$workdir,$archivedir,$opt_t,$opt_O,$opt_Y,$opt_Z,$opt_V,$sim0,$opt_R,$opt_s,$histDir,$nlat,$nlon,$abs_xml_path,$stdoutdir);
       }
       #TIMEAVERAGES - SEASONAL
       my @taNodes = sort by_interval $ppcNode->findnodes('timeAverage[@source="seasonal"]');
@@ -938,7 +951,7 @@ EOF
                $cshscript .= seasonalAVfromhist( $taNode, $sim0 );
             }
          }
-         $cshscript .= analysis( $taNode, $expt, $gridspec, $staticfile,"timeAverage",$diag_source,$ppRootDir,$component,\%dtvars,$analysisdir,$aoutscriptdir,$workdir,$archivedir,$opt_O,$opt_Y,$opt_Z,$opt_V,$sim0,$opt_R,$opt_s,$histDir,$nlat,$nlon,$abs_xml_path,$stdoutdir);
+         $cshscript .= analysis( $taNode, $expt, $gridspec, $staticfile,"timeAverage",$diag_source,$ppRootDir,$component,\%dtvars,$analysisdir,$aoutscriptdir,$workdir,$archivedir,$opt_t,$opt_O,$opt_Y,$opt_Z,$opt_V,$sim0,$opt_R,$opt_s,$histDir,$nlat,$nlon,$abs_xml_path,$stdoutdir);
       }
 
       #if ocean 100 year pp, then submit the averages now in a separate job
@@ -1007,7 +1020,7 @@ EOF
                   $cshscript .= directTS( $tsNode, $sim0, $startofrun );
                }
             }
-            $cshscript .= analysis( $tsNode, $expt, $gridspec,$staticfile,"timeSeries",$diag_source,$ppRootDir,$component,\%dtvars,$analysisdir,$aoutscriptdir,$workdir,$archivedir,$opt_O,$opt_Y,$opt_Z,$opt_V,$sim0,$opt_R,$opt_s,$histDir,$nlat,$nlon,$abs_xml_path,$stdoutdir);
+            $cshscript .= analysis( $tsNode, $expt, $gridspec,$staticfile,"timeSeries",$diag_source,$ppRootDir,$component,\%dtvars,$analysisdir,$aoutscriptdir,$workdir,$archivedir,$opt_t,$opt_O,$opt_Y,$opt_Z,$opt_V,$sim0,$opt_R,$opt_s,$histDir,$nlat,$nlon,$abs_xml_path,$stdoutdir);
          }
       }
 
@@ -1030,7 +1043,7 @@ EOF
                $cshscript .= directTS( $tsNode, $sim0, $startofrun );
             } 
          } 
-         $cshscript .= analysis( $tsNode, $expt, $gridspec,$staticfile,"timeSeries",$diag_source,$ppRootDir,$component,\%dtvars,$analysisdir,$aoutscriptdir,$workdir,$archivedir,$opt_O,$opt_Y,$opt_Z,$opt_V,$sim0,$opt_R,$opt_s,$histDir,$nlat,$nlon,$abs_xml_path,$stdoutdir);
+         $cshscript .= analysis( $tsNode, $expt, $gridspec,$staticfile,"timeSeries",$diag_source,$ppRootDir,$component,\%dtvars,$analysisdir,$aoutscriptdir,$workdir,$archivedir,$opt_t,$opt_O,$opt_Y,$opt_Z,$opt_V,$sim0,$opt_R,$opt_s,$histDir,$nlat,$nlon,$abs_xml_path,$stdoutdir);
       }
 
       #TIMESERIES - MONTHLY
@@ -1052,7 +1065,7 @@ EOF
                $cshscript .= directTS( $tsNode, $sim0, $startofrun );
             }
          }
-         $cshscript .= analysis( $tsNode, $expt, $gridspec,$staticfile,"timeSeries",$diag_source,$ppRootDir,$component,\%dtvars,$analysisdir,$aoutscriptdir,$workdir,$archivedir,$opt_O,$opt_Y,$opt_Z,$opt_V,$sim0,$opt_R,$opt_s,$histDir,$nlat,$nlon,$abs_xml_path,$stdoutdir);
+         $cshscript .= analysis( $tsNode, $expt, $gridspec,$staticfile,"timeSeries",$diag_source,$ppRootDir,$component,\%dtvars,$analysisdir,$aoutscriptdir,$workdir,$archivedir,$opt_t,$opt_O,$opt_Y,$opt_Z,$opt_V,$sim0,$opt_R,$opt_s,$histDir,$nlat,$nlon,$abs_xml_path,$stdoutdir);
       }
 
       #TIMESERIES - ANNUAL
@@ -1074,7 +1087,7 @@ EOF
                $cshscript .= annualTS( $tsNode, $sim0, $startofrun, join("\n",@diagtablecontent) );
             }
          }
-         $cshscript .= analysis( $tsNode, $expt, $gridspec,$staticfile,"timeSeries",$diag_source,$ppRootDir,$component,\%dtvars,$analysisdir,$aoutscriptdir,$workdir,$archivedir,$opt_O,$opt_Y,$opt_Z,$opt_V,$sim0,$opt_R,$opt_s,$histDir,$nlat,$nlon,$abs_xml_path,$stdoutdir);
+         $cshscript .= analysis( $tsNode, $expt, $gridspec,$staticfile,"timeSeries",$diag_source,$ppRootDir,$component,\%dtvars,$analysisdir,$aoutscriptdir,$workdir,$archivedir,$opt_t,$opt_O,$opt_Y,$opt_Z,$opt_V,$sim0,$opt_R,$opt_s,$histDir,$nlat,$nlon,$abs_xml_path,$stdoutdir);
       }
 
       #TIMESERIES - SEASONAL
@@ -1096,13 +1109,13 @@ EOF
                $cshscript .= seasonalTS( $tsNode, $sim0 );
             }
          }
-         $cshscript .= analysis( $tsNode, $expt, $gridspec,$staticfile,"timeSeries",$diag_source,$ppRootDir,$component,\%dtvars,$analysisdir,$aoutscriptdir,$workdir,$archivedir,$opt_O,$opt_Y,$opt_Z,$opt_V,$sim0,$opt_R,$opt_s,$histDir,$nlat,$nlon,$abs_xml_path,$stdoutdir);
+         $cshscript .= analysis( $tsNode, $expt, $gridspec,$staticfile,"timeSeries",$diag_source,$ppRootDir,$component,\%dtvars,$analysisdir,$aoutscriptdir,$workdir,$archivedir,$opt_t,$opt_O,$opt_Y,$opt_Z,$opt_V,$sim0,$opt_R,$opt_s,$histDir,$nlat,$nlon,$abs_xml_path,$stdoutdir);
       }
 
 
       $cshscript .= mailcomponent();
       #CPIO
-      if ( "$cpiomonTS" ne "" ) { $cshscript .= $cpiomonTS; }
+      if ( "$cpiomonTS" ne "" and $aggregateTS ) { $cshscript .= $cpiomonTS; }
 
       #END OF THIS COMPONENT; REMOVE CHECKPOINT FILE
       $cshscript .= "rm -f $ppRootDir/.checkpoint/\$checkptfile\n";
@@ -2328,7 +2341,7 @@ sub annualTS {
 #####################################
 echo 'timeSeries ($component $freq ts from $source)'
 cd \$work
-$time_rm rm -rf \$work/*
+find \$work/* -maxdepth 1 -exec rm -rf {} \;
 set outdir = $outdir
 if ( ! -e \$outdir ) mkdir -p \$outdir
 EOF
@@ -2356,7 +2369,9 @@ EOF
             $filelist .= "\$outdir/$component.$year.\$var ";
             $getlist .= "$component.$year.*.nc ";
          }
-         $makecpio = createcpio( $outdir,"$component.$begin-$tYEARf",FREUtil::timeabbrev($freq),($tYEARf-$begin>20)); 
+         if ( $aggregateTS ) {
+            $makecpio = createcpio( $outdir,"$component.$begin-$tYEARf",FREUtil::timeabbrev($freq),($tYEARf-$begin>20));
+         }
          $catfiles = <<EOF;
 $time_dmget dmget -d \$outdir "$getlist"
 $check_dmget
@@ -2528,7 +2543,7 @@ EOF
 #####################################
 echo 'timeSeries ($component seasonal from monthly ts )'
 cd \$work
-$time_rm rm -rf \$work/*
+find \$work/* -maxdepth 1 -exec rm -rf {} \;
 set outdir = $outdir
 if ( ! -e \$outdir ) mkdir -p \$outdir
 $time_dmget dmget -d $reqpath "$component.$tBEGf-$tENDf.*.nc"
@@ -2558,7 +2573,7 @@ EOF
             $year=FREUtil::padzeros($year);
             $filelist .= "$component.$year.$abbrev.\$var ";
          }
-         if( $abbrev =~ "SON" ) {
+         if( $abbrev =~ "SON" and $aggregateTS ) {
             $makecpio = createcpio( $outdir,"$component.$begin-$year",FREUtil::timeabbrev($freq),($year-$begin>20) );
          }
          $catfiles = <<EOF;
@@ -2767,7 +2782,7 @@ sub monthlyAVfromhist {
 #####################################
 echo 'timeAverage ($component $src $interval averages)'
 cd \$work   
-$time_rm rm -rf \$work/*
+find \$work/* -maxdepth 1 -exec rm -rf {} \;
 set outdir = $outdir 
 if ( ! -e \$outdir ) mkdir -p \$outdir
 EOF
@@ -2823,10 +2838,17 @@ EOF
 
    if ($cubic == 2) { #CUBIC to LATLON
 
+   my $fregrid_wt = '';
+   if ( $component =~/land/ and $dtvars{all_land_static} =~/\bland_frac\b/ ) {
+      print "       land_frac found, weighting exchange grid cell with $hDates[0]\${histmonth}01.land_static\n" if $opt_v;
+      $fregrid_wt = "--weight_file '$hDates[0]\${histmonth}01.land_static' --weight_field 'land_frac'";
+   }
    $csh .= <<EOF;
 @ i ++
 end
 
+   set fregrid_wt = "$fregrid_wt"
+   set fregrid_in_date = $hDates[0]\${histmonth}01
    set fregrid_in = $hDates[0]\${histmonth}01.$diag_source
    set nlat = $nlat ; set nlon = $nlon
    set interp_method = $interpMethod
@@ -2835,14 +2857,23 @@ end
    set fregrid_remap_file = $ppRootDir/$component/.fregrid_remap_file_\${nlon}_by_\${nlat}
    $call_fregrid
    $check_fregrid
+   $time_rm rm \$fregrid_in.tile?.nc
+   $time_rm rm *.grid_spec.tile*.nc
+   set renamevars = '-h -d grid_xt,lon -d grid_yt,lat -v grid_xt,lon -v grid_yt,lat'
+   set renameatts = '-h -a long_name,lon,m,c,"longitude" -a long_name,lat,m,c,"latitude"'
+   if (`ncexists -f \$fregrid_in.nc -v grid_xt_bounds`) then
+      set renamevars = ( \$renamevars -d grid_xt_bounds,lon_bounds -d grid_yt_bounds,lat_bounds -v grid_xt_bounds,lon_bounds -v grid_yt_bounds,lat_bounds )
+      set renameatts = ( \$renameatts '-a long_name,lon_bounds,m,c,"longitude bounds" -a long_name,lat_bounds,m,c,"latitude bounds"' )
+   endif
+   $time_ncrename ncrename \$renamevars \$fregrid_in.nc
+   $check_ncrename
+   $time_ncatted ncatted \$renameatts \$fregrid_in.nc
+   $check_ncatted
 
-   mv $hDates[0]\${histmonth}01.$diag_source.nc $component.$range.\$monthf.nc
+   mv \$fregrid_in.nc $component.$range.\$monthf.nc
    $time_ncatted ncatted -h -O -a filename,global,m,c,"$component.$range.\$monthf.nc" $component.$range.\$monthf.nc
    $check_ncatted
-   $time_ncrename ncrename -h -d grid_xt,lon -d grid_yt,lat -v grid_xt,lon -v grid_yt,lat $component.$range.\$monthf.nc
-   $check_ncrename
-   $time_ncatted ncatted -h -a long_name,lon,m,c,"longitude" -a long_name,lat,m,c,"latitude" $component.$range.\$monthf.nc
-   $check_ncatted
+
    $time_mv $mvfile $component.$range.\$monthf.nc \$outdir/$component.$range.\$monthf.nc
    $time_rm rm $component.$range.\$monthf.nc
    $time_dmput dmput \$outdir/$component.$range.\$monthf.nc &
@@ -2982,7 +3013,7 @@ echo 'timeAverage ($component $src averages)'
 set outdir = $outdir 
 if ( ! -e \$outdir ) mkdir -p \$outdir
 cd \$work
-$time_rm rm -rf \$work/*
+find \$work/* -maxdepth 1 -exec rm -rf {} \;
 EOF
    if ($opt_z) { $csh .= begin_systime(); }
 
@@ -3024,10 +3055,18 @@ EOF
    }
 
 if ($cubic == 2) { #CUBIC to LATLON
+
+   my $fregrid_wt = '';
+   if ( $component =~/land/ and $dtvars{all_land_static} =~/\bland_frac\b/ ) {
+      print "       land_frac found, weighting exchange grid cell with $hDate.land_static\n" if $opt_v;
+      $fregrid_wt = "--weight_file '$hDate.land_static' --weight_field 'land_frac'";
+   }
    $csh .= <<EOF;
 @ i ++
 end
 
+    set fregrid_wt = "$fregrid_wt"
+    set fregrid_in_date = $hDate
     set fregrid_in = $hDate.$diag_source
     set nlat = $nlat ; set nlon = $nlon
     set interp_method = $interpMethod
@@ -3036,15 +3075,23 @@ end
     set fregrid_remap_file = $ppRootDir/$component/.fregrid_remap_file_\${nlon}_by_\${nlat}
     $call_fregrid
     $check_fregrid
+    $time_rm rm \$fregrid_in.tile?.nc
+    $time_rm rm *.grid_spec.tile*.nc
+    set renamevars = '-h -d grid_xt,lon -d grid_yt,lat -v grid_xt,lon -v grid_yt,lat'
+    set renameatts = '-h -a long_name,lon,m,c,"longitude" -a long_name,lat,m,c,"latitude"'
+    if (`ncexists -f \$fregrid_in.nc -v grid_xt_bounds`) then
+       set renamevars = ( \$renamevars -d grid_xt_bounds,lon_bounds -d grid_yt_bounds,lat_bounds -v grid_xt_bounds,lon_bounds -v grid_yt_bounds,lat_bounds )
+       set renameatts = ( \$renameatts '-a long_name,lon_bounds,m,c,"longitude bounds" -a long_name,lat_bounds,m,c,"latitude bounds"' )
+    endif
+    $time_ncrename ncrename \$renamevars \$fregrid_in.nc
+    $check_ncrename
+    $time_ncatted ncatted \$renameatts \$fregrid_in.nc
+    $check_ncatted
 
-mv $hDate.$diag_source.nc $component.$tENDf.ann.nc
-
+mv \$fregrid_in.nc $component.$tENDf.ann.nc
 $time_ncatted ncatted -h -O -a filename,global,m,c,"$component.$tENDf.ann.nc" $component.$tENDf.ann.nc
 $check_ncatted
-$time_ncrename ncrename -h -d grid_xt,lon -d grid_yt,lat -v grid_xt,lon -v grid_yt,lat $component.$tENDf.ann.nc
-$check_ncrename
-$time_ncatted ncatted -h -a long_name,lon,m,c,"longitude" -a long_name,lat,m,c,"latitude" $component.$tENDf.ann.nc
-$check_ncatted
+
 $time_mv $mvfile $component.$tENDf.ann.nc \$outdir/$component.$tENDf.ann.nc
 $time_rm rm $component.$tENDf.ann.nc
 $time_dmput dmput \$outdir/$component.$tENDf.ann.nc &
@@ -3068,7 +3115,7 @@ EOF
    } else { #NOT CUBIC
 
    $csh .= <<EOF;
-foreach file ( `ls \$histDir/$hDate*/*.$diag_source.nc`)
+foreach file ( `ls \$histDir/$hDateyr*/*.$diag_source.nc`)
   ln -s \$file .
 end
 if ( -e annual.nc ) rm -f annual.nc
@@ -3156,7 +3203,7 @@ set outdir = $outdir
 if ( ! -e \$outdir ) mkdir -p \$outdir
 set anndir = $ppRootDir/$component/av/annual_1yr
 cd \$work
-$time_rm rm -rf \$work/*
+find \$work/* -maxdepth 1 -exec rm -rf {} \;
 EOF
    if ($opt_z) { $csh .= begin_systime(); }
 
@@ -3298,7 +3345,7 @@ sub monthlyTSfromdailyTS {
 #####################################
 echo 'timeSeries ($component $freq calculated from $avgatt TS)'
 cd \$work
-$time_rm rm -rf \$work/\*
+find \$work/* -maxdepth 1 -exec rm -rf {} \;
 set outdir = $outdir
 if ( ! -e \$outdir ) mkdir -p \$outdir
 
@@ -3551,7 +3598,7 @@ sub directTS{
 #####################################
 echo 'timeSeries ($component $freq from $source)'
 cd \$work
-$time_rm rm -rf \$work/\*
+find \$work/* -maxdepth 1 -exec rm -rf {} \;
 set outdir = $outdir
 if ( ! -e \$outdir ) mkdir -p \$outdir
 
@@ -3597,8 +3644,16 @@ EOF
          }
          # convert tiles to latlon
          if ( $cubic == 2 ) {
+
+            my $fregrid_wt = '';
+            if ( $component =~/land/ and $dtvars{all_land_static} =~/\bland_frac\b/ ) {
+               print "       land_frac found, weighting exchange grid cell with $hDate.land_static\n" if $opt_v;
+               $fregrid_wt = "--weight_file '$hDate.land_static' --weight_field 'land_frac'";
+            }
             $csh .= <<EOF;
 
+    set fregrid_wt = "$fregrid_wt"
+    set fregrid_in_date = $hDate
     set fregrid_in = $hDate.$source
     set nlat = $nlat ; set nlon = $nlon
     set interp_method = $interpMethod
@@ -3607,13 +3662,20 @@ EOF
     set fregrid_remap_file = $ppRootDir/$component/.fregrid_remap_file_\${nlon}_by_\${nlat}
     $call_fregrid
     $check_fregrid
+    $time_rm rm \$fregrid_in.tile?.nc
+    $time_rm rm *.grid_spec.tile*.nc
+    set renamevars = '-h -d grid_xt,lon -d grid_yt,lat -v grid_xt,lon -v grid_yt,lat'
+    set renameatts = '-h -a long_name,lon,m,c,"longitude" -a long_name,lat,m,c,"latitude"'
+    if (`ncexists -f \$fregrid_in.nc -v grid_xt_bounds`) then
+       set renamevars = ( \$renamevars -d grid_xt_bounds,lon_bounds -d grid_yt_bounds,lat_bounds -v grid_xt_bounds,lon_bounds -v grid_yt_bounds,lat_bounds )
+       set renameatts = ( \$renameatts '-a long_name,lon_bounds,m,c,"longitude bounds" -a long_name,lat_bounds,m,c,"latitude bounds"' )
+    endif
+    $time_ncrename ncrename \$renamevars \$fregrid_in.nc
+    $check_ncrename
+    $time_ncatted ncatted \$renameatts \$fregrid_in.nc
+    $check_ncatted
 
-mv $hDate.$source.nc all.nc
-$time_ncrename ncrename -h -d grid_xt,lon -d grid_yt,lat -v grid_xt,lon -v grid_yt,lat all.nc
-$check_ncrename
-$time_ncatted ncatted -a long_name,lon,m,c,"longitude" -a long_name,lat,m,c,"latitude" all.nc
-$check_ncatted
-$time_rm rm -f *.$source.tile*.nc
+mv \$fregrid_in.nc all.nc
 
 EOF
          }
@@ -3639,7 +3701,15 @@ end
 EOF
          # convert tiles to latlon
          if ( $cubic == 2 ) {
+
+            my $fregrid_wt = '';
+            if ( $component =~/land/ and $dtvars{all_land_static} =~/\bland_frac\b/ ) {
+               print "       land_frac found, weighting exchange grid cell with $hDate.land_static\n" if $opt_v;
+               $fregrid_wt = "--weight_file '$hDate.land_static' --weight_field 'land_frac'";
+            }
             $csh .= <<EOF;
+    set fregrid_wt = "$fregrid_wt"
+    set fregrid_in_date = $hDate
     set fregrid_in = $hDate.$source
     set nlat = $nlat ; set nlon = $nlon
     set interp_method = $interpMethod
@@ -3648,13 +3718,20 @@ EOF
     set fregrid_remap_file = $ppRootDir/$component/.fregrid_remap_file_\${nlon}_by_\${nlat}
     $call_fregrid
     $check_fregrid
+    $time_rm rm \$fregrid_in.tile?.nc
+    $time_rm rm *.grid_spec.tile*.nc
+    set renamevars = '-h -d grid_xt,lon -d grid_yt,lat -v grid_xt,lon -v grid_yt,lat'
+    set renameatts = '-h -a long_name,lon,m,c,"longitude" -a long_name,lat,m,c,"latitude"'
+    if (`ncexists -f \$fregrid_in.nc -v grid_xt_bounds`) then
+       set renamevars = ( \$renamevars -d grid_xt_bounds,lon_bounds -d grid_yt_bounds,lat_bounds -v grid_xt_bounds,lon_bounds -v grid_yt_bounds,lat_bounds )
+       set renameatts = ( \$renameatts '-a long_name,lon_bounds,m,c,"longitude bounds" -a long_name,lat_bounds,m,c,"latitude bounds"' )
+    endif
+    $time_ncrename ncrename \$renamevars \$fregrid_in.nc
+    $check_ncrename
+    $time_ncatted ncatted \$renameatts \$fregrid_in.nc
+    $check_ncatted
 
-mv $hDate.$source.nc all.nc
-$time_ncrename ncrename -h -d grid_xt,lon -d grid_yt,lat -v grid_xt,lon -v grid_yt,lat all.nc
-$check_ncrename
-$time_ncatted ncatted -a long_name,lon,m,c,"longitude" -a long_name,lat,m,c,"latitude" all.nc
-$check_ncatted
-$time_rm rm -f *.$source.tile*.nc
+mv \$fregrid_in.nc all.nc
 
 EOF
          }
@@ -3718,15 +3795,18 @@ end
 EOF
 
    #cpio the timeseries
-   my $abbrev = FREUtil::timeabbrev($freq);
-   my $cpioTS = '';
-   if ( $cubic == 1 ) {
-      $cpioTS = createcpio( $outdir,"$component.$start-$tENDf.tile?",$abbrev,$chunkLength>20 );
-   } else {
-      $cpioTS = createcpio( $outdir,"$component.$start-$tENDf",$abbrev,$chunkLength>20 );
+   if ( $aggregateTS ) {
+      my $abbrev = FREUtil::timeabbrev($freq);
+      my $cpioTS = '';
+      if ( $cubic == 1 ) {
+         $cpioTS = createcpio( $outdir,"$component.$start-$tENDf.tile?",$abbrev,$chunkLength>20 );
+      } else {
+         $cpioTS = createcpio( $outdir,"$component.$start-$tENDf",$abbrev,$chunkLength>20 );
+      }
+      if ("$freq" eq "monthly") { $cpiomonTS .= $cpioTS; } 
+      else { $csh .= $cpioTS; }
    }
-   if ("$freq" eq "monthly") { $cpiomonTS .= $cpioTS; } 
-   else { $csh .= $cpioTS; }
+
    $csh .= "\nendif\n";
 
    if ($opt_z) { $csh .= end_systime(); }
@@ -3801,7 +3881,7 @@ sub monthlyAVfromav {
 #####################################
 echo 'timeAverage ($component $src $interval averages from $subint yr averages)'
 cd \$work   
-$time_rm rm -rf \$work/*
+find \$work/* -maxdepth 1 -exec rm -rf {} \;
 set outdir = $outdir 
 if ( ! -e \$outdir ) mkdir -p \$outdir
 
@@ -3885,7 +3965,7 @@ echo 'timeAverage ($component $src $interval averages from $subint yr averages)'
 set outdir = $outdir 
 if ( ! -e \$outdir ) mkdir -p \$outdir
 cd \$work
-$time_rm rm -rf \$work/*
+find \$work/* -maxdepth 1 -exec rm -rf {} \;
 EOF
    if ($opt_z) { $csh .= begin_systime(); }
 
@@ -3936,6 +4016,9 @@ EOF
 #create static variables file
 sub staticvars {
    my $diag_source = $_[0] ;
+   my $ptmpDir = $_[1] ;
+   my $tmphistdir = $_[2] ;
+   my $refinedir = $_[3] ;
 
    #note: checking ncks: gives error messages when it shouldn't?
    my $check_ncks = errorstr("NCKS ($component static variables)");
@@ -3954,8 +4037,10 @@ sub staticvars {
 if ( ! -e $ppRootDir/$component/$component.static.nc ) then
    echo 'static variables ($component)'
    cd \$work
+   find \$work/* -maxdepth 1 -exec rm -rf {} \;
    mkdir -p $ppRootDir/$component
-   $time_rm rm -rf \$work/*
+   $time_hsmget hsmget -t -q -a $opt_d -p $ptmpDir/history -w $tmphistdir $hDate.nc/\\*$diag_source\\*
+   $time_hsmget hsmget -t -q -a $refinedir -p $ptmpDir/history_refineDiag -w $tmphistdir $hDate.nc/\\*$diag_source\\*
    foreach file ( `ls \$histDir/*/*nc`) 
      ln -s \$file .
    end
@@ -3971,8 +4056,10 @@ EOF
 if ( ! -e $ppRootDir/$component/$component.static.tile6.nc ) then
    echo 'static variables ($component)'
    cd \$work
+   find \$work/* -maxdepth 1 -exec rm -rf {} \;
    mkdir -p $ppRootDir/$component
-   $time_rm rm -rf \$work/*
+   $time_hsmget hsmget -t -q -a $opt_d -p $ptmpDir/history -w $tmphistdir $hDate.nc/\\*$diag_source\\*
+   $time_hsmget hsmget -t -q -a $refinedir -p $ptmpDir/history_refineDiag -w $tmphistdir $hDate.nc/\\*$diag_source\\*
    foreach file ( `ls \$histDir/*/*nc`)
      ln -s \$file .
    end
@@ -3999,10 +4086,18 @@ EOF
 
    } elsif ( $cubic == 2 ) {
       #DATA CONVERTED FROM CUBED SPHERE TO LATLON
+
+      my $fregrid_wt = '';
+      if ( $component =~/land/ and $dtvars{all_land_static} =~/\bland_frac\b/ ) {
+         print "       land_frac found, weighting exchange grid cell with $hDate.land_static\n" if $opt_v;
+         $fregrid_wt = "--weight_file '$hDate.land_static' --weight_field 'land_frac'";
+      }
       my $cubiccsh = <<EOF;
 
    set tiles = (`ls $hDate.$diag_source*.tile1.nc | grep -v grid_spec`)
    foreach tfile ( \$tiles ) 
+     set fregrid_wt = "$fregrid_wt"
+     set fregrid_in_date = $hDate
      set fregrid_in = \$tfile:r:r
      set nlat = $nlat ; set nlon = $nlon
      set interp_method = $interpMethod
@@ -4011,20 +4106,28 @@ EOF
      set fregrid_remap_file = $ppRootDir/$component/.fregrid_remap_file_\${nlon}_by_\${nlat}
      $call_fregrid
      $check_fregrid
-     set regridded = \$tfile:r:r
-     set output_files = (\$output_files \$regridded.nc)
-     $time_ncrename ncrename -h -d grid_xt,lon -d grid_yt,lat -v grid_xt,lon -v grid_yt,lat \$regridded.nc
+     $time_rm rm \$fregrid_in.tile?.nc
+     $time_rm rm *.grid_spec.tile*.nc
+     set renamevars = '-h -d grid_xt,lon -d grid_yt,lat -v grid_xt,lon -v grid_yt,lat'
+     set renameatts = '-h -a long_name,lon,m,c,"longitude" -a long_name,lat,m,c,"latitude"'
+     if (`ncexists -f \$fregrid_in.nc -v grid_xt_bounds`) then
+        set renamevars = ( \$renamevars -d grid_xt_bounds,lon_bounds -d grid_yt_bounds,lat_bounds -v grid_xt_bounds,lon_bounds -v grid_yt_bounds,lat_bounds )
+        set renameatts = ( \$renameatts '-a long_name,lon_bounds,m,c,"longitude bounds" -a long_name,lat_bounds,m,c,"latitude bounds"' )
+     endif
+     $time_ncrename ncrename \$renamevars \$fregrid_in.nc
      $check_ncrename
-     $time_ncatted ncatted -a long_name,lon,m,c,"longitude" -a long_name,lat,m,c,"latitude" \$regridded.nc
+     $time_ncatted ncatted \$renameatts \$fregrid_in.nc
      $check_ncatted
-       set onedvars = `\$NCVARS -s01 \$tfile`
-       if ( "\$onedvars" != "" ) then
-          set onedvarlist = `echo \$onedvars | tr ' ' ','`
-          $time_splitncvars \$SPLITNCVARS -v \$onedvarlist -f $ppRootDir/$component/$component.static.nc \$tfile
-       endif
-    endif
-    rm -rf \$fregrid_in.tile?.nc
+
+     set output_files = (\$output_files \$fregrid_in.nc)
+     
+     set onedvars = `\$NCVARS -s01 \$tfile`
+     if ( "\$onedvars" != "" ) then
+        set onedvarlist = `echo \$onedvars | tr ' ' ','`
+        $time_splitncvars \$SPLITNCVARS -v \$onedvarlist -f $ppRootDir/$component/$component.static.nc \$tfile
+     endif
    end
+endif
 EOF
       $cubiccsh =~ s/set order1/if ( "\$interpvars" != "" ) then\nset order1/;
       $csh .= $cubiccsh;
@@ -4146,7 +4249,7 @@ sub TSfromts {
 #####################################
 echo 'timeSeries ($component $freq $chunkLength ts from $subchunk yr ts)'
 cd \$work   
-$time_rm rm -rf \$work/*
+find \$work/* -maxdepth 1 -exec rm -rf {} \;
 set outdir = $outdir 
 if ( ! -e \$outdir ) mkdir -p \$outdir
 
@@ -4206,7 +4309,9 @@ end
 
 EOF
 
-   $csh .= createcpio( $outdir,"$component.$startf-$tENDf",FREUtil::timeabbrev($freq),$cl>20 );
+   if ( $aggregateTS ) {
+      $csh .= createcpio( $outdir,"$component.$startf-$tENDf",FREUtil::timeabbrev($freq),$cl>20 );
+   }
    if ($opt_z) { $csh .= end_systime(); }
    $csh .= mailerrors($outdir);
 
@@ -4305,7 +4410,7 @@ sub seaTSfromts {
 #####################################
 echo 'timeSeries ($component $freq $chunkLength ts from $subchunk yr ts)'
 cd \$work   
-$time_rm rm -rf \$work/*
+find \$work/* -maxdepth 1 -exec rm -rf {} \;
 set outdir = $outdir 
 if ( ! -e \$outdir ) mkdir -p \$outdir
 
@@ -4359,7 +4464,9 @@ foreach sea (DJF MAM JJA SON)
 end
 
 EOF
-   $csh .= createcpio( $outdir,"$component.$startf-$tENDf",FREUtil::timeabbrev($freq),$cl>20 );
+   if ( $aggregateTS ) {
+      $csh .= createcpio( $outdir,"$component.$startf-$tENDf",FREUtil::timeabbrev($freq),$cl>20 );
+   }
    if ($opt_z) { $csh .= end_systime(); }
    $csh .= mailerrors($outdir);
 
@@ -4434,7 +4541,7 @@ sub seasonalAVfromhist {
 #####################################
 echo 'timeAverage ($component $src $interval averages)'
 cd \$work   
-$time_rm rm -rf \$work/*
+find \$work/* -maxdepth 1 -exec rm -rf {} \;
 set outdir = $outdir 
 if ( ! -e \$outdir ) mkdir -p \$outdir
 mkdir out
@@ -4591,8 +4698,16 @@ $check_timavg
 EOF
             }
          }
+
+         my $fregrid_wt = '';
+         if ( $component =~/land/ and $dtvars{all_land_static} =~/\bland_frac\b/ ) {
+            print "       land_frac found, weighting exchange grid cell with $hDate.land_static\n" if $opt_v;
+            $fregrid_wt = "--weight_file '$hDate.land_static' --weight_field 'land_frac'";
+         }
          $csh .= <<EOF;
-set fregrid_in = $component.$tSEASONf
+    set fregrid_wt = "$fregrid_wt"
+    set fregrid_in_date = $hDate
+    set fregrid_in = $component.$tSEASONf
     set nlat = $nlat ; set nlon = $nlon
     set interp_method = $interpMethod
     set ncvars_arg = -st23
@@ -4600,13 +4715,21 @@ set fregrid_in = $component.$tSEASONf
     set fregrid_remap_file = $ppRootDir/$component/.fregrid_remap_file_\${nlon}_by_\${nlat}
     $call_fregrid
     $check_fregrid
-   $time_ncatted ncatted -h -O -a filename,global,m,c,"$component.$tSEASONf.nc" $component.$tSEASONf.nc
-   $check_ncatted
-   $time_ncrename ncrename -h -d grid_xt,lon -d grid_yt,lat -v grid_xt,lon -v grid_yt,lat $component.$tSEASONf.nc
-   $check_ncrename
-   $time_ncatted ncatted -h -a long_name,lon,m,c,"longitude" -a long_name,lat,m,c,"latitude" $component.$tSEASONf.nc
-   $check_ncatted
+    $time_rm rm \$fregrid_in.tile?.nc
+    $time_rm rm *.grid_spec.tile*.nc
+    set renamevars = '-h -d grid_xt,lon -d grid_yt,lat -v grid_xt,lon -v grid_yt,lat'
+    set renameatts = '-h -a long_name,lon,m,c,"longitude" -a long_name,lat,m,c,"latitude"'
+    if (`ncexists -f \$fregrid_in.nc -v grid_xt_bounds`) then
+       set renamevars = ( \$renamevars -d grid_xt_bounds,lon_bounds -d grid_yt_bounds,lat_bounds -v grid_xt_bounds,lon_bounds -v grid_yt_bounds,lat_bounds )
+       set renameatts = ( \$renameatts '-a long_name,lon_bounds,m,c,"longitude bounds" -a long_name,lat_bounds,m,c,"latitude bounds"' )
+    endif
+    $time_ncrename ncrename \$renamevars \$fregrid_in.nc
+    $check_ncrename
+    $time_ncatted ncatted \$renameatts \$fregrid_in.nc
+    $check_ncatted
 
+    $time_ncatted ncatted -h -O -a filename,global,m,c,"$component.$tSEASONf.nc" $component.$tSEASONf.nc
+    $check_ncatted
 
 $time_mv $mvfile $component.$tSEASONf.nc \$outdir
 $time_rm rm $component.$tSEASONf.nc
@@ -4670,9 +4793,16 @@ $check_timavg
 EOF
       }
 
-   $csh .= <<EOF;
+      my $fregrid_wt = '';
+      if ( $component =~/land/ and $dtvars{all_land_static} =~/\bland_frac\b/ ) {
+         print "       land_frac found, weighting exchange grid cell with $hDate.land_static\n" if $opt_v;
+         $fregrid_wt = "--weight_file '$hDate.land_static' --weight_field 'land_frac'";
+      }
+      $csh .= <<EOF;
 @ i ++
 end
+    set fregrid_wt = "$fregrid_wt"
+    set fregrid_in_date = $hDate
     set fregrid_in = $component.$dates
     set nlat = $nlat ; set nlon = $nlon
     set interp_method = $interpMethod
@@ -4681,12 +4811,21 @@ end
     set fregrid_remap_file = $ppRootDir/$component/.fregrid_remap_file_\${nlon}_by_\${nlat}
     $call_fregrid
     $check_fregrid
-   $time_ncatted ncatted -h -O -a filename,global,m,c,"$component.$dates.nc" $component.$dates.nc
-   $check_ncatted
-   $time_ncrename ncrename -h -d grid_xt,lon -d grid_yt,lat -v grid_xt,lon -v grid_yt,lat $component.$dates.nc
-   $check_ncrename
-   $time_ncatted ncatted -h -a long_name,lon,m,c,"longitude" -a long_name,lat,m,c,"latitude" $component.$dates.nc
-   $check_ncatted
+    $time_rm rm \$fregrid_in.tile?.nc
+    $time_rm rm *.grid_spec.tile*.nc
+    set renamevars = '-h -d grid_xt,lon -d grid_yt,lat -v grid_xt,lon -v grid_yt,lat'
+    set renameatts = '-h -a long_name,lon,m,c,"longitude" -a long_name,lat,m,c,"latitude"'
+    if (`ncexists -f \$fregrid_in.nc -v grid_xt_bounds`) then
+       set renamevars = ( \$renamevars -d grid_xt_bounds,lon_bounds -d grid_yt_bounds,lat_bounds -v grid_xt_bounds,lon_bounds -v grid_yt_bounds,lat_bounds )
+       set renameatts = ( \$renameatts '-a long_name,lon_bounds,m,c,"longitude bounds" -a long_name,lat_bounds,m,c,"latitude bounds"' )
+    endif
+    $time_ncrename ncrename \$renamevars \$fregrid_in.nc
+    $check_ncrename
+    $time_ncatted ncatted \$renameatts \$fregrid_in.nc
+    $check_ncatted
+
+    $time_ncatted ncatted -h -O -a filename,global,m,c,"$component.$dates.nc" $component.$dates.nc
+    $check_ncatted
 
 $time_mv $mvfile $component.$dates.nc \$outdir/$component.$dates.nc
 $time_rm rm $component.$dates.nc
@@ -4929,7 +5068,7 @@ sub seasonalAVfromav {
 #####################################
 echo 'timeAverage ($component $src $interval averages from $subint yr averages)'
 cd \$work   
-$time_rm rm -rf \$work/*
+find \$work/* -maxdepth 1 -exec rm -rf {} \;
 set outdir = $outdir 
 if ( ! -e \$outdir ) mkdir -p \$outdir
 
@@ -5009,13 +5148,24 @@ EOF
 
    $csh .= <<EOF;
 
-   #save new refineDiag history file
+   #append the new variables to the refineDiag.log file
    cd \$refineDiagDir
    foreach refinedFile ( `ls *nc` )
       echo "$refinedir/\$hsmdate.cpio,\$refinedFile" >> $stdoutdir/postProcess/refineDiag.log
       \$NCVARS -st01234 \$refinedFile >> $stdoutdir/postProcess/refineDiag.log
    end
-   $time_hsmput hsmput -s cpio -a $newhistorydir -p $ptmpDir/history_refineDiag -w $tmphistdir/history_refineDiag \$hsmdate
+
+   #save new or modified refineDiag history file
+   if ( -f $newhistorydir/\$hsmdate.cpio ) then
+      mkdir modify
+      cd modify
+      $time_hsmget hsmget -a $newhistorydir -p $ptmpDir/history_refineDiag -w \$refineDiagDir/modify \$hsmdate
+      mv -f ../*nc .
+      $time_hsmput hsmput -s cpio -a $newhistorydir -p $ptmpDir/history_refineDiag -w $tmphistdir/history_refineDiag \$hsmdate
+      cd ..
+   else
+      $time_hsmput hsmput -s cpio -a $newhistorydir -p $ptmpDir/history_refineDiag -w $tmphistdir/history_refineDiag \$hsmdate
+   endif
 end
 EOF
 
@@ -5059,7 +5209,6 @@ my $cshscripttmpl = <<'EOF';
   set TIMAVG = "timavg.csh -mb"
   set PLEVEL = plevel.sh
   set SPLITNCVARS = split_ncvars.csh
-  set NCEXISTS = ncexists
   set FREGRID = "mpirun -np 2 `which fregrid_parallel`"
   set MPPNCCOMBINE = mppnccombine
   set checkptfile = $scriptName:t

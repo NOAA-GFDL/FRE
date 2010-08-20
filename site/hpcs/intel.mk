@@ -13,6 +13,7 @@ LD = ifort
 DEBUG =
 REPRO =
 VERBOSE =
+OPENMP =
 
 MAKEFLAGS += --jobs=8
 
@@ -20,13 +21,16 @@ FPPFLAGS := -fpp -Wp,-w
 
 FFLAGS := -fno-alias -stack_temps -safe_cray_ptr -ftz -i_dynamic -assume byterecl -i4 -r8 -nowarn -g
 FFLAGS_OPT = -O2
-FFLAGS_VERBOSE = -v -V -what
 FFLAGS_REPRO = -fltconsistency
 FFLAGS_DEBUG = -O0 -check -check noarg_temp_created -check nopointer -warn -warn noerrors -debug variable_locations -fpe0 -traceback -ftrapuv
+FFLAGS_OPENMP = -openmp
+FFLAGS_VERBOSE = -v -V -what
 
-CFLAGS := -D__IFC -g
+
+CFLAGS := -D__IFC 
 CFLAGS_OPT = -O2
-CFLAGS_DEBUG = -O0 -ftrapuv -traceback
+CFLAGS_OPENMP = -openmp
+CFLAGS_DEBUG = -O0 -g -ftrapuv -traceback
 
 LDFLAGS :=
 LDFLAGS_VERBOSE := -Wl,-V,--verbose,-cref,-M
@@ -42,6 +46,12 @@ else
 CFLAGS += $(CFLAGS_OPT)
 FFLAGS += $(FFLAGS_OPT)
 endif
+
+ifneq ($(OPENMP),)
+CFLAGS += $(CFLAGS_OPENMP)
+FFLAGS += $(FFLAGS_OPENMP)
+endif
+
 ifneq ($(VERBOSE),)
 CFLAGS += $(CFLAGS_VERBOSE)
 FFLAGS += $(FFLAGS_VERBOSE)

@@ -1,54 +1,45 @@
 #!/bin/csh -f
 #FRE scheduler-options
 # 
-# $Id: runscript.template.main,v 18.0.2.10 2010/08/20 19:44:11 afy Exp $
+# $Id: runscript.template.main,v 1.1.4.4 2010/08/20 18:59:49 afy Exp $
 # ------------------------------------------------------------------------------
-# FMS/FRE Project: Runscript Template - NCCS Version
+# FMS/FRE Project: Runscript Template - NCRC Version
 # ------------------------------------------------------------------------------
-# arl    Ver   18.0  Merged revision 1.1.2.34 onto trunk            March 10
-# afy -------------- Branch 18.0.2 -------------------------------- April 10
-# afy    Ver   1.00  Add flagOutput(Type|Format|Archive) constants  April 10
-# afy    Ver   1.01  Remove flagCombine* settable constants         April 10
-# afy    Ver   1.02  Modify patternGrepRegion                       April 10
-# afy    Ver   1.03  Modify region files processing (renaming)      April 10
-# afy    Ver   1.04  Source the "fre.cshrc" file                    April 10
-# afy    Ver   1.05  Remove FREROOT settable constant               April 10
-# afy    Ver   1.06  Modify aliases (use `which` instead of prefix) April 10
-# afy    Ver   1.07  Use prepare_dir.csh to handle directories      April 10
-# afy    Ver   2.00  Remove flagRemake settable constant            May 10
-# afy    Ver   2.01  Remove siteDir settable constant               May 10
-# afy    Ver   2.02  Modify hsmget aliase (use hsmSiteDir)          May 10
-# afy    Ver   2.03  Add freCommandsHomeDir settable constant       May 10
-# afy    Ver   2.04  Add environment settings for FRE submodules    May 10
-# afy    Ver   3.00  Don't allow to redefine the FRE_COMMANDS_HOME  May 10
-# afy    Ver   3.01  Set the FREROOT variable (temporarily?)        May 10
-# afy    Ver   4.00  Don't remove the workDir in case of errors     June 10
-# afy    Ver   5.00  Add timeStampFormat settable constant          June 10
-# afy    Ver   5.01  Modify alias "time_stamp"                      June 10
-# afy    Ver   6.00  Process variables FRE_STAGE/FRE_INPUT_DIR      June 10
-# afy    Ver   6.01  Add modules initialization                     June 10
-# afy    Ver   6.02  Modify system aliases (use `which`)            June 10
-# afy    Ver   6.03  Modify 'aprun' call (save stderr as well)      June 10
-# arl    Ver   7.00  Modify alias 'mppnccombine'                    August 10
-# arl    Ver   7.01  Modify alias 'combine_parallel'                August 10
-# afy    Ver   8.00  Add check for 'fre-transfer' module            August 10
-# afy    Ver   8.01  Add check for 'fre-nctools' module             August 10
-# afy    Ver   9.00  Balance 'set echo'/'unset echo'                August 10
-# afy    Ver   9.01  Add online combining similar to the GFDL one   August 10
-# afy    Ver   9.02  Modify alias 'send_file'                       August 10
-# afy    Ver   9.03  Rename alias 'qsub' => 'submit'                August 10
-# afy    Ver   9.04  Modify alias 'submit' (add option -V)          August 10
-# afy    Ver   9.05  Modify call to 'combine*' (add 'stdout')       August 10
-# afy    Ver   9.06  Add alias 'tar'                                August 10
-# afy    Ver   9.07  Add flagOutputCheck settable constant          August 10
-# afy    Ver   9.08  Add constant 'patternSedRestartProduction'     August 10
-# afy    Ver   9.09  Add constant 'patternSedRestartRegression'     August 10
-# afy    Ver   9.10  Add restart archives checking                  August 10
-# afy    Ver   9.11  New pragmas for flags/constants/variables      August 10
-# afy    Ver   9.12  Merge flagTransfer* settable constants         August 10
-# afy    Ver   9.13  Fix ascii/restart directories creation         August 10
-# afy    Ver   9.14  Remove combineList variable                    August 10
-# afy    Ver  10.00  Rename combine_parallel.csh => fresavehist     August 10
+# arl    Ver   1.00  Copied from the NCCS version                   July 10
+# arl    Ver   1.01  Unset/set echo around platform csh             July 10
+# arl    Ver   1.02  Modify alias 'mppnccombine'                    July 10
+# arl    Ver   1.03  Modify alias 'combine_parallel'                July 10
+# arl    Ver   1.04  Remove all the saving to the HPSS              July 10
+# arl    Ver   1.05  Remove sending ascii/restarts to the GFDL      July 10
+# arl    Ver   1.06  Replace history combining by online one        July 10
+# arl -------------- Branch 1.1.2 --------------------------------- July 10
+# arl    Ver   1.00  Fix hsmSiteDir variable                        July 10
+# arl    Ver   2.00  Modify LFS striping settings                   August 10
+# arl    Ver   3.00  Modify alias 'combine_parallel' (use siteDir)  August 10
+# arl    Ver   3.01  Fix LFS striping settings                      August 10
+# arl    Ver   3.02  Add staged history combining                   August 10
+# afy -------------- Branch 1.1.4 --------------------------------- August 10
+# afy    Ver   1.00  Cosmetics                                      August 10
+# afy    Ver   1.01  Fix check for 'fre-transfer' module            August 10
+# afy    Ver   1.02  Fix check for 'fre-nctools' module             August 10
+# afy    Ver   1.03  Revive sending ascii/restarts to the GFDL      August 10
+# afy    Ver   2.00  Balance 'set echo'/'unset echo'                August 10
+# afy    Ver   2.01  Make online combining similar to the GFDL one  August 10
+# afy    Ver   2.02  Modify alias 'send_file'                       August 10
+# afy    Ver   2.03  Rename alias 'qsub' => 'submit'                August 10
+# afy    Ver   2.04  Modify alias 'submit' (add option -V)          August 10
+# afy    Ver   2.05  Modify call to 'combine*' (add 'stdout')       August 10
+# afy    Ver   2.06  Add alias 'tar'                                August 10
+# afy    Ver   3.00  Add flagOutputCheck settable constant          August 10
+# afy    Ver   3.01  Add constant 'patternSedRestartProduction'     August 10
+# afy    Ver   3.02  Add constant 'patternSedRestartRegression'     August 10
+# afy    Ver   3.03  Add restart archives checking                  August 10
+# afy    Ver   3.04  New pragmas for flags/constants/variables      August 10
+# afy    Ver   3.05  Merge flagTransfer* settable constants         August 10
+# afy    Ver   3.06  Fix ascii/restart directories creation         August 10
+# afy    Ver   3.07  Fix multi-segment restarts/history creation    August 10
+# afy    Ver   3.08  Remove combineList variable                    August 10
+# afy    Ver   4.00  Rename combine_parallel.csh => fresavehist     August 10
 # ------------------------------------------------------------------------------
 # Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2000-2010
 # Designed and written by V. Balaji, Amy Langenhorst and Aleksey Yakovlev
@@ -194,7 +185,7 @@
   set -r work = $workDir
 
   # ---------------- HSM site-dependent directory
-  set -r hsmSiteDir = $FRE_TRANSFER_HOME/site/doe
+  set -r hsmSiteDir = $FRE_TRANSFER_HOME/site/ncrc
 
   # ---------------- top directory for all the HSM-copied files
   set -r hsmDir = $workDir/hsm
@@ -231,13 +222,10 @@
   alias slmnccombine `which combine-ncc` 
 
   # ---------------- FRE history files offline combining script 
-  alias output_stager $freCommandsHomeDir/site/doe/fresavehist
+  alias output_stager $freCommandsHomeDir/site/ncrc/fresavehist
 
   # ---------------- batch scheduler submit command
   alias submit `which qsub` -q $PBS_QUEUE -V
-
-  # ---------------- HPSS access command
-  alias hsi `which hsi` -q
 
   # ---------------- archiving command
   alias tar `which tar` -b 1024
@@ -548,12 +536,6 @@
 
       ls -1 | egrep "$patternGrepAscii" | tar -cf $asciiArchive --files-from - --remove-files
 
-      pushd $asciiArchive:h
-      set logName = $scriptName:t.$PBS_JOBID.$asciiArchive:t.hsi.log
-      hsi "mkdir -p $outputPath/ascii; cd $outputPath/ascii; put $asciiArchive:t" >& $stdoutDir/$logName &
-      unset logName
-      popd
-
       if ( $?flagTransferOn ) then
         pushd $stdoutDir
         set jobName = $scriptName:t.$PBS_JOBID.$asciiArchive:t.send_file
@@ -640,12 +622,6 @@
         endif
       endif
 
-      pushd $restartArchive:h
-      set logName = $scriptName:t.$PBS_JOBID.$restartArchive:t.hsi.log 
-      hsi "mkdir -p $outputPath/restart; cd $outputPath/restart; put $restartArchive:t" >& $stdoutDir/$logName &
-      unset logName
-      popd
-
       if ( $?flagTransferOn ) then
         pushd $stdoutDir
         set jobName = $scriptName:t.$PBS_JOBID.$restartArchive:t.send_file
@@ -714,12 +690,6 @@
 
         ls -1 | egrep "$patternGrepNC"$ | tar -cf $historyCombinedArchive --files-from - --remove-files
 
-	pushd $historyCombinedArchive:h
-	set logName = $scriptName:t.$PBS_JOBID.$historyCombinedArchive:t.hsi.log 
-	hsi "mkdir -p $outputPath/history; cd $outputPath/history; put $historyCombinedArchive:t" >& $stdoutDir/$logName &
-        unset logName
-	popd
-
         unset historyCombinedArchive
 
       endif
@@ -739,12 +709,6 @@
 	end
 
         ls -1 | egrep "$patternGrepNC.*$patternGrepTail" | tar -cf $historyUncombinedArchive --files-from - --remove-files
-
-	pushd $historyUncombinedArchive:h
-	set logName = $scriptName:t.$PBS_JOBID.$historyUncombinedArchive:t.hsi.log 
-	hsi "mkdir -p $outputPath/history; cd $outputPath/history; put $historyUncombinedArchive:t" >& $stdoutDir/$logName &
-        unset logName
-	popd
 
         unset historyUncombinedArchive
 

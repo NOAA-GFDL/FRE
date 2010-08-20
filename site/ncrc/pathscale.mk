@@ -1,67 +1,91 @@
-# template for the Intel fortran compiler
+# template for the pathscale compiler
 # typical use with mkmf
-# mkmf -t template.ifc -c"-Duse_libMPI -Duse_netCDF" path_names /usr/local/include
+# mkmf -t mkmf.template.pscale -c"-Duse_libMPI -Duse_netCDF" path_names /usr/local/include
 ############
 # commands #
 ############
-FC = ifort
-CC = icc
-LD = ifort
+FC = ftn
+CC = cc
+LD = ftn $(MAIN_PROGRAM)
 #########
 # flags #
 #########
 DEBUG =
 REPRO =
 VERBOSE =
+OPENMP =
 
-MAKEFLAGS += --jobs=8
+##############################################
+# Need to use at least GNU Make version 3.81 #
+##############################################
+need := 3.81
+ok := $(filter $(need),$(firstword $(sort $(MAKE_VERSION) $(need))))
+ifneq ($(need),$(ok))
+$(error Need at least make version $(need).  Load module gmake/3.81)
+endif 
 
-FPPFLAGS := -fpp -Wp,-w
+#################################################################
+# site-dependent definitions, set by environment                #
+#################################################################
 
-FFLAGS := -fno-alias -stack_temps -safe_cray_ptr -ftz -i_dynamic -assume byterecl -i4 -r8 -nowarn -g
-FFLAGS_OPT = -O2
-FFLAGS_VERBOSE = -v -V -what
-FFLAGS_REPRO = -fltconsistency
-FFLAGS_DEBUG = -O0 -check -check noarg_temp_created -check nopointer -warn -warn noerrors -debug variable_locations -fpe0 -traceback -ftrapuv
+NETCDF_ROOT = $(CRAY_NETCDF_DIR)/netcdf-pathscale
+MPI_ROOT    = $(MPICH_DIR)
+INCLUDE = -I$(NETCDF_ROOT)/include
 
-CFLAGS := -D__IFC -g
+FPPFLAGS = $(INCLUDE)
+FFLAGS = -i4 -r8 -byteswapio -fno-second-underscore
+FFLAGS_OPT = -O3 -OPT:fast_math=on:Olimit=0:IEEE_arith=2 -TENV:X=1
+FFLAGS_DEBUG = -g -trapuv -TENV:simd_zmask=OFF:simd_umask=OFF:simd_omask=OFF:simd_dmask=OFF 
+FFLAGS_REPRO = -O2 -OPT:fast_math=off:Olimit=0 -TENV:X=1
+FFLAGS_OPENMP = -mp
+FFLAGS_VERBOSE = -v
+
+CPPFLAGS = $(INCLUDE)
 CFLAGS_OPT = -O2
-CFLAGS_DEBUG = -O0 -ftrapuv -traceback
+CFLAGS_DEBUG = -g
+CFLAGS_OPENMP = -mp
+CFLAGS_VERBOSE = -v
 
-LDFLAGS :=
-LDFLAGS_VERBOSE := -Wl,-V,--verbose,-cref,-M
+# pathscale wants main program outside libraries, do
+# setenv MAIN_PROGRAM coupler_main.o or something before make
+LDFLAGS := -byteswapio
+LDFLAGS_VERBOSE := -v
+
+MAKEFLAGS +=--jobs=2
 
 ifneq ($(REPRO),)
 CFLAGS += $(CFLAGS_REPRO)
 FFLAGS += $(FFLAGS_REPRO)
-endif
-ifneq ($(DEBUG),)
+else ifneq ($(DEBUG),)
 CFLAGS += $(CFLAGS_DEBUG)
 FFLAGS += $(FFLAGS_DEBUG)
 else
-CFLAGS += $(CFLAGS_OPT)
 FFLAGS += $(FFLAGS_OPT)
+CFLAGS += $(CFLAGS_OPT)
 endif
+
+ifneq ($(OPENMP),)
+CFLAGS += $(CFLAGS_OPENMP)
+FFLAGS += $(FFLAGS_OPENMP)
+endif
+
 ifneq ($(VERBOSE),)
 CFLAGS += $(CFLAGS_VERBOSE)
 FFLAGS += $(FFLAGS_VERBOSE)
 LDFLAGS += $(LDFLAGS_VERBOSE)
 endif
 
+# add LIBS at the end
+LIBS := -L$(NETCDF_ROOT)/lib
 ifeq ($(NETCDF),3)
-  # add the use_LARGEFILE cppdef
-  ifneq ($(findstring -Duse_netCDF,$(CPPDEFS)),)
-    CPPDEFS += -Duse_LARGEFILE
-  endif
+# add the use_LARGEFILE cppdef
+ifneq ($(findstring -Duse_netCDF,$(CPPDEFS)),)
+CPPDEFS += -Duse_LARGEFILE
 endif
-
-ifneq ($(findstring netcdf-4.0.1,$(LOADEDMODULES)),)
-  LIBS := -lnetcdff -lnetcdf -lhdf5_hl -lhdf5 -lz
+LIBS += -lnetcdf
 else
-  LIBS := -lnetcdf
+LIBS += -lnetcdff -lnetcdf -lhdf5_hl -lhdf5 -lz
 endif
-
-LIBS += -lmpi -lsma
 LDFLAGS += $(LIBS)
 
 #---------------------------------------------------------------------------

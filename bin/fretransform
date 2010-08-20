@@ -3,6 +3,8 @@
 #substitute autoRTS directories
 #usage: fretransform -x xmlfile > outfile
 use Getopt::Long;
+use FRE();
+
 
 use strict;
 
@@ -11,14 +13,17 @@ my $thisdate = `date '+%Y%m%d_%H%M%S'`;
 chomp $thisdate;
 
 #get options
-use constant VERSION => '$Id: fretransform,v 15.1.2.5 2010/07/15 20:57:02 fms Exp $';
+use constant VERSION => '$Id: fretransform,v 15.1.2.8 2010/08/10 16:21:47 arl Exp $';
 use constant OPTLIST =>
   (
       'help|h',
       'datestr|d=s',
+      'platform|Platform|P=s',
       'xmlfile|x=s',
   );
 my %opt = (
+     'platform'  => FREDefaults::Platform(),
+     'xmlfile'   => FREDefaults::XMLFile(),
      'datestr'   => $thisdate
   );
 Getopt::Long::GetOptions(\%opt,OPTLIST) or die "FATAL: can't parse command line options\n";
@@ -40,15 +45,12 @@ EOF
 }
 
 #get access to fre.properties
-#my $fre = FRE->new('frerts', %opt) or die "Cannot initiate FRE";
-# this change put on hold -- fretransform really needs all platforms?
+my $fre = FRE->new('frerts', %opt) or die "Cannot initiate FRE";
+my $autoRTSroot = $fre->property('FRE.autoRTS.root.prefix')."/$opt{datestr}";
+my $autoRTSarchive = $fre->property('FRE.autoRTS.archive.prefix')."/$opt{datestr}";
+my $site = $fre->property('site');
 
 #create xsl to replace the directory names with "autoRTS" directories
-my $gfdlhomeroot = "\$HOME/autoRTS/$opt{datestr}";
-my $gfdlarchiveroot = "\$ARCHIVE/autoRTS/$opt{datestr}";
-my $jaguarhomeroot = "/ccs/home/\$USER/autoRTS/$opt{datestr}";
-my $jaguararchiveroot = "/tmp/work/\$USER/autoRTS/$opt{datestr}";
-
 my $xsl = <<EOF;
 <xsl:stylesheet version="1.0"
       xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
@@ -61,93 +63,47 @@ my $xsl = <<EOF;
      </xsl:copy>
    </xsl:template>
 
-   <xsl:template match="platform[\@name]/directory[\@type='root']">
-     <xsl:choose>
-     <xsl:when test="contains(../\@name,'hpcs.')">
-            <directory type="root">$gfdlhomeroot</directory>
-     </xsl:when>
-     <xsl:when test="contains(../\@name,'doe.')">
-            <directory type="root">$jaguarhomeroot</directory>
-     </xsl:when>
-     <xsl:otherwise>
-        <xsl:copy>
-        <xsl:apply-templates select="@*"/>
-        <xsl:apply-templates/>
-        </xsl:copy>
-     </xsl:otherwise>
-     </xsl:choose>
+   <xsl:template match="platform[\@name[starts-with(.,'$site.')]]/directory[\@type='root']">
+            <directory type="root">$autoRTSroot</directory>
    </xsl:template>
 
-   <xsl:template match="platform[\@name]/directory[\@type='src']">
+   <xsl:template match="platform[\@name[starts-with(.,'$site.')]]/directory[\@type='src']">
             <directory type="src">\$(rootDir)/\$(name)/src</directory>
    </xsl:template>
 
-   <xsl:template match="platform[\@name]/directory[\@type='scripts']">
+   <xsl:template match="platform[\@name[starts-with(.,'$site.')]]/directory[\@type='scripts']">
             <directory type="scripts">\$(rootDir)/\$(name)/\$(platform)-\$(target)/scripts</directory>
    </xsl:template>
 
-   <xsl:template match="platform[\@name]/directory[\@type='stdout']">
+   <xsl:template match="platform[\@name[starts-with(.,'$site.')]]/directory[\@type='stdout']">
             <directory type="stdout">\$(rootDir)/\$(name)/\$(platform)-\$(target)/stdout</directory>
    </xsl:template>
 
-   <xsl:template match="platform[\@name]/directory[\@type='exec']">
+   <xsl:template match="platform[\@name[starts-with(.,'$site.')]]/directory[\@type='exec']">
             <directory type="exec">\$(rootDir)/\$(name)/\$(platform)-\$(target)/exec</directory>
    </xsl:template>
 
-   <xsl:template match="platform[\@name]/directory[\@type='archive']">
-     <xsl:choose>
-     <xsl:when test="contains(../\@name,'hpcs.')">
-            <directory type="archive">$gfdlarchiveroot/\$(name)/\$(platform)-\$(target)</directory>
-     </xsl:when>
-     <xsl:when test="contains(../\@name,'doe.')">
-            <directory type="archive">$jaguararchiveroot/\$(name)/\$(platform)-\$(target)</directory>
-     </xsl:when>
-     <xsl:otherwise>
-        <xsl:copy>
-        <xsl:apply-templates select="@*"/>
-        <xsl:apply-templates/>
-        </xsl:copy>
-     </xsl:otherwise>
-     </xsl:choose>
+   <xsl:template match="platform[\@name[starts-with(.,'$site.')]]/directory[\@type='archive']">
+            <directory type="archive">$autoRTSarchive/\$(name)/\$(platform)-\$(target)</directory>
    </xsl:template>
 
-   <xsl:template match="platform[\@name]/directory[\@type='work']">
-            <directory type="work">\$TMPDIR/work/\$(name)</directory>
+   <xsl:template match="platform[\@name[starts-with(.,'$site.')]]/directory[\@type='work']">
+            
    </xsl:template>
 
-   <xsl:template match="platform[\@name]/directory[\@type='ptmp']">
-            <directory type="ptmp">\$TMPDIR/ptmp</directory>
+   <xsl:template match="platform[\@name[starts-with(.,'$site.')]]/directory[\@type='ptmp']">
+           
    </xsl:template>
 
-   <xsl:template match="platform[\@name]/directory[not(@*)]">
-     <xsl:choose>
-     <xsl:when test="contains(../\@name,'hpcs.')">
+   <xsl:template match="platform[\@name[starts-with(.,'$site.')]]/directory[not(@*)]">
          <directory>
-           <root>$gfdlhomeroot</root>
+           <root>$autoRTSroot</root>
            <src>\$(rootDir)/\$(name)/src</src>
            <scripts>\$(rootDir)/\$(name)/\$(platform)-\$(target)/scripts</scripts>
            <stdout>\$(rootDir)/\$(name)/\$(platform)-\$(target)/stdout</stdout>
            <exec>\$(rootDir)/\$(name)/\$(platform)-\$(target)/exec</exec>
-           <archive>$gfdlarchiveroot/\$(name)/\$(platform)-\$(target)</archive>
+           <archive>$autoRTSarchive/\$(name)/\$(platform)-\$(target)</archive>
          </directory>
-     </xsl:when>
-     <xsl:when test="contains(../\@name,'doe.')">
-         <directory>
-           <root>$jaguarhomeroot</root>
-           <src>\$(rootDir)/\$(name)/src</src>
-           <scripts>\$(rootDir)/\$(name)/\$(platform)-\$(target)/scripts</scripts>
-           <stdout>\$(rootDir)/\$(name)/\$(platform)-\$(target)/stdout</stdout>
-           <exec>\$(rootDir)/\$(name)/\$(platform)-\$(target)/exec</exec>
-           <archive>$jaguararchiveroot/\$(name)/\$(platform)-\$(target)</archive>
-         </directory>
-     </xsl:when>
-     <xsl:otherwise>
-        <xsl:copy>
-        <xsl:apply-templates select="@*"/>
-        <xsl:apply-templates/>
-        </xsl:copy>
-     </xsl:otherwise>
-     </xsl:choose>
    </xsl:template>
 
 </xsl:stylesheet>

@@ -53,6 +53,9 @@
 # 091209 bhs	1107 PP job line executes in "sh" (for FREROOT, modules stuff)
 # 091210 bhs	1107 add fs_init() and fs_space()
 # 100125 bhs	1109 correct hsmput path to include /history
+# 100816 afy    1110 replace FREROOT by FRE_TRANSFER_HOME
+# 100816 afy    1110 add "module use --append" lines based on MODULEPATH
+# 100816 afy    1110 replace "/opt/modules/default" by $MODULESHOME
 
 ###############################################################################
 #				Program Notes
@@ -113,7 +116,7 @@ use vars qw(%FSpct %FSmnt %FScrit %FSfull %FSwarn $FSlevels);
 
 # static environment variables
 use vars qw($USER $ARCHIVE $FTMPDIR $JOB_ID $JOB_NAME $PTMPDIR);
-use vars qw($FREROOT $LOADEDMODULES);
+use vars qw($FRE_TRANSFER_HOME $MODULEPATH $LOADEDMODULES);
 use vars qw($AbortIfErr $ForceErr $HsmGetPut);
 
 # arguments and switches
@@ -147,7 +150,7 @@ use vars qw($x_cmdout $x_return_code);
 my @Fstat = stat $0; my $TSfmt="%4d-%02d%02d %02d:%02d:%02d";
 my @Tim = localtime $Fstat[9]; $Tim[5] += 1900; $Tim[4] += 1;
 my $TS = sprintf $TSfmt,$Tim[5],$Tim[4],$Tim[3],$Tim[2],$Tim[1],$Tim[0];
-$Version = "1109, $TS";
+$Version = "1110, $TS";
 ########################################################################
 
 # define command name, fru directory and global log
@@ -491,13 +494,18 @@ $CmdPath = "$PWD/$0" if (substr($CmdPath,0,1) ne "/");
 	    die_msg "open $PPCfile failed: $!"; die;
 	}
 #       import environment parameters which affect job execution
-	print JOB "FREROOT=$FREROOT; export FREROOT; " if ($FREROOT);
-	print JOB ". /opt/modules/default/init/sh; ";
-	print JOB "module use -a /home/fms/local/modulefiles/ia64; ";
+	print JOB "FRE_TRANSFER_HOME=$FRE_TRANSFER_HOME; export FRE_TRANSFER_HOME; " if ($FRE_TRANSFER_HOME);
+	print JOB ". \$MODULESHOME/init/sh; ";
+	if ($MODULEPATH) {
+	    my @ModulePathsToAppend = split /:/, $MODULEPATH;
+	    foreach my $ModulePath (@ModulePathsToAppend) {
+	        print JOB "module use --append $ModulePath\n"
+	    }
+	}
 	if ($LOADEDMODULES) {
 	    my @ModulesToLoad = split /:/, $LOADEDMODULES;
 	    foreach my $Module (@ModulesToLoad) {
-		print JOB "module load $Module; "
+		print JOB "module load $Module\n"
 	    }
 	}
 #       write out specified post-processing command
@@ -606,9 +614,14 @@ $CmdPath = "$PWD/$0" if (substr($CmdPath,0,1) ne "/");
 	print JOB "#\$ -o $HomeOut/r$begindate.\$JOB_ID\n";
 	print JOB "cat $RepairJob\n" if ($Verbose >= 3);
 #       import environment parameters which affect job execution
-	print JOB "setenv FREROOT $FREROOT\n" if ($FREROOT);
-	print JOB "source /opt/modules/default/init/tcsh\n";
-	print JOB "module use -a /home/fms/local/modulefiles/ia64\n";
+	print JOB "setenv FRE_TRANSFER_HOME $FRE_TRANSFER_HOME\n" if ($FRE_TRANSFER_HOME);
+	print JOB "source \$MODULESHOME/init/tcsh\n";
+	if ($MODULEPATH) {
+	    my @ModulePathsToAppend = split /:/, $MODULEPATH;
+	    foreach my $ModulePath (@ModulePathsToAppend) {
+	        print JOB "module use --append $ModulePath\n"
+	    }
+	}
 	if ($LOADEDMODULES) {
 	    my @ModulesToLoad = split /:/, $LOADEDMODULES;
 	    foreach my $Module (@ModulesToLoad) {
@@ -685,9 +698,14 @@ $CmdPath = "$PWD/$0" if (substr($CmdPath,0,1) ne "/");
 	print JOB "#\$ -o $HomeOut/s$begindate.\$JOB_ID\n";
 	print JOB "cat $JobFile\n" if ($Verbose >= 3);
 #       import environment parameters which affect job execution
-	print JOB "setenv FREROOT $FREROOT\n" if ($FREROOT);
-	print JOB "source /opt/modules/default/init/tcsh\n";
-	print JOB "module use -a /home/fms/local/modulefiles/ia64\n";
+	print JOB "setenv FRE_TRANSFER_HOME $FRE_TRANSFER_HOME\n" if ($FRE_TRANSFER_HOME);
+	print JOB "source \$MODULESHOME/init/tcsh\n";
+	if ($MODULEPATH) {
+	    my @ModulePathsToAppend = split /:/, $MODULEPATH;
+	    foreach my $ModulePath (@ModulePathsToAppend) {
+	        print JOB "module use --append $ModulePath\n"
+	    }
+	}
 	if ($LOADEDMODULES) {
 	    my @ModulesToLoad = split /:/, $LOADEDMODULES;
 	    foreach my $Module (@ModulesToLoad) {
@@ -1155,7 +1173,8 @@ $ARCHIVE = $ENV{ARCHIVE}; $ARCHIVE="/archive/$USER" if (! $ARCHIVE);
 $FTMPDIR = $ENV{FTMPDIR};
 $JOB_ID = $ENV{JOB_ID};
 $JOB_NAME = $ENV{JOB_NAME}; $JOB_NAME = $0 if (! $JOB_NAME);
-$FREROOT = $ENV{FREROOT};
+$FRE_TRANSFER_HOME = $ENV{FRE_TRANSFER_HOME};
+$MODULEPATH = $ENV{MODULEPATH};
 $LOADEDMODULES = $ENV{LOADEDMODULES};
 $PTMPDIR = $ENV{PTMPDIR}; $PTMPDIR="/ptmp/$USER" if (! $PTMPDIR);
 # import frusavehist override variables
@@ -1174,8 +1193,8 @@ $Qinfo = "$ENV{HOME}/qinfo4fre";
 # commands for copying to /ptmp
 # cxfscp: t=threads, b=buffers, s=KB, u=update, p=permissions, r=recursive
 $FastCopy = "cxfscp -t 1 -b 8 -s 65000 -up";
-if ($FREROOT) {
-    $HsmPut = "$FREROOT/bin/hsmput";
+if ($FRE_TRANSFER_HOME) {
+    $HsmPut = "$FRE_TRANSFER_HOME/bin/hsmput -m $FRE_TRANSFER_HOME/site/hpcs/hsmput.mk";
 } else {
     $HsmPut = "$FRUdir/bin/hsmput";
 }

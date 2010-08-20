@@ -1,5 +1,5 @@
 #
-# $Id: FRETemplate.pm,v 18.0.2.1 2010/07/08 19:31:25 afy Exp $
+# $Id: FRETemplate.pm,v 18.0.2.2 2010/08/19 17:34:43 afy Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: Template Management Module
 # ------------------------------------------------------------------------------
@@ -8,6 +8,9 @@
 # afy    Ver   1.00  Modify setSchedulerOptions (properties)        July 10
 # afy    Ver   1.01  Modify setSchedulerDualRuns (properties)       July 10
 # afy    Ver   1.02  Modify setSchedulerMakeVerbose (properties)    July 10
+# afy    Ver   2.00  Add setFlag subroutine                         August 10
+# afy    Ver   2.01  Add setVariable subroutine                     August 10
+# afy    Ver   2.02  Add setList subroutine                         August 10
 # ------------------------------------------------------------------------------
 # Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2009-2010
 # Designed and written by V. Balaji, Amy Langenhorst and Aleksey Yakovlev
@@ -27,6 +30,9 @@ use FREDefaults();
 # //////////////////////////////////////////////////////////////////////////////
 
 use constant PRAGMA_PREFIX => '#FRE';
+use constant PRAGMA_FLAG => 'flag';
+use constant PRAGMA_CONSTANT => 'const';
+use constant PRAGMA_VARIABLE => 'var';
 use constant PRAGMA_SCHEDULER_OPTIONS => 'scheduler-options';
 use constant PRAGMA_SCHEDULER_MAKE_VERBOSE => 'scheduler-make-verbose';
 use constant PRAGMA_VERSION_INFO => 'version-info';
@@ -47,6 +53,45 @@ my $option = sub($$;$)
 # //////////////////////////////////////////////////////////////////////////////
 # //////////////////////////////////////////////////////// Exported Functions //
 # //////////////////////////////////////////////////////////////////////////////
+
+sub setFlag($$$)
+# ------ arguments: $refToScript $name $value
+{
+  my ($r, $n, $v) = @_;
+  my $prefix = FRETemplate::PRAGMA_PREFIX;
+  my $flag = FRETemplate::PRAGMA_FLAG;
+  my ($placeholderPrefix, $placeholderSuffix) = (qr/^([ \t]*)$prefix[ \t]+$flag[ \t]*\([ \t]*/mo, qr/[ \t]*\)[ \t]*$/mo);
+  ${$r} =~ s/$placeholderPrefix$n$placeholderSuffix/$1set -r $n$v/;
+}
+
+sub setVariable($$$)
+# ------ arguments: $refToScript $name $value
+{
+  my ($r, $n, $v) = @_;
+  my $prefix = FRETemplate::PRAGMA_PREFIX;
+  my ($constant, $variable) = (FRETemplate::PRAGMA_CONSTANT, FRETemplate::PRAGMA_VARIABLE);
+  my ($placeholderPrefix, $placeholderSuffix) = (qr/^([ \t]*)$prefix[ \t]+($constant|$variable)[ \t]*\([ \t]*/mo, qr/[ \t]*\)[ \t]*$/mo);
+  if (${$r} =~ m/$placeholderPrefix$n$placeholderSuffix/)
+  {
+    my $cmd = ($2 eq $constant) ? 'set -r' : 'set';
+    substr(${$r}, $-[0], $+[0] - $-[0]) = "$1$cmd $n = $v";
+  }
+}
+
+sub setList($$@)
+# ------ arguments: $refToScript $name @value
+{
+  my ($r, $n, @v) = @_;
+  my $prefix = FRETemplate::PRAGMA_PREFIX;
+  my ($constant, $variable) = (FRETemplate::PRAGMA_CONSTANT, FRETemplate::PRAGMA_VARIABLE);
+  my ($placeholderPrefix, $placeholderSuffix) = (qr/^([ \t]*)$prefix[ \t]+($constant|$variable)[ \t]*\([ \t]*/mo, qr/[ \t]*\)[ \t]*$/mo);
+  if (${$r} =~ m/$placeholderPrefix$n$placeholderSuffix/)
+  {
+    my $list = join ' ', @v;
+    my $cmd = ($2 eq $constant) ? 'set -r' : 'set';
+    substr(${$r}, $-[0], $+[0] - $-[0]) = "$1$cmd $n = ( $list )";
+  }
+}
 
 sub setSchedulerOptions($$$$$$%)
 # ------ arguments: $script $expt $npes $simRunTime $segRunTime $stdoutDir %options

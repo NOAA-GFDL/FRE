@@ -1,5 +1,5 @@
 #
-# $Id: FREDefaults.pm,v 18.0.2.3 2010/07/08 19:27:33 afy Exp $
+# $Id: FREDefaults.pm,v 18.0.2.7 2010/08/04 20:55:35 afy Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: System Defaults Module
 # ------------------------------------------------------------------------------
@@ -11,6 +11,10 @@
 # afy    Ver   3.01  Modify Platform (call Site explicitly)         July 10
 # afy    Ver   3.02  Replace SiteGFDL => SiteIsGFDL                 July 10
 # afy    Ver   3.03  Replace SiteDOE => SiteIsCCS                   July 10
+# afy    Ver   4.00  Modify Site (fix splitting)                    August 10
+# afy    Ver   5.00  Add SiteIsCMRS subroutine                      August 10
+# afy    Ver   6.00  Modify Site (add CMRS branch)                  August 10
+# afy    Ver   7.00  Replace SiteIsCCS => SiteIsNCCS                August 10
 # ------------------------------------------------------------------------------
 # Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2009-2010
 # Designed and written by V. Balaji, Amy Langenhorst and Aleksey Yakovlev
@@ -58,10 +62,12 @@ use constant STATUS_FRE_RUN_EXECUTION_PROBLEM		=> 62;
 # //////////////////////////////////////////////////////////////////////////////
 
 use constant DOMAIN_GFDL	=> 'gfdl.noaa.gov'; 
-use constant DOMAIN_CCS		=> 'ccs.ornl.gov'; 
+use constant DOMAIN_NCCS	=> 'ccs.ornl.gov'; 
+use constant DOMAIN_CMRS	=> 'ncrc.gov'; 
 
 use constant SITE_GFDL		=> 'hpcs';
-use constant SITE_CCS		=> 'doe';
+use constant SITE_NCCS		=> 'doe';
+use constant SITE_CMRS		=> 'ncrc';
 use constant SITE_UNKNOWN	=> 'unknown';
 
 use constant XMLFILE_DEFAULT	=> 'rts.xml';
@@ -82,13 +88,17 @@ sub Site()
   {
     return FREDefaults::SITE_GFDL;
   }
-  elsif ($domain eq FREDefaults::DOMAIN_CCS)
+  elsif ($domain eq FREDefaults::DOMAIN_NCCS)
   {
-    return FREDefaults::SITE_CCS;
+    return FREDefaults::SITE_NCCS;
+  }
+  elsif ($domain eq FREDefaults::DOMAIN_CMRS)
+  {
+    return FREDefaults::SITE_CMRS;
   }
   elsif ($domain)
   {
-    return (split '.', $domain)[0];
+    return (split /\./, $domain)[0];
   }
   else
   {
@@ -102,10 +112,16 @@ sub SiteIsGFDL()
   return (FREDefaults::Site() eq FREDefaults::SITE_GFDL);
 }
 
-sub SiteIsCCS()
+sub SiteIsNCCS()
 # ------ arguments: none
 {
-  return (FREDefaults::Site() eq FREDefaults::SITE_CCS);
+  return (FREDefaults::Site() eq FREDefaults::SITE_NCCS);
+}
+
+sub SiteIsCMRS()
+# ------ arguments: none
+{
+  return (FREDefaults::Site() eq FREDefaults::SITE_CMRS);
 }
 
 sub XMLFile()

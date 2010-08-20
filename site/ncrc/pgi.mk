@@ -6,7 +6,7 @@
 ############
 FC = ftn
 CC = cc
-LD = ftn $(MAIN_PROGRAM)
+LD = ftn
 #########
 # flags #
 #########
@@ -14,34 +14,24 @@ DEBUG =
 REPRO =
 VERBOSE =
 
-##############################################
-# Need to use at least GNU Make version 3.81 #
-##############################################
-need := 3.81
-ok := $(filter $(need),$(firstword $(sort $(MAKE_VERSION) $(need))))
-ifneq ($(need),$(ok))
-$(error Need at least make version $(need).  Load module gmake/3.81)
-endif 
-
 #################################################################
 # site-dependent definitions, set by environment                #
 #################################################################
 
-NETCDF_ROOT = $(NETCDF_DIR)
+NETCDF_ROOT = $(CRAY_NETCDF_DIR)/netcdf-pgi
 MPI_ROOT    = $(MPICH_DIR)
 INCLUDE = -I$(NETCDF_ROOT)/include
 
 FPPFLAGS = $(INCLUDE)
-FFLAGS = -i4 -r8 -byteswapio -fno-second-underscore
-FFLAGS_OPT = -O3 -OPT:fast_math=on:Olimit=0:IEEE_arith=2 -TENV:X=1
-FFLAGS_DEBUG = -g -trapuv -TENV:simd_zmask=OFF:simd_umask=OFF:simd_omask=OFF:simd_dmask=OFF 
-FFLAGS_REPRO = -O2 -OPT:fast_math=off:Olimit=0 -TENV:X=1
+FFLAGS = -i4 -r8 -byteswapio -Mcray=pointer
+FFLAGS_OPT = -O2 -Mflushz -Mvect=nosse -Mnoscalarsse -Mallocatable=03 -D_F2000
+FFLAGS_DEBUG = -g -traceback -Ktrap=fp
 FFLAGS_OPENMP = -mp
 FFLAGS_VERBOSE = -v
 
 CPPFLAGS = $(INCLUDE)
 CFLAGS_OPT = -O2
-CFLAGS_DEBUG = -g
+CFLAGS_DEBUG = -g -traceback -Ktrap=fp
 CFLAGS_OPENMP = -mp
 CFLAGS_VERBOSE = -v
 
@@ -50,19 +40,19 @@ CFLAGS_VERBOSE = -v
 LDFLAGS := -byteswapio
 LDFLAGS_VERBOSE := -v
 
-MAKEFLAGS +=--jobs=8
+MAKEFLAGS +=--jobs=2
 
 ifneq ($(REPRO),)
-CFLAGS += $(CFLAGS_REPRO)
-FFLAGS += $(FFLAGS_REPRO)
-else ifneq ($(DEBUG),)
+CFLAGS += $(CFLAGS_REPRO) $(CFLAGS_OPT)
+FFLAGS += $(FFLAGS_REPRO) $(FFLAGS_OPT)
+else
+CFLAGS += $(CFLAGS_OPT)
+FFLAGS += $(FFLAGS_OPT)
+endif
+ifneq ($(DEBUG),)
 CFLAGS += $(CFLAGS_DEBUG)
 FFLAGS += $(FFLAGS_DEBUG)
-else
-FFLAGS += $(FFLAGS_OPT)
-CFLAGS += $(CFLAGS_OPT)
 endif
-
 ifneq ($(OPENMP),)
 CFLAGS += $(CFLAGS_OPENMP)
 FFLAGS += $(FFLAGS_OPENMP)

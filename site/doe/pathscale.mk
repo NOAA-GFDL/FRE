@@ -13,6 +13,7 @@ LD = ftn $(MAIN_PROGRAM)
 DEBUG =
 REPRO =
 VERBOSE =
+OPENMP =
 
 ##############################################
 # Need to use at least GNU Make version 3.81 #
@@ -55,7 +56,8 @@ MAKEFLAGS +=--jobs=8
 ifneq ($(REPRO),)
 CFLAGS += $(CFLAGS_REPRO)
 FFLAGS += $(FFLAGS_REPRO)
-else ifneq ($(DEBUG),)
+endif
+ifneq ($(DEBUG),)
 CFLAGS += $(CFLAGS_DEBUG)
 FFLAGS += $(FFLAGS_DEBUG)
 else

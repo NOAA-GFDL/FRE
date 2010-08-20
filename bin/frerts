@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 # -*- cperl -*-
-# $Id: frerts,v 15.1.2.23 2010/07/15 21:00:20 fms Exp $
+# $Id: frerts,v 15.1.2.26 2010/07/23 17:27:46 arl Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: Automated launch of fremake, frerun and frecheck.
 # ------------------------------------------------------------------------------
@@ -20,13 +20,13 @@ use Date::Manip();
 {
 package frerts;
 
-use constant VERSION => '$Id: frerts,v 15.1.2.23 2010/07/15 21:00:20 fms Exp $';
+use constant VERSION => '$Id: frerts,v 15.1.2.26 2010/07/23 17:27:46 arl Exp $';
 use constant OPTLIST =>
   (
       'help|h',
       'datestr|d=s',
       'execute|e',
-      'platform|Platform|P',
+      'platform|Platform|P=s',
       'regtype|r=s',
       'submit|s',
       'verbose|v',
@@ -101,7 +101,6 @@ EOF
 my $fre = FRE->new('frerts', %opt) or exit(1);
 my $root = $fre->{rootNode};
 my $autoRTSroot = $fre->property('FRE.autoRTS.root.prefix');
-my $autoRTSarchive = $fre->property('FRE.autoRTS.root.prefix');
 
 #get info for script...
 my $rtsstdoutdir = "$autoRTSroot/$opt{datestr}";
@@ -194,7 +193,7 @@ my $compilenpes=8;
 my $mkscriptn = "autoRTS.mk.$thisdate.csh";
 my $runscriptn = "autoRTS.run.$thisdate.csh";
 my $mkscript = "$autoRTSroot/$opt{datestr}/$mkscriptn";
-my $runscript = "$autoRTSarchive/$opt{datestr}/$runscriptn";
+my $runscript = "$autoRTSroot/$opt{datestr}/$runscriptn";
 
 my $mkcsh = <<EOF;
 #!/bin/csh -f
@@ -295,7 +294,7 @@ cd $TMPDIR
 echo Starting from $origxml
 echo Temporary files in $TMPDIR
 
-fretransform -d $label -x $origxml > $xml
+fretransform -d $label -p $platform -x $origxml > $xml
 
 set list = ( `frelist -p $platform -x $xml |grep -v INHERITS` )
 set list = ( $list `frelist -p $platform -x $xml |grep INHERITS |cut -f1 -d\ ` )

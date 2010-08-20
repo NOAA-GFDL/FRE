@@ -8,7 +8,7 @@ sub analysis {
 
    my ($ts_av_Node,$expt,$gridspec,$staticfile,$tsORav,$diagfile,$ppRootDir, 
        $component,$dtvars_ref,$analysisdir,$aoutscriptdir,$workdir, 
-       $archivedir,$opt_O,$opt_Y,$opt_Z,$opt_v,$sim0,$opt_R,$opt_s,$hist_dir,$nlat,$nlon,$frexml,$stdoutdir) = @_; 
+       $archivedir,$opt_t,$opt_O,$opt_Y,$opt_Z,$opt_v,$sim0,$opt_R,$opt_s,$hist_dir,$nlat,$nlon,$frexml,$stdoutdir) = @_; 
 
 # exit if no analysis nodes found
    my $anum = &anodenum($ts_av_Node);
@@ -53,6 +53,7 @@ sub analysis {
                print "aoutscriptdir: $aoutscriptdir\n";
                print "workdir: $workdir\n";
                print "archivedir: $archivedir\n";
+               print "\$opt_t: $opt_t\n";
                print "\$opt_O: $opt_O\n";
                print "\$opt_Y: $opt_Y\n";
                print "\$opt_Z: $opt_Z\n";
@@ -125,6 +126,7 @@ sub analysis {
      $arrayofExptsH[$iExpt]{hist_dir} = cleanpath($hist_dir);
      $arrayofExptsH[$iExpt]{nlon} = $nlon;
      $arrayofExptsH[$iExpt]{nlat} = $nlat;
+     $arrayofExptsH[$iExpt]{time} = $opt_t;
 
 
      # These variables always use cntl's

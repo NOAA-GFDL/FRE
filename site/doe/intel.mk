@@ -13,6 +13,7 @@ LD = ftn
 DEBUG =
 REPRO =
 VERBOSE =
+OPENMP =
 
 ##############################################
 # Need to use at least GNU Make version 3.81 #
@@ -33,12 +34,15 @@ FPPFLAGS := -fpp -Wp,-w $(INCLUDE)
 
 FFLAGS := -fno-alias -automatic -safe-cray-ptr -ftz -assume byterecl -i4 -r8 -nowarn $(INCLUDE)
 FFLAGS_OPT = -O3 -debug minimal -fp-model precise -override-limits
-FFLAGS_VERBOSE = -v -V -what
-FFLAGS_REPRO = -O2 -debug minimal -fp-model precise -override-limits
 FFLAGS_DEBUG = -g -O0 -check -check noarg_temp_created -check nopointer -warn -warn noerrors -fpe0 -traceback -ftrapuv
+FFLAGS_REPRO = -O2 -debug minimal -fp-model precise -override-limits
+FFLAGS_OPENMP = -openmp
+FFLAGS_VERBOSE = -v -V -what
+
 
 CFLAGS := -D__IFC 
 CFLAGS_OPT = -O2 -debug minimal
+CFLAGS_OPENMP = -openmp
 CFLAGS_DEBUG = -O0 -g -ftrapuv -traceback
 
 LDFLAGS :=
@@ -47,12 +51,18 @@ LDFLAGS_VERBOSE := -Wl,-V,--verbose,-cref,-M
 ifneq ($(REPRO),)
 CFLAGS += $(CFLAGS_REPRO)
 FFLAGS += $(FFLAGS_REPRO)
-else ifneq ($(DEBUG),)
+endif
+ifneq ($(DEBUG),)
 CFLAGS += $(CFLAGS_DEBUG)
 FFLAGS += $(FFLAGS_DEBUG)
 else
 CFLAGS += $(CFLAGS_OPT)
 FFLAGS += $(FFLAGS_OPT)
+endif
+
+ifneq ($(OPENMP),)
+CFLAGS += $(CFLAGS_OPENMP)
+FFLAGS += $(FFLAGS_OPENMP)
 endif
 
 ifneq ($(VERBOSE),)
