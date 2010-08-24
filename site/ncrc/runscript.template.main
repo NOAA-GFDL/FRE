@@ -1,7 +1,7 @@
 #!/bin/csh -f
 #FRE scheduler-options
 # 
-# $Id: runscript.template.main,v 1.1.4.4 2010/08/20 18:59:49 afy Exp $
+# $Id: runscript.template.main,v 1.1.4.5 2010/08/24 00:42:28 afy Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: Runscript Template - NCRC Version
 # ------------------------------------------------------------------------------
@@ -40,6 +40,8 @@
 # afy    Ver   3.07  Fix multi-segment restarts/history creation    August 10
 # afy    Ver   3.08  Remove combineList variable                    August 10
 # afy    Ver   4.00  Rename combine_parallel.csh => fresavehist     August 10
+# afy    Ver   5.00  Fix a problem with flagOutputTransfer          August 10
+# afy    Ver   5.01  Cosmetics in the output stager call            August 10
 # ------------------------------------------------------------------------------
 # Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2000-2010
 # Designed and written by V. Balaji, Amy Langenhorst and Aleksey Yakovlev
@@ -173,13 +175,13 @@
   set -r beginruntime = `date "+%s"`
   set -r outputPath = `echo $outputDir | perl -pe "s/.*?$USER\///"`
 
-  # ---------------- options for send_file
+  # ---------------- options for the FRE file sender
   set -r send_time_ascii = 00:01:00
   set -r send_time_restart = 00:30:00
 
-  # ---------------- options for output stager
-  set -r stager_time = 02:00:00
-  set -r stager_npes = 48
+  # ---------------- options for the FRE output stager
+  set -r output_stager_time = 02:00:00
+  set -r output_stager_npes = 48
 
   # ---------------- for compatibility only
   set -r work = $workDir
@@ -221,7 +223,7 @@
   alias mppnccombine `which mppnccombine` -64
   alias slmnccombine `which combine-ncc` 
 
-  # ---------------- FRE history files offline combining script 
+  # ---------------- FRE output stager 
   alias output_stager $freCommandsHomeDir/site/ncrc/fresavehist
 
   # ---------------- batch scheduler submit command
@@ -536,7 +538,7 @@
 
       ls -1 | egrep "$patternGrepAscii" | tar -cf $asciiArchive --files-from - --remove-files
 
-      if ( $?flagTransferOn ) then
+      if ( $?flagOutputTransferOn ) then
         pushd $stdoutDir
         set jobName = $scriptName:t.$PBS_JOBID.$asciiArchive:t.send_file
         if ( "$project" != "" ) then
@@ -622,7 +624,7 @@
         endif
       endif
 
-      if ( $?flagTransferOn ) then
+      if ( $?flagOutputTransferOn ) then
         pushd $stdoutDir
         set jobName = $scriptName:t.$PBS_JOBID.$restartArchive:t.send_file
         if ( "$project" != "" ) then
@@ -727,11 +729,22 @@
        find $workDir -maxdepth 1 -type f -regex "$patternFindNC" -exec mv -f {} $tempHistoryDateDir \;
 
        pushd $stdoutDir
-       set jobName = $scriptName:t.$PBS_JOBID.$tempHistoryDateDir:t.combine
+       set jobName = $scriptName:t.$PBS_JOBID.$tempHistoryDateDir:t.output_stager
        if ( "$project" != "" ) then
-         submit -A $project -N $jobName -o $stdoutDir/ -l walltime=$stager_time,size=$stager_npes -v project=$project,datedir=$tempHistoryDateDir,stdout=$stdoutDir/ `alias output_stager`
+         submit \
+         -A $project \
+         -N $jobName \
+         -o $stdoutDir/ \
+         -l walltime=$output_stager_time,size=$output_stager_npes \
+         -v project=$project,datedir=$tempHistoryDateDir,stdout=$stdoutDir/ \
+         `alias output_stager`
        else
-         submit -N $jobName -o $stdoutDir/ -l walltime=$stager_time,size=$stager_npes -v datedir=$tempHistoryDateDir,stdout=$stdoutDir/ `alias output_stager`
+         submit \
+         -N $jobName \
+         -o $stdoutDir/ \
+         -l walltime=$output_stager_time,size=$output_stager_npes \
+         -v datedir=$tempHistoryDateDir,stdout=$stdoutDir/ \
+         `alias output_stager`
        endif
        unset jobName
        popd

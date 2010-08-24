@@ -11,10 +11,6 @@
   unalias *
   set beginruntime = `date "+%s"`
 
-  source $MODULESHOME/init/csh
-  module use -a /ncrc/home2/fms/local/modulefiles
-  module load fre
-
   if ( ! $?datedir ) then
     set datedir = ""
     if ( $?1 ) then
@@ -22,18 +18,24 @@
     endif
   endif
 
-  if ( ! $?project ) then
-    set project = ""
-    if ( $?2 ) then
-      set project = "-A $2"
-    endif
-  else
-    set project = "-A $project"
-  endif
+set project = ""
+#  if ( ! $?project ) then
+#    set project = ""
+#    if ( $?2 ) then
+#      set project = "-A $2"
+#    endif
+#  else
+#    set project = "-A $project"
+#  endif
 
   set stdoutopt = ''
   if ( $?stdout ) then
-    set stdoutopt = "-o $stdout"
+    set stdoutopt = "-o $stdout/$PBS_JOBNAME.$PBS_JOBID.save_file"
+  endif
+
+  set freppcmd = ''
+  if ( $?frepp ) then
+    set freppcmd = "$frepp"
   endif
 
 ########################################################################
@@ -49,6 +51,15 @@
 ########################################################################
 #---------- only highly premeditated user changes below here -----------
 ########################################################################
+echo ===================================================================
+echo mppnccombine=$mppnccombine
+echo send_file=$send_file
+echo PBS_O_WORKDIR/=$PBS_O_WORKDIR/
+echo datedir=$datedir
+echo project=$project
+echo stdoutopt=$stdoutopt
+echo submit=`which submit`
+
 if ( ! -d "$datedir" ) then
    echo "ERROR: datedir '$datedir' is not a directory"
    echo "ERROR: Please provide datedir as a command line argument"
@@ -117,7 +128,7 @@ rmdir $datedir
 pushd ..
 set myarchivedir = `basename $cwd`
 popd
-if ( `echo $myarchivedir | egrep -c '^[0-9]*$'` ) then
+if ( `echo $myarchivedir | egrep -c '^[0-9]+''$'` ) then
 if ( -f ../../history/$arfile ) then
    ls -1 $arfile ../../history/$arfile | ardiff
    if ( $status ) then
@@ -139,14 +150,37 @@ endif
 cd $PBS_O_WORKDIR
 submit -v file=$datedir:h/$arfile $send_file
 
-##SEND FILE TO HSI
-#cd $datedir:h
-#set outpath = `echo $datedir:h/$arfile | perl -pe "s/.*?$USER\///" | perl -pe '/\// ? s/(.*)\/.*/$1/ : s/.*/./'`
-#echo outpath is $outpath
-#hsi "mkdir -p $outpath ; cd $outpath ; put $arfile"
-#if ( $status != 0 ) then
-#  echo "ERROR: in hsi"
-#endif
+#CALL FREPP     
+
+if ( $?frepp ) then
+
+   set tmplist = (`echo $freppcmd | sed 's/.* -x //'
+   set xmlfile = $tmplist[1]
+   set rxmlfile = /archive/$USER/ncrc/$xmlfile:t
+   gcp $xmlfile gfdl:$rxmlfile
+   set freppcmd = (`echo $freppcmd | sed "s,$xmlfile,$rxmlfile,")
+
+   cat >> $stdout/$PBS_JOBNAME.frepp <<EOF
+#!/bin/csh -f
+#PBS -l partition=noaa
+#PBS -N frepptest
+#PBS -l size=2
+#PBS -l walltime=00:10:00 
+
+#comment for now: -l pe ic.test
+
+source /opt/modules/default/init/tcsh
+module purge
+module load fre
+
+$freppcmd
+EOF
+
+   msub $stdout/$PBS_JOBNAME.frepp
+
+endif
+
+#END OF SCRIPT
 
 unset echo
 set endruntime = `date "+%s"`

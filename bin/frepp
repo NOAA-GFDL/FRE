@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 # -*- cperl -*-
-# $Id: frepp,v 18.0.2.30 2010/08/20 19:18:04 arl Exp $
+# $Id: frepp,v 18.0.2.31 2010/08/24 16:50:06 fms Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: History/diagnostics post-processing
 # ------------------------------------------------------------------------------
@@ -33,7 +33,7 @@ use vars qw( $maxyrs $maxdisk $cubic $nlat $nlon $interpMethod $getgridspec $bas
 
   package frepp;
 
-  use constant VERSION => '$Id: frepp,v 18.0.2.30 2010/08/20 19:18:04 arl Exp $';
+  use constant VERSION => '$Id: frepp,v 18.0.2.31 2010/08/24 16:50:06 fms Exp $';
 
 #Usage:    $relfrepp [ -AB:C:O:RY:Z:c:d:f:hlmMp:oqr:S:st:u:vx:z ] experiment [ experiment2 ... ]                 
   use constant OPTLIST =>
@@ -212,7 +212,7 @@ if ( $opt_M and not $opt_p ) { $opt_M = "#\$ -m e";} else { $opt_M = ""; }
 
 if ( $opt_O ) { print STDERR "NOTE: There has been a change to the behavior of the -O option. Your scripts will be written directly to '$opt_O' and not to '$opt_O/scripts/postProcess'\n"; }
 
-$versionId = ' $Id: frepp,v 18.0.2.30 2010/08/20 19:18:04 arl Exp $';
+$versionId = ' $Id: frepp,v 18.0.2.31 2010/08/24 16:50:06 fms Exp $';
 
 $perlerrors = "";
 $component = "";
@@ -719,7 +719,7 @@ endif
 
 if ( "\$fregrid_wt" != '' ) then
    $time_hsmget hsmget -t -q -a $opt_d -p $ptmpDir/history -w $tmphistdir \$fregrid_in_date.nc/\\*land_static\\*
-   ln -s \$histDir/\$fregrid_in_date.nc/*land_static.nc .
+   ln -s \$histDir/\$fregrid_in_date.nc/*land_static* .
 endif
 
 EOF
@@ -2341,7 +2341,7 @@ sub annualTS {
 #####################################
 echo 'timeSeries ($component $freq ts from $source)'
 cd \$work
-find \$work/* -maxdepth 1 -exec rm -rf {} \;
+find \$work/* -maxdepth 1 -exec rm -rf {} \\;
 set outdir = $outdir
 if ( ! -e \$outdir ) mkdir -p \$outdir
 EOF
@@ -2543,7 +2543,7 @@ EOF
 #####################################
 echo 'timeSeries ($component seasonal from monthly ts )'
 cd \$work
-find \$work/* -maxdepth 1 -exec rm -rf {} \;
+find \$work/* -maxdepth 1 -exec rm -rf {} \\;
 set outdir = $outdir
 if ( ! -e \$outdir ) mkdir -p \$outdir
 $time_dmget dmget -d $reqpath "$component.$tBEGf-$tENDf.*.nc"
@@ -2782,7 +2782,7 @@ sub monthlyAVfromhist {
 #####################################
 echo 'timeAverage ($component $src $interval averages)'
 cd \$work   
-find \$work/* -maxdepth 1 -exec rm -rf {} \;
+find \$work/* -maxdepth 1 -exec rm -rf {} \\;
 set outdir = $outdir 
 if ( ! -e \$outdir ) mkdir -p \$outdir
 EOF
@@ -2841,7 +2841,7 @@ EOF
    my $fregrid_wt = '';
    if ( $component =~/land/ and $dtvars{all_land_static} =~/\bland_frac\b/ ) {
       print "       land_frac found, weighting exchange grid cell with $hDates[0]\${histmonth}01.land_static\n" if $opt_v;
-      $fregrid_wt = "--weight_file '$hDates[0]\${histmonth}01.land_static' --weight_field 'land_frac'";
+      $fregrid_wt = "--weight_file $hDates[0]\${histmonth}01.land_static --weight_field land_frac";
    }
    $csh .= <<EOF;
 @ i ++
@@ -3013,7 +3013,7 @@ echo 'timeAverage ($component $src averages)'
 set outdir = $outdir 
 if ( ! -e \$outdir ) mkdir -p \$outdir
 cd \$work
-find \$work/* -maxdepth 1 -exec rm -rf {} \;
+find \$work/* -maxdepth 1 -exec rm -rf {} \\;
 EOF
    if ($opt_z) { $csh .= begin_systime(); }
 
@@ -3059,7 +3059,7 @@ if ($cubic == 2) { #CUBIC to LATLON
    my $fregrid_wt = '';
    if ( $component =~/land/ and $dtvars{all_land_static} =~/\bland_frac\b/ ) {
       print "       land_frac found, weighting exchange grid cell with $hDate.land_static\n" if $opt_v;
-      $fregrid_wt = "--weight_file '$hDate.land_static' --weight_field 'land_frac'";
+      $fregrid_wt = "--weight_file $hDate.land_static --weight_field land_frac";
    }
    $csh .= <<EOF;
 @ i ++
@@ -3203,7 +3203,7 @@ set outdir = $outdir
 if ( ! -e \$outdir ) mkdir -p \$outdir
 set anndir = $ppRootDir/$component/av/annual_1yr
 cd \$work
-find \$work/* -maxdepth 1 -exec rm -rf {} \;
+find \$work/* -maxdepth 1 -exec rm -rf {} \\;
 EOF
    if ($opt_z) { $csh .= begin_systime(); }
 
@@ -3345,7 +3345,7 @@ sub monthlyTSfromdailyTS {
 #####################################
 echo 'timeSeries ($component $freq calculated from $avgatt TS)'
 cd \$work
-find \$work/* -maxdepth 1 -exec rm -rf {} \;
+find \$work/* -maxdepth 1 -exec rm -rf {} \\;
 set outdir = $outdir
 if ( ! -e \$outdir ) mkdir -p \$outdir
 
@@ -3598,7 +3598,7 @@ sub directTS{
 #####################################
 echo 'timeSeries ($component $freq from $source)'
 cd \$work
-find \$work/* -maxdepth 1 -exec rm -rf {} \;
+find \$work/* -maxdepth 1 -exec rm -rf {} \\;
 set outdir = $outdir
 if ( ! -e \$outdir ) mkdir -p \$outdir
 
@@ -3648,7 +3648,7 @@ EOF
             my $fregrid_wt = '';
             if ( $component =~/land/ and $dtvars{all_land_static} =~/\bland_frac\b/ ) {
                print "       land_frac found, weighting exchange grid cell with $hDate.land_static\n" if $opt_v;
-               $fregrid_wt = "--weight_file '$hDate.land_static' --weight_field 'land_frac'";
+               $fregrid_wt = "--weight_file $hDate.land_static --weight_field land_frac";
             }
             $csh .= <<EOF;
 
@@ -3705,7 +3705,7 @@ EOF
             my $fregrid_wt = '';
             if ( $component =~/land/ and $dtvars{all_land_static} =~/\bland_frac\b/ ) {
                print "       land_frac found, weighting exchange grid cell with $hDate.land_static\n" if $opt_v;
-               $fregrid_wt = "--weight_file '$hDate.land_static' --weight_field 'land_frac'";
+               $fregrid_wt = "--weight_file $hDate.land_static --weight_field land_frac";
             }
             $csh .= <<EOF;
     set fregrid_wt = "$fregrid_wt"
@@ -3881,7 +3881,7 @@ sub monthlyAVfromav {
 #####################################
 echo 'timeAverage ($component $src $interval averages from $subint yr averages)'
 cd \$work   
-find \$work/* -maxdepth 1 -exec rm -rf {} \;
+find \$work/* -maxdepth 1 -exec rm -rf {} \\;
 set outdir = $outdir 
 if ( ! -e \$outdir ) mkdir -p \$outdir
 
@@ -3965,7 +3965,7 @@ echo 'timeAverage ($component $src $interval averages from $subint yr averages)'
 set outdir = $outdir 
 if ( ! -e \$outdir ) mkdir -p \$outdir
 cd \$work
-find \$work/* -maxdepth 1 -exec rm -rf {} \;
+find \$work/* -maxdepth 1 -exec rm -rf {} \\;
 EOF
    if ($opt_z) { $csh .= begin_systime(); }
 
@@ -4037,7 +4037,7 @@ sub staticvars {
 if ( ! -e $ppRootDir/$component/$component.static.nc ) then
    echo 'static variables ($component)'
    cd \$work
-   find \$work/* -maxdepth 1 -exec rm -rf {} \;
+   find \$work/* -maxdepth 1 -exec rm -rf {} \\;
    mkdir -p $ppRootDir/$component
    $time_hsmget hsmget -t -q -a $opt_d -p $ptmpDir/history -w $tmphistdir $hDate.nc/\\*$diag_source\\*
    $time_hsmget hsmget -t -q -a $refinedir -p $ptmpDir/history_refineDiag -w $tmphistdir $hDate.nc/\\*$diag_source\\*
@@ -4056,7 +4056,7 @@ EOF
 if ( ! -e $ppRootDir/$component/$component.static.tile6.nc ) then
    echo 'static variables ($component)'
    cd \$work
-   find \$work/* -maxdepth 1 -exec rm -rf {} \;
+   find \$work/* -maxdepth 1 -exec rm -rf {} \\;
    mkdir -p $ppRootDir/$component
    $time_hsmget hsmget -t -q -a $opt_d -p $ptmpDir/history -w $tmphistdir $hDate.nc/\\*$diag_source\\*
    $time_hsmget hsmget -t -q -a $refinedir -p $ptmpDir/history_refineDiag -w $tmphistdir $hDate.nc/\\*$diag_source\\*
@@ -4090,7 +4090,7 @@ EOF
       my $fregrid_wt = '';
       if ( $component =~/land/ and $dtvars{all_land_static} =~/\bland_frac\b/ ) {
          print "       land_frac found, weighting exchange grid cell with $hDate.land_static\n" if $opt_v;
-         $fregrid_wt = "--weight_file '$hDate.land_static' --weight_field 'land_frac'";
+         $fregrid_wt = "--weight_file $hDate.land_static --weight_field land_frac";
       }
       my $cubiccsh = <<EOF;
 
@@ -4249,7 +4249,7 @@ sub TSfromts {
 #####################################
 echo 'timeSeries ($component $freq $chunkLength ts from $subchunk yr ts)'
 cd \$work   
-find \$work/* -maxdepth 1 -exec rm -rf {} \;
+find \$work/* -maxdepth 1 -exec rm -rf {} \\;
 set outdir = $outdir 
 if ( ! -e \$outdir ) mkdir -p \$outdir
 
@@ -4410,7 +4410,7 @@ sub seaTSfromts {
 #####################################
 echo 'timeSeries ($component $freq $chunkLength ts from $subchunk yr ts)'
 cd \$work   
-find \$work/* -maxdepth 1 -exec rm -rf {} \;
+find \$work/* -maxdepth 1 -exec rm -rf {} \\;
 set outdir = $outdir 
 if ( ! -e \$outdir ) mkdir -p \$outdir
 
@@ -4541,7 +4541,7 @@ sub seasonalAVfromhist {
 #####################################
 echo 'timeAverage ($component $src $interval averages)'
 cd \$work   
-find \$work/* -maxdepth 1 -exec rm -rf {} \;
+find \$work/* -maxdepth 1 -exec rm -rf {} \\;
 set outdir = $outdir 
 if ( ! -e \$outdir ) mkdir -p \$outdir
 mkdir out
@@ -4702,7 +4702,7 @@ EOF
          my $fregrid_wt = '';
          if ( $component =~/land/ and $dtvars{all_land_static} =~/\bland_frac\b/ ) {
             print "       land_frac found, weighting exchange grid cell with $hDate.land_static\n" if $opt_v;
-            $fregrid_wt = "--weight_file '$hDate.land_static' --weight_field 'land_frac'";
+            $fregrid_wt = "--weight_file $hDate.land_static --weight_field land_frac";
          }
          $csh .= <<EOF;
     set fregrid_wt = "$fregrid_wt"
@@ -4796,7 +4796,7 @@ EOF
       my $fregrid_wt = '';
       if ( $component =~/land/ and $dtvars{all_land_static} =~/\bland_frac\b/ ) {
          print "       land_frac found, weighting exchange grid cell with $hDate.land_static\n" if $opt_v;
-         $fregrid_wt = "--weight_file '$hDate.land_static' --weight_field 'land_frac'";
+         $fregrid_wt = "--weight_file $hDate.land_static --weight_field land_frac";
       }
       $csh .= <<EOF;
 @ i ++
@@ -5068,7 +5068,7 @@ sub seasonalAVfromav {
 #####################################
 echo 'timeAverage ($component $src $interval averages from $subint yr averages)'
 cd \$work   
-find \$work/* -maxdepth 1 -exec rm -rf {} \;
+find \$work/* -maxdepth 1 -exec rm -rf {} \\;
 set outdir = $outdir 
 if ( ! -e \$outdir ) mkdir -p \$outdir
 

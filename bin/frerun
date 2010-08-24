@@ -1,7 +1,7 @@
 #!/usr/bin/perl
 # -*- cperl -*-
 #
-# $Id: frerun,v 18.0.2.15 2010/08/20 20:56:40 afy Exp $
+# $Id: frerun,v 18.0.2.16 2010/08/24 00:38:13 afy Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: Program to Create a Script to Run a Model
 # ------------------------------------------------------------------------------
@@ -74,6 +74,13 @@
 # afy    Ver  14.06  Use new module FRETemplate (new set* subs)     August 10
 # afy    Ver  14.07  Modify setMPI (pass the ./$executable:t)       August 10
 # afy    Ver  15.00  Correction for the --dual option               August 10
+# afy    Ver  16.00  Modify option --transfer (negatable)           August 10
+# afy    Ver  16.01  Revive option --submit-staged                  August 10
+# afy    Ver  16.02  Modify option --submit (don't allow values)    August 10
+# afy    Ver  16.03  Modify option --validate (no aliases)          August 10
+# afy    Ver  16.04  Modify option --version (low case)             August 10
+# afy    Ver  16.05  Default option --dual from a property          August 10
+# afy    Ver  16.06  Default option --transfer from a property      August 10
 # ------------------------------------------------------------------------------
 # Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2000-2010
 # Designed and written by V. Balaji, Amy Langenhorst and Aleksey Yakovlev
@@ -103,7 +110,7 @@ use FREUtil();
 
   package frerun;
 
-  use constant VERSION => '$Id: frerun,v 18.0.2.15 2010/08/20 20:56:40 afy Exp $';
+  use constant VERSION => '$Id: frerun,v 18.0.2.16 2010/08/24 00:38:13 afy Exp $';
 
   use constant OPTLIST =>
   (
@@ -117,16 +124,17 @@ use FREUtil();
     'namelist|N',
     'overwrite|o',
     'regression|r=s',
-    'transfer|T',
+    'submit-staged|S',
+    'transfer|T!',
     'unique|u',
     'execute|E',
     'help|h',
     'npes|n=i',
     'platform|p=s',
-    'validate|S',
-    'submit|s:s',
+    'submit|s',
     'target|t=s',
-    'Version|V',
+    'validate',
+    'version|V',
     'verbose|v+',
     'walltime|w=i',
     'xmlfile|x=s'
@@ -145,8 +153,6 @@ use FREUtil();
   
   use constant NPES_DEFAULT => 2;
   use constant WALLTIME_DEFAULT => 30;
-  
-  use constant DUAL_RUN_DEFAULT => FREDefaults::SiteIsCMRS();
   
 }
 
@@ -169,7 +175,6 @@ use FREUtil();
     my $tgt = FREDefaults::Target();
     my $nps = frerun::NPES_DEFAULT;
     my $wtm = frerun::WALLTIME_DEFAULT;
-    my $ddr = (frerun::DUAL_RUN_DEFAULT) ? 'on' : 'off';
     my $beg = "\e[0;4m";
     my $end = "\e[m";
     return
@@ -177,26 +182,27 @@ use FREUtil();
       "\n",
       "  Usage: $self [option|experiment] ...\n\n",
       "  Options:\n\n",
-      "   -a,          --archive            save model output in the ${beg}a${end}rchive (negatable, default is on)\n",
-      "   -c,          --check              ${beg}c${end}heck model output with the main model run (which makes sense for unique runs only)\n",
+      "   -a,          --archive            save the model output in the ${beg}a${end}rchive (negatable, default is on)\n",
+      "   -c,          --check              ${beg}c${end}heck the model output with the main model run (which makes sense for unique runs only)\n",
       "   -C,          --combine-history    ${beg}c${end}ombine history files after each segment run (negatable, default is on)\n",
-      "   -g STRING,   --debug=STRING       run in ${beg}d${end}ebug mode STRING (possible values are 'totalview'|'setup')\n",
-      "   -D,          --dual               create a pair of runscripts - the main one and the ${beg}d${end}ual unique one (negatable, default is $ddr)\n",
+      "   -g STRING,   --debug=STRING       run in debu${beg}g${end} mode STRING (possible values are 'totalview' and 'setup')\n",
+      "   -D,          --dual               create a pair of runscripts - the main one and the ${beg}d${end}ual one (negatable, default depends on site)\n",
       "   -e,          --extend             ${beg}e${end}xtend default run of existing experiment\n",
       "   -L,          --logging            enable batch system ${beg}l${end}ogging (negatable, default is on)\n",
       "   -N,          --namelist           print all the ${beg}n${end}amelists with all substitutions and overrides\n", 
       "   -o,          --overwrite          ${beg}o${end}verwrite default run of existing experiment\n", 
       "   -r STRING,   --regression=STRING  run in ${beg}r${end}egression test mode STRING with minimal output processing\n",
-      "   -T,          --transfer           ${beg}t${end}ransfer remotedly created ascii and restart files back to GFDL\n",
-      "   -u,          --unique             create new ${beg}u${end}nique run of existing experiment\n\n", 
+      "   -S,          --submit-staged      ${beg}s${end}ubmit all the created scripts as batch jobs with input data staging\n",
+      "   -T,          --transfer           ${beg}t${end}ransfer all the remotedly created model output back to GFDL (negatable, default depends on site)\n",
+      "   -u,          --unique             create a new ${beg}u${end}nique run of existing experiment\n\n", 
       "   -E,          --execute            ${beg}e${end}xecute all the created scripts in the current session\n", 
       "   -h,          --help               print ${beg}h${end}elp message and exit\n",
       "   -n NUM,      --npes=NUM           ${beg}n${end}umber of processors to use for input data staging (default is $nps)\n",
       "   -p STRING,   --platform=STRING    hardware and software ${beg}p${end}latform STRING (default is '$pfm')\n", 
-      "   -S,          --validate           validate the FILE against the ${beg}s${end}chema before processing\n",
-      "   -s [STRING], --submit[=STRING]    ${beg}s${end}ubmit all the created scripts as batch jobs\n",
+      "   -s,          --submit             ${beg}s${end}ubmit all the created scripts as batch jobs\n",
       "   -t STRING,   --target=STRING      use compilation directives, ${beg}t${end}argeted by STRING (default is '$tgt')\n", 
-      "   -V,          --Version            print the tool ${beg}v${end}ersion and exit\n",
+      "                --validate           validate the FILE against its XML schema before processing\n",
+      "   -V,          --version            print the tool ${beg}v${end}ersion and exit\n",
       "   -v,          --verbose            get ${beg}v${end}erbose messages (repeat the option to increase verbosity level)\n", 
       "   -w NUM,      --walltime=NUM       maximum ${beg}w${end}all time (in minutes) to use for input data staging (default is $wtm)\n", 
       "   -x FILE,     --xmlfile=FILE       experiment suite ${beg}X${end}ML configuration FILE (default is '$cwd/$xml')\n\n", 
@@ -229,6 +235,9 @@ use FREUtil();
       "      The --dual option is recognized for production runs only.\n",    
       "   Use --regression to run a regression test instead of the <production> run.\n", 
       "      Regression tests have minimal treatment of output files.\n",
+      "   Use --submit-staged to automatically submit all the created scripts in the input data staging mode.\n",
+      "      The same script is submitted twice with different parameters, so it works as the input data stager at first,\n",
+      "      then it works normally with input data, prepared by the stager.\n",  
       "   Use --platform to pick a platform for experiment(s).\n", 
       "      The <platform> node in the experiment suite configuration file is used\n", 
       "      to set platform-specific data and instructions.\n",
@@ -242,10 +251,7 @@ use FREUtil();
       "   Use --execute to run the created script right away.\n",
       "      If the target platform is not where $self is being run, do not specify --execute.\n", 
       "      Submit as a batch job or run by hand on the right platform.\n",
-      "   Use --submit to automatically submit all the created scripts as batch jobs.\n",
-      "      The --submit=staged option can be used to automatically submit the scripts in the input data staging mode.\n",
-      "      The same script is submitted twice with different parameters, so it works as an input data stager at first,\n",
-      "      then it works normally with input data, prepared by the stager.\n\n"  
+      "   Use --submit to automatically submit all the created scripts as batch jobs.\n\n"
     );
   }
 
@@ -1600,14 +1606,14 @@ use FREUtil();
 	      return (0, FREDefaults::STATUS_FS_GENERIC_PROBLEM);
 	    }
 	  }
-	  elsif (exists($o{submit}) and !$o{submit}) 
+	  elsif ($o{submit}) 
 	  {
 	    $fre->out(2, "Executing 'qsub $n'...");
 	    my $qsubMsg = qx(qsub $n);
 	    print "$qsubMsg";
 	    return ($s, FREDefaults::STATUS_OK);
 	  }
-	  elsif (exists($o{submit}) and ($o{submit} eq 'staged'))
+	  elsif ($o{'submit-staged'})
 	  {
 	    my $inputDir = frerun::outputScriptInputDir($fre, $z);
             my $coresPerNode = $fre->property('FRE.machine.coresPerNode');
@@ -1977,47 +1983,9 @@ use FREUtil();
     'xmlfile'		=> FREDefaults::XMLFile()
   );
 
-  %opt = (%opt, 'dual' => 1) if frerun::DUAL_RUN_DEFAULT;
-
   Getopt::Long::GetOptions(\%opt, frerun::OPTLIST) or (print frerun::Usage() and exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM);
   if ($opt{Version}) {print frerun::VERSION,"\n" and exit FREDefaults::STATUS_OK;}
   if ($opt{help}) {print frerun::Help() and exit FREDefaults::STATUS_OK;}
-  
-  if ($opt{extend} + $opt{overwrite} + $opt{unique} > 1)
-  {
-    FREMsg::out($opt{verbose}, 0, "Options --extend, --overwrite and --unique are mutually exclusive - only one of them can be present");
-    exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
-  }
-  
-  if ($opt{dual} and $opt{unique})
-  {
-    FREMsg::out($opt{verbose}, 0, "Options --dual and --unique are mutually exclusive - only one of them can be present. Try using --nodual");
-    exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
-  }
-
-  if (exists($opt{submit}) and $opt{submit} and ($opt{submit} ne 'staged'))
-  {
-    FREMsg::out($opt{verbose}, 0, "Option --submit can be empty or have the 'staged' value only. The value '$opt{submit}' isn't allowed");
-    exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
-  }
-
-  if ($opt{check} and !$opt{unique})
-  {
-    FREMsg::out($opt{verbose}, 1, "Option --check is allowed only when the option --unique is present, the --check option is ignored");
-    delete $opt{check};
-  }
-
-  if ($opt{check} and $opt{transfer})
-  {
-    FREMsg::out($opt{verbose}, 1, "Option --transfer is not allowed when the option --check is present, the --transfer option is ignored");
-    delete $opt{transfer};
-  }
-
-  if ($opt{dual} and $opt{regression})
-  {
-    FREMsg::out($opt{verbose}, 1, "Options --dual and --regression are incompatible, the --dual option is ignored");
-    delete $opt{dual};
-  }
   
   if (scalar(@ARGV) == 0)
   {
@@ -2026,7 +1994,49 @@ use FREUtil();
     exit FREDefaults::STATUS_COMMAND_NO_EXPERIMENTS;
   }
 
+  if ($opt{extend} + $opt{overwrite} + $opt{unique} > 1)
+  {
+    FREMsg::out($opt{verbose}, 0, "Options --extend, --overwrite and --unique are mutually exclusive - only one of them can be present");
+    exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
+  }
+  
+  if ($opt{check} and !$opt{unique})
+  {
+    FREMsg::out($opt{verbose}, 1, "Option --check is allowed only when the option --unique is present, the --check option is ignored");
+    delete $opt{check};
+  }
+
+  if ($opt{dual} and $opt{regression})
+  {
+    FREMsg::out($opt{verbose}, 1, "Options --dual and --regression are incompatible, the --dual option is ignored");
+    delete $opt{dual};
+  }
+  
+  if ($opt{dual} and $opt{unique})
+  {
+    FREMsg::out($opt{verbose}, 0, "Options --dual and --unique are incompatible, the --dual option is ignored");
+    delete $opt{dual};
+  }
+
+  if ($opt{transfer} and $opt{check})
+  {
+    FREMsg::out($opt{verbose}, 1, "Option --transfer is not allowed when the option --check is present, the --transfer option is ignored");
+    delete $opt{transfer};
+  }
+
   my $fre = FRE->new('frerun', %opt) or exit FREDefaults::STATUS_FRE_GENERIC_PROBLEM;
+
+  if (!exists($opt{dual}) and !$opt{regression} and !$opt{unique} and $fre->property('FRE.option.dual.default'))
+  {
+    FREMsg::out($opt{verbose}, 1, "Option --dual has been automatically added");
+    %opt = (%opt, 'dual' => 1);
+  }
+
+  if (!exists($opt{transfer}) and !$opt{check} and $fre->property('FRE.option.transfer.default'))
+  {
+    FREMsg::out($opt{verbose}, 1, "Option --transfer has been automatically added");
+    %opt = (%opt, 'transfer' => 1);
+  }
 
   my @exps = ();
   foreach my $expName (@ARGV)
@@ -2151,7 +2161,7 @@ use FREUtil();
 	  $fre->out(2, "A runscript for the experiment '$expName' has been created successfully");
 	  if ($opt{dual})
 	  {
-	    (my $rc, $status) = frerun::processProduction($exp, \%nml, (%opt, 'check' => 1, 'extend' => 0, 'overwrite' => 0, 'unique' => 1));
+	    (my $rc, $status) = frerun::processProduction($exp, \%nml, (%opt, 'check' => 1, 'extend' => 0, 'overwrite' => 0, 'transfer' => 0, 'unique' => 1));
 	    if ($rc)
 	    {
 	      $fre->out(2, "A dual runscript for the experiment '$expName' has been created successfully");
