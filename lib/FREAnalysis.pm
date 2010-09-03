@@ -577,6 +577,7 @@ sub filltemplate {
 #    my ($aScriptout,$aScript, $workdir, $mode, $momGrid,$gridspec,$staticfile,$asrcdir,$asrcfile,$expt,$figureDir,$astartYear,$aendYear,$databegyr,$dataendyr,$clnumber,$specify1year,$archivedir) = @_; 
     my $printout = "$aScriptout.printout";  #change this to send the stdout to stdoutdir... but will break analysis scripts. -arl
     my $tmpsch = `cat $aScript`;
+    my $fremodule = `echo \$LOADEDMODULES | tr ':' '\n' | egrep '^fre/.+'`;
     #
     $tmpsch =~ s/#\$ -o.*/#\$ -o $printout/;
     $tmpsch =~ s/#\$ -P.*//;
@@ -607,6 +608,7 @@ sub filltemplate {
     $tmpsch =~ s/set nlon\s*$/set nlon = $arrayofExptsH_ref->[0]->{nlon}/m;
     $tmpsch =~ s/set nlat\s*$/set nlat = $arrayofExptsH_ref->[0]->{nlat}/m;
     $tmpsch =~ s/set frexml\s*$/set frexml = $frexml/m;
+    $tmpsch =~ s/set fremodule\s*$/set fremodule = $fremodule/m;
     $tmpsch =~ s/set stdoutdir\s*$/set stdoutdir = $stdoutdir/m;
     $tmpsch =~ s/setenv FREROOT.*/setenv FREROOT $ENV{FREROOT}/m;
     

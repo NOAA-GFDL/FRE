@@ -56,8 +56,7 @@ MAKEFLAGS +=--jobs=8
 ifneq ($(REPRO),)
 CFLAGS += $(CFLAGS_REPRO)
 FFLAGS += $(FFLAGS_REPRO)
-endif
-ifneq ($(DEBUG),)
+else ifneq ($(DEBUG),)
 CFLAGS += $(CFLAGS_DEBUG)
 FFLAGS += $(FFLAGS_DEBUG)
 else

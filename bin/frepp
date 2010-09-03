@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 # -*- cperl -*-
-# $Id: frepp,v 18.0.2.31 2010/08/24 16:50:06 fms Exp $
+# $Id: frepp,v 18.0.2.37 2010/08/31 17:46:17 fms Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: History/diagnostics post-processing
 # ------------------------------------------------------------------------------
@@ -33,7 +33,7 @@ use vars qw( $maxyrs $maxdisk $cubic $nlat $nlon $interpMethod $getgridspec $bas
 
   package frepp;
 
-  use constant VERSION => '$Id: frepp,v 18.0.2.31 2010/08/24 16:50:06 fms Exp $';
+  use constant VERSION => '$Id: frepp,v 18.0.2.37 2010/08/31 17:46:17 fms Exp $';
 
 #Usage:    $relfrepp [ -AB:C:O:RY:Z:c:d:f:hlmMp:oqr:S:st:u:vx:z ] experiment [ experiment2 ... ]                 
   use constant OPTLIST =>
@@ -87,7 +87,7 @@ use vars qw( $maxyrs $maxdisk $cubic $nlat $nlon $interpMethod $getgridspec $bas
 
    Getopt::Long::GetOptions(\%opt, frepp::OPTLIST) or (print 'bad opts' and die "\n");
    if ($opt{Version}) {print frepp::VERSION,"\n" and exit(0);}
-   use vars qw( $opt_d $opt_D $opt_f $opt_l $opt_o $opt_p $opt_M $opt_m $opt_q $opt_t $opt_r $opt_x $opt_s $opt_v $opt_V  $opt_A $opt_B $opt_C $opt_O $opt_R $opt_S $opt_Y $opt_Z $opt_c $opt_h $opt_o $opt_u $opt_z );
+   use vars qw( $opt_d $opt_D $opt_f $opt_l $opt_o $opt_p $opt_M $opt_m $opt_q $opt_t $opt_r $opt_x $opt_s $opt_v $opt_V  $opt_A $opt_B $opt_C $opt_O $opt_R $opt_S $opt_Y $opt_Z $opt_c $opt_H $opt_h $opt_o $opt_u $opt_z );
 $opt_d=$opt{dir};
 $opt_f=$opt{filelist};
 $opt_l=$opt{limitstatic};
@@ -111,6 +111,7 @@ $opt_S=$opt{Segment};
 $opt_Y=$opt{AnalysisStartYear};
 $opt_Z=$opt{AnalysisEndYear};
 $opt_c=$opt{component};
+$opt_H=$opt{refineDiagOnly};
 $opt_h=$opt{help};
 $opt_o=$opt{overwrite};
 $opt_u=$opt{unique};
@@ -212,7 +213,7 @@ if ( $opt_M and not $opt_p ) { $opt_M = "#\$ -m e";} else { $opt_M = ""; }
 
 if ( $opt_O ) { print STDERR "NOTE: There has been a change to the behavior of the -O option. Your scripts will be written directly to '$opt_O' and not to '$opt_O/scripts/postProcess'\n"; }
 
-$versionId = ' $Id: frepp,v 18.0.2.31 2010/08/24 16:50:06 fms Exp $';
+$versionId = ' $Id: frepp,v 18.0.2.37 2010/08/31 17:46:17 fms Exp $';
 
 $perlerrors = "";
 $component = "";
@@ -467,6 +468,7 @@ EOF
    if ( $opt_d ) { $version_info .= "-d $opt_d "; }
    if ( $opt_u ) { $version_info .= "-u $opt_u "; }
    if ( $opt_r ) { $version_info .= "-r $opt_r "; }
+   if ( $opt_H ) { $version_info .= "-H "; }
    if ( $opt_m ) { $version_info .= "-m "; }
    $version_info .= "$expt";
    my $outscript = "$outscriptdir/$expt"."_$opt_t";
@@ -584,17 +586,19 @@ EOF
 
    if ( $opt_f or $opt_D ) {
       #separate mppnccombine from rest of script due to splitting components
-      $cshscripttmpl .= "\n/usr/bin/perl $absfrepp -x $abs_xml_path -t $opt_t -s -v ";
-      if ( $opt_d ) { $cshscripttmpl .= "-d $opt_d "; }
-      if ( $opt_u ) { $cshscripttmpl .= "-u $opt_u "; }
-      if ( $opt_c ) { $cshscripttmpl .= "-c $opt_c "; }
-      if ( $opt_m ) { $cshscripttmpl .= "-m "; }
-      if ( $opt_M ) { $cshscripttmpl .= "-M "; }
-      $cshscripttmpl .= "$expt\n";
-      $cshscripttmpl .= errorstr("$relfrepp had a problem creating next script $expt"."_$opt_t");
+      unless ( $opt_H ) {
+         $cshscripttmpl .= "\n/usr/bin/perl $absfrepp -x $abs_xml_path -t $opt_t -s -v ";
+         if ( $opt_d ) { $cshscripttmpl .= "-d $opt_d "; }
+         if ( $opt_u ) { $cshscripttmpl .= "-u $opt_u "; }
+         if ( $opt_c ) { $cshscripttmpl .= "-c $opt_c "; }
+         if ( $opt_m ) { $cshscripttmpl .= "-m "; }
+         if ( $opt_M ) { $cshscripttmpl .= "-M "; }
+         $cshscripttmpl .= "$expt\n";
+         $cshscripttmpl .= errorstr("$relfrepp had a problem creating next script $expt"."_$opt_t");
+      }
 
       if ( $opt_D and $opt_p ) {
-         $cshscripttmpl .= call_frepp($abs_xml_path, $outscript, $opt_c, "") unless $opt{refineDiagOnly};
+         $cshscripttmpl .= call_frepp($abs_xml_path, $outscript, $opt_c, "");
          $cshscripttmpl .= errorstr("$relfrepp had a problem creating next script $expt"."_$opt_t");
       }
 
@@ -715,16 +719,43 @@ if (\$#attCmds > 0) then
    $time_ncatted ncatted -h -O \$attCmds \$fregrid_in.tile4.nc
    $time_ncatted ncatted -h -O \$attCmds \$fregrid_in.tile5.nc
    $time_ncatted ncatted -h -O \$attCmds \$fregrid_in.tile6.nc
+   #check_ncatted
 endif
 
 if ( "\$fregrid_wt" != '' ) then
    $time_hsmget hsmget -t -q -a $opt_d -p $ptmpDir/history -w $tmphistdir \$fregrid_in_date.nc/\\*land_static\\*
    ln -s \$histDir/\$fregrid_in_date.nc/*land_static* .
+   set fregrid_yr = `echo \$fregrid_in_date | cut -c 1-4`
+   foreach i ( 1 2 3 4 5 6 )
+      foreach fregrid_mo ( 02 03 04 05 06 07 08 09 10 11 12 )
+        if ( ! -e \${fregrid_yr}\${fregrid_mo}01.land_static.tile\$i.nc ) then
+           ln -s \${fregrid_yr}0101.land_static.tile\$i.nc \${fregrid_yr}\${fregrid_mo}01.land_static.tile\$i.nc
+        endif
+      end
+   end
 endif
 
-EOF
-    $call_fregrid .= $time_fregrid . <<'EOF';
- $FREGRID --input_mosaic $input_mosaic --input_file $fregrid_in --interp_method $interp_method --remap_file $fregrid_remap_file --nlon $nlon --nlat $nlat --scalar_field $interpvars $fregrid_wt
+$time_fregrid \$FREGRID --input_mosaic \$input_mosaic --input_file \$fregrid_in --interp_method \$interp_method --remap_file \$fregrid_remap_file --nlon \$nlon --nlat \$nlat --scalar_field \$interpvars \$fregrid_wt
+#check_fregrid
+
+$time_rm rm \$fregrid_in.tile?.nc
+$time_rm rm *.grid_spec.tile*.nc
+set renamevars = ( -h -d grid_xt,lon -d grid_yt,lat -v grid_xt,lon -v grid_yt,lat )
+set renameatts = ( -h -a long_name,lon,m,c,"longitude" -a long_name,lat,m,c,"latitude" -a bounds,lon,m,c,"lon_bnds" -a bounds,lat,m,c,"lat_bnds" )
+if (`ncdump -h \$fregrid_in.nc | grep -c ":coordinates = "`) then
+   set renameatts = ( \$renameatts -a coordinates,,d,, )
+endif 
+if (`ncexists -f \$fregrid_in.nc -v grid_xt_bnds`) then
+   $time_ncrename ncrename \$renamevars -v grid_xt_bnds,lon_bnds -v grid_yt_bnds,lat_bnds \$fregrid_in.nc
+   #check_ncrename
+   $time_ncatted ncatted \$renameatts -a long_name,lon_bnds,m,c,"longitude bounds" -a long_name,lat_bnds,m,c,"latitude bounds" \$fregrid_in.nc
+   #check_ncatted
+else
+   $time_ncrename ncrename \$renamevars \$fregrid_in.nc
+   #check_ncrename
+   $time_ncatted ncatted \$renameatts \$fregrid_in.nc
+   #check_ncatted
+endif
 EOF
 
    if ( $opt_A) {print STDERR "\n ANALYSIS ONLY mode, pp/ files will not be generated\n";}
@@ -1300,6 +1331,7 @@ sub call_frepp {
       if ( $opt_c ) { $csh .= "-c $component "; }
       if ( $opt_m ) { $csh .= "-m "; }
       if ( $opt_M ) { $csh .= "-M "; }
+      if ( $opt_H ) { $csh .= "-H "; }
       $csh .= "$expt\n";
       $csh .= errorstr("$relfrepp had a problem creating next script $expt"."_$nextyearf");
       $csh .= mailerrors($outscript);
@@ -1312,6 +1344,7 @@ sub call_frepp {
       if ( $opt_c ) { $csh .= "-c $component "; }
       if ( $opt_m ) { $csh .= "-m "; }
       if ( $opt_M ) { $csh .= "-M "; }
+      if ( $opt_H ) { $csh .= "-H "; }
       $csh .= "$expt\n";
       $csh .= errorstr("$relfrepp had a problem creating final analysis script $expt"."_$nextyearf");
       $csh .= mailerrors($outscript);
@@ -2843,6 +2876,10 @@ EOF
       print "       land_frac found, weighting exchange grid cell with $hDates[0]\${histmonth}01.land_static\n" if $opt_v;
       $fregrid_wt = "--weight_file $hDates[0]\${histmonth}01.land_static --weight_field land_frac";
    }
+   my $call_and_check_fregrid = $call_fregrid;
+   $call_and_check_fregrid =~ s/#check_fregrid/$check_fregrid/;
+   $call_and_check_fregrid =~ s/#check_ncrename/$check_ncrename/g;
+   $call_and_check_fregrid =~ s/#check_ncatted/$check_ncatted/g;
    $csh .= <<EOF;
 @ i ++
 end
@@ -2855,20 +2892,7 @@ end
    set ncvars_arg = -st23
    set variables = ( $variables )
    set fregrid_remap_file = $ppRootDir/$component/.fregrid_remap_file_\${nlon}_by_\${nlat}
-   $call_fregrid
-   $check_fregrid
-   $time_rm rm \$fregrid_in.tile?.nc
-   $time_rm rm *.grid_spec.tile*.nc
-   set renamevars = '-h -d grid_xt,lon -d grid_yt,lat -v grid_xt,lon -v grid_yt,lat'
-   set renameatts = '-h -a long_name,lon,m,c,"longitude" -a long_name,lat,m,c,"latitude"'
-   if (`ncexists -f \$fregrid_in.nc -v grid_xt_bounds`) then
-      set renamevars = ( \$renamevars -d grid_xt_bounds,lon_bounds -d grid_yt_bounds,lat_bounds -v grid_xt_bounds,lon_bounds -v grid_yt_bounds,lat_bounds )
-      set renameatts = ( \$renameatts '-a long_name,lon_bounds,m,c,"longitude bounds" -a long_name,lat_bounds,m,c,"latitude bounds"' )
-   endif
-   $time_ncrename ncrename \$renamevars \$fregrid_in.nc
-   $check_ncrename
-   $time_ncatted ncatted \$renameatts \$fregrid_in.nc
-   $check_ncatted
+   $call_and_check_fregrid
 
    mv \$fregrid_in.nc $component.$range.\$monthf.nc
    $time_ncatted ncatted -h -O -a filename,global,m,c,"$component.$range.\$monthf.nc" $component.$range.\$monthf.nc
@@ -3061,6 +3085,10 @@ if ($cubic == 2) { #CUBIC to LATLON
       print "       land_frac found, weighting exchange grid cell with $hDate.land_static\n" if $opt_v;
       $fregrid_wt = "--weight_file $hDate.land_static --weight_field land_frac";
    }
+   my $call_and_check_fregrid = $call_fregrid;
+   $call_and_check_fregrid =~ s/#check_fregrid/$check_fregrid/;
+   $call_and_check_fregrid =~ s/#check_ncrename/$check_ncrename/g;
+   $call_and_check_fregrid =~ s/#check_ncatted/$check_ncatted/g;
    $csh .= <<EOF;
 @ i ++
 end
@@ -3073,20 +3101,7 @@ end
     set ncvars_arg = -st23
     set variables = ( $variables )
     set fregrid_remap_file = $ppRootDir/$component/.fregrid_remap_file_\${nlon}_by_\${nlat}
-    $call_fregrid
-    $check_fregrid
-    $time_rm rm \$fregrid_in.tile?.nc
-    $time_rm rm *.grid_spec.tile*.nc
-    set renamevars = '-h -d grid_xt,lon -d grid_yt,lat -v grid_xt,lon -v grid_yt,lat'
-    set renameatts = '-h -a long_name,lon,m,c,"longitude" -a long_name,lat,m,c,"latitude"'
-    if (`ncexists -f \$fregrid_in.nc -v grid_xt_bounds`) then
-       set renamevars = ( \$renamevars -d grid_xt_bounds,lon_bounds -d grid_yt_bounds,lat_bounds -v grid_xt_bounds,lon_bounds -v grid_yt_bounds,lat_bounds )
-       set renameatts = ( \$renameatts '-a long_name,lon_bounds,m,c,"longitude bounds" -a long_name,lat_bounds,m,c,"latitude bounds"' )
-    endif
-    $time_ncrename ncrename \$renamevars \$fregrid_in.nc
-    $check_ncrename
-    $time_ncatted ncatted \$renameatts \$fregrid_in.nc
-    $check_ncatted
+    $call_and_check_fregrid
 
 mv \$fregrid_in.nc $component.$tENDf.ann.nc
 $time_ncatted ncatted -h -O -a filename,global,m,c,"$component.$tENDf.ann.nc" $component.$tENDf.ann.nc
@@ -3650,6 +3665,10 @@ EOF
                print "       land_frac found, weighting exchange grid cell with $hDate.land_static\n" if $opt_v;
                $fregrid_wt = "--weight_file $hDate.land_static --weight_field land_frac";
             }
+            my $call_and_check_fregrid = $call_fregrid;
+            $call_and_check_fregrid =~ s/#check_fregrid/$check_fregrid/;
+            $call_and_check_fregrid =~ s/#check_ncrename/$check_ncrename/g;
+            $call_and_check_fregrid =~ s/#check_ncatted/$check_ncatted/g;
             $csh .= <<EOF;
 
     set fregrid_wt = "$fregrid_wt"
@@ -3660,20 +3679,7 @@ EOF
     set ncvars_arg = -st23
     set variables = ( $variables )
     set fregrid_remap_file = $ppRootDir/$component/.fregrid_remap_file_\${nlon}_by_\${nlat}
-    $call_fregrid
-    $check_fregrid
-    $time_rm rm \$fregrid_in.tile?.nc
-    $time_rm rm *.grid_spec.tile*.nc
-    set renamevars = '-h -d grid_xt,lon -d grid_yt,lat -v grid_xt,lon -v grid_yt,lat'
-    set renameatts = '-h -a long_name,lon,m,c,"longitude" -a long_name,lat,m,c,"latitude"'
-    if (`ncexists -f \$fregrid_in.nc -v grid_xt_bounds`) then
-       set renamevars = ( \$renamevars -d grid_xt_bounds,lon_bounds -d grid_yt_bounds,lat_bounds -v grid_xt_bounds,lon_bounds -v grid_yt_bounds,lat_bounds )
-       set renameatts = ( \$renameatts '-a long_name,lon_bounds,m,c,"longitude bounds" -a long_name,lat_bounds,m,c,"latitude bounds"' )
-    endif
-    $time_ncrename ncrename \$renamevars \$fregrid_in.nc
-    $check_ncrename
-    $time_ncatted ncatted \$renameatts \$fregrid_in.nc
-    $check_ncatted
+    $call_and_check_fregrid
 
 mv \$fregrid_in.nc all.nc
 
@@ -3707,6 +3713,10 @@ EOF
                print "       land_frac found, weighting exchange grid cell with $hDate.land_static\n" if $opt_v;
                $fregrid_wt = "--weight_file $hDate.land_static --weight_field land_frac";
             }
+            my $call_and_check_fregrid = $call_fregrid;
+            $call_and_check_fregrid =~ s/#check_fregrid/$check_fregrid/;
+            $call_and_check_fregrid =~ s/#check_ncrename/$check_ncrename/g;
+            $call_and_check_fregrid =~ s/#check_ncatted/$check_ncatted/g;
             $csh .= <<EOF;
     set fregrid_wt = "$fregrid_wt"
     set fregrid_in_date = $hDate
@@ -3716,20 +3726,7 @@ EOF
     set ncvars_arg = -st23
     set variables = ( $variables )
     set fregrid_remap_file = $ppRootDir/$component/.fregrid_remap_file_\${nlon}_by_\${nlat}
-    $call_fregrid
-    $check_fregrid
-    $time_rm rm \$fregrid_in.tile?.nc
-    $time_rm rm *.grid_spec.tile*.nc
-    set renamevars = '-h -d grid_xt,lon -d grid_yt,lat -v grid_xt,lon -v grid_yt,lat'
-    set renameatts = '-h -a long_name,lon,m,c,"longitude" -a long_name,lat,m,c,"latitude"'
-    if (`ncexists -f \$fregrid_in.nc -v grid_xt_bounds`) then
-       set renamevars = ( \$renamevars -d grid_xt_bounds,lon_bounds -d grid_yt_bounds,lat_bounds -v grid_xt_bounds,lon_bounds -v grid_yt_bounds,lat_bounds )
-       set renameatts = ( \$renameatts '-a long_name,lon_bounds,m,c,"longitude bounds" -a long_name,lat_bounds,m,c,"latitude bounds"' )
-    endif
-    $time_ncrename ncrename \$renamevars \$fregrid_in.nc
-    $check_ncrename
-    $time_ncatted ncatted \$renameatts \$fregrid_in.nc
-    $check_ncatted
+    $call_and_check_fregrid
 
 mv \$fregrid_in.nc all.nc
 
@@ -4092,8 +4089,14 @@ EOF
          print "       land_frac found, weighting exchange grid cell with $hDate.land_static\n" if $opt_v;
          $fregrid_wt = "--weight_file $hDate.land_static --weight_field land_frac";
       }
+      my $call_and_check_fregrid = $call_fregrid;
+      $call_and_check_fregrid =~ s/#check_fregrid/$check_fregrid/;
+      $call_and_check_fregrid =~ s/#check_ncrename/$check_ncrename/g;
+      $call_and_check_fregrid =~ s/#check_ncatted/$check_ncatted/g;
+      $call_and_check_fregrid =~ s/set order1/if ( "\$interpvars" != "" ) then\nset order1/;
       my $cubiccsh = <<EOF;
 
+   set output_files = ( )
    set tiles = (`ls $hDate.$diag_source*.tile1.nc | grep -v grid_spec`)
    foreach tfile ( \$tiles ) 
      set fregrid_wt = "$fregrid_wt"
@@ -4104,32 +4107,20 @@ EOF
      set ncvars_arg = -s2
      set variables = ( )
      set fregrid_remap_file = $ppRootDir/$component/.fregrid_remap_file_\${nlon}_by_\${nlat}
-     $call_fregrid
-     $check_fregrid
-     $time_rm rm \$fregrid_in.tile?.nc
-     $time_rm rm *.grid_spec.tile*.nc
-     set renamevars = '-h -d grid_xt,lon -d grid_yt,lat -v grid_xt,lon -v grid_yt,lat'
-     set renameatts = '-h -a long_name,lon,m,c,"longitude" -a long_name,lat,m,c,"latitude"'
-     if (`ncexists -f \$fregrid_in.nc -v grid_xt_bounds`) then
-        set renamevars = ( \$renamevars -d grid_xt_bounds,lon_bounds -d grid_yt_bounds,lat_bounds -v grid_xt_bounds,lon_bounds -v grid_yt_bounds,lat_bounds )
-        set renameatts = ( \$renameatts '-a long_name,lon_bounds,m,c,"longitude bounds" -a long_name,lat_bounds,m,c,"latitude bounds"' )
-     endif
-     $time_ncrename ncrename \$renamevars \$fregrid_in.nc
-     $check_ncrename
-     $time_ncatted ncatted \$renameatts \$fregrid_in.nc
-     $check_ncatted
 
-     set output_files = (\$output_files \$fregrid_in.nc)
-     
-     set onedvars = `\$NCVARS -s01 \$tfile`
+     set onedvars = `\$NCVARS -s01 \$fregrid_in.tile1.nc`
      if ( "\$onedvars" != "" ) then
         set onedvarlist = `echo \$onedvars | tr ' ' ','`
-        $time_splitncvars \$SPLITNCVARS -v \$onedvarlist -f $ppRootDir/$component/$component.static.nc \$tfile
+        $time_splitncvars \$SPLITNCVARS -s -v \$onedvarlist -f $ppRootDir/$component/$component.static.nc \$fregrid_in.tile1.nc
+     endif
+
+     $call_and_check_fregrid
+
+        set output_files = (\$output_files \$fregrid_in.nc)
+     
      endif
    end
-endif
 EOF
-      $cubiccsh =~ s/set order1/if ( "\$interpvars" != "" ) then\nset order1/;
       $csh .= $cubiccsh;
    } elsif ( $cubic == 0 ) {
       #DATA ALREADY LATLON
@@ -4146,7 +4137,7 @@ EOF
             set static = (`\$NCVARS -s012 \$file`)
             if ( "\$static" != "" ) then
                set static = `echo \$static | tr ' ' ','`
-               $time_splitncvars \$SPLITNCVARS -v \$static -f $ppRootDir/$component/$component.static.nc \$file
+               $time_splitncvars \$SPLITNCVARS -s -v \$static -f $ppRootDir/$component/$component.static.nc \$file
                $check_splitncvars
             endif
          end
@@ -4704,6 +4695,10 @@ EOF
             print "       land_frac found, weighting exchange grid cell with $hDate.land_static\n" if $opt_v;
             $fregrid_wt = "--weight_file $hDate.land_static --weight_field land_frac";
          }
+         my $call_and_check_fregrid = $call_fregrid;
+         $call_and_check_fregrid =~ s/#check_fregrid/$check_fregrid/;
+         $call_and_check_fregrid =~ s/#check_ncrename/$check_ncrename/g;
+         $call_and_check_fregrid =~ s/#check_ncatted/$check_ncatted/g;
          $csh .= <<EOF;
     set fregrid_wt = "$fregrid_wt"
     set fregrid_in_date = $hDate
@@ -4713,20 +4708,7 @@ EOF
     set ncvars_arg = -st23
     set variables = ( $variables )
     set fregrid_remap_file = $ppRootDir/$component/.fregrid_remap_file_\${nlon}_by_\${nlat}
-    $call_fregrid
-    $check_fregrid
-    $time_rm rm \$fregrid_in.tile?.nc
-    $time_rm rm *.grid_spec.tile*.nc
-    set renamevars = '-h -d grid_xt,lon -d grid_yt,lat -v grid_xt,lon -v grid_yt,lat'
-    set renameatts = '-h -a long_name,lon,m,c,"longitude" -a long_name,lat,m,c,"latitude"'
-    if (`ncexists -f \$fregrid_in.nc -v grid_xt_bounds`) then
-       set renamevars = ( \$renamevars -d grid_xt_bounds,lon_bounds -d grid_yt_bounds,lat_bounds -v grid_xt_bounds,lon_bounds -v grid_yt_bounds,lat_bounds )
-       set renameatts = ( \$renameatts '-a long_name,lon_bounds,m,c,"longitude bounds" -a long_name,lat_bounds,m,c,"latitude bounds"' )
-    endif
-    $time_ncrename ncrename \$renamevars \$fregrid_in.nc
-    $check_ncrename
-    $time_ncatted ncatted \$renameatts \$fregrid_in.nc
-    $check_ncatted
+    $call_and_check_fregrid
 
     $time_ncatted ncatted -h -O -a filename,global,m,c,"$component.$tSEASONf.nc" $component.$tSEASONf.nc
     $check_ncatted
@@ -4798,6 +4780,10 @@ EOF
          print "       land_frac found, weighting exchange grid cell with $hDate.land_static\n" if $opt_v;
          $fregrid_wt = "--weight_file $hDate.land_static --weight_field land_frac";
       }
+      my $call_and_check_fregrid = $call_fregrid;
+      $call_and_check_fregrid =~ s/#check_fregrid/$check_fregrid/;
+      $call_and_check_fregrid =~ s/#check_ncrename/$check_ncrename/g;
+      $call_and_check_fregrid =~ s/#check_ncatted/$check_ncatted/g;
       $csh .= <<EOF;
 @ i ++
 end
@@ -4809,20 +4795,7 @@ end
     set ncvars_arg = -st23
     set variables = ( $variables )
     set fregrid_remap_file = $ppRootDir/$component/.fregrid_remap_file_\${nlon}_by_\${nlat}
-    $call_fregrid
-    $check_fregrid
-    $time_rm rm \$fregrid_in.tile?.nc
-    $time_rm rm *.grid_spec.tile*.nc
-    set renamevars = '-h -d grid_xt,lon -d grid_yt,lat -v grid_xt,lon -v grid_yt,lat'
-    set renameatts = '-h -a long_name,lon,m,c,"longitude" -a long_name,lat,m,c,"latitude"'
-    if (`ncexists -f \$fregrid_in.nc -v grid_xt_bounds`) then
-       set renamevars = ( \$renamevars -d grid_xt_bounds,lon_bounds -d grid_yt_bounds,lat_bounds -v grid_xt_bounds,lon_bounds -v grid_yt_bounds,lat_bounds )
-       set renameatts = ( \$renameatts '-a long_name,lon_bounds,m,c,"longitude bounds" -a long_name,lat_bounds,m,c,"latitude bounds"' )
-    endif
-    $time_ncrename ncrename \$renamevars \$fregrid_in.nc
-    $check_ncrename
-    $time_ncatted ncatted \$renameatts \$fregrid_in.nc
-    $check_ncatted
+    $call_and_check_fregrid
 
     $time_ncatted ncatted -h -O -a filename,global,m,c,"$component.$dates.nc" $component.$dates.nc
     $check_ncatted
@@ -5157,12 +5130,11 @@ EOF
 
    #save new or modified refineDiag history file
    if ( -f $newhistorydir/\$hsmdate.cpio ) then
-      mkdir modify
-      cd modify
-      $time_hsmget hsmget -a $newhistorydir -p $ptmpDir/history_refineDiag -w \$refineDiagDir/modify \$hsmdate
-      mv -f ../*nc .
+      $time_hsmget hsmget -a $newhistorydir -p $ptmpDir/history_refineDiag -w $tmphistdir/modify_refineDiag \$hsmdate/\\*
+      mv -f * $tmphistdir/modify_refineDiag/\$hsmdate/
+      mv -f $tmphistdir/modify_refineDiag/\$hsmdate/* .
+      rm -rf $tmphistdir/modify_refineDiag
       $time_hsmput hsmput -s cpio -a $newhistorydir -p $ptmpDir/history_refineDiag -w $tmphistdir/history_refineDiag \$hsmdate
-      cd ..
    else
       $time_hsmput hsmput -s cpio -a $newhistorydir -p $ptmpDir/history_refineDiag -w $tmphistdir/history_refineDiag \$hsmdate
    endif
