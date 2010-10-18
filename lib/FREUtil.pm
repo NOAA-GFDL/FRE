@@ -1,11 +1,12 @@
 #
-# $Id: FREUtil.pm,v 18.0.2.1 2010/04/16 22:33:51 afy Exp $
+# $Id: FREUtil.pm,v 18.0.2.2 2010/09/14 05:29:38 afy Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: Utilities Module
 # ------------------------------------------------------------------------------
 # arl    Ver  18.00  Merged revision 17.0.2.10 onto trunk           March 10
 # afy -------------- Branch 18.0.2 -------------------------------- April 10
 # afy    Ver   1.00  Add jobID subroutine                           April 10
+# afy    Ver   2.00  Remove propertyNameCheck subroutine            September 10
 # ------------------------------------------------------------------------------
 # Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2000-2010
 # Designed and written by V. Balaji, Amy Langenhorst and Aleksey Yakovlev
@@ -870,14 +871,6 @@ sub dirCommonLevelsNumber($$)
     } 
   }
   return $res;
-}
-
-sub propertyNameCheck($)
-# ------ arguments: $string
-# ------ return 1 if the given $string matches property name pattern 
-{
-  my $s = shift;
-  return ($s =~ m/^[a-zA-Z]+(?:\w|\.)*$/) ? 1 : 0;
 }
 
 sub environmentVariablesExpand($)

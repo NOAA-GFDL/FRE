@@ -1,7 +1,7 @@
 #!/bin/csh -f
 #FRE scheduler-options
 # 
-# $Id: runscript.template.main,v 18.0.2.12 2010/08/20 18:17:30 afy Exp $
+# $Id: runscript.template.main,v 18.0.2.14 2010/10/18 02:34:54 afy Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: Runscript Template - GFDL Version
 # ------------------------------------------------------------------------------
@@ -51,6 +51,15 @@
 # afy    Ver  11.07  Modify alias 'frusavehist' (add option -eht)   August 10
 # afy    Ver  11.08  Change 'frusavehist' location                  August 10
 # afy    Ver  12.00  Rename 'frusavehist' => 'fresavehist'          August 10
+# afy    Ver  13.00  Modify 'npes' type (const => var)              October 10
+# afy    Ver  13.01  Add alias 'submit'                             October 10
+# afy    Ver  13.02  Don't adjust 'ptmpDir' from FRE_INPUT_DIR      October 10
+# afy    Ver  13.03  Add branch for FRE_STAGE == CHAIN              October 10
+# afy    Ver  13.04  Modify restarts checking (polling for ok-file) October 10
+# afy    Ver  13.05  Modify region files combining (use children)   October 10
+# afy    Ver  13.06  Modify online combining (exit, fix uncombined) October 10
+# afy    Ver  14.00  Modify gridSpec/initCond loading (branch 'nc') October 10
+# afy    Ver  14.01  Modify all 'find' calls (no -exec/-regex)      October 10
 # ------------------------------------------------------------------------------
 # Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2000-2010
 # Designed and written by V. Balaji, Amy Langenhorst and Aleksey Yakovlev
@@ -79,7 +88,6 @@
   #FRE const(ppRefineDiagScriptNames)
   #FRE const(executable)
   #FRE const(getFmsData)
-  #FRE const(npes)
   #FRE const(segmentsPerSimulation)
   #FRE const(segmentsPerJob)
   #FRE const(jobsPerSimulation)
@@ -99,22 +107,11 @@
   #FRE flag(flagOutputPostProcess)
   #FRE flag(flagOutputCheck)
 
+  #FRE var(npes)
   #FRE var(ptmpDir)
   #FRE var(outputDir)
   #FRE var(gridSpec)
   #FRE var(initCond)
-
-################################################################################
-#-------------- global variables adjustment for input data staging -------------
-################################################################################
-
-  if ( $?FRE_STAGE ) then
-    if ( $?FRE_INPUT_DIR ) then
-      if ( "$FRE_INPUT_DIR" != "" ) then
-        set ptmpDir = $FRE_INPUT_DIR
-      endif
-    endif
-  endif
 
 ################################################################################
 #------------------------ global environment settings --------------------------
@@ -189,23 +186,20 @@
   set -r patternGrepTail = '\.[0-9]{4}$'
   set -r patternGrepAscii = '\<out\>|\<results\>'
   set -r patternGrepHistx = '^hi\.'
+  set -r patternGrepRestarts = '\<res\>'
   set -r patternGrepRestartsOrNC = '\<res\>|\<nc\>'
   set -r patternGrepRegion = '^rregion'
   set -r patternGrepNC = '\<nc\>'
-
-  # ---------------- matching patterns for find
-  set -r patternFindRestarts = '.*\<res\>.*'
-  set -r patternFindNC = '.*\<nc\>.*'
 
   # ---------------- replacement patterns for sed
   set -r patternSedRestartProduction = 's/\/[0-9]+(\/restart\/[0-9]+\.cpio)$/\1/'
   set -r patternSedRestartRegression = 's/pe[0-9]+(\/restart\/[0-9]+\.cpio)$/pe\1/'
 
   # ---------------- FRE string date generation for file name labels
-  alias time_stamp `which time_stamp.csh` -f $timeStampFormat
+  alias timeStamp `which time_stamp.csh` -f $timeStampFormat
 
   # ---------------- FRE directory making/cleaning utility
-  alias prepare_dir `which prepare_dir.csh`
+  alias prepareDir `which prepare_dir.csh`
 
   # ---------------- FRE archives comparing utility
   alias ardiff `which ardiff`
@@ -238,8 +232,11 @@
     alias slmnccombine `which combine-ncc`
   endif
 
-  # ---------------- FRE staging utility for parallel combining/postprocessing
-  alias output_stager $freCommandsHomeDir/site/hpcs/fresavehist -eht
+  # ---------------- FRE output stager
+  alias outputStager $freCommandsHomeDir/site/hpcs/fresavehist -eht
+
+  # ---------------- batch scheduler submit command
+  alias submit `which qsub`
 
   # ---------------- fast CXFS copy command
   alias cp `which cxfscp` -t 1 -b 8 -s 65000
@@ -304,7 +301,7 @@
 
   # ---------------- print the script parameters
 
-  unset echo 
+  unset echo
   echo $name
   echo ${npes}pe_${segmentsPerJob}run
   set echo
@@ -359,9 +356,9 @@
 
   # ---------------- set up working directory structure
 
-  prepare_dir $workDir		|| exit 1
-  prepare_dir $workDir/INPUT	|| exit 1
-  prepare_dir $workDir/RESTART	|| exit 1
+  prepareDir $workDir		|| exit 1
+  prepareDir $workDir/INPUT	|| exit 1
+  prepareDir $workDir/RESTART	|| exit 1
 
   # ---------------- input data loading
 
@@ -394,15 +391,19 @@
 
   if ( ( $gridSpec:e == 'cpio' || $gridSpec:e == 'tar' ) && $gridSpec:r:e == 'nc' ) then
     hsmget $gridSpec:r:r:s+/++/\* && \
-    find $hsmDir$gridSpec:r:r -maxdepth 1 -type f -exec ln -f -t $workDir/INPUT/ {} \;
+    find $hsmDir$gridSpec:r:r -maxdepth 1 -type f | xargs ln -f -t $workDir/INPUT
     @ gridSpecStatus = $status
   else if ( ( $gridSpec:e == 'cpio' || $gridSpec:e == 'tar' ) && $gridSpec:r:e != 'nc' ) then
     hsmget $gridSpec:r:s+/++/\* && \
-    find $hsmDir$gridSpec:r -maxdepth 1 -type f -exec ln -f -t $workDir/INPUT/ {} \;
+    find $hsmDir$gridSpec:r -maxdepth 1 -type f | xargs ln -f -t $workDir/INPUT
+    @ gridSpecStatus = $status
+  else if ( $gridSpec:e == 'nc' ) then
+    hsmget $gridSpec:s+/++ && \
+    ln -f $hsmDir/$gridSpec:s+/++ $workDir/INPUT/grid_spec.nc
     @ gridSpecStatus = $status
   else if ( $gridSpec != "" && -d "$gridSpec" ) then
     hsmget $gridSpec:s+/++/\* && \
-    find $hsmDir$gridSpec -maxdepth 1 -type f -exec ln -f -t $workDir/INPUT/ {} \;
+    find $hsmDir$gridSpec -maxdepth 1 -type f | xargs ln -f -t $workDir/INPUT
     @ gridSpecStatus = $status
   else if ( $gridSpec != "" && -f "$gridSpec" ) then
     hsmget $gridSpec:s+/++ && \
@@ -423,15 +424,19 @@
 
   if ( ( $initCond:e == 'cpio' || $initCond:e == 'tar' ) && $initCond:r:e == 'nc' ) then
     hsmget $initCond:r:r:s+/++/\* && \
-    find $hsmDir$initCond:r:r -maxdepth 1 -type f -exec ln -f -t $workDir/INPUT/ {} \;
+    find $hsmDir$initCond:r:r -maxdepth 1 -type f | xargs ln -f -t $workDir/INPUT
     @ initCondStatus = $status
   else if ( ( $initCond:e == 'cpio' || $initCond:e == 'tar' ) && $initCond:r:e != 'nc' ) then
     hsmget $initCond:r:s+/++/\* && \
-    find $hsmDir$initCond:r -maxdepth 1 -type f -exec ln -f -t $workDir/INPUT/ {} \;
+    find $hsmDir$initCond:r -maxdepth 1 -type f | xargs ln -f -t $workDir/INPUT
+    @ initCondStatus = $status
+  else if ( $initCond:e == 'nc' ) then
+    hsmget $initCond:s+/++ && \
+    ln -f $hsmDir/$initCond:s+/++ $workDir/INPUT/.
     @ initCondStatus = $status
   else if ( $initCond != "" && -d "$initCond" ) then
     hsmget $initCond:s+/++/\* && \
-    find $hsmDir$initCond -maxdepth 1 -type f -exec ln -f -t $workDir/INPUT/ {} \;
+    find $hsmDir$initCond -maxdepth 1 -type f | xargs ln -f -t $workDir/INPUT
     @ initCondStatus = $status
   else if ( $initCond != "" && -f "$initCond" ) then
     hsmget $initCond:s+/++ && \
@@ -467,6 +472,17 @@
       unset echo
       echo end_of_input
       echo "NOTE: Natural end-of-input for $scriptName."
+      set echo
+      exit 0
+    else if ( $FRE_STAGE == 'CHAIN' ) then
+      if ( "$project" != "" ) then
+        submit -P $project -v FRE_PROJECT=$project $scriptName
+      else
+        submit $scriptName
+      endif
+      unset echo
+      echo end_of_chaining
+      echo "NOTE: Natural end-of-chaining for $scriptName."
       set echo
       exit 0
     endif
@@ -628,7 +644,7 @@
       wait
       set MPI_FAIL
       set outputDir = ${outputDir}_crash
-      prepare_dir $outputDir/ascii || exit 1
+      prepareDir $outputDir/ascii || exit 1
       if ( $cores_dumped > 0 ) then
         cat core*.out >> fms.out
         cat core*.out
@@ -643,9 +659,9 @@
 
     # ---------------- generate date for file names
 
-    set begindate = `time_stamp -b`
+    set begindate = `timeStamp -b`
     if ( $begindate == 'no_time_stamp' ) set begindate = tmp`date '+%j%H%M%S'`
-    set enddate = `time_stamp -e`
+    set enddate = `timeStamp -e`
     if ( $enddate == 'no_time_stamp' ) set enddate = tmp`date '+%j%H%M%S'`
     set fyear = `echo $enddate | cut -c -4`
 
@@ -668,7 +684,7 @@
       set asciiArchDir = $outputDir/ascii/$begindate.ascii_out
       set asciiWorkDir = $hsmDir$asciiArchDir
 
-      prepare_dir $asciiWorkDir || exit 1 
+      prepareDir $asciiWorkDir || exit 1 
 
       foreach file ( $asciiFiles )
 	mv $file $asciiWorkDir/$begindate.$file
@@ -699,7 +715,7 @@
       set histxArchDir = $outputDir/ascii/$begindate.hi
       set histxWorkDir = $hsmDir$histxArchDir
 
-      prepare_dir $histxWorkDir || exit 1 
+      prepareDir $histxWorkDir || exit 1 
 
       foreach file ( $histxFiles )
 	mv $file $histxWorkDir/$file
@@ -732,7 +748,7 @@
       set restartArchDir = $outputDir/restart/$enddate
       set restartWorkDir = $hsmDir$restartArchDir
 
-      prepare_dir $restartWorkDir || exit 1 
+      prepareDir $restartWorkDir || exit 1 
 
       cp -p $restartFiles	$restartWorkDir
       cp -p $workDir/input.nml	$restartWorkDir
@@ -754,55 +770,73 @@
       endif
 
       if ( $irun < $segmentsPerJob ) then
-        find $workDir/INPUT   -maxdepth 1 -type f -regex "$patternFindRestarts" -exec rm {} \;
-        find $workDir/RESTART -maxdepth 1 -type f -regex "$patternFindRestarts" -exec mv -f {} ../INPUT \;
-        find $workDir/RESTART -maxdepth 1 -type f -regex "$patternFindNC" -exec mv -f {} ../INPUT \;
+        find $workDir/INPUT   -maxdepth 1 -type f | egrep "$patternGrepRestarts" | xargs -r rm -f
+        find $workDir/RESTART -maxdepth 1 -type f | egrep "$patternGrepRestarts" | xargs -r mv -f -t ../INPUT
+        find $workDir/RESTART -maxdepth 1 -type f | egrep "$patternGrepNC"       | xargs -r mv -f -t ../INPUT
       endif
 
       if ( $?flagOutputCheckOn ) then
+
         set restartArchive = $restartArchDir.cpio
-        if ( -f $restartArchive.ok ) then
-          if ( -f $restartArchive && -r $restartArchive ) then
-            if ( $?flagRunTypeProduction ) then
-              set restartArchiveMain = `echo $restartArchive | sed -r "$patternSedRestartProduction"`
-            else if ( $?flagRunTypeRegression ) then
-              set restartArchiveMain = `echo $restartArchive | sed -r "$patternSedRestartRegression"`
+
+        if ( -f $restartArchive.ok && -f $restartArchive && -r $restartArchive ) then
+
+          if ( $?flagRunTypeProduction ) then
+            set restartArchiveMain = `echo $restartArchive | sed -r "$patternSedRestartProduction"`
+          else
+            set restartArchiveMain = `echo $restartArchive | sed -r "$patternSedRestartRegression"`
+          endif
+
+          @ retry = 0
+          while ( 1 )
+            if ( -f $restartArchiveMain.ok && -f $restartArchiveMain && -r $restartArchiveMain ) then
+              set restartArchiveMainFound
+              break
+            else if ( $retry < 10 ) then
+              sleep 30
+              @ retry++
             else
-              set restartArchiveMain = "" 
+              unset restartArchiveMainFound
+              break
             endif
-            if ( $restartArchiveMain != "" && -f $restartArchiveMain.ok ) then
-              if ( -f $restartArchiveMain && -r $restartArchiveMain ) then
-                ls -1 $restartArchiveMain $restartArchive | ardiff
-                if ( $status ) then
-        	  unset echo
-        	  echo "WARNING: Restart archives '$restartArchiveMain' and '$restartArchive' don't match!"
-                  set msg = "Restart archives '$restartArchiveMain' and '$restartArchive' don't match!\n\n"
-		  set msg = "${msg}Job details:\n"
-		  set msg = "${msg}'$name' (run $ireload, loop $irun) running on '$HOST'\n"
-		  set msg = "${msg}Batch job stdout:\n"
-		  set msg = "${msg}$SGE_STDOUT_PATH"
-                  echo $msg | Mail -s "job '$JOB_ID' '$name' - restart archives don't match!" $USER
-                  unset msg
-        	  set echo
-                else
-        	  unset echo
-        	  echo "NOTE: Restart archives '$restartArchiveMain' and '$restartArchive' match..."
-        	  set echo
-                endif
-              else
-        	unset echo
-        	echo "WARNING: The restart archive '$restartArchiveMain' doesn't exist or isn't readable"
-        	set echo
-              endif
+          end
+          unset retry
+
+          if ( $?restartArchiveMainFound ) then
+            ls -1 $restartArchiveMain $restartArchive | ardiff
+            if ( $status ) then
+              unset echo
+              echo "WARNING: Restart archives '$restartArchiveMain' and '$restartArchive' don't match!"
+              set msg = "Restart archives '$restartArchiveMain' and '$restartArchive' don't match!\n\n"
+	      set msg = "${msg}Job details:\n"
+	      set msg = "${msg}'$name' (run $ireload, loop $irun) running on '$HOST'\n"
+	      set msg = "${msg}Batch job stdout:\n"
+	      set msg = "${msg}$SGE_STDOUT_PATH"
+              echo $msg | Mail -s "job '$JOB_ID' '$name' - restart archives don't match!" $USER
+              unset msg
+              set echo
+            else
+              unset echo
+              echo "NOTE: Restart archives '$restartArchiveMain' and '$restartArchive' match..."
+              set echo
             endif
-            unset restartArchiveMain
           else
             unset echo
-            echo "WARNING: The restart archive '$restartArchive' doesn't exist or isn't readable"
+            echo "WARNING: The restart archive '$restartArchiveMain' doesn't exist or isn't readable"
             set echo
           endif
+
+          unset restartArchiveMainFound
+          unset restartArchiveMain
+
+        else
+          unset echo
+          echo "WARNING: The restart archive '$restartArchive' doesn't exist or isn't readable"
+          set echo
         endif
+
         unset restartArchive
+
       endif
 
     endif
@@ -815,18 +849,27 @@
 
     if ( $#regionFiles > 0 ) then
 
+      set filesNotOK = ()
+
       foreach file ( $regionFiles )
 	set inputFiles = ( `ls -1 | egrep "$file$patternGrepTail"` )
 	if ( $#inputFiles > 0 ) then
-          mppnccombine $file $inputFiles && mv -f $file `echo $file | sed "s/$patternGrepRegion//"` && rm -f $inputFiles
-          if ( $status ) then
-            unset echo
-            echo "ERROR: in execution of mppnccombine on region files"
-            set echo
-            exit 1
-          endif
+          ( mppnccombine $file $inputFiles || set filesNotOK = ( $filesNotOK $file ) ; mv -f $file `echo $file | sed "s/$patternGrepRegion//"` && rm -f $inputFiles ) &
 	endif
       end
+      wait
+
+      if ( $#filesNotOK > 0) then
+	unset echo
+	foreach file ( $filesNotOK )
+	  echo "A problem during combining the region file: $file"
+	end
+	echo "ERROR: Failed to combine region files"
+	set echo
+	exit 1
+      endif
+
+      unset filesNotOK 
 
     endif
 
@@ -835,14 +878,35 @@
     if ( $?flagOutputCombineTypeOnline ) then
 
       if ( $?flagOutputCombineOn ) then
+
 	set historyFiles = ( `ls -1 | egrep "$patternGrepNC.*$patternGrepTail" | sed -r "s/$patternGrepTail//g" | sort -u` )
-	foreach file ( $historyFiles )
-          set inputFiles = ( `ls -1 | egrep "$file$patternGrepTail"` )
-          if ( $#inputFiles > 0) then
-	    ( mppnccombine $file $inputFiles || echo "ERROR: mppnccombine $file" ; test -s $file && rm -f $inputFiles ) &
-          endif
-	end
-	wait
+
+        if ( $#historyFiles > 0 ) then
+
+          set filesNotOK = ()
+
+	  foreach file ( $historyFiles )
+            set inputFiles = ( `ls -1 | egrep "$file$patternGrepTail"` )
+            if ( $#inputFiles > 0) then
+	      ( mppnccombine $file $inputFiles || set filesNotOK = ( $filesNotOK $file ) ; test -s $file && rm -f $inputFiles ) &
+            endif
+	  end
+	  wait
+
+	  if ( $#filesNotOK > 0) then
+	    unset echo
+	    foreach file ( $filesNotOK )
+	      echo "A problem during combining the history file: $file"
+	    end
+	    echo "ERROR: Failed to combine history files"
+	    set echo
+	    exit 1
+	  endif
+
+          unset filesNotOK
+
+        endif
+
       endif
 
       set historyCombinedFiles = ( `ls -1 | egrep "$patternGrepNC"$` )
@@ -857,7 +921,7 @@
 
         set historyCombinedWorkDir = $hsmDir$historyCombinedArchDir
 
-	prepare_dir $historyCombinedWorkDir || exit 1 
+	prepareDir $historyCombinedWorkDir || exit 1 
 
         if ( -f $historyCombinedArchDir.cpio ) then
           hsmget $historyCombinedArchDir:s+/++/\*
@@ -889,14 +953,10 @@
 
       if ( $#historyUncombinedFiles > 0 ) then
 
-	set historyUncombinedArchDir = $outputDir/history/$begindate.nc.0000
+        set historyUncombinedArchDir = $outputDir/history/$begindate.nc.0000
         set historyUncombinedWorkDir = $hsmDir$historyUncombinedArchDir
 
-	prepare_dir $historyUncombinedWorkDir || exit 1 
-
-        if ( -f $historyCombinedArchDir.cpio ) then
-          hsmget $historyUncombinedArchDir:s+/++/\*
-        endif
+	prepareDir $historyUncombinedWorkDir || exit 1 
 
 	foreach file ( $historyUncombinedFiles )
 	  mv $file $historyUncombinedWorkDir/$begindate.$file
@@ -946,7 +1006,7 @@
 	set historyArchDir = $outputDir/history/$begindate.nc.0000
         set historyWorkDir = $hsmDir$historyArchDir
 
-	prepare_dir $historyWorkDir || exit 1 
+	prepareDir $historyWorkDir || exit 1 
 
 	foreach file ( `ls -1 | egrep "$patternGrepNC"` )
 	  mv $file $historyWorkDir/$begindate.$file
@@ -1024,10 +1084,14 @@
       endif
 
       if ( $?flagOutputPostProcessOn ) then
-        set combineListNew = `output_stager -b $begindate -o $outputDir -m "$MPPcmd" -c "$combineListSaved" -p "$PPcmd" $saveHistOptions`
+        set combineListNew = `outputStager -b $begindate -o $outputDir -m "$MPPcmd" -c "$combineListSaved" -p "$PPcmd" $saveHistOptions`
       else
-        set combineListNew = `output_stager -b $begindate -o $outputDir -m "$MPPcmd" -c "$combineListSaved" $saveHistOptions`
+        set combineListNew = `outputStager -b $begindate -o $outputDir -m "$MPPcmd" -c "$combineListSaved" $saveHistOptions`
       endif
+
+      unset combineListSaved
+      unset saveHistOptions
+      unset MPPcmd
 
       if ( "$PPcmd" == "" ) then
 	set combineList = ( $combineListNew )
@@ -1036,6 +1100,9 @@
 	set combineList = ( )
 	unset prevdate
       endif
+
+      unset combineListNew
+      unset PPcmd
 
     endif
 
@@ -1052,9 +1119,9 @@
       set MPPcmd = `alias mppnccombine`
 
       if ( $?flagOutputPostProcessOn ) then
-        output_stager -b $begindate -o $outputDir -m "$MPPcmd" -c "" -p "$PPcmd"
+        outputStager -b $begindate -o $outputDir -m "$MPPcmd" -c "" -p "$PPcmd"
       else
-        output_stager -b $begindate -o $outputDir -m "$MPPcmd" -c ""
+        outputStager -b $begindate -o $outputDir -m "$MPPcmd" -c ""
       endif
 
     endif
@@ -1178,9 +1245,10 @@
       endif
 
       if ( $alloc > 0 ) then
+        unset echo
 	echo reloading
-	alias qsub 'qsub -pe ic.alloc $npes'
-	set resubmit
+        set echo
+	set peToResubmit = "-pe ic.alloc $npes"
 	@ alloc--
       else if ( $windf > 0 ) then
 	set projlist = ( `qconf -sprjl` )
@@ -1191,15 +1259,16 @@
             if ( $p == "${firstc}d" || $p == "$firstc" ) set project = $p
           end
 	endif
+        unset echo
 	echo reloading
-	alias qsub 'qsub -pe ic.windf $npes'
-	set resubmit
+        set echo
+	set peToResubmit = "-pe ic.windf $npes"
 	@ windf--
       else
 	unset echo
         echo "WARNING: Have not reached $jobsPerSimulation submissions, but no queue time remaining"
-        set echo  
-	unset resubmit
+        set echo
+	unset peToResubmit
       endif
 
       if ( -f $queue_file ) rm -f $queue_file
@@ -1222,17 +1291,16 @@
       endif
 
       if ( -f $scriptName ) then
-	if ( $?resubmit ) then
+	if ( $?peToResubmit ) then
           if ( "$project" != "" ) then
-            qsub -P $project -v FRE_PROJECT=$project $scriptName
+            submit $peToResubmit -P $project -v FRE_PROJECT=$project $scriptName
           else
-            qsub $scriptName
+            submit $peToResubmit $scriptName
           endif
         endif
       else
 	unset echo
-	echo "WARNING: reload script does not exist, run $ireload, loop $irun" 
-	echo "         $scriptName could not be resubmitted"
+	echo "WARNING: The script '$scriptName' does not exist (run $ireload, loop $irun) - it can't be resubmitted"
         set echo
       endif
 

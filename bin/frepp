@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 # -*- cperl -*-
-# $Id: frepp,v 18.0.2.37 2010/08/31 17:46:17 fms Exp $
+# $Id: frepp,v 18.0.2.40 2010/09/28 21:24:53 arl Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: History/diagnostics post-processing
 # ------------------------------------------------------------------------------
@@ -33,7 +33,7 @@ use vars qw( $maxyrs $maxdisk $cubic $nlat $nlon $interpMethod $getgridspec $bas
 
   package frepp;
 
-  use constant VERSION => '$Id: frepp,v 18.0.2.37 2010/08/31 17:46:17 fms Exp $';
+  use constant VERSION => '$Id: frepp,v 18.0.2.40 2010/09/28 21:24:53 arl Exp $';
 
 #Usage:    $relfrepp [ -AB:C:O:RY:Z:c:d:f:hlmMp:oqr:S:st:u:vx:z ] experiment [ experiment2 ... ]                 
   use constant OPTLIST =>
@@ -63,6 +63,7 @@ use vars qw( $maxyrs $maxdisk $cubic $nlat $nlon $interpMethod $getgridspec $bas
 
       'refineDiag|D=s',
       'refineDiagOnly|H',
+      'wait|w=s',
       
       'unique|u=s',
       'month|m',
@@ -87,7 +88,7 @@ use vars qw( $maxyrs $maxdisk $cubic $nlat $nlon $interpMethod $getgridspec $bas
 
    Getopt::Long::GetOptions(\%opt, frepp::OPTLIST) or (print 'bad opts' and die "\n");
    if ($opt{Version}) {print frepp::VERSION,"\n" and exit(0);}
-   use vars qw( $opt_d $opt_D $opt_f $opt_l $opt_o $opt_p $opt_M $opt_m $opt_q $opt_t $opt_r $opt_x $opt_s $opt_v $opt_V  $opt_A $opt_B $opt_C $opt_O $opt_R $opt_S $opt_Y $opt_Z $opt_c $opt_H $opt_h $opt_o $opt_u $opt_z );
+   use vars qw( $opt_d $opt_D $opt_f $opt_l $opt_o $opt_p $opt_M $opt_m $opt_q $opt_t $opt_r $opt_x $opt_s $opt_v $opt_V  $opt_A $opt_B $opt_C $opt_O $opt_R $opt_S $opt_Y $opt_Z $opt_c $opt_H $opt_h $opt_o $opt_u $opt_z $opt_w );
 $opt_d=$opt{dir};
 $opt_f=$opt{filelist};
 $opt_l=$opt{limitstatic};
@@ -117,7 +118,7 @@ $opt_o=$opt{overwrite};
 $opt_u=$opt{unique};
 $opt_z=$opt{statistics};
 $opt_D=$opt{refineDiag};
-
+$opt_w=$opt{wait};
 
 ################### PROCESS ARGS, SET DEFAULTS #########################
 if ( -l $0 ) {
@@ -126,6 +127,10 @@ if ( -l $0 ) {
    $absfrepp = File::Spec->rel2abs( $0 );
 }
 $relfrepp = basename($absfrepp);
+
+if ( "$opt_w" ne '' ) {
+$opt_w = " -hold_jid $opt_w";
+}
 
 #getopts( 'AB:C:O:RY:Z:c:d:f:hlmMp:oqr:S:st:u:vVx:z' ) || die "\aSyntax: $0 [-AB:C:O:RY:Z:c:d:f:hlmMp:oqr:S:st:u:vVx:z]\n";
 
@@ -152,6 +157,7 @@ Usage:    $relfrepp [ -AB:C:O:RY:Z:c:d:f:hlmMp:oqr:S:st:u:vx:z ] experiment [ ex
           -m           = use month as base unit instead of year, for short runs, BETA
                          You can use "-t 19820301" to start from March 1982
           -d dir       = path to history data [default \$archive/\$name/history]
+          -w jobname   = place hold on current job so that it waits for jobname to complete
 
           OPTIONS FOR ANALYSIS FIGURES
           -A           = run analysis only
@@ -213,7 +219,7 @@ if ( $opt_M and not $opt_p ) { $opt_M = "#\$ -m e";} else { $opt_M = ""; }
 
 if ( $opt_O ) { print STDERR "NOTE: There has been a change to the behavior of the -O option. Your scripts will be written directly to '$opt_O' and not to '$opt_O/scripts/postProcess'\n"; }
 
-$versionId = ' $Id: frepp,v 18.0.2.37 2010/08/31 17:46:17 fms Exp $';
+$versionId = ' $Id: frepp,v 18.0.2.40 2010/09/28 21:24:53 arl Exp $';
 
 $perlerrors = "";
 $component = "";
@@ -527,14 +533,14 @@ EOF
 
    if ( $opt_r ) {  #if a regression test, no further postprocessing
       $cshscripttmpl =~ s/(-soft -l fre_info=)/$1ppYears\@$maxyrs+/;
-      FREUtil::writescript($cshscripttmpl,$outscript,"qsub");
+      FREUtil::writescript($cshscripttmpl,$outscript,"qsub$opt_w");
       next;
    }
    my $ppNode = FREUtil::getppNode($expt);
    unless ( $ppNode ) {  #if no pp node, no further postprocessing
       $cshscripttmpl =~ s/#\$ -l h_cpu.*/#\$ -l h_cpu=01:00:00/;
       $cshscripttmpl =~ s/(-soft -l fre_info=)/$1ppYears\@$maxyrs+/;
-      FREUtil::writescript($cshscripttmpl,$outscript,"qsub");
+      FREUtil::writescript($cshscripttmpl,$outscript,"qsub$opt_w");
       next; 
    }
    if ( "$opt_M" ne "" ) {
@@ -593,6 +599,12 @@ EOF
          if ( $opt_c ) { $cshscripttmpl .= "-c $opt_c "; }
          if ( $opt_m ) { $cshscripttmpl .= "-m "; }
          if ( $opt_M ) { $cshscripttmpl .= "-M "; }
+         #add hold for prerequisite job
+         if ( $opt_p ) {
+            my $prev = FREUtil::modifydate($opt_t,"- 1 years");
+            $prev = FREUtil::graindate($prev,"day");
+            $cshscripttmpl .= "-w $expt"."_$prev "; 
+         }
          $cshscripttmpl .= "$expt\n";
          $cshscripttmpl .= errorstr("$relfrepp had a problem creating next script $expt"."_$opt_t");
       }
@@ -605,7 +617,7 @@ EOF
       $cshscripttmpl .= mailerrors($outscript);
       $cshscripttmpl =~ s/#\$ -l h_cpu.*/#\$ -l h_cpu=30:00:00/;
       $cshscripttmpl =~ s/(-soft -l fre_info=)/$1ppYears\@$maxyrs+/;
-      FREUtil::writescript($cshscripttmpl,$outscript,"qsub");
+      FREUtil::writescript($cshscripttmpl,$outscript,"qsub$opt_w");
       next; 
    } else {
       $cshscripttmpl =~ s/set histDir = .*/set histDir = $tmphistdir/;
@@ -695,7 +707,7 @@ else
    set interpvars = ( `$NCVARS $ncvars_arg $fregrid_in.tile1.nc` )
    set interpvars = `echo $interpvars |sed 's/ /,/g'`
 endif
-set order1 = ( precip prec_ls snow_ls prec_conv snow_conv uw_precip prec_uwc snow_uwc prc_deep_donner snow_deep_donner prc1_deep_donner prc_mca_donner snow_mca_donner ice_mask land_mask zsurf )
+set order1 = ( precip prec_ls snow_ls prec_conv snow_conv uw_precip prec_uwc snow_uwc prc_deep_donner snow_deep_donner prc1_deep_donner prc_mca_donner snow_mca_donner ice_mask land_mask zsurf cld_amt_2d conv_freq IWP_all_clouds WP_all_clouds WVP tot_cloud_area tot_ice_amt tot_liq_amt swdn_sfc_clr swdn_sfc swdn_toa_clr swdn_toa swup_sfc_clr swup_sfc swup_toa_clr swup_toa )
 set attCmds = ()
 unset echo
 foreach order1var ( $order1 )
@@ -777,7 +789,9 @@ EOF
          my $origoutscript = $outscript;
          $outscript = "$outscriptdir/$expt"."_$component"."_$opt_t";
          $cshscript =~ s/set scriptName = .*/set scriptName = $outscript/;
+         $cshscript =~ s/(-w $expt)/$1_$component/;
          $cshscript =~ s/(-soft -l fre_info=)/$1ppComponent\@$component+/;
+         $opt_w =~ s/( -hold_jid $expt)(.*)(_\d\d\d\d\d\d\d\d)/$1_$component$3/;
       }
 
       #check if need to convert cube sphere grid to lat lon
@@ -888,6 +902,11 @@ EOF
          $segUnits = FREUtil::getxpathval('runtime/production/segment/@units');  #global
       }
       my $simEND = FREUtil::modifydate($run0,"+ $simTime $simUnits - 1 sec");
+
+      if ( $simEND < $tEND ) {
+         $tEND = $simEND;
+         print "      adjusting tEND to simulation end: $tEND\n";
+      }
       #print "      simEND is $simEND (from basedate + xml simTime)\n";
 
       my $scriptcopy = $cshscript;
@@ -1026,7 +1045,7 @@ EOF
          $cshscript .= "qstat -j \$JOB_ID | grep ^usage\n";
          $cshscript .= "echo END-OF-SCRIPT for postprocessing job $t0-$tEND for $expt\n";
          $cshscript=~ s/(-soft -l fre_info=)/$1ppYears\@$maxyrs+/;
-         unless ($opt_A) {FREUtil::writescript($cshscript,$newoutscript,"qsub");}
+         unless ($opt_A) {FREUtil::writescript($cshscript,$newoutscript,"qsub$opt_w");}
          $cshscript = $scriptcopy;
       }
 
@@ -1193,7 +1212,7 @@ EOF
                 $cshscript =~ s/pe ic.postp (.+)/pe ic.postp $npes/; 
          }
          $cshscript=~ s/(-soft -l fre_info=)/$1ppYears\@$maxyrs+/;
-         unless ($opt_A) {FREUtil::writescript($cshscript,$outscript,"qsub");}
+         unless ($opt_A) {FREUtil::writescript($cshscript,$outscript,"qsub$opt_w");}
       }
    }
 
@@ -1230,7 +1249,7 @@ EOF
       $cshscript .= "echo END-OF-SCRIPT for postprocessing job $t0-$tEND for $expt\n";
       if ( $maxyrs < 2 ) { $cshscript=~ s/#\$ -l h_cpu.*/#\$ -l h_cpu=20:00:00/; }
       $cshscript=~ s/(-soft -l fre_info=)/$1ppYears\@$maxyrs+/;
-      unless ($opt_A) {FREUtil::writescript($cshscript,$outscript,"qsub");}
+      unless ($opt_A) {FREUtil::writescript($cshscript,$outscript,"qsub$opt_w");}
    }
 
    sysmailuser();

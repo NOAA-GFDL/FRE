@@ -13,7 +13,7 @@ LD = ftn
 DEBUG =
 REPRO =
 VERBOSE =
-OPENMP =
+OPENMP = 
 
 ##############################################
 # Need to use at least GNU Make version 3.81 #
@@ -39,20 +39,19 @@ FFLAGS_REPRO = -O2 -debug minimal -fp-model precise -override-limits
 FFLAGS_OPENMP = -openmp
 FFLAGS_VERBOSE = -v -V -what
 
-
 CFLAGS := -D__IFC 
 CFLAGS_OPT = -O2 -debug minimal
 CFLAGS_OPENMP = -openmp
 CFLAGS_DEBUG = -O0 -g -ftrapuv -traceback
 
 LDFLAGS :=
+LDFLAGS := -openmp
 LDFLAGS_VERBOSE := -Wl,-V,--verbose,-cref,-M
 
 ifneq ($(REPRO),)
 CFLAGS += $(CFLAGS_REPRO)
 FFLAGS += $(FFLAGS_REPRO)
-endif
-ifneq ($(DEBUG),)
+else ifneq ($(DEBUG),)
 CFLAGS += $(CFLAGS_DEBUG)
 FFLAGS += $(FFLAGS_DEBUG)
 else
@@ -63,6 +62,7 @@ endif
 ifneq ($(OPENMP),)
 CFLAGS += $(CFLAGS_OPENMP)
 FFLAGS += $(FFLAGS_OPENMP)
+LDFLAGS += $(LDFLAGS_OPENMP)
 endif
 
 ifneq ($(VERBOSE),)

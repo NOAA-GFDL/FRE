@@ -1,7 +1,7 @@
 #!/bin/csh -f
 #FRE scheduler-options
 # 
-# $Id: runscript.template.main,v 1.1.4.7 2010/08/28 17:29:53 afy Exp $
+# $Id: runscript.template.main,v 1.1.4.13 2010/10/11 19:19:00 afy Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: Runscript Template - NCRC Version
 # ------------------------------------------------------------------------------
@@ -57,6 +57,27 @@
 # afy    Ver   7.05  Modify restarts checking (add polling/delay)   August 10
 # afy    Ver   7.06  Fix staged combining (frepp condition)         August 10
 # afy    Ver   7.07  Fix output stager calls (frepp parameter)      August 10
+# afy    Ver   8.00  Modify alias 'submit' (use msub!)              September 10
+# afy    Ver   8.01  Add alias 'submitFileSender'                   September 10
+# afy    Ver   9.00  Add a check for the PBS_O_WORKDIR presence     September 10
+# afy    Ver   9.01  Remove all the references to the PBS_QUEUE     September 10
+# afy    Ver   9.02  Add default PBS_JOBNAME, adjust it later       September 10
+# afy    Ver   9.03  Modify alias 'submitFileSender' (use qsub!)    September 10
+# afy    Ver  10.00  Modify alias 'submitFileSender' (msub -q ldtn) September 10
+# afy    Ver  11.00  Modify alias 'submitFileSender' (gaea!, size)  September 10
+# afy    Ver  11.01  Add alias 'submitOutputStager'                 September 10
+# afy    Ver  12.00  Add constants 'fileSender(Partition|Queue)'    October 10
+# afy    Ver  12.01  Modify alias 'submitFileSender' (use ^)        October 10
+# afy    Ver  12.02  Add constants 'outputStager(Partition|Queue)'  October 10
+# afy    Ver  12.03  Modify alias 'submitOutputStager' (use ^)      October 10
+# afy    Ver  13.00  Modify 'npes' type (const => var)              October 10
+# afy    Ver  13.01  Add settable constants 'outputStager*'         October 10
+# afy    Ver  13.02  Add settable constants 'fileSender*'           October 10
+# afy    Ver  13.03  Don't adjust 'ptmpDir' from FRE_INPUT_DIR      October 10
+# afy    Ver  13.04  Add branch for FRE_STAGE == CHAIN              October 10
+# afy    Ver  13.05  Add alias 'frepp'                              October 10
+# afy    Ver  13.06  Modify alias 'submit' (remove option -V)       October 10
+# afy    Ver  13.07  Use shortened PBS_JOBID in filenames           October 10
 # ------------------------------------------------------------------------------
 # Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2000-2010
 # Designed and written by V. Balaji, Amy Langenhorst and Aleksey Yakovlev
@@ -73,11 +94,13 @@
 
   if ( $?PBS_ENVIRONMENT ) then
     if ( $PBS_ENVIRONMENT == 'PBS_BATCH' ) then
-      chmod 644 $PBS_O_WORKDIR/$PBS_JOBID.OU
+      if ( $?PBS_O_WORKDIR ) then
+        chmod 644 $PBS_O_WORKDIR/$PBS_JOBID.OU
+      endif
     endif 
   else
-    set -r PBS_JOBID = 000000
-    set -r PBS_QUEUE = batch
+    set -r PBS_JOBID = '000000'
+    set -r PBS_JOBNAME = 'STDIN'
   endif
 
 ################################################################################
@@ -93,7 +116,6 @@
   #FRE const(scriptName)
   #FRE const(ppRefineDiagScriptNames)
   #FRE const(executable)
-  #FRE const(npes)
   #FRE const(segmentsPerSimulation)
   #FRE const(segmentsPerJob)
   #FRE const(jobsPerSimulation)
@@ -102,6 +124,11 @@
   #FRE const(dayslist)
   #FRE const(timeStampFormat)
   #FRE const(baseDate)
+
+  #FRE const(outputStagerPartition)
+  #FRE const(outputStagerQueue)
+  #FRE const(fileSenderPartition)
+  #FRE const(fileSenderQueue)
 
   #FRE flag(flagRunType)
   #FRE flag(flagOutputType)
@@ -113,22 +140,11 @@
   #FRE flag(flagOutputTransfer)
   #FRE flag(flagOutputCheck)
 
+  #FRE var(npes)
   #FRE var(ptmpDir)
   #FRE var(outputDir)
   #FRE var(gridSpec)
   #FRE var(initCond)
-
-################################################################################
-#-------------- global variables adjustment for input data staging -------------
-################################################################################
-
-  if ( $?FRE_STAGE ) then
-    if ( $?FRE_INPUT_DIR ) then
-      if ( "$FRE_INPUT_DIR" != "" ) then
-        set ptmpDir = $FRE_INPUT_DIR
-      endif
-    endif
-  endif
 
 ################################################################################
 #------------------------ global environment settings --------------------------
@@ -141,6 +157,7 @@
 
   # ---------------- FRE scripts/executables, which have to be accessible via the PATH after the platform csh:
 
+  # ardiff		- part of the fre-commands module
   # combine-ncc		- part of the fre-nctools module
   # hsmget		- part of the fre-transfer module 
   # mppnccombine	- part of the fre-nctools module
@@ -184,21 +201,24 @@
   setenv PATH $FRE_COMMANDS_HOME/bin:$PATH
   setenv FREROOT $FRE_COMMANDS_HOME
 
+  # ---------------- adjust the job name for interactive runs 
+
+  if ( $PBS_JOBNAME == 'STDIN' ) then
+    setenv PBS_JOBNAME $name
+  endif
+
 ################################################################################
 #------------------------ global constants and aliases -------------------------
 ################################################################################
 
   set -r beginruntime = `date "+%s"`
   set -r outputPath = `echo $outputDir | perl -pe "s/.*?$USER\///"`
+  set -r jobId = `echo $PBS_JOBID | sed -r 's/^([0-9]+).*$/o\1/'`
 
   # ---------------- options for the FRE file sender
-  set -r file_sender_time_ascii   = 00:01:00
-  set -r file_sender_time_restart = 00:30:00
-  set -r file_sender_time_history = 01:00:00
-
-  # ---------------- options for the FRE output stager
-  set -r output_stager_time = 02:00:00
-  set -r output_stager_npes = 48
+  set -r fileSenderTimeAscii   = 00:01:00
+  set -r fileSenderTimeRestart = 00:30:00
+  set -r fileSenderTimeHistory = 01:00:00
 
   # ---------------- for compatibility only
   set -r work = $workDir
@@ -225,29 +245,34 @@
   set -r patternSedRestartRegression = 's/pe[0-9]+(\/restart\/[0-9]+\.tar)$/pe\1/'
 
   # ---------------- FRE string date generation for file name labels
-  alias time_stamp `which time_stamp.csh` -f $timeStampFormat
+  alias timeStamp `which time_stamp.csh` -f $timeStampFormat
 
   # ---------------- FRE directory making/cleaning utility
-  alias prepare_dir `which prepare_dir.csh`
+  alias prepareDir `which prepare_dir.csh`
 
   # ---------------- FRE archives comparing utility
   alias ardiff `which ardiff`
+
+  # ---------------- FRE postprocessing utility
+  alias frepp frepp -v -c split -s
 
   # ---------------- FRE data copying between work directory and archive directory via ptmp directory
   alias hsmget `which hsmget` -q -t -m $hsmSiteDir/hsmget.mk -w $hsmDir -p '$ptmpDir' -a /
 
   # ---------------- FRE script for sending files to GFDL
-  alias file_sender `which send_file`
+  alias fileSender `which send_file`
 
   # ---------------- FRE netCDF files combining utilities
   alias mppnccombine `which mppnccombine` -64
   alias slmnccombine `which combine-ncc` 
 
   # ---------------- FRE output stager 
-  alias output_stager $freCommandsHomeDir/site/ncrc/fresavehist
+  alias outputStager $freCommandsHomeDir/site/ncrc/fresavehist
 
-  # ---------------- batch scheduler submit command
-  alias submit `which qsub` -q $PBS_QUEUE -V
+  # ---------------- batch scheduler submit commands
+  alias submit `which msub`
+  alias submitFileSender `which msub` -l size=1,partition=$fileSenderPartition -q $fileSenderQueue -V
+  alias submitOutputStager `which msub` -l size=1,walltime=4:00:00,partition=$outputStagerPartition -q $outputStagerQueue -V
 
   # ---------------- archiving command
   alias tar `which tar` -b 1024
@@ -349,9 +374,9 @@
 
   # ---------------- set up working directory structure
 
-  prepare_dir $workDir		|| exit 1
-  prepare_dir $workDir/INPUT	|| exit 1
-  prepare_dir $workDir/RESTART	|| exit 1
+  prepareDir $workDir		|| exit 1
+  prepareDir $workDir/INPUT	|| exit 1
+  prepareDir $workDir/RESTART	|| exit 1
 
   lfs setstripe $workDir/INPUT   -s 1048576 -c 0 -i -1
   lfs setstripe $workDir/RESTART -s 1048576 -c 0 -i -1
@@ -453,6 +478,19 @@
       echo "NOTE: Natural end-of-input for $scriptName."
       set echo
       exit 0
+    else if ( $FRE_STAGE == 'CHAIN' ) then
+      pushd $stdoutDir
+      if ( "$project" != "" ) then
+        submit -A $project -v FRE_PROJECT=$project $scriptName
+      else
+        submit $scriptName
+      endif
+      popd
+      unset echo
+      echo end_of_chaining
+      echo "NOTE: Natural end-of-chaining for $scriptName."
+      set echo
+      exit 0
     endif
   endif 
 
@@ -549,7 +587,7 @@
       wait
       set MPI_FAIL
       set outputDir = ${outputDir}_crash
-      prepare_dir $outputDir/ascii || exit 1
+      prepareDir $outputDir/ascii || exit 1
       if ( $cores_dumped > 0 ) then
         cat core*.out >> fms.out
         cat core*.out
@@ -564,9 +602,9 @@
 
     # ---------------- generate date for file names
 
-    set begindate = `time_stamp -b`
+    set begindate = `timeStamp -b`
     if ( $begindate == 'no_time_stamp' ) set begindate = tmp`date '+%j%H%M%S'`
-    set enddate = `time_stamp -e`
+    set enddate = `timeStamp -e`
     if ( $enddate == 'no_time_stamp' ) set enddate = tmp`date '+%j%H%M%S'`
     set fyear = `echo $enddate | cut -c -4`
 
@@ -589,7 +627,7 @@
       set asciiArchive = $outputDir/ascii/$begindate.ascii_out.tar
 
       if ( ! -e $asciiArchive:h ) then
-        prepare_dir $asciiArchive:h || exit 1
+        prepareDir $asciiArchive:h || exit 1
       endif
 
       foreach file ( $asciiFiles )
@@ -603,22 +641,22 @@
 
       if ( $?flagOutputTransferOn ) then
         pushd $stdoutDir
-        set jobName = $scriptName:t.$PBS_JOBID.file_sender.A.$begindate
+        set jobName = $scriptName:t.$jobId.file_sender.A.$begindate
         if ( "$project" != "" ) then
-	  submit \
+	  submitFileSender \
           -A $project \
           -N $jobName \
           -o $stdoutDir/ \
-          -l walltime=$file_sender_time_ascii \
+          -l walltime=$fileSenderTimeAscii \
           -v file=$asciiArchive \
-          `alias file_sender`
+          `alias fileSender`
         else
-	  submit \
+	  submitFileSender \
           -N $jobName \
           -o $stdoutDir/ \
-          -l walltime=$file_sender_time_ascii \
+          -l walltime=$fileSenderTimeAscii \
           -v file=$asciiArchive \
-          `alias file_sender`
+          `alias fileSender`
         endif
         unset jobName
         popd
@@ -639,7 +677,7 @@
       set restartArchive = $outputDir/restart/$enddate.tar
 
       if ( ! -e $restartArchive:h ) then
-        prepare_dir $restartArchive:h || exit 1
+        prepareDir $restartArchive:h || exit 1
       endif
 
       cp -p $workDir/input.nml .
@@ -693,7 +731,7 @@
 	      set msg = "${msg}Job details:\n"
 	      set msg = "${msg}'$name' (run $ireload, loop $irun) running on '$HOST'\n"
 	      set msg = "${msg}Batch job stdout:\n"
-	      set msg = "${msg}$stdoutDir/$PBS_JOBNAME.$PBS_JOBID"
+	      set msg = "${msg}$stdoutDir/$PBS_JOBNAME.$jobId"
               echo $msg | Mail -s "job '$PBS_JOBID' '$name' - restart archives don't match!" $USER
               unset msg
               set echo
@@ -721,22 +759,22 @@
 
       if ( $?flagOutputTransferOn ) then
         pushd $stdoutDir
-        set jobName = $scriptName:t.$PBS_JOBID.file_sender.R.$enddate
+        set jobName = $scriptName:t.$jobId.file_sender.R.$enddate
         if ( "$project" != "" ) then
-	  submit \
+	  submitFileSender \
           -A $project \
           -N $jobName \
           -o $stdoutDir/ \
-          -l walltime=$file_sender_time_restart \
+          -l walltime=$fileSenderTimeRestart \
           -v file=$restartArchive \
-          `alias file_sender`
+          `alias fileSender`
         else
-	  submit \
+	  submitFileSender \
           -N $jobName \
           -o $stdoutDir/ \
-          -l walltime=$file_sender_time_restart \
+          -l walltime=$fileSenderTimeRestart \
           -v file=$restartArchive \
-          `alias file_sender`
+          `alias fileSender`
         endif
         unset jobName
         popd
@@ -819,7 +857,7 @@
         set historyCombinedArchive = $outputDir/history/$begindate.nc.tar
 
         if ( ! -e $historyCombinedArchive:h ) then       
-          prepare_dir $historyCombinedArchive:h || exit 1
+          prepareDir $historyCombinedArchive:h || exit 1
         endif
       
 	foreach file ( $historyCombinedFiles )
@@ -833,22 +871,22 @@
 
 	if ( $?flagOutputTransferOn ) then
           pushd $stdoutDir
-          set jobName = $scriptName:t.$PBS_JOBID.file_sender.H.$begindate
+          set jobName = $scriptName:t.$jobId.file_sender.H.$begindate
           if ( "$project" != "" ) then
-	    submit \
+	    submitFileSender \
             -A $project \
             -N $jobName \
             -o $stdoutDir/ \
-            -l walltime=$file_sender_time_history \
+            -l walltime=$fileSenderTimeHistory \
             -v file=$historyCombinedArchive \
-            `alias file_sender`
+            `alias fileSender`
           else
-	    submit \
+	    submitFileSender \
             -N $jobName \
             -o $stdoutDir/ \
-            -l walltime=$file_sender_time_history \
+            -l walltime=$fileSenderTimeHistory \
             -v file=$historyCombinedArchive \
-            `alias file_sender`
+            `alias fileSender`
           endif
           unset jobName
           popd
@@ -867,7 +905,7 @@
 	set historyUncombinedArchive = $outputDir/history/$begindate.nc.0000.tar
 
         if ( ! -e $historyUncombinedArchive:h ) then
-	  prepare_dir $historyUncombinedArchive:h || exit 1
+	  prepareDir $historyUncombinedArchive:h || exit 1
         endif
 
 	foreach file ( $historyUncombinedFiles )
@@ -881,22 +919,22 @@
 
 	if ( $?flagOutputTransferOn ) then
           pushd $stdoutDir
-          set jobName = $scriptName:t.$PBS_JOBID.file_sender.U.$begindate
+          set jobName = $scriptName:t.$jobId.file_sender.U.$begindate
           if ( "$project" != "" ) then
-	    submit \
+	    submitFileSender \
             -A $project \
             -N $jobName \
             -o $stdoutDir/ \
-            -l walltime=$file_sender_time_history \
+            -l walltime=$fileSenderTimeHistory \
             -v file=$historyUncombinedArchive \
-            `alias file_sender`
+            `alias fileSender`
           else
-	    submit \
+	    submitFileSender \
             -N $jobName \
             -o $stdoutDir/ \
-            -l walltime=$file_sender_time_history \
+            -l walltime=$fileSenderTimeHistory \
             -v file=$historyUncombinedArchive \
-            `alias file_sender`
+            `alias fileSender`
           endif
           unset jobName
           popd
@@ -916,7 +954,7 @@
             set firstdate = $begindate
 	  endif
           if ( $?flagOutputPostProcessOn ) then
-	    echo "frepp -t $firstdate -d $outputDir/history -x $rtsxml $name"
+	    echo "`alias frepp` -t $firstdate -d $outputDir/history -x $rtsxml $name"
           endif
 	  set combineList = ( )
           unset firstdate
@@ -946,9 +984,9 @@
             set firstdate = $begindate
 	  endif
           if ( $?ppRefineDiagScriptNamesList ) then
-	    set PPcmd = "frepp -t $firstdate -D $ppRefineDiagScriptNamesList -d $outputDir/history -x $rtsxml $name"
+	    set PPcmd = "`alias frepp` -t $firstdate -D $ppRefineDiagScriptNamesList -d $outputDir/history -x $rtsxml $name"
           else
-	    set PPcmd = "frepp -t $firstdate -d $outputDir/history -x $rtsxml $name"
+	    set PPcmd = "`alias frepp` -t $firstdate -d $outputDir/history -x $rtsxml $name"
           endif
           unset firstdate
 	else
@@ -960,27 +998,25 @@
 
       set tempHistoryDateDir = $outputDir/history/$begindate
 
-      prepare_dir $tempHistoryDateDir || exit 1
+      prepareDir $tempHistoryDateDir || exit 1
 
       find $workDir -maxdepth 1 -type f -regex "$patternFindNC" -exec mv -f {} $tempHistoryDateDir \;
 
       pushd $stdoutDir
-      set jobName = $scriptName:t.$PBS_JOBID.output_stager.$begindate
+      set jobName = $scriptName:t.$jobId.output_stager.$begindate
       if ( "$project" != "" ) then
-        submit \
+        submitOutputStager \
         -A $project \
         -N $jobName \
         -o $stdoutDir/ \
-        -l walltime=$output_stager_time,size=$output_stager_npes \
         -v project=$project,datedir=$tempHistoryDateDir,check=$?flagOutputCheck,frepp="$PPcmd",stdout=$stdoutDir/ \
-        `alias output_stager`
+        `alias outputStager`
       else
-        submit \
+        submitOutputStager \
         -N $jobName \
         -o $stdoutDir/ \
-        -l walltime=$output_stager_time,size=$output_stager_npes \
         -v datedir=$tempHistoryDateDir,check=$?flagOutputCheck,frepp="$PPcmd",stdout=$stdoutDir/ \
-        `alias output_stager`
+        `alias outputStager`
       endif
       unset jobName
       popd
@@ -1034,10 +1070,8 @@
 
     if ( $?flagRunTypeProduction ) then
 
-      set now = `date +%s`
-
       unset echo
-      echo "Writing reload information to $reload_file at $now"
+      echo "Writing reload information to $reload_file at `date +%s`"
       set echo
 
       if ( -f $reload_file ) then
@@ -1099,7 +1133,7 @@
 
   if ( $?flagRunTypeRegression ) then
 
-    prepare_dir $workDir/combine_restarts || exit 1
+    prepareDir $workDir/combine_restarts || exit 1
     pushd $workDir/combine_restarts
 
     tar -xf $restartArchive

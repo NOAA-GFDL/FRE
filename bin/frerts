@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 # -*- cperl -*-
-# $Id: frerts,v 15.1.2.27 2010/08/24 20:25:25 fms Exp $
+# $Id: frerts,v 15.1.2.27.2.6 2010/10/18 18:16:32 arl Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: Automated launch of fremake, frerun and frecheck.
 # ------------------------------------------------------------------------------
@@ -20,7 +20,7 @@ use Date::Manip();
 {
 package frerts;
 
-use constant VERSION => '$Id: frerts,v 15.1.2.27 2010/08/24 20:25:25 fms Exp $';
+use constant VERSION => '$Id: frerts,v 15.1.2.27.2.6 2010/10/18 18:16:32 arl Exp $';
 use constant OPTLIST =>
   (
       'help|h',
@@ -167,17 +167,34 @@ if ( $npes > 40 and not $opt{submit} ) {
 
 my $schedprefix = $fre->property('FRE.scheduler.prefix');
 my $schedcputime = $fre->property('FRE.scheduler.option.time');
-my $schednpes = $fre->property('FRE.scheduler.option.npes');
+my $schednpes = $fre->property('FRE.scheduler.option.ncores');
 my $schedstdout = $fre->property('FRE.scheduler.option.stdout');
 my $schedcpuset = $fre->property('FRE.scheduler.option.cpuset');
 my $schedrerun = $fre->property('FRE.scheduler.option.rerun');
 my $schedname = $fre->property('FRE.scheduler.option.name');
 my $schedjobid = $fre->property('FRE.scheduler.variable.jobID');
+my $schedjoin = $fre->property('FRE.scheduler.option.join');
+
+my $schedmkpartition = '';
+if ( "$fre->property('FRE.scheduler.partition.make')" ne '' ) {
+ $schedmkpartition = $fre->property('FRE.scheduler.option.partition');
+ my $part = $fre->property('FRE.scheduler.partition.make');
+ $schedmkpartition =~ s/\$/$part/;
+}
+
+my $schedrunpartition = '';
+if ( "$fre->property('FRE.scheduler.partition.run')" ne '' ) {
+ $schedrunpartition = $fre->property('FRE.scheduler.option.partition');
+ my $part = $fre->property('FRE.scheduler.partition.run');
+ $schedrunpartition =~ s/\$/$part/;
+}
+
 $schedcputime =~ s/\$//;
 $schednpes =~ s/\$//;
-$schedstdout = '-o '; #fre.properties doesn't allow specification of full path at DOE
-                      #luckily this option is always -o. This should be changed in
-                      #fre.properties to make it cleaner.
+
+$schedstdout = $fre->property('FRE.scheduler.option.stdout');
+$schedstdout =~ s/\$/$rtsstdoutdir/;
+                      
 $schedname =~ s/\$//;
 
 my $project = $fre->property('FRE.scheduler.project');
@@ -187,8 +204,10 @@ if ( "$project" ne '' ) {
    $project = "$schedprefix $schedproject";
 }
 
-my $compiletime='02:00:00';
-my $compilenpes=8;
+my $compiletime = '02:00:00';
+my $compilenpes = $fre->property('FRE.scheduler.coresPerJob.increment.make');
+my $compilemaxnpes = $fre->property('FRE.scheduler.coresPerJob.max.make');
+$compilenpes *= 2 unless $compilenpes * 2 > $compilemaxnpes;
 
 my $mkscriptn = "autoRTS.mk.$thisdate.csh";
 my $runscriptn = "autoRTS.run.$thisdate.csh";
@@ -201,12 +220,15 @@ my $mkcsh = <<EOF;
 
 $schedprefix $schedcputime$compiletime
 $schedprefix $schednpes$compilenpes
-$schedprefix $schedstdout$rtsstdoutdir/$mkscriptn.o\$$schedjobid
+$schedprefix $schedstdout
 $schedprefix $schedname frerts-mk,$xml,$opt{datestr}
-$schedprefix $schedcpuset
-$schedprefix $schedrerun
-$project
 EOF
+
+$mkcsh .= "$schedprefix $schedcpuset\n" unless "$schedcpuset" eq '';
+$mkcsh .= "$schedprefix $schedrerun\n" unless "$schedrerun" eq '';
+$mkcsh .= "$schedprefix $schedjoin\n" unless "$schedjoin" eq '';
+$mkcsh .= "$schedprefix $schedmkpartition\n" unless "$schedmkpartition" eq '';
+$mkcsh .= "$project\n" unless "$project" eq '';
 
    my $runcsh = <<EOF;
 #!/bin/csh -f
@@ -214,12 +236,15 @@ EOF
 
 $schedprefix $schedcputime$ttlruntime
 $schedprefix $schednpes$npes
-$schedprefix $schedstdout$rtsstdoutdir/$runscriptn.o\$$schedjobid
+$schedprefix $schedstdout
 $schedprefix $schedname frerts-run,$xml,$opt{datestr}
-$schedprefix $schedcpuset
-$schedprefix $schedrerun
-$project
 EOF
+
+$runcsh .= "$schedprefix $schedcpuset\n" unless "$schedcpuset" eq '';
+$runcsh .= "$schedprefix $schedrerun\n" unless "$schedrerun" eq '';
+$runcsh .= "$schedprefix $schedjoin\n" unless "$schedjoin" eq '';
+$runcsh .= "$schedprefix $schedrunpartition\n" unless "$schedrunpartition" eq '';
+$runcsh .= "$project\n" unless "$project" eq '';
 
    my $vars = <<EOF;
 
@@ -256,15 +281,17 @@ EOF
    $mkcsh .= "$vars".getmktemplate()."$runinter";
    $runcsh .= "$vars".getruntemplate();
 
+   my $submitcmd = $fre->property('FRE.scheduler.submit.command');
+
    #write script...
    print "Make script: $mkscript\n" if $opt{verbose};
    print "Run script: $runscript\n" if $opt{verbose};
-   my $mkjob = writescript($mkcsh,$fre,$mkscript,"qsub",$opt{submit},$opt{verbose},0);
+   my $mkjob = writescript($mkcsh,$fre,$mkscript,"$submitcmd",$opt{submit},$opt{verbose},0);
 
    if ( $mkjob ) {
       my $dependsOn = $fre->property('FRE.scheduler.option.dependsOn');
       $dependsOn =~ s/\$/$mkjob/;
-      writescript($runcsh,$fre,$runscript,"qsub $dependsOn",$opt{submit},$opt{verbose},1);
+      writescript($runcsh,$fre,$runscript,"$submitcmd $dependsOn",$opt{submit},$opt{verbose},1);
    } else {
       die "Compile script submission failed, cannot submit runscript\n";
    }
@@ -376,6 +403,7 @@ if ( ! -d $rootdir ) then
   mkdir -p $rootdir || exit 1
 endif
 cp $xml $rootdir
+set frerunstatus = 0
 
 foreach expt ( $list )
   set cmd = "frerun -p $platform -t repro -r $regtype -x $xml $expt"
@@ -384,6 +412,7 @@ foreach expt ( $list )
   set workdir = (`echo $dirs | awk '{print $6}'`)
   set out = $stdoutdir/run_$expt.stdout
   set runs = () 
+  set frerunstatus = 0
   echo ---------------------------------------------------
   echo $cmd
   $cmd >& $out 
@@ -407,6 +436,7 @@ foreach expt ( $list )
      echo "frerun failed for $expt (status $mystatus)"
      tail $out
      echo See $out
+     set frerunstatus = 1
   endif
 end
 
@@ -415,7 +445,7 @@ set cmd = "frecheck -p $platform -t repro -x $xml $list"
 echo $cmd
 
 $cmd > stdoutfile
-if ( $status == 0 ) then
+if ( $status == 0 && $frerunstatus == 0 ) then
    set result = 'passed'
 else
    set result = 'FAILED'
@@ -470,7 +500,7 @@ sub writescript {
       if($verbose){print "\nExecuting '$batchCmd $outscript'\n";}
       my $qsub_msg = `$batchCmd $outscript`;
       print "\n$qsub_msg";
-      my $qsubOutputPattern = $fre->property('FRE.scheduler.qsub.output.pattern');
+      my $qsubOutputPattern = $fre->property("FRE.scheduler.submit.output.pattern");
       return ($qsub_msg =~ m/$qsubOutputPattern/m) ? $1 : '';
    } else {
       unless ($batchonly) {

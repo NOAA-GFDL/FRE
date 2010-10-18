@@ -39,20 +39,22 @@ FFLAGS_REPRO = -O2 -debug minimal -fp-model precise -override-limits
 FFLAGS_OPENMP = -openmp
 FFLAGS_VERBOSE = -v -V -what
 
-
 CFLAGS := -D__IFC 
 CFLAGS_OPT = -O2 -debug minimal
 CFLAGS_OPENMP = -openmp
 CFLAGS_DEBUG = -O0 -g -ftrapuv -traceback
 
 LDFLAGS :=
+LDFLAGS_OPENMP := -openmp
 LDFLAGS_VERBOSE := -Wl,-V,--verbose,-cref,-M
+
+# start with blank LIBS
+LIBS :=
 
 ifneq ($(REPRO),)
 CFLAGS += $(CFLAGS_REPRO)
 FFLAGS += $(FFLAGS_REPRO)
-endif
-ifneq ($(DEBUG),)
+else ifneq ($(DEBUG),)
 CFLAGS += $(CFLAGS_DEBUG)
 FFLAGS += $(FFLAGS_DEBUG)
 else
@@ -63,6 +65,9 @@ endif
 ifneq ($(OPENMP),)
 CFLAGS += $(CFLAGS_OPENMP)
 FFLAGS += $(FFLAGS_OPENMP)
+LDFLAGS += $(LDFLAGS_OPENMP)
+# to correct a loader bug on gaea: envars below set by module load intel
+LIBS += -L$(INTEL_PATH)/$(INTEL_MAJOR_VERSION)/$(INTEL_MINOR_VERSION)/lib/intel64 -lifcoremt
 endif
 
 ifneq ($(VERBOSE),)
@@ -79,9 +84,9 @@ ifeq ($(NETCDF),3)
 endif
 
 ifneq ($(findstring netcdf-4.0.1,$(LOADEDMODULES)),)
-  LIBS := -lnetcdff -lnetcdf -lhdf5_hl -lhdf5 -lz
+  LIBS += -lnetcdff -lnetcdf -lhdf5_hl -lhdf5 -lz
 else
-  LIBS := -lnetcdf
+  LIBS += -lnetcdf
 endif
 
 LIBS += 

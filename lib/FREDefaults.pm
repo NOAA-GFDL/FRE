@@ -1,5 +1,5 @@
 #
-# $Id: FREDefaults.pm,v 18.0.2.7 2010/08/04 20:55:35 afy Exp $
+# $Id: FREDefaults.pm,v 18.0.2.10 2010/09/29 16:30:35 afy Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: System Defaults Module
 # ------------------------------------------------------------------------------
@@ -15,6 +15,19 @@
 # afy    Ver   5.00  Add SiteIsCMRS subroutine                      August 10
 # afy    Ver   6.00  Modify Site (add CMRS branch)                  August 10
 # afy    Ver   7.00  Replace SiteIsCCS => SiteIsNCCS                August 10
+# afy    Ver   8.00  Add Partition subroutine                       September 10
+# afy    Ver   8.01  Add PlatformStandardized subroutine            September 10
+# afy    Ver   8.02  Modify Platform subroutine (add partition)     September 10
+# afy    Ver   8.03  Add siteGet/partitionGet utilities             September 10
+# afy    Ver   8.04  Add FREDefaults(Site|Partition) globals        September 10
+# afy    Ver   8.05  Replace SiteIsCMRS => SiteIsNCRC               September 10
+# afy    Ver   8.06  Replace SiteIsCCS => SiteIsNCCS                September 10
+# afy    Ver   9.00  Disable partitions on NCRC                     September 10
+# afy    Ver   9.00  Add constant DEFERRED_NAMES                    September 10
+# afy    Ver   9.01  Add DeferredPropertyNames subroutine           September 10
+# afy    Ver  10.00  Remove Partition subroutine                    September 10
+# afy    Ver  10.01  Modify PlatformStandardized subroutine         September 10
+# afy    Ver  10.02  Modify Platform subroutine                     September 10
 # ------------------------------------------------------------------------------
 # Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2009-2010
 # Designed and written by V. Balaji, Amy Langenhorst and Aleksey Yakovlev
@@ -62,12 +75,12 @@ use constant STATUS_FRE_RUN_EXECUTION_PROBLEM		=> 62;
 # //////////////////////////////////////////////////////////////////////////////
 
 use constant DOMAIN_GFDL	=> 'gfdl.noaa.gov'; 
+use constant DOMAIN_NCRC	=> 'ncrc.gov'; 
 use constant DOMAIN_NCCS	=> 'ccs.ornl.gov'; 
-use constant DOMAIN_CMRS	=> 'ncrc.gov'; 
 
 use constant SITE_GFDL		=> 'hpcs';
+use constant SITE_NCRC		=> 'ncrc';
 use constant SITE_NCCS		=> 'doe';
-use constant SITE_CMRS		=> 'ncrc';
 use constant SITE_UNKNOWN	=> 'unknown';
 
 use constant XMLFILE_DEFAULT	=> 'rts.xml';
@@ -75,6 +88,43 @@ use constant TARGET_DEFAULT 	=> 'prod';
 
 use constant GLOBAL_NAMES	=> 'site,siteDir,suite,platform,target,name,root';
 use constant EXPERIMENT_DIRS	=> 'root,src,exec,scripts,stdout,work,ptmp,archive,postProcess,analysis';
+use constant DEFERRED_NAMES	=> 'name';
+
+# //////////////////////////////////////////////////////////////////////////////
+# ///////////////////////////////////////////////////////////////// Utilities //
+# //////////////////////////////////////////////////////////////////////////////
+
+my $siteGet = sub()
+# ------ arguments: none
+{
+  my $domain = Net::Domain::hostdomain();
+  if ($domain eq FREDefaults::DOMAIN_GFDL)
+  {
+    return FREDefaults::SITE_GFDL;
+  }
+  elsif ($domain eq FREDefaults::DOMAIN_NCRC)
+  {
+    return FREDefaults::SITE_NCRC;
+  }
+  elsif ($domain eq FREDefaults::DOMAIN_NCCS)
+  {
+    return FREDefaults::SITE_NCCS;
+  }
+  elsif ($domain)
+  {
+    return (split(/\./, $domain))[0];
+  }
+  else
+  {
+    return FREDefaults::SITE_UNKNOWN; 
+  }
+};
+
+# //////////////////////////////////////////////////////////////////////////////
+# ////////////////////////////////////////////////////////// Global Variables //
+# //////////////////////////////////////////////////////////////////////////////
+
+my $FREDefaultsSite = $siteGet->();
 
 # //////////////////////////////////////////////////////////////////////////////
 # //////////////////////////////////////////////////////// Exported Functions //
@@ -83,45 +133,25 @@ use constant EXPERIMENT_DIRS	=> 'root,src,exec,scripts,stdout,work,ptmp,archive,
 sub Site()
 # ------ arguments: none
 {
-  my $domain = Net::Domain::hostdomain();
-  if ($domain eq FREDefaults::DOMAIN_GFDL)
-  {
-    return FREDefaults::SITE_GFDL;
-  }
-  elsif ($domain eq FREDefaults::DOMAIN_NCCS)
-  {
-    return FREDefaults::SITE_NCCS;
-  }
-  elsif ($domain eq FREDefaults::DOMAIN_CMRS)
-  {
-    return FREDefaults::SITE_CMRS;
-  }
-  elsif ($domain)
-  {
-    return (split /\./, $domain)[0];
-  }
-  else
-  {
-    return FREDefaults::SITE_UNKNOWN; 
-  }
+  return $FREDefaultsSite;
 }
 
 sub SiteIsGFDL()
 # ------ arguments: none
 {
-  return (FREDefaults::Site() eq FREDefaults::SITE_GFDL);
+  return ($FREDefaultsSite eq FREDefaults::SITE_GFDL);
+}
+
+sub SiteIsNCRC()
+# ------ arguments: none
+{
+  return ($FREDefaultsSite eq FREDefaults::SITE_NCRC);
 }
 
 sub SiteIsNCCS()
 # ------ arguments: none
 {
-  return (FREDefaults::Site() eq FREDefaults::SITE_NCCS);
-}
-
-sub SiteIsCMRS()
-# ------ arguments: none
-{
-  return (FREDefaults::Site() eq FREDefaults::SITE_CMRS);
+  return ($FREDefaultsSite eq FREDefaults::SITE_NCCS);
 }
 
 sub XMLFile()
@@ -130,10 +160,26 @@ sub XMLFile()
   return FREDefaults::XMLFILE_DEFAULT;
 }
 
+sub PlatformStandardized($)
+# ------ arguments: $platform
+{
+  my $p = shift;
+  if ($p =~ m/^(?:(\w+)\.)?(\w*)$/o)
+  {
+    my $site = (defined($1)) ? $1 : $FREDefaultsSite;
+    my $tail = ($2) ? $2 : $site;
+    return $site . '.' . $tail;
+  }
+  else
+  {
+    return '';
+  }
+}
+
 sub Platform()
 # ------ arguments: none
 {
-  return FREDefaults::Site() . '.' . FREDefaults::Site();
+  return $FREDefaultsSite . '.' . $FREDefaultsSite;
 }
 
 sub Target()
@@ -151,11 +197,13 @@ sub ExperimentDirs()
 sub ReservedPropertyNames()
 # ------ arguments: none
 {
-  return
-  (
-    split(',', FREDefaults::GLOBAL_NAMES),
-    map($_ . 'Dir', FREDefaults::ExperimentDirs())
-  );
+  return (split(',', FREDefaults::GLOBAL_NAMES), map($_ . 'Dir', FREDefaults::ExperimentDirs()));
+}
+
+sub DeferredPropertyNames()
+# ------ arguments: none
+{
+  return split(',', FREDefaults::DEFERRED_NAMES);
 }
 
 # //////////////////////////////////////////////////////////////////////////////

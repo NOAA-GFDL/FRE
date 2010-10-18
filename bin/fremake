@@ -1,7 +1,7 @@
 #!/usr/bin/perl
 # -*- cperl -*-
 #
-# $Id: fremake,v 18.0.2.7 2010/06/18 20:49:47 afy Exp $
+# $Id: fremake,v 18.0.2.11 2010/09/29 16:57:38 afy Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: Program to Create a Script to Compile a Model
 # ------------------------------------------------------------------------------
@@ -24,6 +24,19 @@
 # afy    Ver   7.00  Use new FREDefaults.pm to return status        June 10
 # afy    Ver   7.01  Use new FREXML.pm (based on the XML::Dumper)   June 10
 # afy    Ver   7.02  Add check for the executable existence/perms   June 10
+# afy    Ver   8.00  Reconfigure Getopt::Long (no 'auto_abbrev')    September 10
+# afy    Ver   8.01  Add single-letter aliases to all the options   September 10
+# afy    Ver   8.02  Modify option --validate (no aliases)          September 10
+# afy    Ver   8.03  Modify option --version (low case)             September 10
+# afy    Ver   8.04  Use new module FRETemplate                     September 10
+# afy    Ver   8.05  Modify processCompileExecuteOrSubmit ($submit) September 10
+# afy    Ver   9.00  Use new module FRETemplate (setScheduler*)     September 10
+# afy    Ver  10.00  Rename option --npes => --ncores               September 10
+# afy    Ver  10.01  Modify processCompileScriptCreate (ncores)     September 10
+# afy    Ver  10.02  Modify processCompileScriptCreate (tabs!)      September 10
+# afy    Ver  10.03  Modify processCompileScriptCreate (cosmetics)  September 10
+# afy    Ver  10.04  Modify Usage subroutine (corrections)          September 10
+# afy    Ver  11.00  Add option --partition                         September 10
 # ------------------------------------------------------------------------------
 # Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2000-2010
 # Designed and written by V. Balaji, Amy Langenhorst and Aleksey Yakovlev
@@ -33,7 +46,7 @@ use strict;
 
 use File::Basename();
 use File::Copy();
-use Getopt::Long(':config', 'no_ignore_case');
+use Getopt::Long(':config', 'no_ignore_case', 'no_auto_abbrev');
 
 use FRE();
 use FREDefaults();
@@ -52,27 +65,29 @@ use FREXML();
 
   package fremake;
 
-  use constant VERSION => '$Id: fremake,v 18.0.2.7 2010/06/18 20:49:47 afy Exp $';
+  use constant VERSION => '$Id: fremake,v 18.0.2.11 2010/09/29 16:57:38 afy Exp $';
 
   use constant OPTLIST =>
   (
     'force-compile|F',
     'force-checkout|f',
-    'execute',
-    'help',
-    'npes=i',
-    'platform=s',
-    'validate|S',
-    'submit',
-    'target=s',
-    'Version',
+    'execute|E',
+    'help|h',
+    'ncores|n=i',
+    'partition|P=s',
+    'platform|p=s',
+    'submit|s',
+    'target|t=s',
+    'validate',
+    'version|V',
     'verbose|v+',
-    'walltime=i',
-    'xmlfile=s'
+    'walltime|w=i',
+    'xmlfile|x=s'
   );
   
-  use constant NPES_DEFAULT => 8;
   use constant WALLTIME_DEFAULT => 120;
+  use constant NCORES_DEFAULT => 8;
+  use constant TAB => '<TAB>';
 
 }
 
@@ -95,28 +110,29 @@ use FREXML();
     my $xml = FREDefaults::XMLFile();
     my $pfm = FREDefaults::Platform();
     my $tgt = FREDefaults::Target();
-    my $nps = fremake::NPES_DEFAULT;
+    my $ncs = fremake::NCORES_DEFAULT;
     my $wtm = fremake::WALLTIME_DEFAULT;
     my $beg = "\e[0;4m";
     my $end = "\e[m";
     return
     (
       "\n",
-      "  Usage: $self [options] experiment [experiment ...]\n\n",
+      "  Usage: $self [option|experiment] ...\n\n",
       "  Options:\n\n",
-      "   -F,        --force-compile    ${beg}f${end}orce compile in case the executable directory exists\n", 
-      "   -f,        --force-checkout   ${beg}f${end}orce checkout in case the source directory exists\n\n", 
-      "   -e,        --execute          ${beg}e${end}xecute all the created scripts in the current session\n", 
-      "   -h,        --help             print ${beg}h${end}elp message and exit\n",
-      "   -n NUM,    --npes=NUM         ${beg}n${end}umber of processors to use (default is $nps)\n",
-      "   -p STRING, --platform=STRING  hardware and software ${beg}p${end}latform STRING (default is '$pfm')\n", 
-      "   -S,        --validate         validate the FILE against the ${beg}s${end}chema before processing\n",
-      "   -s,        --submit           ${beg}s${end}ubmit all the created scripts as batch jobs\n",
-      "   -t STRING, --target=STRING    use compilation directives, ${beg}t${end}argeted by STRING (default is '$tgt')\n", 
-      "   -V,        --Version          print the tool ${beg}v${end}ersion and exit\n",
-      "   -v,        --verbose          get ${beg}v${end}erbose messages (repeat the option to increase verbosity level)\n", 
-      "   -w NUM,    --walltime=NUM     maximum ${beg}w${end}all time (in minutes) to use (default is $wtm)\n", 
-      "   -x FILE,   --xmlfile=FILE     experiment suite ${beg}X${end}ML configuration FILE (default is '$cwd/$xml')\n\n", 
+      "   -F,          --force-compile      ${beg}f${end}orce compile in case the executable directory exists\n", 
+      "   -f,          --force-checkout     ${beg}f${end}orce checkout in case the source directory exists\n\n", 
+      "   -E,          --execute            ${beg}e${end}xecute all the created scripts in the current session\n", 
+      "   -h,          --help               print ${beg}h${end}elp message and exit\n",
+      "   -n NUM,      --ncores=NUM         ${beg}n${end}umber of processor cores to use (default is $ncs)\n",
+      "   -P STRING,   --partition=STRING   ${beg}p${end}artition to use for compilation\n",
+      "   -p STRING,   --platform=STRING    hardware and software ${beg}p${end}latform STRING (default is '$pfm')\n", 
+      "   -s,          --submit             ${beg}s${end}ubmit all the created scripts as batch jobs\n",
+      "   -t STRING,   --target=STRING      use compilation directives, ${beg}t${end}argeted by STRING (default is '$tgt')\n", 
+      "                --validate           validate the FILE against its XML schema before processing\n",
+      "   -V,          --version            print the tool ${beg}v${end}ersion and exit\n",
+      "   -v,          --verbose            get ${beg}v${end}erbose messages (repeat the option to increase verbosity level)\n", 
+      "   -w NUM,      --walltime=NUM       maximum ${beg}w${end}all time (in minutes) to use (default is $wtm)\n", 
+      "   -x FILE,     --xmlfile=FILE       experiment suite ${beg}X${end}ML configuration FILE (default is '$cwd/$xml')\n\n", 
       "  All the option names may be abbreviated, a single leading dash is also acceptable.\n",
       "  At least one experiment from the FILE must be listed as an argument.\n\n"
     );
@@ -131,7 +147,7 @@ use FREXML();
     return
     (
       "\n",
-      "   Synopsis: $self creates a C-shell script to compile sources for FRE experiment(s).\n",
+      "   Synopsis: $self creates a tcsh script to compile sources for FRE experiment(s).\n",
       "@usage",
       "   Use --force-checkout to get a fresh checkout to the source directory.\n",
       "      An existing source directory is normally reused if possible. However it might be an issue\n",
@@ -377,7 +393,7 @@ use FREXML();
     my ($fre, $scoScriptName) = ($z->fre(), fremake::checkoutScriptName($z)); 
     if ($scoScript)
     {
-      $scoScript = FRETemplate::setVersionInfo($scoScript, $z, $0, %o);
+      FRETemplate::setVersionInfo(\$scoScript, $z, $0, %o);
       if (open my $scoScriptHandle, '>', $scoScriptName)
       {
 	print {$scoScriptHandle} $scoScript;
@@ -428,7 +444,7 @@ use FREXML();
 	(
 	  1,
 	  "The existing checkout script '$scoScriptName' doesn't match checkout instructions in the XML file!",
-          "If you need a fresh checkout, please rerun the fremake with the --force-checkout option.",
+          "If you need a fresh checkout, please rerun the fremake with the --force-checkout (-f) option.",
 	  "Please consider checking your changed sources in the CVS before that!", 
           "Try the --help option for more information."
 	);
@@ -549,11 +565,11 @@ use FREXML();
     }
   }
 
-  sub processCompileScriptCreate($$$)
-  # ------ arguments: $exp $refToHash $npes
+  sub processCompileScriptCreate($$)
+  # ------ arguments: $exp $refToHash
   {
 
-    my ($z, $h, $n) = @_;
+    my ($z, $h) = @_;
     my ($expName, $rootDir, $srcDir, $execDir, $fre) = ($z->name(), $z->rootDir(), $z->srcDir(), $z->execDir(), $z->fre());
 
     $fre->out(2, "Using executable directory '$execDir'...");
@@ -682,11 +698,11 @@ use FREXML();
 
     # --------------------------------------------------------------------------- create the master Makefile
 
-    my $Makefile = '';
+    my ($Makefile, $tab) = ('', fremake::TAB);
     $Makefile .= "# Makefile for Experiment '$expName'\n";
     $Makefile .= "include $mkmfTemplate\n\n";
     $Makefile .= "fms_$expName.x: @liblist\n";
-    $Makefile .= "\t\\\$(LD) \\\$\^ \\\$(LDFLAGS) -o \\\$\@ \n\n";
+    $Makefile .= "${tab}\\\$(LD) \\\$\^ \\\$(LDFLAGS) -o \\\$\@ \n\n";
 
     foreach my $name (@names)
     {
@@ -704,7 +720,7 @@ use FREXML();
 	}
       }
       $Makefile .= "lib$name.a: $req FORCE\n";
-      $Makefile .= "\tmake $makeOverrides -f Makefile.$name \\\$\@\n\n";
+      $Makefile .= "${tab}make $makeOverrides -f Makefile.$name \\\$\@\n\n";
     }
 
     $Makefile .= "FORCE:\n\n";
@@ -712,19 +728,20 @@ use FREXML();
     $Makefile .= "clean:\n";
     foreach my $name (@names)
     {
-      $Makefile .= "\tmake $makeOverrides -f Makefile.$name clean\n";
+      $Makefile .= "${tab}make $makeOverrides -f Makefile.$name clean\n";
     }
     $Makefile .= "\n";
 
     $Makefile .= "localize:\n";
     foreach my $name (@names)
     {
-      $Makefile .= "\tmake $makeOverrides -f Makefile.$name localize\n";
+      $Makefile .= "${tab}make $makeOverrides -f Makefile.$name localize\n";
     }
 
-    # ------------------------------------------------------------------------- set the FRE commands home directory
+    # ------------------------------------------------------------------------------ get FRE parameters
 
     my $freCommandsHomeDir = FRE::home();
+    my $jobs = $fre->property('FRE.tool.make.jobs.default');
 
     # ------------------------------------------------------------------- create the environment setting script
 
@@ -734,13 +751,17 @@ use FREXML();
     $envScript .= "# ------------------------------------------------------------------------------\n";
     $envScript .= "#FRE version-info\n";
     $envScript .= "# ------------------------------------------------------------------------------\n\n";
-    $envScript .= "set echo\n";
-    $envScript .= "unalias *\n";
-    $envScript .= "$baseCsh\n";
-    $envScript .= "setenv PATH $freCommandsHomeDir/bin:\$PATH\n";
-    $envScript .= "setenv MAKEFLAGS jobs=$n\n\n";
-    $envScript .= "#FRE scheduler-make-verbose\n";
+
+    $envScript .= "setenv MAKEFLAGS jobs=$jobs\n\n";
+
     $envScript .= "unset echo\n";
+    $envScript .= "source \$MODULESHOME/init/tcsh\n";
+    $envScript .= "$baseCsh\n";
+    $envScript .= "module list\n";
+    $envScript .= "set echo\n\n";
+
+    $envScript .= "setenv PATH $freCommandsHomeDir/bin:\$PATH\n\n";
+    $envScript .= "#FRE scheduler-make-verbose\n";
 
     # ---------------------------------------------------------------------------- create the compile script
 
@@ -751,6 +772,7 @@ use FREXML();
     foreach (keys %libHeaderDirList) { $libHeaderList .= "-I$_ "; }
 
     my $cmpScript = '';
+    my $envScriptName = fremake::envScriptName($z);
 
     $cmpScript .= "#!/bin/tcsh -f\n";
     $cmpScript .= "#FRE scheduler-options\n\n";
@@ -758,12 +780,14 @@ use FREXML();
     $cmpScript .= "# ------------------------------------------------------------------------------\n";
     $cmpScript .= "#FRE version-info\n";
     $cmpScript .= "# ------------------------------------------------------------------------------\n\n";
+    
+    $cmpScript .= "echo Starting on `date`\n";
+    $cmpScript .= "echo \$HOST \$HOSTNAME\n";
     $cmpScript .= "set echo\n";
-    $cmpScript .= "unalias *\n";
-    $cmpScript .= "$baseCsh\n";
-    $cmpScript .= "setenv PATH $freCommandsHomeDir/bin:\$PATH\n";
-    $cmpScript .= "setenv MAKEFLAGS jobs=$n\n\n";
-    $cmpScript .= "#FRE scheduler-make-verbose\n";
+    $cmpScript .= "unalias *\n\n";
+
+    $cmpScript .= "# ---------------- set environment\n\n";
+    $cmpScript .= "source $envScriptName\n\n";
 
     $cmpScript .= "# ---------------- write main Makefile\n\n";
     $cmpScript .= "cat >$execDir/Makefile <<END\n";
@@ -794,6 +818,8 @@ use FREXML();
 
     }
 
+    $cmpScript .= "# ---------------- adjust the main Makefile\n\n";
+    $cmpScript .= "cat Makefile | sed -e 's/${tab}/\\t/' > Makefile.\$\$ && mv -f Makefile.\$\$ Makefile\n\n";
     $cmpScript .= "# ---------------- call make on the main Makefile\n\n";
     $cmpScript .= "make $makeOverrides fms_$expName.x\n\n";
     $cmpScript .= "if ( \$status ) then\n";
@@ -836,14 +862,16 @@ use FREXML();
     elsif ($o{submit}) 
     {
       FREXML::save($cmpVerifyName, $r);
-      $fre->out(2, "Executing 'qsub $cmpScriptName'...");
-      print qx(qsub $cmpScriptName);
+      my $submit = $fre->property('FRE.scheduler.submit.command');
+      $fre->out(2, "Executing '$submit $cmpScriptName'...");
+      print qx($submit $cmpScriptName);
       return (1, FREDefaults::STATUS_OK);
     }
     else
     {
       FREXML::save($cmpVerifyName, $r);
-      print "TO SUBMIT => qsub $cmpScriptName\n";
+      my $submit = $fre->property('FRE.scheduler.submit.command');
+      print "TO SUBMIT => $submit $cmpScriptName\n";
       return (1, FREDefaults::STATUS_OK);
     }
   }
@@ -853,17 +881,18 @@ use FREXML();
   # ------ return ($flag, $status)
   {
     my ($z, $r, %o) = @_;
-    my ($cmpScript, $envScript) = fremake::processCompileScriptCreate($z, $r, $o{npes});
+    my ($cmpScript, $envScript) = fremake::processCompileScriptCreate($z, $r);
     my ($fre, $envScriptName, $cmpScriptName) = ($z->fre(), fremake::envScriptName($z), fremake::compileScriptName($z));
     if ($cmpScript)
     {
 
-      $envScript = FRETemplate::setVersionInfo($envScript, $z, $0, %o);
-      $envScript = FRETemplate::setSchedulerMakeVerbose($envScript, $z);
+      FRETemplate::setVersionInfo(\$envScript, $z, $0, %o);
+      FRETemplate::setSchedulerMakeVerbose(\$envScript, $z);
 
-      $cmpScript = FRETemplate::setSchedulerOptions($cmpScript, $z, $o{npes}, "00:$o{walltime}:00", '', $z->execDir(), %o);
-      $cmpScript = FRETemplate::setVersionInfo($cmpScript, $z, $0, %o);
-      $cmpScript = FRETemplate::setSchedulerMakeVerbose($cmpScript, $z);
+      FRETemplate::setSchedulerResources(\$cmpScript, $z, $o{ncores}, "00:$o{walltime}:00", '', $o{partition}, 'make');
+      FRETemplate::setSchedulerNames(\$cmpScript, $z, File::Basename::basename($cmpScriptName), $z->execDir());
+      FRETemplate::setVersionInfo(\$cmpScript, $z, $0, %o);
+      FRETemplate::setSchedulerMakeVerbose(\$cmpScript, $z);
 
       if (open my $envScriptHandle, '>', $envScriptName and open my $cmpScriptHandle, '>', $cmpScriptName)
       {
@@ -907,7 +936,7 @@ use FREXML();
 	(
 	  0,
 	  "The existing compile script '$cmpScriptName' doesn't match compile instructions in the XML file!",
-          "Please rerun the fremake with the --force-compile option.", 
+          "Please rerun the fremake with the --force-compile (-F) option.", 
           "Try the --help option for more information."
 	); 
 	return (0, FREDefaults::STATUS_FRE_COMPILE_NO_MATCH);
@@ -989,11 +1018,11 @@ use FREXML();
 
   my %opt =
   (
-    npes	=> fremake::NPES_DEFAULT,
-    walltime	=> fremake::WALLTIME_DEFAULT,
-    platform	=> FREDefaults::Platform(),
-    target	=> FREDefaults::Target(),
-    xmlfile	=> FREDefaults::XMLFile()
+    'ncores'	=> fremake::NCORES_DEFAULT,
+    'walltime'	=> fremake::WALLTIME_DEFAULT,
+    'platform'	=> FREDefaults::Platform(),
+    'target'	=> FREDefaults::Target(),
+    'xmlfile'	=> FREDefaults::XMLFile()
   );
 
   Getopt::Long::GetOptions(\%opt, fremake::OPTLIST) or (print fremake::Usage() and exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM);
@@ -1002,7 +1031,8 @@ use FREXML();
 
   if (scalar(@ARGV) == 0)
   {
-    FREMsg::out($opt{verbose}, 0, "At least one experiment name is needed on the command line");
+    my $self = File::Basename::basename($0);
+    FREMsg::out($opt{verbose}, 0, "At least one experiment name is needed on the command line", "Try '$self --help' for more information");
     exit FREDefaults::STATUS_COMMAND_NO_EXPERIMENTS;
   }
 

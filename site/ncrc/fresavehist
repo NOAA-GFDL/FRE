@@ -9,6 +9,7 @@
 # data must be of this form: $tmpbase/$USER/subdirs/expt/history/datedir/histfiles
 # ie, datedir = /lustre/scratch/alangenh/cubed_sphere/history/19811001
 
+  echo ====== FRESAVEHIST ======
   unalias *
   set beginruntime = `date "+%s"`
 
@@ -30,8 +31,10 @@ set project = ""
 #  endif
 
   set stdoutopt = ''
+  set stdoutxml = ''
   if ( $?stdout ) then
     set stdoutopt = "-o $stdout/$PBS_JOBNAME.$PBS_JOBID.save_file"
+    set stdoutxml = "-o $stdout/$PBS_JOBNAME.$PBS_JOBID.save_xml"
   endif
 
   set freppcmd = ''
@@ -39,19 +42,31 @@ set project = ""
     set freppcmd = "$frepp"
   endif
 
+set echo
+
+  set send_file = `which send_file`
+  if ( ! -f "$send_file" ) then
+    unset echo
+    source $MODULESHOME/init/csh
+    module use -a /ncrc/home2/fms/local/modulefiles
+    module load fre/arkansas-6
+    module list
+    set echo
+    set send_file = `which send_file`
+  endif
 ########################################################################
 #------------------------ default variables ----------------------------
 ########################################################################
 #for combine of restart files
   set mppnccombine = `which mppnccombine_mpi`" -64 -h 16384"
-#send file
-  set send_file = `which send_file`
 #qsub/msub command
-  alias submit "qsub -V $stdoutopt $project"
+  alias submit "msub -V -q eslogin $project"
 
 ########################################################################
 #---------- only highly premeditated user changes below here -----------
 ########################################################################
+  setenv X509_USER_PROXY "$HOME/.globus"
+
 echo ===================================================================
 echo mppnccombine=$mppnccombine
 echo send_file=$send_file
@@ -124,6 +139,33 @@ mv $arfile ..
 cd ..
 rmdir $datedir
 
+#CALL FREPP     
+
+if ( "$freppcmd" != '' ) then
+
+   set tmplist = (`echo $freppcmd | sed 's/.* -x //'`)
+   set xmlfile = $tmplist[1]
+   submit $stdoutxml -v file=$xmlfile $send_file
+   set outpath = `echo $xmlfile | perl -pe "s/.*?$USER\///" | perl -pe '/\// ? s/(.*)\/.*/$1/ : s/.*/./'`
+   set rxmlfile = /archive/$USER/ncrc/$outpath/$xmlfile:t
+   set freppcmd = (`echo $freppcmd | sed "s,$xmlfile,$rxmlfile,"`)
+
+   set outpath = `echo $datedir | perl -pe "s/.*?$USER\///" | perl -pe '/\// ? s/(.*)\/.*/$1/ : s/.*/./'`
+   set rhistdir = /archive/$USER/ncrc/$outpath
+   set freppcmd = (`echo $freppcmd | sed "s,-d \S* ,-d $rhistdir ,"`)
+   echo $freppcmd
+
+   cp $FRE_COMMANDS_HOME/site/ncrc/pptemplate.csh $stdout/$PBS_JOBNAME.frepp
+   echo "$freppcmd" >> $stdout/$PBS_JOBNAME.frepp
+   #msub $stdout/$PBS_JOBNAME.frepp
+
+endif
+
+#SEND FILE TO GFDL
+
+cd $PBS_O_WORKDIR
+submit $stdoutopt -v file=$datedir:h/$arfile,remotejob=$stdout/$PBS_JOBNAME.frepp $send_file
+
 #EVALUATE DUAL RUNS
 
 pushd ..
@@ -144,41 +186,6 @@ END
       echo "passed: $arfile" >> ../dualRuns.log 
    endif
 endif
-endif
-
-#SEND FILE TO GFDL
-
-cd $PBS_O_WORKDIR
-submit -v file=$datedir:h/$arfile $send_file
-
-#CALL FREPP     
-
-if ( $?frepp ) then
-
-   set tmplist = (`echo $freppcmd | sed 's/.* -x //'
-   set xmlfile = $tmplist[1]
-   set rxmlfile = /archive/$USER/ncrc/$xmlfile:t
-   gcp $xmlfile gfdl:$rxmlfile
-   set freppcmd = (`echo $freppcmd | sed "s,$xmlfile,$rxmlfile,")
-
-   cat >> $stdout/$PBS_JOBNAME.frepp <<EOF
-#!/bin/csh -f
-#PBS -l partition=noaa
-#PBS -N frepptest
-#PBS -l size=2
-#PBS -l walltime=00:10:00 
-
-#comment for now: -l pe ic.test
-
-source /opt/modules/default/init/tcsh
-module purge
-module load fre
-
-$freppcmd
-EOF
-
-   msub $stdout/$PBS_JOBNAME.frepp
-
 endif
 
 #END OF SCRIPT

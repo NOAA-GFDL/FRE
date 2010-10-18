@@ -1,5 +1,5 @@
 #
-# $Id: FRETemplate.pm,v 18.0.2.2 2010/08/19 17:34:43 afy Exp $
+# $Id: FRETemplate.pm,v 18.0.2.7 2010/09/29 16:33:29 afy Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: Template Management Module
 # ------------------------------------------------------------------------------
@@ -11,6 +11,19 @@
 # afy    Ver   2.00  Add setFlag subroutine                         August 10
 # afy    Ver   2.01  Add setVariable subroutine                     August 10
 # afy    Ver   2.02  Add setList subroutine                         August 10
+# afy    Ver   3.00  Modify setSchedulerOptions (partition)         September 10
+# afy    Ver   3.01  Modify setSchedulerDualRuns (refToScript)      September 10
+# afy    Ver   3.02  Modify setSchedulerMakeVerbose (refToScript)   September 10
+# afy    Ver   3.03  Modify setVersionInfo (refToScript)            September 10
+# afy    Ver   4.00  Split setSchedulerOptions into two parts       September 10
+# afy    Ver   5.00  Modify setSchedulerResources (fix ncores)      September 10
+# afy    Ver   5.01  Modify setSchedulerResources (queue)           September 10
+# afy    Ver   6.00  Add scheduler(Resources|Names) utilities       September 10
+# afy    Ver   6.01  Add scheduler(Resources|Nsames)AsString subs   September 10
+# afy    Ver   6.02  Modify setScheduler(Resources|Names) subs      September 10
+# afy    Ver   7.00  Modify schedulerResources (add parameter)      September 10
+# afy    Ver   7.01  Modify setSchedulerResources (use new ^)       September 10
+# afy    Ver   7.02  Modify schedulerResourcesAsString (use new ^)  September 10
 # ------------------------------------------------------------------------------
 # Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2009-2010
 # Designed and written by V. Balaji, Amy Langenhorst and Aleksey Yakovlev
@@ -48,6 +61,68 @@ my $option = sub($$;$)
   my $optionString = $fre->property($n);
   $optionString =~ s/\$/$v/;
   return $optionString;
+};
+
+my $schedulerResources = sub($$$$$$)
+# ------ arguments: $expt $ncores $time $segmentTime $partition $mode
+{
+
+  my ($z, $n, $t, $g, $p, $m) = @_;
+
+  my $fre = $z->fre();
+  my $project = $fre->project();
+  my $partition = $p || $fre->property("FRE.scheduler.partition.$m");
+  my $queue = $fre->property("FRE.scheduler.queue.$m");
+  my $coresPerJobInc = $fre->property("FRE.scheduler.coresPerJob.increment.$m");
+  my $coresPerJobMax = $fre->property("FRE.scheduler.coresPerJob.max.$m");
+  
+  my $ncores = ($n < $coresPerJobInc) ? $coresPerJobInc : (($coresPerJobMax < $n) ? $coresPerJobMax : $n);
+  
+  my %option =
+  (
+    ncores	=> $option->($fre, 'FRE.scheduler.option.ncores', POSIX::ceil($ncores / $coresPerJobInc) * $coresPerJobInc),
+    time	=> $option->($fre, 'FRE.scheduler.option.time', $t),
+    partition	=> $option->($fre, 'FRE.scheduler.option.partition', $partition),
+    queue	=> $option->($fre, 'FRE.scheduler.option.queue', $queue),
+    join	=> $option->($fre, 'FRE.scheduler.option.join'),
+    cpuset	=> $option->($fre, 'FRE.scheduler.option.cpuset'),
+    rerun	=> $option->($fre, 'FRE.scheduler.option.rerun'),
+    mail	=> $option->($fre, 'FRE.scheduler.option.mail')
+  );
+  
+  %option =
+  (
+    %option,
+    project	=> $option->($fre, 'FRE.scheduler.option.project', $project),
+    projectAux	=> $option->($fre, 'FRE.scheduler.option.generic', "FRE_PROJECT=$project")
+  ) if $project;
+  
+  %option =
+  (
+    %option,
+    segmentTime	=> $option->($fre, 'FRE.scheduler.option.segmentTime', $g)
+  ) if $g;
+  
+  return \%option;
+  
+};
+
+my $schedulerNames = sub($$$)
+# ------ arguments: $expt $scriptName $stdoutDir
+{
+
+  my ($z, $n, $d) = @_;
+
+  my $fre = $z->fre();
+
+  my %option =
+  (
+    name	=> $option->($fre, 'FRE.scheduler.option.name', $n),
+    stdout	=> $option->($fre, 'FRE.scheduler.option.stdout', $d)
+  );
+  
+  return \%option; 
+
 };
 
 # //////////////////////////////////////////////////////////////////////////////
@@ -93,57 +168,89 @@ sub setList($$@)
   }
 }
 
-sub setSchedulerOptions($$$$$$%)
-# ------ arguments: $script $expt $npes $simRunTime $segRunTime $stdoutDir %options
+sub setSchedulerResources($$$$$$$)
+# ------ arguments: $refToScript $expt $ncores $time $segmentTime $partition $mode
 {
 
-  my ($s, $z, $n, $t, $g, $d, %o) = @_;
+  my ($r, $z, $n, $t, $g, $p, $m) = @_;
 
   my $prefix = FRETemplate::PRAGMA_PREFIX;
   my $schedulerOptions = FRETemplate::PRAGMA_SCHEDULER_OPTIONS;
   my $placeholder = qr/^[ \t]*$prefix[ \t]+$schedulerOptions[ \t]*$/mo;
 
-  my $fre = $z->fre();
-  my $project = $fre->project();
-  my $prefix = $fre->property('FRE.scheduler.prefix');
-  my $queue = $fre->property('FRE.scheduler.queue');
-  my $coresPerNode = $fre->property('FRE.machine.coresPerNode');
+  my $schedulerPrefix = $z->fre()->property('FRE.scheduler.prefix');
+  my $h = $schedulerResources->($z, $n, $t, $g, $p, $m);
   
-  my %option =
-  (
-    npes	=> $option->($fre, 'FRE.scheduler.option.npes', POSIX::ceil($n / $coresPerNode) * $coresPerNode),
-    time	=> $option->($fre, 'FRE.scheduler.option.time', $t),
-    segmentTime	=> $option->($fre, 'FRE.scheduler.option.segmentTime', $g),
-    queue	=> $option->($fre, 'FRE.scheduler.option.queue', $queue),
-    stdout	=> $option->($fre, 'FRE.scheduler.option.stdout', $d),
-    join	=> $option->($fre, 'FRE.scheduler.option.join'),
-    cpuset	=> $option->($fre, 'FRE.scheduler.option.cpuset'),
-    rerun	=> $option->($fre, 'FRE.scheduler.option.rerun'),
-    mail	=> $option->($fre, 'FRE.scheduler.option.mail')
-  );
-  
-  %option =
-  (
-    %option,
-    project	=> $option->($fre, 'FRE.scheduler.option.project', $project),
-    projectAux	=> $option->($fre, 'FRE.scheduler.option.generic', "FRE_PROJECT=$project")
-  ) if $project;
-  
-  foreach my $key (sort keys %option)
+  foreach my $key (sort keys %{$h})
   {
-    my $value = $option{$key}; 
-    $s =~ s/($placeholder)/$1\n$prefix $value/ if $value; 
+    my $value = $h->{$key}; 
+    ${$r} =~ s/($placeholder)/$1\n$schedulerPrefix $value/ if $value; 
+  }
+
+}
+
+sub schedulerResourcesAsString($$$$$$)
+# ------ arguments: $expt $ncores $time $segmentTime $partition $mode
+{
+
+  my ($z, $n, $t, $g, $p, $m) = @_;
+
+  my ($h, @result) = ($schedulerResources->($z, $n, $t, $g, $p, $m), ());
+
+  foreach my $key (sort keys %{$h})
+  {
+    my $value = $h->{$key}; 
+    push @result, $value if $value; 
+  }
+
+  return join ' ', @result; 
+  
+}
+
+sub setSchedulerNames($$$$)
+# ------ arguments: $refToScript $expt $scriptName $stdoutDir
+{
+
+  my ($r, $z, $n, $d) = @_;
+
+  my $prefix = FRETemplate::PRAGMA_PREFIX;
+  my $schedulerOptions = FRETemplate::PRAGMA_SCHEDULER_OPTIONS;
+  my $placeholder = qr/^[ \t]*$prefix[ \t]+$schedulerOptions[ \t]*$/mo;
+
+  my $schedulerPrefix = $z->fre()->property('FRE.scheduler.prefix');
+  my $h = $schedulerNames->($z, $n, $d);
+  
+  foreach my $key (sort keys %{$h})
+  {
+    my $value = $h->{$key}; 
+    ${$r} =~ s/($placeholder)/$1\n$schedulerPrefix $value/ if $value; 
   }
   
-  return $s;
+}
+
+sub schedulerNamesAsString($$$)
+# ------ arguments: $expt $scriptName $stdoutDir
+{
+
+  my ($z, $n, $d) = @_;
+
+  my ($h, @result) = ($schedulerNames->($z, $n, $d), ());
+  
+  foreach my $key (sort keys %{$h})
+  {
+    my $value = $h->{$key}; 
+    push @result, $value if $value; 
+  }
+
+  return join ' ', @result; 
 
 }
 
 sub setSchedulerDualRuns($$)
-# ------ arguments: $script $exp
+# ------ arguments: $refToScript $exp
 {
 
-  my ($s, $z) = @_;
+  my ($r, $z) = @_;
 
   my $prefix = FRETemplate::PRAGMA_PREFIX;
   my $schedulerOptions = FRETemplate::PRAGMA_SCHEDULER_OPTIONS;
@@ -153,17 +260,15 @@ sub setSchedulerDualRuns($$)
   my $prefix = $fre->property('FRE.scheduler.prefix');
   my $optionProjectDual = $option->($fre, 'FRE.scheduler.option.projectDual');
 
-  $s =~ s/($placeholder)/$1\n$prefix $optionProjectDual/ if $optionProjectDual; 
+  ${$r} =~ s/($placeholder)/$1\n$prefix $optionProjectDual/ if $optionProjectDual; 
   
-  return $s;
-
 }
 
 sub setSchedulerMakeVerbose($$)
-# ------ arguments: $script $exp
+# ------ arguments: $reToScript $exp
 {
 
-  my ($s, $z) = @_;
+  my ($r, $z) = @_;
 
   my $prefix = FRETemplate::PRAGMA_PREFIX;
   my $schedulerOptions = FRETemplate::PRAGMA_SCHEDULER_MAKE_VERBOSE;
@@ -186,17 +291,15 @@ sub setSchedulerMakeVerbose($$)
   $makeVerbose .= '  endif' . "\n";
   $makeVerbose .= 'endif' . "\n";
 
-  $s =~ s/$placeholder/$makeVerbose/;
-
-  return $s;
+  ${$r} =~ s/$placeholder/$makeVerbose/;
 
 }
 
 sub setVersionInfo($$$%)
-# ------ arguments: $script $expt $caller %options
+# ------ arguments: $refToScript $expt $caller %options
 {
 
-  my ($s, $z, $c, %o) = @_;
+  my ($r, $z, $c, %o) = @_;
 
   my $prefix = FRETemplate::PRAGMA_PREFIX;
   my $versionInfo = FRETemplate::PRAGMA_VERSION_INFO;
@@ -221,9 +324,7 @@ sub setVersionInfo($$$%)
     }
   }
 
-  $s =~ s/$placeholder/$info/;
-
-  return $s;
+  ${$r} =~ s/$placeholder/$info/;
 
 }
 
