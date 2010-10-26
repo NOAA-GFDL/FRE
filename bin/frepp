@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 # -*- cperl -*-
-# $Id: frepp,v 18.0.2.40 2010/09/28 21:24:53 arl Exp $
+# $Id: frepp,v 18.0.2.41 2010/10/25 22:02:35 fms Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: History/diagnostics post-processing
 # ------------------------------------------------------------------------------
@@ -33,7 +33,7 @@ use vars qw( $maxyrs $maxdisk $cubic $nlat $nlon $interpMethod $getgridspec $bas
 
   package frepp;
 
-  use constant VERSION => '$Id: frepp,v 18.0.2.40 2010/09/28 21:24:53 arl Exp $';
+  use constant VERSION => '$Id: frepp,v 18.0.2.41 2010/10/25 22:02:35 fms Exp $';
 
 #Usage:    $relfrepp [ -AB:C:O:RY:Z:c:d:f:hlmMp:oqr:S:st:u:vx:z ] experiment [ experiment2 ... ]                 
   use constant OPTLIST =>
@@ -219,7 +219,7 @@ if ( $opt_M and not $opt_p ) { $opt_M = "#\$ -m e";} else { $opt_M = ""; }
 
 if ( $opt_O ) { print STDERR "NOTE: There has been a change to the behavior of the -O option. Your scripts will be written directly to '$opt_O' and not to '$opt_O/scripts/postProcess'\n"; }
 
-$versionId = ' $Id: frepp,v 18.0.2.40 2010/09/28 21:24:53 arl Exp $';
+$versionId = ' $Id: frepp,v 18.0.2.41 2010/10/25 22:02:35 fms Exp $';
 
 $perlerrors = "";
 $component = "";
@@ -292,7 +292,8 @@ if ( $opt_v ) {
 }
 
 #set default platform
-$platform = 'ia64';
+$platform = `uname -m`;
+chomp $platform;
 my $platformcsh;
 
 #These things vary by platform
@@ -433,6 +434,19 @@ setenv NC_BLKSZ 64K
 alias ncks "ncks --64bit --hdr_pad 15000"
 alias ncrcat "ncrcat --64bit -t 2"
 EOF
+   } elsif ( "$platform" eq 'x86_64' ) {
+      $cp = 'cp';
+      $cpio = 'cpio -C 524288';
+      $uncpio = 'cpio -C 2097152';
+      $mvfile = 'cp';
+      $platformcsh = $exp->fre()->platformValue('csh');
+      $platformcsh .= <<'EOF';
+
+setenv NC_BLKSZ 64K
+alias ncks "ncks --64bit --hdr_pad 15000"
+alias ncrcat "ncrcat --64bit -t 2"
+EOF
+
    } elsif ( "$platform" eq 'ifc' ) {
    } else {
       mailuser("platform $platform not supported for postprocessing");
@@ -746,10 +760,18 @@ if ( "\$fregrid_wt" != '' ) then
       end
    end
 endif
-
-$time_fregrid \$FREGRID --input_mosaic \$input_mosaic --input_file \$fregrid_in --interp_method \$interp_method --remap_file \$fregrid_remap_file --nlon \$nlon --nlat \$nlat --scalar_field \$interpvars \$fregrid_wt
+EOF
+      if ( $basenpes == 1 ) {
+         $call_fregrid .= <<EOF;
+$time_fregrid fregrid --input_mosaic \$input_mosaic --input_file \$fregrid_in --interp_method \$interp_method --remap_file \$fregrid_remap_file --nlon \$nlon --nlat \$nlat --scalar_field \$interpvars \$fregrid_wt
+EOF
+      } else {
+         $call_fregrid .= <<EOF;
+$time_fregrid mpirun -np $basenpes fregrid_parallel --input_mosaic \$input_mosaic --input_file \$fregrid_in --interp_method \$interp_method --remap_file \$fregrid_remap_file --nlon \$nlon --nlat \$nlat --scalar_field \$interpvars \$fregrid_wt
+EOF
+      }
+      $call_fregrid .= <<EOF;
 #check_fregrid
-
 $time_rm rm \$fregrid_in.tile?.nc
 $time_rm rm *.grid_spec.tile*.nc
 set renamevars = ( -h -d grid_xt,lon -d grid_yt,lat -v grid_xt,lon -v grid_yt,lat )
@@ -1007,7 +1029,7 @@ EOF
       #if ocean 100 year pp, then submit the averages now in a separate job
       if ( $maxyrs > 20 and $component eq 'ocean' ) { 
          $cshscript =~ s/#\$ -l h_cpu.*/#\$ -l h_cpu=30:00:00/; 
-         my $npes = $basenpes * 2;
+         my $npes = $basenpes * 2 unless $basenpes == 1;
          $cshscript =~ s/pe ic.postp (.+)/pe ic.postp $npes/; 
          $mkdircommand = createdirs( $mkdircommand );
          my $newoutscript = "$outscript"."_av";
@@ -5200,7 +5222,6 @@ my $cshscripttmpl = <<'EOF';
   set TIMAVG = "timavg.csh -mb"
   set PLEVEL = plevel.sh
   set SPLITNCVARS = split_ncvars.csh
-  set FREGRID = "mpirun -np 2 `which fregrid_parallel`"
   set MPPNCCOMBINE = mppnccombine
   set checkptfile = $scriptName:t
   set errors_found = 0
@@ -5271,7 +5292,6 @@ end
 EOF
 
    $cshscripttmpl =~ s/-pe ic.postp 1/-pe ic.postp $basenpes/;
-   $cshscripttmpl =~ s/set FREGRID = "mpirun -np 2/set FREGRID = "mpirun -np $basenpes/;
 
 return $cshscripttmpl;
 }

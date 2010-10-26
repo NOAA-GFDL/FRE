@@ -9,6 +9,17 @@
 # data must be of this form: $tmpbase/$USER/subdirs/expt/history/datedir/histfiles
 # ie, datedir = /lustre/scratch/alangenh/cubed_sphere/history/19811001
 
+#available variables to be passed with msub -v:
+# datedir = dir containing uncombined files (required)
+# project = scheduler project (default: none)
+# stdout = dir to write stdout files to (default: .)
+# frepp = a frepp command to run at gfdl (default: none)
+# platform = the ncrc platform that the current run is using (default: ncrc.default)
+# combine = type of combine. Currently supported: staged
+#                       to be implemented later: deferred/offline, off, test
+# transfer = whether to transfer output to gfdl (default: 1)
+# check = whether to check dual run output (default: 0)
+
   echo ====== FRESAVEHIST ======
   unalias *
   set beginruntime = `date "+%s"`
@@ -35,21 +46,54 @@ set project = ""
   if ( $?stdout ) then
     set stdoutopt = "-o $stdout/$PBS_JOBNAME.$PBS_JOBID.save_file"
     set stdoutxml = "-o $stdout/$PBS_JOBNAME.$PBS_JOBID.save_xml"
+  else
+    set stdoutopt = "-o ./$PBS_JOBNAME.$PBS_JOBID.save_file"
+    set stdoutxml = "-o ./$PBS_JOBNAME.$PBS_JOBID.save_xml"
   endif
 
   set freppcmd = ''
   if ( $?frepp ) then
-    set freppcmd = "$frepp"
+    set freppcmd = `echo $frepp | tr "'" " "`
+  endif
+  
+  if ( ! $?platform ) then
+    set platform = 'ncrc.default'
   endif
 
-set echo
+  if ( ! $?transfer ) then
+    set transfer = 1
+  endif
+
+  if ( ! $?combine ) then
+    set combine = 'staged'
+  endif
+
+  if ( `echo $HOST | grep -c gaea-ldtn` ) then
+    set machine = 'ldtn'
+  else if ( `echo $HOST | grep -c c1ms-batch` ) then
+    set machine = 'c1ms'
+  else
+    echo "ERROR: combine on $HOST not supported, try c1ms or ldtn."
+    exit 1
+  endif
+
+  if ( ! $?check) then
+    set check = 0
+  endif
+
+  set fremodule = 'fre'
+  if ( $?freversion ) then
+  if ( "$?freversion" != '' ) then
+    set fremodule = "fre/$freversion"
+  endif
+  endif
 
   set send_file = `which send_file`
   if ( ! -f "$send_file" ) then
     unset echo
     source $MODULESHOME/init/csh
     module use -a /ncrc/home2/fms/local/modulefiles
-    module load fre/arkansas-6
+    module load $fremodule
     module list
     set echo
     set send_file = `which send_file`
@@ -57,15 +101,18 @@ set echo
 ########################################################################
 #------------------------ default variables ----------------------------
 ########################################################################
-#for combine of restart files
-  set mppnccombine = `which mppnccombine_mpi`" -64 -h 16384"
+#mppnccombine command 
+  if ( "$machine" == 'ldtn' ) then
+    set mppnccombine = `which mppnccombine_ldtn`" -64 -h 16384"
+  else if ( "$machine" == 'c1ms' ) then
+    set mppnccombine = `which mppnccombine_mpi`" -64 -h 16384"
+  endif
 #qsub/msub command
   alias submit "msub -V -q eslogin $project"
 
 ########################################################################
 #---------- only highly premeditated user changes below here -----------
 ########################################################################
-  setenv X509_USER_PROXY "$HOME/.globus"
 
 echo ===================================================================
 echo mppnccombine=$mppnccombine
@@ -75,31 +122,57 @@ echo datedir=$datedir
 echo project=$project
 echo stdoutopt=$stdoutopt
 echo submit=`which submit`
+echo host=`hostname`
+echo ===================================================================
 
 if ( ! -d "$datedir" ) then
    echo "ERROR: datedir '$datedir' is not a directory"
    echo "ERROR: Please provide datedir as a command line argument"
    exit 1
 endif
-set begindate = $datedir:t
-set name = `echo $datedir | tr '/' '\t' | cut -f 5`
-echo HOST $HOST $HOSTNAME
-echo datedir=$datedir
-cd $datedir
-set time=2
+
 if ( $?PBS_JOBID ) then
  chmod 644 $PBS_O_WORKDIR/$PBS_JOBID.OU
 endif
 
+set echo
+
+set begindate = $datedir:t
+set name = `echo $datedir | tr '/' '\t' | cut -f 5`
+echo HOST $HOST $HOSTNAME
+cd $datedir
+set time=2
+
 #COMBINE HISTORY FILES
-foreach diagoutput (`ls -1 | egrep ".nc.[0-9][0-9][0-9][0-9]" | sed 's/\.[0-9][0-9][0-9][0-9]//g' | sort -u`)
-  sleep 1
-  set first = `ls -1 | egrep "$diagoutput.[0-9][0-9][0-9][0-9]" | head -1 | awk -F . '{print $NF}' `
-  sleep 1
-  set last = `ls -1 | egrep "$diagoutput.[0-9][0-9][0-9][0-9]" | tail -1 | awk -F . '{print $NF}' `
-  echo aprun -n 1 -N 1 $mppnccombine -r -n $first -e $last $diagoutput
-  aprun -n 1 -N 1 $mppnccombine -r -n $first -e $last $diagoutput &
-end
+
+if ( "$machine" == "c1ms") then
+
+ foreach diagoutput (`ls -1 | egrep ".nc.[0-9][0-9][0-9][0-9]" | sed 's/\.[0-9][0-9][0-9][0-9]//g' | sort -u`)
+   sleep 1
+   set first = `ls -1 | egrep "$diagoutput.[0-9][0-9][0-9][0-9]" | head -1 | awk -F . '{print $NF}' `
+   sleep 1
+   set last = `ls -1 | egrep "$diagoutput.[0-9][0-9][0-9][0-9]" | tail -1 | awk -F . '{print $NF}' `
+   echo aprun -n 1 -N 1 $mppnccombine -r -n $first -e $last $diagoutput
+   aprun -n 1 -N 1 $mppnccombine -r -n $first -e $last $diagoutput &
+ end
+
+else if ( "$machine" == "ldtn") then 
+ 
+ set count = 0
+ foreach diagoutput (`ls -1 | egrep ".nc.[0-9][0-9][0-9][0-9]" | sed 's/\.[0-9][0-9][0-9][0-9]//g' | sort -u`)
+   sleep 1
+   set first = `ls -1 | egrep "$diagoutput.[0-9][0-9][0-9][0-9]" | head -1 | awk -F . '{print $NF}' `
+   sleep 1
+   set last = `ls -1 | egrep "$diagoutput.[0-9][0-9][0-9][0-9]" | tail -1 | awk -F . '{print $NF}' `
+   $mppnccombine -r -n $first -e $last $diagoutput &
+   set count = `expr $count + 1`
+   if ($count == 8) then
+     wait
+     set count = 0
+   endif
+ end
+
+endif
 
 wait
 
@@ -122,7 +195,11 @@ set files = ( `ls -1 | egrep ".nc"'$'` )
 if ( $#files > 0 ) then
    set arfile = $begindate.nc.tar
    echo $files | tr ' ' '\n' > ./tarinput
-   tar -b 1000 -cf $arfile -T tarinput
+   if ( "$machine" == "c1ms") then
+     aprun -n 1 -N 1 tar -b 1000 -cf $arfile -T tarinput
+   else
+     tar -b 1000 -cf $arfile -T tarinput
+   endif
    rm tarinput
    if ( -s $arfile ) then
      find $datedir -type f -maxdepth 1 -regex '.*.nc' -exec rm {} \;
@@ -139,10 +216,17 @@ mv $arfile ..
 cd ..
 rmdir $datedir
 
+unsetenv PBS_SERVER
+
 #CALL FREPP     
 
 if ( "$freppcmd" != '' ) then
 
+   #add corresponding platform
+   set gfdlplatform = "hpcs."`echo $platform | sed 's/.*\.//'`
+   set freppcmd = (`echo $freppcmd | sed "s, , -p $gfdlplatform ,"`)
+
+   #use xml file copied from ncrc
    set tmplist = (`echo $freppcmd | sed 's/.* -x //'`)
    set xmlfile = $tmplist[1]
    submit $stdoutxml -v file=$xmlfile $send_file
@@ -150,6 +234,7 @@ if ( "$freppcmd" != '' ) then
    set rxmlfile = /archive/$USER/ncrc/$outpath/$xmlfile:t
    set freppcmd = (`echo $freppcmd | sed "s,$xmlfile,$rxmlfile,"`)
 
+   #specify the appropriate history directory
    set outpath = `echo $datedir | perl -pe "s/.*?$USER\///" | perl -pe '/\// ? s/(.*)\/.*/$1/ : s/.*/./'`
    set rhistdir = /archive/$USER/ncrc/$outpath
    set freppcmd = (`echo $freppcmd | sed "s,-d \S* ,-d $rhistdir ,"`)
@@ -157,35 +242,47 @@ if ( "$freppcmd" != '' ) then
 
    cp $FRE_COMMANDS_HOME/site/ncrc/pptemplate.csh $stdout/$PBS_JOBNAME.frepp
    echo "$freppcmd" >> $stdout/$PBS_JOBNAME.frepp
-   #msub $stdout/$PBS_JOBNAME.frepp
 
 endif
 
 #SEND FILE TO GFDL
 
-cd $PBS_O_WORKDIR
-submit $stdoutopt -v file=$datedir:h/$arfile,remotejob=$stdout/$PBS_JOBNAME.frepp $send_file
+if ( $transfer && "$freppcmd" != '' ) then
+
+ cd $PBS_O_WORKDIR
+ submit $stdoutopt -v file=$datedir:h/$arfile,remotejob=$stdout/$PBS_JOBNAME.frepp $send_file
+
+else if ( $transfer ) then
+
+ cd $PBS_O_WORKDIR
+ submit $stdoutopt -v file=$datedir:h/$arfile $send_file
+
+endif
 
 #EVALUATE DUAL RUNS
 
-pushd ..
-set myarchivedir = `basename $cwd`
-popd
-if ( `echo $myarchivedir | egrep -c '^[0-9]+''$'` ) then
-if ( -f ../../history/$arfile ) then
-   ls -1 $arfile ../../history/$arfile | ardiff
-   if ( $status ) then
+if ( $check && "$machine" == "c1ms" ) then
+
+ pushd ..
+ set myarchivedir = `basename $cwd`
+ popd
+ if ( `echo $myarchivedir | egrep -c '^[0-9]+''$'` ) then
+ if ( -f ../../history/$arfile ) then
+    ls -1 $arfile ../../history/$arfile | ardiff
+    if ( $status ) then
       Mail -s "DUAL RUN FAILURE" $USER <<END
 These two history files do not match:
 
 cd $cwd
 ls -1 $arfile ../../history/$arfile | ardiff
 END
-      echo "FAILED: $arfile" >> ../dualRuns.log 
-   else
-      echo "passed: $arfile" >> ../dualRuns.log 
-   endif
-endif
+       echo "FAILED: $arfile" >> ../dualRuns.log 
+    else
+       echo "passed: $arfile" >> ../dualRuns.log 
+    endif
+ endif
+ endif
+
 endif
 
 #END OF SCRIPT

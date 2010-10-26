@@ -1,5 +1,5 @@
 #
-# $Id: FREDefaults.pm,v 18.0.2.10 2010/09/29 16:30:35 afy Exp $
+# $Id: FREDefaults.pm,v 18.0.2.11 2010/10/11 18:57:17 afy Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: System Defaults Module
 # ------------------------------------------------------------------------------
@@ -28,6 +28,10 @@
 # afy    Ver  10.00  Remove Partition subroutine                    September 10
 # afy    Ver  10.01  Modify PlatformStandardized subroutine         September 10
 # afy    Ver  10.02  Modify Platform subroutine                     September 10
+# afy    Ver  11.00  Modify siteGet (add GFDLPP)                    October 10
+# afy    Ver  11.01  Add SiteIsGFDLPP subroutine                    October 10
+# afy    Ver  11.02  Modify PlatformStandardized (use 'default')    October 10
+# afy    Ver  11.03  Modify Platform (use 'default')                October 10
 # ------------------------------------------------------------------------------
 # Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2009-2010
 # Designed and written by V. Balaji, Amy Langenhorst and Aleksey Yakovlev
@@ -74,16 +78,19 @@ use constant STATUS_FRE_RUN_EXECUTION_PROBLEM		=> 62;
 # ////////////////////////////////////////////////////////// Global Constants //
 # //////////////////////////////////////////////////////////////////////////////
 
-use constant DOMAIN_GFDL	=> 'gfdl.noaa.gov'; 
+use constant DOMAIN_GFDL	=> 'gfdl.noaa.gov';
+use constant DOMAIN_GFDLPP	=> 'princeton.rdhpcs.noaa.gov'; 
 use constant DOMAIN_NCRC	=> 'ncrc.gov'; 
-use constant DOMAIN_NCCS	=> 'ccs.ornl.gov'; 
+use constant DOMAIN_NCCS	=> 'ccs.ornl.gov';
 
 use constant SITE_GFDL		=> 'hpcs';
+use constant SITE_GFDLPP	=> 'gfdl';
 use constant SITE_NCRC		=> 'ncrc';
 use constant SITE_NCCS		=> 'doe';
 use constant SITE_UNKNOWN	=> 'unknown';
 
 use constant XMLFILE_DEFAULT	=> 'rts.xml';
+use constant PLATFORM_DEFAULT	=> 'default';
 use constant TARGET_DEFAULT 	=> 'prod';
 
 use constant GLOBAL_NAMES	=> 'site,siteDir,suite,platform,target,name,root';
@@ -101,6 +108,10 @@ my $siteGet = sub()
   if ($domain eq FREDefaults::DOMAIN_GFDL)
   {
     return FREDefaults::SITE_GFDL;
+  }
+  elsif ($domain eq FREDefaults::DOMAIN_GFDLPP)
+  {
+    return FREDefaults::SITE_GFDLPP;
   }
   elsif ($domain eq FREDefaults::DOMAIN_NCRC)
   {
@@ -142,6 +153,12 @@ sub SiteIsGFDL()
   return ($FREDefaultsSite eq FREDefaults::SITE_GFDL);
 }
 
+sub SiteIsGFDLPP()
+# ------ arguments: none
+{
+  return ($FREDefaultsSite eq FREDefaults::SITE_GFDLPP);
+}
+
 sub SiteIsNCRC()
 # ------ arguments: none
 {
@@ -167,7 +184,7 @@ sub PlatformStandardized($)
   if ($p =~ m/^(?:(\w+)\.)?(\w*)$/o)
   {
     my $site = (defined($1)) ? $1 : $FREDefaultsSite;
-    my $tail = ($2) ? $2 : $site;
+    my $tail = ($2) ? $2 : FREDefaults::PLATFORM_DEFAULT;
     return $site . '.' . $tail;
   }
   else
@@ -179,7 +196,7 @@ sub PlatformStandardized($)
 sub Platform()
 # ------ arguments: none
 {
-  return $FREDefaultsSite . '.' . $FREDefaultsSite;
+  return $FREDefaultsSite . '.' . FREDefaults::PLATFORM_DEFAULT;
 }
 
 sub Target()

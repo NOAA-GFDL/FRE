@@ -1,7 +1,7 @@
 #!/usr/bin/perl
 # -*- cperl -*-
 #
-# $Id: frerun,v 18.0.2.23 2010/10/11 19:24:12 afy Exp $
+# $Id: frerun,v 18.0.2.25 2010/10/21 20:22:49 afy Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: Program to Create a Script to Run a Model
 # ------------------------------------------------------------------------------
@@ -100,6 +100,9 @@
 # afy    Ver  23.01  Add option --submit-chained                    October 10
 # afy    Ver  23.02  Modify init (add partitions/queues setup)      October 10
 # afy    Ver  23.00  Modify outputScriptExecuteOrSubmit (names)     October 10
+# afy    Ver  24.00  Add option --output-staging                    October 10
+# afy    Ver  24.01  Assign 'platform' settable constant            October 10
+# afy    Ver  25.00  Assign 'target' settable constant              October 10
 # ------------------------------------------------------------------------------
 # Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2000-2010
 # Designed and written by V. Balaji, Amy Langenhorst and Aleksey Yakovlev
@@ -129,7 +132,7 @@ use FREUtil();
 
   package frerun;
 
-  use constant VERSION => '$Id: frerun,v 18.0.2.23 2010/10/11 19:24:12 afy Exp $';
+  use constant VERSION => '$Id: frerun,v 18.0.2.25 2010/10/21 20:22:49 afy Exp $';
 
   use constant OPTLIST =>
   (
@@ -141,6 +144,7 @@ use FREUtil();
     'extend|e',
     'logging|L!',
     'namelist|N',
+    'output-staging|O=i',
     'overwrite|o',
     'regression|r=s',
     'submit-chained|S',
@@ -210,7 +214,8 @@ use FREUtil();
       "   -D,          --dual               create a pair of runscripts - the main one and the ${beg}d${end}ual one (negatable, default depends on site)\n",
       "   -e,          --extend             ${beg}e${end}xtend default run of existing experiment\n",
       "   -L,          --logging            enable batch system ${beg}l${end}ogging (negatable, default is on)\n",
-      "   -N,          --namelist           print all the ${beg}n${end}amelists with all substitutions and overrides\n", 
+      "   -N,          --namelist           print all the ${beg}n${end}amelists with all substitutions and overrides\n",
+      "   -O,          --output-staging=NUM type of ${beg}o${end}utput data staging, which can be interpreted differently at various sites\n",     
       "   -o,          --overwrite          ${beg}o${end}verwrite default run of existing experiment\n", 
       "   -r STRING,   --regression=STRING  run in ${beg}r${end}egression test mode STRING with minimal output processing\n",
       "   -S,          --submit-chained     ${beg}s${end}ubmit all the created scripts as input data staging jobs, submitting run jobs at their end\n",
@@ -524,6 +529,31 @@ use FREUtil();
       my $fmsRelease = $fre->fmsRelease();
       push @getFmsData, ('-r', $fmsRelease) if $fmsRelease;
 
+      # ------------------------------------------------------------------ setting output staging parameters
+
+      if (exists($o{'output-staging'}) and $o{'output-staging'} != 0)
+      {
+        my $outputStagingType = $o{'output-staging'};
+	my $outputStagingPartition = $fre->property("FRE.scheduler.partition.outputStager.$outputStagingType");
+	my $outputStagingQueue = $fre->property("FRE.scheduler.queue.outputStager.$outputStagingType");
+	if ($outputStagingPartition and $outputStagingQueue)
+	{
+	  FRETemplate::setVariable(\$s, 'outputStagerPartition', $outputStagingPartition);
+	  FRETemplate::setVariable(\$s, 'outputStagerQueue', $outputStagingQueue);
+	}
+	else
+	{
+	  FRETemplate::setVariable(\$s, 'outputStagerPartition', $fre->property('FRE.scheduler.partition.outputStager'));
+	  FRETemplate::setVariable(\$s, 'outputStagerQueue', $fre->property('FRE.scheduler.queue.outputStager'));
+          $fre->out(1, "Output staging type '$outputStagingType' isn't supported - using default type...");
+	}
+      }
+      else
+      {
+	FRETemplate::setVariable(\$s, 'outputStagerPartition', $fre->property('FRE.scheduler.partition.outputStager'));
+	FRETemplate::setVariable(\$s, 'outputStagerQueue', $fre->property('FRE.scheduler.queue.outputStager'));
+      }
+      
       # ----------------------------------------------------------- setting constants/variables 
 
       FRETemplate::setFlag(\$s, 'flagRunType', ($o{regression}) ? 'Regression' : 'Production');
@@ -537,6 +567,8 @@ use FREUtil();
       FRETemplate::setFlag(\$s, 'flagOutputTransfer', ($o{transfer}) ? 'On' : 'Off');
       FRETemplate::setFlag(\$s, 'flagOutputCheck', ($o{check}) ? 'On' : 'Off');
 
+      FRETemplate::setVariable(\$s, 'platform', $o{platform});
+      FRETemplate::setVariable(\$s, 'target', $o{target});
       FRETemplate::setVariable(\$s, 'name', $z->name());
       FRETemplate::setVariable(\$s, 'rtsxml', $fre->configFileAbsPathName());
       FRETemplate::setVariable(\$s, 'freCommandsHomeDir', FRE::home());
@@ -544,9 +576,7 @@ use FREUtil();
       FRETemplate::setVariable(\$s, 'ptmpDir', $z->ptmpDir());
       FRETemplate::setVariable(\$s, 'archiveDir', $z->archiveDir());
       FRETemplate::setVariable(\$s, 'executable', $execName);
-
-      FRETemplate::setVariable(\$s, 'outputStagerPartition', $fre->property('FRE.scheduler.partition.outputStager'));
-      FRETemplate::setVariable(\$s, 'outputStagerQueue', $fre->property('FRE.scheduler.queue.outputStager'));
+      
       FRETemplate::setVariable(\$s, 'fileSenderPartition', $fre->property('FRE.scheduler.partition.transfer'));
       FRETemplate::setVariable(\$s, 'fileSenderQueue', $fre->property('FRE.scheduler.queue.transfer'));
       
