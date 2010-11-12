@@ -1,7 +1,7 @@
 #!/bin/csh -f
 #FRE scheduler-options
 # 
-# $Id: runscript.template.main,v 1.1.4.17.2.1 2010/10/26 15:11:43 arl Exp $
+# $Id: runscript.template.main,v 1.1.4.17.2.5 2010/11/12 23:58:32 Amy.Langenhorst Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: Runscript Template - NCRC Version
 # ------------------------------------------------------------------------------
@@ -88,6 +88,10 @@
 # afy    Ver  16.00  Modify restarts combining (check, pattern)     October 10
 # afy    Ver  17.00  Add settable constant 'target'                 October 10
 # afy    Ver  17.01  Adjust OMP_NUM_THREADS based on target         October 10
+# afy    Ver  18.00  Add 'unsetenv PBS_SERVER' (to fix Moab bug)    November 10
+# afy    Ver  18.01  Modify submitOutputStager (walltime: 4 => 16)  November 10
+# afy    Ver  19.00  Maximize the walltime for all file senders     November 10
+# afy    Ver  19.01  Modify submitOutputStager (size => nodes:ppn)  November 10
 # ------------------------------------------------------------------------------
 # Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2000-2010
 # Designed and written by V. Balaji, Amy Langenhorst and Aleksey Yakovlev
@@ -178,6 +182,9 @@
   # send_file		- part of the fre-transfer module
   # time_stamp.csh	- part of the fre-commands module
 
+  # ---------------- run command; users can override in their xml
+  alias runCommand `which aprun` -n $npes ./$executable:t
+
   # ---------------- initialize environment modules
 
   unset echo
@@ -220,6 +227,10 @@
     setenv PBS_JOBNAME $name
   endif
 
+  # ---------------- adjust environment to fix Moab issue
+
+  unsetenv PBS_SERVER
+
 ################################################################################
 #------------------------ global constants and aliases -------------------------
 ################################################################################
@@ -228,9 +239,9 @@
   set -r jobId = `echo $PBS_JOBID | sed -r 's/^([0-9]+).*$/o\1/'`
 
   # ---------------- options for the FRE file sender
-  set -r fileSenderTimeAscii   = 00:01:00
-  set -r fileSenderTimeRestart = 00:30:00
-  set -r fileSenderTimeHistory = 01:00:00
+  set -r fileSenderTimeAscii   = 16:00:00
+  set -r fileSenderTimeRestart = 16:00:00
+  set -r fileSenderTimeHistory = 16:00:00
 
   # ---------------- for compatibility only
   set -r work = $workDir
@@ -281,7 +292,7 @@
   # ---------------- batch scheduler submit commands
   alias submit `which msub`
   alias submitFileSender `which msub` -l size=1,partition=$fileSenderPartition -q $fileSenderQueue -V
-  alias submitOutputStager `which msub` -l size=48,walltime=16:00:00,partition=$outputStagerPartition -q $outputStagerQueue -V
+  alias submitOutputStager `which msub` -l nodes=1:ppn=8,walltime=16:00:00,partition=$outputStagerPartition -q $outputStagerQueue -V
 
   # ---------------- archiving command
   alias tar `which tar` -b 1024
@@ -489,8 +500,6 @@
   ls -l INPUT/*
   set echo
 
-  unsetenv PBS_SERVER
-
   # ---------------- normal exit if in the input data staging mode
 
   if ( $?FRE_STAGE ) then
@@ -520,7 +529,11 @@
 
   # ---------------- executable and tables loading
 
-  cp -p $executable $executable:t
+  gcp $executable $cwd/$executable:t
+  if ( $status ) then
+    echo "ERROR: in gcp of $executable"
+    exit 1
+  endif
 
 #diagTable_from_xml
 #fieldTable_from_xml
@@ -602,7 +615,7 @@
       unsetenv OMP_NUM_THREADS
     endif 
 
-    aprun -n $npes ./$executable:t |& tee fms.out
+    runCommand |& tee fms.out 
 
     if ( $status ) then
       @ cores_dumped = 0

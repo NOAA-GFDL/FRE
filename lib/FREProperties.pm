@@ -1,5 +1,5 @@
 #
-# $Id: FREProperties.pm,v 18.0.2.5 2010/09/17 00:11:17 afy Exp $
+# $Id: FREProperties.pm,v 18.0.2.6 2010/11/07 23:08:37 afy Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: Properties Management Module
 # ------------------------------------------------------------------------------
@@ -19,6 +19,7 @@
 # afy    Ver   4.02  Don't support curly bracketted references      September 10
 # afy    Ver   5.00  Modify treeProcessDataSource (sites!)          September 10
 # afy    Ver   5.01  Don't expand placeholders in unbound nodes     September 10
+# afy    Ver   6.00  Modify treeProcessPlatform (add 'stem')        November 10
 # ------------------------------------------------------------------------------
 # Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2009-2010
 # Designed and written by V. Balaji, Amy Langenhorst and Aleksey Yakovlev
@@ -400,6 +401,17 @@ my $treeProcessPlatform = sub($$$)
       if ($nameStandardized eq $r->{platform})
       {
 	$nameNode->setValue($nameStandardized) if $nameStandardized ne $name;
+	my @stemNodes = $n->findnodes('directory/@stem');
+	if (scalar(@stemNodes) <= 1)
+	{
+	  my $value = (scalar(@stemNodes) == 1) ? $stemNodes[0]->findvalue('.') : $r->{'FRE.directory.stem.default'};
+	  $propertyInsert->($r, 'stem', $placeholdersExpand->($r, $value), $w); 
+	}
+	else
+	{
+	  my $line = $n->line_number();
+	  FREMsg::out($w, 1, "XML file line $line: the 'stem' attribute is defined more than once - it is ignored");
+	}
 	foreach my $t (FREProperties::DIRECTORIES)
 	{
 	  my $value =

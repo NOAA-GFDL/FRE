@@ -43,12 +43,15 @@ set project = ""
 
   set stdoutopt = ''
   set stdoutxml = ''
+  set sendjobH = `echo $PBS_JOBNAME | sed 's/output_stager/file_sender.H/'`
+  set sendjobX = `echo $PBS_JOBNAME | sed 's/output_stager/file_sender.X/'`
   if ( $?stdout ) then
-    set stdoutopt = "-o $stdout/$PBS_JOBNAME.$PBS_JOBID.save_file"
-    set stdoutxml = "-o $stdout/$PBS_JOBNAME.$PBS_JOBID.save_xml"
+    set stdoutopt = "-N $sendjobH -o $stdout/$sendjobH"
+    set stdoutxml = "-N $sendjobX -o $stdout/$sendjobX"
   else
-    set stdoutopt = "-o ./$PBS_JOBNAME.$PBS_JOBID.save_file"
-    set stdoutxml = "-o ./$PBS_JOBNAME.$PBS_JOBID.save_xml"
+    set stdoutopt = "-N $sendjobH -o ./$sendjobH"
+    set stdoutxml = "-N $sendjobX -o ./$sendjobX"
+    set stdout = $PBS_O_WORKDIR
   endif
 
   set freppcmd = ''
@@ -224,40 +227,49 @@ if ( "$freppcmd" != '' ) then
 
    #add corresponding platform
    set gfdlplatform = "hpcs."`echo $platform | sed 's/.*\.//'`
-   set freppcmd = (`echo $freppcmd | sed "s, , -p $gfdlplatform ,"`)
+   set freppcmd = (`echo $freppcmd | sed "s, , -P $gfdlplatform ,"`)
+
+   #extract version of frepp, don't use full path to frepp
+   set freppversion = `echo $freppcmd | cut -d' ' -f 1 | awk 'BEGIN {FS = "/"};{f=NF-2;print $f}'`
+   set freppcmd = ("frepp" `echo $freppcmd | cut -d' ' -f 2-`)
 
    #use xml file copied from ncrc
    set tmplist = (`echo $freppcmd | sed 's/.* -x //'`)
    set xmlfile = $tmplist[1]
+
+   pushd $stdout
    submit $stdoutxml -v file=$xmlfile $send_file
+   popd
+
    set outpath = `echo $xmlfile | perl -pe "s/.*?$USER\///" | perl -pe '/\// ? s/(.*)\/.*/$1/ : s/.*/./'`
-   set rxmlfile = /archive/$USER/ncrc/$outpath/$xmlfile:t
+   set rxmlfile = /archive/$USER/$outpath/$xmlfile:t
    set freppcmd = (`echo $freppcmd | sed "s,$xmlfile,$rxmlfile,"`)
 
    #specify the appropriate history directory
    set outpath = `echo $datedir | perl -pe "s/.*?$USER\///" | perl -pe '/\// ? s/(.*)\/.*/$1/ : s/.*/./'`
-   set rhistdir = /archive/$USER/ncrc/$outpath
+   set rhistdir = /archive/$USER/$outpath
    set freppcmd = (`echo $freppcmd | sed "s,-d \S* ,-d $rhistdir ,"`)
    echo $freppcmd
 
-   cp $FRE_COMMANDS_HOME/site/ncrc/pptemplate.csh $stdout/$PBS_JOBNAME.frepp
-   echo "$freppcmd" >> $stdout/$PBS_JOBNAME.frepp
+   set ppjobname = `echo $PBS_JOBNAME | sed 's/output_stager/frepp/'`
+   cp $FRE_COMMANDS_HOME/site/ncrc/pptemplate.csh $stdout/$ppjobname
+   perl -pi -e "s/frepptest/$ppjobname/" $stdout/$ppjobname
+   echo "module load fre/$freppversion" >> $stdout/$ppjobname
+   echo "module list" >> $stdout/$ppjobname
+   echo "set echo" >> $stdout/$ppjobname
+   echo "$freppcmd" >> $stdout/$ppjobname
 
 endif
 
-#SEND FILE TO GFDL
+#SEND HISTORY FILE TO GFDL
 
+pushd $stdout
 if ( $transfer && "$freppcmd" != '' ) then
-
- cd $PBS_O_WORKDIR
- submit $stdoutopt -v file=$datedir:h/$arfile,remotejob=$stdout/$PBS_JOBNAME.frepp $send_file
-
+  submit $stdoutopt -v file=$datedir:h/$arfile,remotejob=$stdout/$ppjobname $send_file
 else if ( $transfer ) then
-
- cd $PBS_O_WORKDIR
- submit $stdoutopt -v file=$datedir:h/$arfile $send_file
-
+  submit $stdoutopt -v file=$datedir:h/$arfile $send_file
 endif
+popd
 
 #EVALUATE DUAL RUNS
 

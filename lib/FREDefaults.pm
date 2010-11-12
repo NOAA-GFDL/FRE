@@ -1,5 +1,5 @@
 #
-# $Id: FREDefaults.pm,v 18.0.2.11 2010/10/11 18:57:17 afy Exp $
+# $Id: FREDefaults.pm,v 18.0.2.12 2010/11/07 23:05:38 afy Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: System Defaults Module
 # ------------------------------------------------------------------------------
@@ -32,6 +32,7 @@
 # afy    Ver  11.01  Add SiteIsGFDLPP subroutine                    October 10
 # afy    Ver  11.02  Modify PlatformStandardized (use 'default')    October 10
 # afy    Ver  11.03  Modify Platform (use 'default')                October 10
+# afy    Ver  12.00  Modify GLOBAL_NAMES (add 'stem')               November 10
 # ------------------------------------------------------------------------------
 # Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2009-2010
 # Designed and written by V. Balaji, Amy Langenhorst and Aleksey Yakovlev
@@ -93,7 +94,7 @@ use constant XMLFILE_DEFAULT	=> 'rts.xml';
 use constant PLATFORM_DEFAULT	=> 'default';
 use constant TARGET_DEFAULT 	=> 'prod';
 
-use constant GLOBAL_NAMES	=> 'site,siteDir,suite,platform,target,name,root';
+use constant GLOBAL_NAMES	=> 'site,siteDir,suite,platform,target,name,root,stem';
 use constant EXPERIMENT_DIRS	=> 'root,src,exec,scripts,stdout,work,ptmp,archive,postProcess,analysis';
 use constant DEFERRED_NAMES	=> 'name';
 
