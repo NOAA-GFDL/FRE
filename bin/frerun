@@ -1,7 +1,7 @@
 #!/usr/bin/perl
 # -*- cperl -*-
 #
-# $Id: frerun,v 18.0.2.25 2010/10/21 20:22:49 afy Exp $
+# $Id: frerun,v 18.0.2.27 2010/11/19 18:14:01 afy Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: Program to Create a Script to Run a Model
 # ------------------------------------------------------------------------------
@@ -103,6 +103,10 @@
 # afy    Ver  24.00  Add option --output-staging                    October 10
 # afy    Ver  24.01  Assign 'platform' settable constant            October 10
 # afy    Ver  25.00  Assign 'target' settable constant              October 10
+# afy    Ver  26.00  Rethink the option --output-staging            November 10
+# afy    Ver  26.01  Rename flag*CombineType => flag*StagingType    November 10
+# afy    Ver  26.02  Rename flag*Combine => flag*CombineHistory     November 10
+# afy    Ver  27.00  Properties for --ncores/walltime defaults      November 10
 # ------------------------------------------------------------------------------
 # Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2000-2010
 # Designed and written by V. Balaji, Amy Langenhorst and Aleksey Yakovlev
@@ -132,7 +136,7 @@ use FREUtil();
 
   package frerun;
 
-  use constant VERSION => '$Id: frerun,v 18.0.2.25 2010/10/21 20:22:49 afy Exp $';
+  use constant VERSION => '$Id: frerun,v 18.0.2.27 2010/11/19 18:14:01 afy Exp $';
 
   use constant OPTLIST =>
   (
@@ -144,7 +148,7 @@ use FREUtil();
     'extend|e',
     'logging|L!',
     'namelist|N',
-    'output-staging|O=i',
+    'output-staging|O=s',
     'overwrite|o',
     'regression|r=s',
     'submit-chained|S',
@@ -176,6 +180,8 @@ use FREUtil();
 
   use constant REGRESSION_SUITE => ('basic', 'restarts', 'scaling');
   
+  use constant OUTPUT_STAGING_TYPES => ('online', 'offline', 'staged', 'bySegment');
+  
   use constant NCORES_DEFAULT => 2;
   use constant WALLTIME_DEFAULT => 30;
   
@@ -198,8 +204,6 @@ use FREUtil();
     my $xml = FREDefaults::XMLFile();
     my $pfm = FREDefaults::Platform();
     my $tgt = FREDefaults::Target();
-    my $ncs = frerun::NCORES_DEFAULT;
-    my $wtm = frerun::WALLTIME_DEFAULT;
     my $beg = "\e[0;4m";
     my $end = "\e[m";
     return
@@ -207,33 +211,33 @@ use FREUtil();
       "\n",
       "  Usage: $self [option|experiment] ...\n\n",
       "  Options:\n\n",
-      "   -a,          --archive            save the model output in the ${beg}a${end}rchive (negatable, default is on)\n",
-      "   -c,          --check              ${beg}c${end}heck the model output with the main model run (which makes sense for unique runs only)\n",
-      "   -C,          --combine-history    ${beg}c${end}ombine history files after each segment run (negatable, default is on)\n",
-      "   -g STRING,   --debug=STRING       run in debu${beg}g${end} mode STRING (possible values are 'totalview' and 'setup')\n",
-      "   -D,          --dual               create a pair of runscripts - the main one and the ${beg}d${end}ual one (negatable, default depends on site)\n",
-      "   -e,          --extend             ${beg}e${end}xtend default run of existing experiment\n",
-      "   -L,          --logging            enable batch system ${beg}l${end}ogging (negatable, default is on)\n",
-      "   -N,          --namelist           print all the ${beg}n${end}amelists with all substitutions and overrides\n",
-      "   -O,          --output-staging=NUM type of ${beg}o${end}utput data staging, which can be interpreted differently at various sites\n",     
-      "   -o,          --overwrite          ${beg}o${end}verwrite default run of existing experiment\n", 
-      "   -r STRING,   --regression=STRING  run in ${beg}r${end}egression test mode STRING with minimal output processing\n",
-      "   -S,          --submit-chained     ${beg}s${end}ubmit all the created scripts as input data staging jobs, submitting run jobs at their end\n",
-      "                --submit-staged      ${beg}s${end}ubmit all the created scripts as batch jobs with input data staging\n",
-      "   -T,          --transfer           ${beg}t${end}ransfer all the remotedly created model output back to GFDL (negatable, default depends on site)\n",
-      "   -u,          --unique             create a new ${beg}u${end}nique run of existing experiment\n\n", 
-      "   -E,          --execute            ${beg}e${end}xecute all the created scripts in the current session\n", 
-      "   -h,          --help               print ${beg}h${end}elp message and exit\n",
-      "   -n NUM,      --ncores=NUM         ${beg}n${end}umber of processor cores to use for input data staging (default is $ncs)\n",
-      "   -P STRING,   --partition=STRING   ${beg}p${end}artition to use for model runs\n",
-      "   -p STRING,   --platform=STRING    hardware and software ${beg}p${end}latform STRING (default is '$pfm')\n", 
-      "   -s,          --submit             ${beg}s${end}ubmit all the created scripts as batch jobs\n",
-      "   -t STRING,   --target=STRING      use compilation directives, ${beg}t${end}argeted by STRING (default is '$tgt')\n", 
-      "                --validate           validate the FILE against its XML schema before processing\n",
-      "   -V,          --version            print the tool ${beg}v${end}ersion and exit\n",
-      "   -v,          --verbose            get ${beg}v${end}erbose messages (repeat the option to increase verbosity level)\n", 
-      "   -w NUM,      --walltime=NUM       maximum ${beg}w${end}all time (in minutes) to use for input data staging (default is $wtm)\n", 
-      "   -x FILE,     --xmlfile=FILE       experiment suite ${beg}X${end}ML configuration FILE (default is '$cwd/$xml')\n\n", 
+      "   -a,          --archive               save the model output in the ${beg}a${end}rchive (negatable, default is on)\n",
+      "   -c,          --check                 ${beg}c${end}heck the model output with the main model run (which makes sense for unique runs only)\n",
+      "   -C,          --combine-history       ${beg}c${end}ombine history files after each segment run (negatable, default is on)\n",
+      "   -g STRING,   --debug=STRING          run in debu${beg}g${end} mode STRING (possible values are 'totalview' and 'setup')\n",
+      "   -D,          --dual                  create a pair of runscripts - the main one and the ${beg}d${end}ual one (negatable, default depends on site)\n",
+      "   -e,          --extend                ${beg}e${end}xtend default run of existing experiment\n",
+      "   -L,          --logging               enable batch system ${beg}l${end}ogging (negatable, default is on)\n",
+      "   -N,          --namelist              print all the ${beg}n${end}amelists with all substitutions and overrides\n",
+      "   -O,          --output-staging=STRING type of ${beg}o${end}utput data staging ('online', 'offline', 'staged' or 'bySegment')\n",     
+      "   -o,          --overwrite             ${beg}o${end}verwrite default run of existing experiment\n", 
+      "   -r STRING,   --regression=STRING     run in ${beg}r${end}egression test mode STRING with minimal output processing\n",
+      "   -S,          --submit-chained        ${beg}s${end}ubmit all the created scripts as input data staging jobs, submitting run jobs at their end\n",
+      "                --submit-staged         ${beg}s${end}ubmit all the created scripts as batch jobs with input data staging\n",
+      "   -T,          --transfer              ${beg}t${end}ransfer all the remotedly created model output back to GFDL (negatable, default depends on site)\n",
+      "   -u,          --unique                create a new ${beg}u${end}nique run of existing experiment\n\n", 
+      "   -E,          --execute               ${beg}e${end}xecute all the created scripts in the current session\n", 
+      "   -h,          --help                  print ${beg}h${end}elp message and exit\n",
+      "   -n NUM,      --ncores=NUM            ${beg}n${end}umber of processor cores to use for input data staging (default depends on site)\n",
+      "   -P STRING,   --partition=STRING      ${beg}p${end}artition to use for model runs\n",
+      "   -p STRING,   --platform=STRING       hardware and software ${beg}p${end}latform STRING (default is '$pfm')\n", 
+      "   -s,          --submit                ${beg}s${end}ubmit all the created scripts as batch jobs\n",
+      "   -t STRING,   --target=STRING         use compilation directives, ${beg}t${end}argeted by STRING (default is '$tgt')\n", 
+      "                --validate              validate the FILE against its XML schema before processing\n",
+      "   -V,          --version               print the tool ${beg}v${end}ersion and exit\n",
+      "   -v,          --verbose               get ${beg}v${end}erbose messages (repeat the option to increase verbosity level)\n", 
+      "   -w NUM,      --walltime=NUM          maximum ${beg}w${end}all time (in minutes) to use for input data staging (default depends on site)\n", 
+      "   -x FILE,     --xmlfile=FILE          experiment suite ${beg}X${end}ML configuration FILE (default is '$cwd/$xml')\n\n", 
       "  At least one experiment from the FILE must be listed as an argument.\n\n"
     );
   }
@@ -425,86 +429,99 @@ use FREUtil();
 	$fre->out(1, "Your executable '$execName' doesn't exist or has wrong permissions");
       }
 
-      # ---------------------------------------------------- output history combining
+      # ---------------------------------------------------------------------- output data staging
 
-      my $postProcessCombine = $z->extractValue('postProcess/@combine');
-      my $flagOutputCombineType;
+      my $flagOutputStagingType = $o{'output-staging'} || $z->extractValue('postProcess/@combine');
 
-      if ($postProcessCombine =~ m/^(?:online|offline|staged|bySegment)?$/)
+      if ($flagOutputStagingType)
       {
-	if (!$postProcessCombine or $postProcessCombine eq 'online')
+	if (scalar(grep($_ eq $flagOutputStagingType, frerun::OUTPUT_STAGING_TYPES)) > 0)
 	{
-	  $flagOutputCombineType = 'Online';
-	}
-	elsif ($o{archive})
-	{
-	  if ($postProcessCombine eq 'offline')
+	  if ($fre->property("FRE.output.staging.$flagOutputStagingType"))
 	  {
-            if ($o{regression})
+	    if ($flagOutputStagingType eq 'offline')
 	    {
-	      $flagOutputCombineType = 'Online';
-	      $fre->out(1, "The offline combining can't be used for regression tests - using online combining...");
+	      if (!$o{archive})
+	      {
+		$flagOutputStagingType = 'online';
+		$fre->out(1, "The 'offline' output staging can't be used with the --noarchive option - using the 'online' one...");
+	      }
+              elsif ($o{regression})
+	      {
+		$flagOutputStagingType = 'online';
+		$fre->out(1, "The 'offline' output staging can't be used for regression tests - using the 'online' one...");
+	      }
+	      elsif ($o{unique})
+	      {
+		$flagOutputStagingType = 'online';
+		$fre->out(1, "The 'offline' output staging can't be used for unique runs - using the 'online' one...");
+	      }
+	      else
+	      {
+                $fre->out(2, "The 'offline' output staging will be used...");
+	      }
 	    }
-	    elsif ($o{unique})
+	    elsif ($flagOutputStagingType eq 'staged')
 	    {
-	      $flagOutputCombineType = 'Online';
-	      $fre->out(1, "The offline combining can't be used for unique runs - using online combining...");
+	      if (!$o{archive})
+	      {
+		$flagOutputStagingType = 'online';
+		$fre->out(1, "The 'staged' output staging can't be used with the --noarchive option - using the 'online' one...");
+	      }
+	      else
+	      {
+                $fre->out(2, "The 'staged' output staging will be used...");
+	      }
+	    }
+	    elsif ($flagOutputStagingType eq 'bySegment')
+	    {
+	      if (!$o{archive})
+	      {
+		$flagOutputStagingType = 'online';
+		$fre->out(1, "The 'bySegment' output staging can't be used with the --noarchive option - using the 'online' one...");
+	      }
+	      else
+	      {
+                $fre->out(2, "The 'bySegment' output staging will be used...");
+	      }
 	    }
 	    else
 	    {
-	      $flagOutputCombineType = 'Offline';
+              $fre->out(2, "The '$flagOutputStagingType' output staging will be used...");
 	    }
 	  }
-	  elsif ($postProcessCombine eq 'staged')
+	  else
 	  {
-            $flagOutputCombineType = 'Staged';
-	  }
-	  elsif ($postProcessCombine eq 'bySegment')
-	  {
-	    $flagOutputCombineType = 'BySegment';
+	    $flagOutputStagingType = 'online';
+	    $fre->out(1, "The '$flagOutputStagingType' output staging isn't supported at this site - using the 'online' one...");
 	  }
 	}
 	else
 	{
-	  $flagOutputCombineType = 'Online';
-	  $fre->out(1, "The '$postProcessCombine' combining can't be used with the --noarchive option - using online combining...");
+	  $flagOutputStagingType = 'online';
+	  $fre->out(1, "The '$flagOutputStagingType' output staging type isn't supported - using the 'online' one...");
 	}
       }
       else
       {
-	$flagOutputCombineType = 'Online';
-	$fre->out(1, "The '$postProcessCombine' combining isn't supported - using online combining...");
+        $flagOutputStagingType = 'online';
+        $fre->out(1, "The output staging isn't defined - using the 'online' one...");
       }
+      
+      # --------------------------------------------------------------------------------------- history combining
 
-      my $flagOutputCombine = ($o{'combine-history'}) ? 'On' : 'Off';
-      if ($flagOutputCombine eq 'Off' and !$o{regression})
+      my $flagOutputCombineHistory = ($o{'combine-history'}) ? 'On' : 'Off';
+      if ($flagOutputCombineHistory eq 'Off')
       {
-	$flagOutputCombine = 'On';
-	$fre->out(1, "You can use the --nocombine-history option for regression tests only - ignored...");
-      }
-
-      if ($flagOutputCombine eq 'On')
-      {
-	if ($flagOutputCombineType eq 'Online')
+        if ($o{regression})
 	{
-	  $fre->out(2, "Using online history combining...");
+          $fre->out(2, "The history won't be combined...");
 	}
-	elsif ($flagOutputCombineType eq 'Offline')
-	{
-	  $fre->out(2, "Using offline history combining (by frepp)...");
+	else
+        {
+	  $flagOutputCombineHistory = 'On';
+	  $fre->out(1, "You can use the --nocombine-history option for regression tests only - ignored...");
 	}
-	elsif ($flagOutputCombineType eq 'Staged')
-	{
-	  $fre->out(2, "Using staged history combining...");
-	}
-	elsif ($flagOutputCombineType eq 'BySegment')
-	{
-	  $fre->out(2, "Using history combining by segment...");
-	}
-      }
-      else
-      {
-	$fre->out(2, "History won't be combined...");
       }
 
       # -------------------------------------------------------------------------------- output archiving
@@ -529,39 +546,14 @@ use FREUtil();
       my $fmsRelease = $fre->fmsRelease();
       push @getFmsData, ('-r', $fmsRelease) if $fmsRelease;
 
-      # ------------------------------------------------------------------ setting output staging parameters
-
-      if (exists($o{'output-staging'}) and $o{'output-staging'} != 0)
-      {
-        my $outputStagingType = $o{'output-staging'};
-	my $outputStagingPartition = $fre->property("FRE.scheduler.partition.outputStager.$outputStagingType");
-	my $outputStagingQueue = $fre->property("FRE.scheduler.queue.outputStager.$outputStagingType");
-	if ($outputStagingPartition and $outputStagingQueue)
-	{
-	  FRETemplate::setVariable(\$s, 'outputStagerPartition', $outputStagingPartition);
-	  FRETemplate::setVariable(\$s, 'outputStagerQueue', $outputStagingQueue);
-	}
-	else
-	{
-	  FRETemplate::setVariable(\$s, 'outputStagerPartition', $fre->property('FRE.scheduler.partition.outputStager'));
-	  FRETemplate::setVariable(\$s, 'outputStagerQueue', $fre->property('FRE.scheduler.queue.outputStager'));
-          $fre->out(1, "Output staging type '$outputStagingType' isn't supported - using default type...");
-	}
-      }
-      else
-      {
-	FRETemplate::setVariable(\$s, 'outputStagerPartition', $fre->property('FRE.scheduler.partition.outputStager'));
-	FRETemplate::setVariable(\$s, 'outputStagerQueue', $fre->property('FRE.scheduler.queue.outputStager'));
-      }
-      
       # ----------------------------------------------------------- setting constants/variables 
 
       FRETemplate::setFlag(\$s, 'flagRunType', ($o{regression}) ? 'Regression' : 'Production');
       FRETemplate::setFlag(\$s, 'flagLogging', ($o{logging}) ? 'On' : 'Off');
       FRETemplate::setFlag(\$s, 'flagOutputType', ($o{extend}) ? 'Extend' : (($o{overwrite}) ? 'Overwrite' : (($o{unique}) ? 'Unique' : 'Initial')));
       FRETemplate::setFlag(\$s, 'flagOutputFormat', (FRETargets::containsHDF5($fre->target())) ? 'HDF5' : '64Bit');
-      FRETemplate::setFlag(\$s, 'flagOutputCombineType', $flagOutputCombineType);
-      FRETemplate::setFlag(\$s, 'flagOutputCombine', $flagOutputCombine);
+      FRETemplate::setFlag(\$s, 'flagOutputStagingType', ucfirst $flagOutputStagingType);
+      FRETemplate::setFlag(\$s, 'flagOutputCombineHistory', $flagOutputCombineHistory);
       FRETemplate::setFlag(\$s, 'flagOutputArchive', $flagOutputArchive);
       FRETemplate::setFlag(\$s, 'flagOutputPostProcess', (!$o{regression} && !$o{unique}) ? "On" : "Off");
       FRETemplate::setFlag(\$s, 'flagOutputTransfer', ($o{transfer}) ? 'On' : 'Off');
@@ -579,6 +571,8 @@ use FREUtil();
       
       FRETemplate::setVariable(\$s, 'fileSenderPartition', $fre->property('FRE.scheduler.partition.transfer'));
       FRETemplate::setVariable(\$s, 'fileSenderQueue', $fre->property('FRE.scheduler.queue.transfer'));
+      FRETemplate::setVariable(\$s, 'outputStagerPartition', $fre->property('FRE.scheduler.partition.outputStager'));
+      FRETemplate::setVariable(\$s, 'outputStagerQueue', $fre->property('FRE.scheduler.queue.outputStager'));
       
       FRETemplate::setList(\$s, 'ppRefineDiagScriptNames', $z->extractPPRefineDiagScripts());
       FRETemplate::setList(\$s, 'getFmsData', @getFmsData);
@@ -2017,8 +2011,6 @@ use FREUtil();
     'archive'		=> 1,
     'combine-history'	=> 1,
     'logging'		=> 1,
-    'ncores'		=> frerun::NCORES_DEFAULT,
-    'walltime'		=> frerun::WALLTIME_DEFAULT,
     'platform'		=> FREDefaults::Platform(),
     'target'		=> FREDefaults::Target(),
     'xmlfile'		=> FREDefaults::XMLFile()
@@ -2047,6 +2039,30 @@ use FREUtil();
     exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
   }
   
+  if (exists($opt{'output-staging'}) and scalar(grep($_ eq $opt{'output-staging'}, frerun::OUTPUT_STAGING_TYPES)) == 0)
+  {
+    FREMsg::out($opt{verbose}, 0, "The option --output-staging='$opt{'output-staging'}' is invalid - the option value must be one of: online, offline, staged, bySegment");
+    exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
+  }
+  
+  if (exists($opt{'output-staging'}) and ($opt{'output-staging'} ne 'online') and !$opt{archive})
+  {
+    FREMsg::out($opt{verbose}, 0, "Options --output-staging='$opt{'output-staging'}' and --noarchive are incompatible");
+    exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
+  }
+
+  if (($opt{'output-staging'} eq 'offline') and $opt{regression})
+  {
+    FREMsg::out($opt{verbose}, 0, "The 'offline' output staging can't be used for regression tests");
+    exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
+  }
+
+  if (($opt{'output-staging'} eq 'offline') and $opt{unique})
+  {
+    FREMsg::out($opt{verbose}, 0, "The 'offline' output staging can't be used for unique runs");
+    exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
+  }
+
   if ($opt{check} and !$opt{unique})
   {
     FREMsg::out($opt{verbose}, 1, "Option --check is allowed only when the option --unique is present, the --check option is ignored");
@@ -2070,7 +2086,7 @@ use FREUtil();
     FREMsg::out($opt{verbose}, 1, "Option --transfer is not allowed when the option --check is present, the --transfer option is ignored");
     delete $opt{transfer};
   }
-
+  
   my $fre = FRE->new('frerun', %opt) or exit FREDefaults::STATUS_FRE_GENERIC_PROBLEM;
 
   if (!exists($opt{dual}) and !$opt{regression} and !$opt{unique} and $fre->property('FRE.option.dual.default'))
@@ -2085,6 +2101,16 @@ use FREUtil();
     %opt = (%opt, 'transfer' => 1);
   }
 
+  {
+    my $ncores = $opt{ncores} || $fre->property('FRE.input.staging.coresPerJob.default') || frerun::NCORES_DEFAULT;
+    %opt = (%opt, 'ncores' => $ncores);
+  }
+  
+  {
+    my $walltime = $opt{walltime} || $fre->property('FRE.input.staging.walltime.default') || frerun::WALLTIME_DEFAULT;
+    %opt = (%opt, 'walltime' => $walltime);
+  }
+  
   my @exps = ();
   foreach my $expName (@ARGV)
   {

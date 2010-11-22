@@ -2,7 +2,7 @@
 #PBS -l partition=noaa
 #PBS -N frepptest
 #PBS -l size=2
-#PBS -l walltime=00:10:00
+#PBS -l walltime=00:60:00
 #PBS -q ic10.a
 #PBS -o $HOME/qinfo4fre
 
