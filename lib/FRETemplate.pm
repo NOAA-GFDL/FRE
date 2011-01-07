@@ -1,5 +1,5 @@
 #
-# $Id: FRETemplate.pm,v 18.0.2.7 2010/09/29 16:33:29 afy Exp $
+# $Id: FRETemplate.pm,v 18.0.2.9 2010/12/20 23:43:37 afy Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: Template Management Module
 # ------------------------------------------------------------------------------
@@ -24,6 +24,8 @@
 # afy    Ver   7.00  Modify schedulerResources (add parameter)      September 10
 # afy    Ver   7.01  Modify setSchedulerResources (use new ^)       September 10
 # afy    Ver   7.02  Modify schedulerResourcesAsString (use new ^)  September 10
+# afy    Ver   8.00  Modify schedulerResources (add mail mode)      December 10
+# afy    Ver   9.00  Modify schedulerNames (add workDir)            December 10
 # ------------------------------------------------------------------------------
 # Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2009-2010
 # Designed and written by V. Balaji, Amy Langenhorst and Aleksey Yakovlev
@@ -75,6 +77,7 @@ my $schedulerResources = sub($$$$$$)
   my $queue = $fre->property("FRE.scheduler.queue.$m");
   my $coresPerJobInc = $fre->property("FRE.scheduler.coresPerJob.increment.$m");
   my $coresPerJobMax = $fre->property("FRE.scheduler.coresPerJob.max.$m");
+  my $mailMode = $fre->mailMode();
   
   my $ncores = ($n < $coresPerJobInc) ? $coresPerJobInc : (($coresPerJobMax < $n) ? $coresPerJobMax : $n);
   
@@ -87,7 +90,7 @@ my $schedulerResources = sub($$$$$$)
     join	=> $option->($fre, 'FRE.scheduler.option.join'),
     cpuset	=> $option->($fre, 'FRE.scheduler.option.cpuset'),
     rerun	=> $option->($fre, 'FRE.scheduler.option.rerun'),
-    mail	=> $option->($fre, 'FRE.scheduler.option.mail')
+    mail	=> $option->($fre, 'FRE.scheduler.option.mail', $mailMode)
   );
   
   %option =
@@ -118,7 +121,8 @@ my $schedulerNames = sub($$$)
   my %option =
   (
     name	=> $option->($fre, 'FRE.scheduler.option.name', $n),
-    stdout	=> $option->($fre, 'FRE.scheduler.option.stdout', $d)
+    stdout	=> $option->($fre, 'FRE.scheduler.option.stdout', $d),
+    workDir	=> $option->($fre, 'FRE.scheduler.option.workDir', $d)
   );
   
   return \%option; 

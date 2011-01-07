@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 # -*- cperl -*-
-# $Id: frepp,v 18.0.2.43 2010/11/16 17:51:09 fms Exp $
+# $Id: frepp,v 18.0.2.52.2.1 2011/01/03 23:58:18 afy Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: History/diagnostics post-processing
 # ------------------------------------------------------------------------------
@@ -26,14 +26,14 @@ use vars qw( $expt %nml $err $username %dtvars $root);
 use vars qw( $mkdircommand $hDate $t0 $tEND $ppRootDir $component $cpiomonTS $aggregateTS $historyfiles);
 use vars qw( $do_static $segTime $segUnits $caltype);
 use vars qw( $analysisdir $absfrepp $relfrepp $perlerrors );
-use vars qw( $archivedir $rootdir $workdir $rtsVersion $platform $versionId );
+use vars qw( $archivedir $rootdir $workdir $rtsVersion $platform $versionId $batchSubmit );
 use vars qw( $maxyrs $maxdisk $cubic $nlat $nlon $interpMethod $getgridspec $basenpes $call_fregrid );
 
 {
 
   package frepp;
 
-  use constant VERSION => '$Id: frepp,v 18.0.2.43 2010/11/16 17:51:09 fms Exp $';
+  use constant VERSION => '$Id: frepp,v 18.0.2.52.2.1 2011/01/03 23:58:18 afy Exp $';
 
 #Usage:    $relfrepp [ -AB:C:O:RY:Z:c:d:f:hlmMp:oqr:S:st:u:vx:z ] experiment [ experiment2 ... ]                 
   use constant OPTLIST =>
@@ -88,7 +88,7 @@ use vars qw( $maxyrs $maxdisk $cubic $nlat $nlon $interpMethod $getgridspec $bas
 
    Getopt::Long::GetOptions(\%opt, frepp::OPTLIST) or (print 'bad opts' and die "\n");
    if ($opt{Version}) {print frepp::VERSION,"\n" and exit(0);}
-   use vars qw( $opt_d $opt_D $opt_f $opt_l $opt_o $opt_p $opt_M $opt_m $opt_q $opt_t $opt_r $opt_x $opt_s $opt_v $opt_V  $opt_A $opt_B $opt_C $opt_O $opt_R $opt_S $opt_Y $opt_Z $opt_c $opt_H $opt_h $opt_o $opt_u $opt_z $opt_w );
+   use vars qw( $opt_d $opt_D $opt_f $opt_l $opt_o $opt_p $opt_M $opt_m $opt_q $opt_t $opt_r $opt_x $opt_s $opt_v $opt_V  $opt_A $opt_B $opt_C $opt_O $opt_R $opt_S $opt_Y $opt_Z $opt_c $opt_H $opt_h $opt_o $opt_u $opt_z $opt_w $opt_P );
 $opt_d=$opt{dir};
 $opt_f=$opt{filelist};
 $opt_l=$opt{limitstatic};
@@ -119,6 +119,7 @@ $opt_u=$opt{unique};
 $opt_z=$opt{statistics};
 $opt_D=$opt{refineDiag};
 $opt_w=$opt{wait};
+$opt_P=$opt{platform};
 
 ################### PROCESS ARGS, SET DEFAULTS #########################
 if ( -l $0 ) {
@@ -127,10 +128,6 @@ if ( -l $0 ) {
    $absfrepp = File::Spec->rel2abs( $0 );
 }
 $relfrepp = basename($absfrepp);
-
-if ( "$opt_w" ne '' ) {
-$opt_w = " -hold_jid $opt_w";
-}
 
 #getopts( 'AB:C:O:RY:Z:c:d:f:hlmMp:oqr:S:st:u:vVx:z' ) || die "\aSyntax: $0 [-AB:C:O:RY:Z:c:d:f:hlmMp:oqr:S:st:u:vVx:z]\n";
 
@@ -171,7 +168,7 @@ Usage:    $relfrepp [ -AB:C:O:RY:Z:c:d:f:hlmMp:oqr:S:st:u:vx:z ] experiment [ ex
                          This year overrides the endYear specifed in the <analysis> tag.
 
           OPTIONS FOR TIMING/DEBUGGING/STATISTICS
-          -M           = send mail to user when job is complete, ie qsub -m e
+          -M           = send mail to user when job is complete
           -q           = don't print the error checks into the script.  For evaluating csh.
           -v           = verbose flag                                                   
           -V           = very verbose flag                                                   
@@ -179,7 +176,7 @@ Usage:    $relfrepp [ -AB:C:O:RY:Z:c:d:f:hlmMp:oqr:S:st:u:vx:z ] experiment [ ex
           GENERAL FRE OPTIONS
           -h           = show this help message, then exit
           -r runparams = regression test run.  Combine netcdf files, but no further processing
-          -s           = automatically submit the script with qsub                      
+          -s           = automatically submit the script to the batch scheduler
           -x xmlfile   = specify xml file (default: ./rts.xml)
           experiment   = experiment to create scripts for; must be found in xml file    
 
@@ -219,7 +216,7 @@ if ( $opt_M and not $opt_p ) { $opt_M = "#\$ -m e";} else { $opt_M = ""; }
 
 if ( $opt_O ) { print STDERR "NOTE: There has been a change to the behavior of the -O option. Your scripts will be written directly to '$opt_O' and not to '$opt_O/scripts/postProcess'\n"; }
 
-$versionId = ' $Id: frepp,v 18.0.2.43 2010/11/16 17:51:09 fms Exp $';
+$versionId = ' $Id: frepp,v 18.0.2.52.2.1 2011/01/03 23:58:18 afy Exp $';
 
 $perlerrors = "";
 $component = "";
@@ -291,8 +288,9 @@ if ( $opt_v ) {
    else {print "  year)\n";}
 }
 
-#set default platform to ia64
+#set default platform to ia64 for hpcs.*, x86_64 for gfdl.*
 $platform = 'ia64';
+if ( $opt_P =~ /^gfdl\./ ) { $platform = 'x86_64'; }
 chomp $platform;
 my $platformcsh;
 
@@ -360,6 +358,7 @@ foreach $expt ( @ARGV ) {
 
    my $tmphistdir = "";
    if ( "$workdir" eq "" ) { 
+      die "ERROR: No workDir from xml\n";
       $tmphistdir = "\$TMPDIR/$expt"."_$opt_t";
       $workdir = "\$TMPDIR/$expt"."_$opt_t/work"; 
    } else { 
@@ -405,6 +404,8 @@ foreach $expt ( @ARGV ) {
    }
 
    #set platform specific variables
+   print STDERR "Using platform $platform\n" if $opt_v;
+   $batchSubmit = 'msub -d $HOME';
    if ( "$platform" eq 'sgi' ) {
       $cpio = 'cpio -C 524288';
       $cp = 'cp -b 2097152';
@@ -423,6 +424,7 @@ set ncks = /usr/local/bin/ncks
 which ncatted
 EOF
    } elsif ( "$platform" eq 'ia64' ) {
+      $batchSubmit = 'qsub';
       $cp = '/usr/cluster/bin/cxfscp';
       $cpio = 'cpio -C 524288';
       $uncpio = 'cpio -C 2097152';
@@ -435,10 +437,11 @@ alias ncks "ncks --64bit --hdr_pad 15000"
 alias ncrcat "ncrcat --64bit -t 2"
 EOF
    } elsif ( "$platform" eq 'x86_64' ) {
-      $cp = 'cp';
+      $basenpes = 1;
+      $cp = 'mpscp';
       $cpio = 'cpio -C 524288';
       $uncpio = 'cpio -C 2097152';
-      $mvfile = 'cp';
+      $mvfile = 'mpscp';
       $platformcsh = $exp->fre()->platformValue('csh');
       $platformcsh .= <<'EOF';
 
@@ -452,6 +455,15 @@ EOF
       mailuser("platform $platform not supported for postprocessing");
       print STDERR "ERROR: You specified '$freppplatform' for the post-processing platform in the <postProcess> tag.\nPlatform must be either 'ia64' or 'sgi' (for the Origins)\n";
    }
+
+   if ( "$opt_w" ne '' ) {
+      if ( "$platform" eq 'ia64' ) {
+         $opt_w = " -hold_jid $opt_w";
+      } else {
+         $opt_w = " -l depend=afterok:$opt_w";
+      }
+   }
+
 
    #variables for timing statistics
    if ( $opt_z ) {
@@ -481,6 +493,7 @@ EOF
 
    my $version_info = "$version_head";
    if ( $opt_f ) { $version_info .= "-f '$opt_f' "; }
+   if ( $opt_P ) { $version_info .= "-P $opt_P "; }
    if ( $opt_D ) { $version_info .= "-D $opt_D "; }
    if ( $opt_t ) { $version_info .= "-t $opt_t "; }
    if ( $opt_p ) { $version_info .= "-p $opt_p "; }
@@ -491,10 +504,19 @@ EOF
    if ( $opt_H ) { $version_info .= "-H "; }
    if ( $opt_m ) { $version_info .= "-m "; }
    $version_info .= "$expt";
+   my $this_frepp_cmd = $version_info;
+   $this_frepp_cmd =~ s/.*# //smg;
    my $outscript = "$outscriptdir/$expt"."_$opt_t";
-   if ( $opt_r ) { $outscript = "$outscriptdir/$expt"."_$opt_r"."_$opt_t"; }
-   if ( $opt_r ) { $maxruntime = "01:00:00"; }
-   if ( $opt_D ) { $outscript = "$outscriptdir/$expt"."_refineDiag_$opt_t"; }
+   my $pbs_job_name = "$expt"."_$opt_t";
+   if ( $opt_r ) { 
+      $outscript = "$outscriptdir/$expt"."_$opt_r"."_$opt_t";
+      $maxruntime = "01:00:00";
+      $pbs_job_name = "$expt"."_$opt_r"."_$opt_t"; 
+   }
+   if ( $opt_D ) { 
+      $outscript = "$outscriptdir/$expt"."_refineDiag_$opt_t"; 
+      $pbs_job_name = "$expt"."_refineDiag_$opt_t"; 
+   }
 
    my $cshscripttmpl = getTemplate($platform);
    #csh_from_xml...
@@ -531,8 +553,16 @@ EOF
    $cshscripttmpl =~ s/#get_site_config/$siteconfig/;
    #if you didn't specify -f, you didn't want to combine any files
    if ( ! $opt_f ) { $cshscripttmpl =~ s/#combine history files.*//s; }
-   $cshscripttmpl =~ s/#\$ -l h_cpu/#\$ -l h_cpu=$maxruntime/;   #this will need work
-   $cshscripttmpl =~ s/#\$ -o/#\$ -o $stdoutdir\/postProcess/;
+
+   if ( "$platform" eq 'ia64' ) {
+      $cshscripttmpl =~ s/#\$ -l h_cpu/#\$ -l h_cpu=$maxruntime/;
+      $cshscripttmpl =~ s/#\$ -o/#\$ -o $stdoutdir\/postProcess/;
+   } else {
+      $cshscripttmpl =~ s/#PBS -N/#PBS -N $pbs_job_name/; 
+      $cshscripttmpl =~ s/#PBS -l walltime/#PBS -l walltime=$maxruntime/;
+      $cshscripttmpl =~ s/#PBS -o/#PBS -o $stdoutdir\/postProcess\//;
+      $cshscripttmpl =~ s/setenv SGE_STDOUT_PATH/setenv SGE_STDOUT_PATH $stdoutdir\/postProcess\/$pbs_job_name.\$JOB_ID/;
+   }
    $cshscripttmpl =~ s/(-soft -l fre_info=)/$1ppVersion\@$relfrepp -hard/;
    $cshscripttmpl =~ s/version_info/$versionId\n$version_info/;
    $cshscripttmpl =~ s/set name/set name = $expt/;
@@ -547,14 +577,18 @@ EOF
 
    if ( $opt_r ) {  #if a regression test, no further postprocessing
       $cshscripttmpl =~ s/(-soft -l fre_info=)/$1ppYears\@$maxyrs+/;
-      FREUtil::writescript($cshscripttmpl,$outscript,"qsub$opt_w");
+      FREUtil::writescript($cshscripttmpl,$outscript,"$batchSubmit$opt_w");
       next;
    }
    my $ppNode = FREUtil::getppNode($expt);
    unless ( $ppNode ) {  #if no pp node, no further postprocessing
+   if ( "$platform" eq 'ia64' ) {
       $cshscripttmpl =~ s/#\$ -l h_cpu.*/#\$ -l h_cpu=01:00:00/;
+   } else {
+      $cshscripttmpl =~ s/#PBS -l walltime.*/#PBS -l walltime=01:00:00/;
+   }
       $cshscripttmpl =~ s/(-soft -l fre_info=)/$1ppYears\@$maxyrs+/;
-      FREUtil::writescript($cshscripttmpl,$outscript,"qsub$opt_w");
+      FREUtil::writescript($cshscripttmpl,$outscript,"$batchSubmit$opt_w");
       next; 
    }
    if ( "$opt_M" ne "" ) {
@@ -608,6 +642,7 @@ EOF
       #separate mppnccombine from rest of script due to splitting components
       unless ( $opt_H ) {
          $cshscripttmpl .= "\n/usr/bin/perl $absfrepp -x $abs_xml_path -t $opt_t -s -v ";
+         if ( $opt_P ) { $cshscripttmpl .= "-P $opt_P "; }
          if ( $opt_d ) { $cshscripttmpl .= "-d $opt_d "; }
          if ( $opt_u ) { $cshscripttmpl .= "-u $opt_u "; }
          if ( $opt_c ) { $cshscripttmpl .= "-c $opt_c "; }
@@ -629,9 +664,13 @@ EOF
       }
 
       $cshscripttmpl .= mailerrors($outscript);
+   if ( "$platform" eq 'ia64' ) {
       $cshscripttmpl =~ s/#\$ -l h_cpu.*/#\$ -l h_cpu=30:00:00/;
+   } else {
+      $cshscripttmpl =~ s/#PBS -l walltime.*/#PBS -l walltime=30:00:00/;
+   }
       $cshscripttmpl =~ s/(-soft -l fre_info=)/$1ppYears\@$maxyrs+/;
-      FREUtil::writescript($cshscripttmpl,$outscript,"qsub$opt_w");
+      FREUtil::writescript($cshscripttmpl,$outscript,"$batchSubmit$opt_w");
       next; 
    } else {
       $cshscripttmpl =~ s/set histDir = .*/set histDir = $tmphistdir/;
@@ -721,7 +760,7 @@ else
    set interpvars = ( `$NCVARS $ncvars_arg $fregrid_in.tile1.nc` )
    set interpvars = `echo $interpvars |sed 's/ /,/g'`
 endif
-set order1 = ( precip prec_ls snow_ls prec_conv snow_conv uw_precip prec_uwc snow_uwc prc_deep_donner snow_deep_donner prc1_deep_donner prc_mca_donner snow_mca_donner ice_mask land_mask zsurf cld_amt_2d conv_freq IWP_all_clouds WP_all_clouds WVP tot_cloud_area tot_ice_amt tot_liq_amt swdn_sfc_clr swdn_sfc swdn_toa_clr swdn_toa swup_sfc_clr swup_sfc swup_toa_clr swup_toa )
+set order1 = ( precip prec_ls snow_ls prec_conv snow_conv uw_precip prec_uwc snow_uwc prc_deep_donner snow_deep_donner prc1_deep_donner prc_mca_donner snow_mca_donner ice_mask land_mask zsurf cld_amt_2d conv_freq IWP_all_clouds WP_all_clouds WVP tot_cloud_area tot_ice_amt tot_liq_amt swdn_sfc_clr swdn_sfc swdn_toa_clr swdn_toa swup_sfc_clr swup_sfc swup_toa_clr swup_toa wind_ref wind_ref_max wind_ref_min )
 set attCmds = ()
 unset echo
 foreach order1var ( $order1 )
@@ -809,8 +848,12 @@ EOF
       if ( $opt_c ) {   #append component name to job and file name
          $cshscript = $cshscripttmpl;
          my $origoutscript = $outscript;
+         my $orig_pbs_job_name = $pbs_job_name;
          $outscript = "$outscriptdir/$expt"."_$component"."_$opt_t";
+         $pbs_job_name = "$expt"."_$component"."_$opt_t";
          $cshscript =~ s/set scriptName = .*/set scriptName = $outscript/;
+         $cshscript =~ s/#PBS -N .*/#PBS -N $pbs_job_name/;
+         $cshscript =~ s/setenv SGE_STDOUT_PATH.*/setenv SGE_STDOUT_PATH $stdoutdir\/postProcess\/$pbs_job_name.\$JOB_ID/;
          $cshscript =~ s/(-w $expt)/$1_$component/;
          $cshscript =~ s/(-soft -l fre_info=)/$1ppComponent\@$component+/;
          $opt_w =~ s/( -hold_jid $expt)(.*)(_\d\d\d\d\d\d\d\d)/$1_$component$3/;
@@ -1028,12 +1071,19 @@ EOF
 
       #if ocean 100 year pp, then submit the averages now in a separate job
       if ( $maxyrs > 20 and $component eq 'ocean' ) { 
-         $cshscript =~ s/#\$ -l h_cpu.*/#\$ -l h_cpu=30:00:00/; 
+         if ( "$platform" eq 'ia64' ) {
+            $cshscript =~ s/#\$ -l h_cpu.*/#\$ -l h_cpu=30:00:00/; 
+         } else {
+            $cshscript =~ s/#PBS -l walltime.*/#PBS -l walltime=30:00:00/; 
+         }
          my $npes = $basenpes * 2 unless $basenpes == 1;
          $cshscript =~ s/pe ic.postp (.+)/pe ic.postp $npes/; 
          $mkdircommand = createdirs( $mkdircommand );
          my $newoutscript = "$outscript"."_av";
+         my $new_pbs_job_name = "$pbs_job_name"."_av";
          $cshscript =~ s/set scriptName = .*/set scriptName = $newoutscript/;
+         $cshscript =~ s/setenv SGE_STDOUT_PATH.*/setenv SGE_STDOUT_PATH $stdoutdir\/postProcess\/$new_pbs_job_name.\$JOB_ID/;
+         $cshscript =~ s/#PBS -N .*/#PBS -N $new_pbs_job_name/;
          my @hf = dmget_files();
          my @hsmf = jpk_hsmget_files();
          if ( scalar @hf ) {
@@ -1041,7 +1091,26 @@ EOF
 cd $opt_d
 foreach h ( @hf )
  set historyyear = `echo \$h | cut -c 1-4`
- foreach historyfile ( `ls \$historyyear????.nc.cpio \$historyyear????.nc.tar`)
+ set availhf = ( `ls \$historyyear????.nc.cpio \$historyyear????.nc.tar` )
+ if ( "\$availhf" == "" ) then
+   Mail -s "\$name year \$historyyear cannot be postprocessed" \$USER <<END
+Your FRE post-processing job ( \$JOB_ID ) has exited because no history files
+were found for year \$historyyear in directory:
+$opt_d
+
+Please transfer or create the needed history file(s) and then resubmit frepp:
+
+$this_frepp_cmd
+
+Job details:
+\$name running on \$HOST
+Batch job stdout:
+\$SGE_STDOUT_PATH
+END
+    sleep 30
+    exit 6
+ endif
+ foreach historyfile ( \$availhf )
   set hsmdate = \$historyfile:r
   foreach hsmfile ( @hsmf ) 
    $time_hsmget hsmget -t -q -a $opt_d -p $ptmpDir/history -w $tmphistdir \$hsmdate/\\*.\$hsmfile.\\*
@@ -1064,10 +1133,11 @@ EOF
             $cshscript =~ s/#dmget_history_files/$hsmget_history/;
          }
 
-         $cshscript .= "qstat -j \$JOB_ID | grep ^usage\n";
+     
+         if ( "$platform" eq 'ia64' ) { $cshscript .= "qstat -j \$JOB_ID | grep ^usage\n"; }
          $cshscript .= "echo END-OF-SCRIPT for postprocessing job $t0-$tEND for $expt\n";
          $cshscript=~ s/(-soft -l fre_info=)/$1ppYears\@$maxyrs+/;
-         unless ($opt_A) {FREUtil::writescript($cshscript,$newoutscript,"qsub$opt_w");}
+         unless ($opt_A) {FREUtil::writescript($cshscript,$newoutscript,"$batchSubmit$opt_w");}
          $cshscript = $scriptcopy;
       }
 
@@ -1202,7 +1272,26 @@ EOF
 cd $opt_d
 foreach h ( @hf )
  set historyyear = `echo \$h | cut -c 1-4`
- foreach historyfile ( `ls \$historyyear????.nc.cpio \$historyyear????.nc.tar`)
+ set availhf = ( `ls \$historyyear????.nc.cpio \$historyyear????.nc.tar` )
+ if ( "\$availhf" == "" ) then
+   Mail -s "\$name year \$historyyear cannot be postprocessed" \$USER <<END
+Your FRE post-processing job ( \$JOB_ID ) has exited because no history files
+were found for year \$historyyear in directory:
+$opt_d
+
+Please transfer or create the needed history file(s) and then resubmit frepp:
+
+$this_frepp_cmd
+
+Job details:
+\$name running on \$HOST
+Batch job stdout:
+\$SGE_STDOUT_PATH
+END
+    sleep 30
+    exit 6
+ endif
+ foreach historyfile ( \$availhf )
   set hsmdate = \$historyfile:r
   foreach hsmfile ( @hsmf ) 
    $time_hsmget hsmget -t -q -a $opt_d -p $ptmpDir/history -w $tmphistdir \$hsmdate/\\*.\$hsmfile.\\*
@@ -1225,16 +1314,26 @@ EOF
             $cshscript =~ s/#dmget_history_files/$hsmget_history/;
          }
          $cshscript .= call_frepp($abs_xml_path, $outscript, $component, $simEND);
-         $cshscript .= "qstat -j \$JOB_ID | grep ^usage\n";
+         if ( "$platform" eq 'ia64' ) { $cshscript .= "qstat -j \$JOB_ID | grep ^usage\n"; }
          $cshscript .= "echo END-OF-SCRIPT for postprocessing job $t0-$tEND for $expt\n";
-         if ( $maxyrs < 2 ) { $cshscript =~ s/#\$ -l h_cpu.*/#\$ -l h_cpu=20:00:00/; }
+         if ( $maxyrs < 2 ) { 
+            if ( "$platform" eq 'ia64' ) {
+               $cshscript =~ s/#\$ -l h_cpu.*/#\$ -l h_cpu=20:00:00/; 
+            } else {
+               $cshscript =~ s/#PBS -l walltime.*/#PBS -l walltime=20:00:00/; 
+            }
+         }
          if ( $maxyrs >= 20 ) { 
-                $cshscript =~ s/#\$ -l h_cpu.*/#\$ -l h_cpu=30:00:00/; 
-                my $npes = $basenpes;
-                $cshscript =~ s/pe ic.postp (.+)/pe ic.postp $npes/; 
+            if ( "$platform" eq 'ia64' ) {
+               $cshscript =~ s/#\$ -l h_cpu.*/#\$ -l h_cpu=30:00:00/; 
+            } else {
+               $cshscript =~ s/#PBS -l walltime.*/#PBS -l walltime=30:00:00/; 
+            }
+            my $npes = $basenpes;
+            $cshscript =~ s/pe ic.postp (.+)/pe ic.postp $npes/; 
          }
          $cshscript=~ s/(-soft -l fre_info=)/$1ppYears\@$maxyrs+/;
-         unless ($opt_A) {FREUtil::writescript($cshscript,$outscript,"qsub$opt_w");}
+         unless ($opt_A) {FREUtil::writescript($cshscript,$outscript,"$batchSubmit$opt_w");}
       }
    }
 
@@ -1247,7 +1346,26 @@ EOF
 cd $opt_d
 foreach h ( @hf )
  set historyyear = `echo \$h | cut -c 1-4`
- foreach historyfile ( `ls \$historyyear????.nc.cpio \$historyyear????.nc.tar`)
+ set availhf = ( `ls \$historyyear????.nc.cpio \$historyyear????.nc.tar` )
+ if ( "\$availhf" == "" ) then
+   Mail -s "\$name year \$historyyear cannot be postprocessed" \$USER <<END
+Your FRE post-processing job ( \$JOB_ID ) has exited because no history files
+were found for year \$historyyear in directory:
+$opt_d
+
+Please transfer or create the needed history file(s) and then resubmit frepp:
+
+$this_frepp_cmd
+
+Job details:
+\$name running on \$HOST
+Batch job stdout:
+\$SGE_STDOUT_PATH
+END
+    sleep 30
+    exit 6
+ endif
+ foreach historyfile ( \$availhf )
   set hsmdate = \$historyfile:r
   $time_hsmget hsmget -a $opt_d -p $ptmpDir/history -w $tmphistdir \$hsmdate/\\*
  end
@@ -1267,11 +1385,17 @@ EOF
          }
 
       $cshscript .= call_frepp($abs_xml_path, $outscript, $component, "");
-      $cshscript .= "qstat -j \$JOB_ID | grep ^usage\n";
+      if ( "$platform" eq 'ia64' ) { $cshscript .= "qstat -j \$JOB_ID | grep ^usage\n"; }
       $cshscript .= "echo END-OF-SCRIPT for postprocessing job $t0-$tEND for $expt\n";
-      if ( $maxyrs < 2 ) { $cshscript=~ s/#\$ -l h_cpu.*/#\$ -l h_cpu=20:00:00/; }
+      if ( $maxyrs < 2 ) {
+         if ( "$platform" eq 'ia64' ) {
+            $cshscript=~ s/#\$ -l h_cpu.*/#\$ -l h_cpu=20:00:00/; 
+         } else {
+            $cshscript=~ s/#PBS -l walltime.*/#PBS -l walltime=20:00:00/; 
+         }
+      }
       $cshscript=~ s/(-soft -l fre_info=)/$1ppYears\@$maxyrs+/;
-      unless ($opt_A) {FREUtil::writescript($cshscript,$outscript,"qsub$opt_w");}
+      unless ($opt_A) {FREUtil::writescript($cshscript,$outscript,"$batchSubmit$opt_w");}
    }
 
    sysmailuser();
@@ -1340,12 +1464,15 @@ sub createdirs {
          #if($opt_v){print "executing mkdircommand:\nfirst half:\n'$f'\n\nsecond half:\n'$s'\n";}
          #system "rsh ac-arch 'mkdir -p $f'";
          #system "rsh ac-arch 'mkdir -p $s'";
-         FREUtil::remoteExec("mkdir -p $f",'rsh ac-arch','IP35');
-         FREUtil::remoteExec("mkdir -p $s",'rsh ac-arch','IP35');
+         #FREUtil::remoteExec("mkdir -p $f",'rsh ac-arch','IP35');
+         FREUtil::execute('ac-arch',"mkdir -p $f");
+         #FREUtil::remoteExec("mkdir -p $s",'rsh ac-arch','IP35');
+         FREUtil::execute('ac-arch',"mkdir -p $s");
       } else {
          #if ( $opt_v ) { print "executing mkdircommand: $mkdircommand\n"; }
          #system "rsh ac-arch '$mkdircommand'"; 
-         FREUtil::remoteExec($mkdircommand,'rsh ac-arch','IP35');
+         #FREUtil::remoteExec($mkdircommand,'rsh ac-arch','IP35');
+         FREUtil::execute('ac-arch',$mkdircommand);
       }
       $mkdircommand = "mkdir -p ";
    }
@@ -1366,6 +1493,7 @@ sub call_frepp {
       my $nextyear = FREUtil::modifydate($tEND,"+ 1 sec");
       my $nextyearf = FREUtil::graindate($nextyear,"day");
       $csh .= "\n/usr/bin/perl $absfrepp -x $abs_xml_path -t $nextyearf -p $togo -s -v ";
+      if ( $opt_P ) { $csh .= "-P $opt_P "; }
       if ( $opt_d ) { $csh .= "-d $opt_d "; }
       if ( $opt_D ) { $csh .= "-D '$opt_D' "; }
       if ( $opt_u ) { $csh .= "-u $opt_u "; }
@@ -1380,6 +1508,7 @@ sub call_frepp {
       my $nextyear = FREUtil::modifydate($tEND,"+ 1 sec");
       my $nextyearf = FREUtil::graindate($nextyear,"day");
       $csh .= "\n/usr/bin/perl $absfrepp -A -x $abs_xml_path -t $nextyearf -s -v ";
+      if ( $opt_P ) { $csh .= "-P $opt_P "; }
       if ( $opt_d ) { $csh .= "-d $opt_d "; }
       if ( $opt_u ) { $csh .= "-u $opt_u "; }
       if ( $opt_c ) { $csh .= "-c $component "; }
@@ -1404,7 +1533,7 @@ if ( \$errors_found == 0 ) then
 endif
 if ( -f /home/gfdl/flags/fre.checkpoint.\$HOSTNAME || -f /home/gfdl/flags/fre.checkpoint.all || -f /home/gfdl/flags/jobs/fre.checkpoint.\$JOB_ID || -f \$HOME/fre.checkpoint.\$JOB_ID ) then
    set now = `date +\%s`
-   qsub \$scriptName -g $checkpt
+   $batchSubmit \$scriptName -g $checkpt
    echo "Exiting early by HPCS request at \$now, will resume with $checkpt"
    Mail -s "\$name job \$JOB_ID has been checkpointed by frepp" \$USER <<END
 Your FRE post-processing job ( \$JOB_ID ) has been stopped and resubmitted 
@@ -1491,7 +1620,7 @@ if ( \$status != 0 ) then
  cat >> \$work/.errorssend <<END
 
 You will need to resubmit the job when the error conditions are resolved:
-qsub $outscript
+$batchSubmit $outscript
 END
  $sendemail
  exit 1
@@ -5187,15 +5316,40 @@ EOF
 
 
 sub getTemplate {
-#only supporting ia64 based platforms for now
-my $platform = $_[0];
-my $cshscripttmpl = <<'EOF';
+   my $platform = $_[0];
+
+   my $cshscripttmpl = '';
+   if ( "$platform" eq 'ia64' ) {
+      $cshscripttmpl = <<'EOF';
 #!/bin/csh -f
 #$ -l h_cpu
 #$ -pe ic.postp 1
 #$ -o
 #$ -r y
 #$ -soft -l fre_info=
+EOF
+   } else {
+      $cshscripttmpl = <<'EOF';
+#!/bin/csh -f
+#PBS -N
+#PBS -l walltime
+#PBS -j oe
+#PBS -o
+#PBS -r y
+#$ -soft -l fre_info=
+EOF
+      $cshscripttmpl .= <<EOF;
+
+setenv JOB_ID `echo \$PBS_JOBID |cut -f1 -d.`
+setenv SGE_STDOUT_PATH 
+if ( -d "$workdir" ) then
+  rm -rf $workdir
+endif
+mkdir -p $workdir
+EOF
+   }
+
+   $cshscripttmpl .= <<'EOF';
 #=======================================================================
 #version_info
 #=======================================================================

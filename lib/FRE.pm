@@ -1,5 +1,5 @@
 #
-# $Id: FRE.pm,v 18.0.2.6 2010/09/29 16:36:32 afy Exp $
+# $Id: FRE.pm,v 18.0.2.7 2010/12/08 00:41:38 afy Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: Main Library Module
 # ------------------------------------------------------------------------------
@@ -20,6 +20,8 @@
 # afy    Ver   6.01  Modify platformSiteGet (remove partition)      September 10
 # afy    Ver   6.02  Modify mkmfTemplateGet (weaken requirements)   September 10
 # afy    Ver   6.03  Modify new (don't process partition)           September 10
+# afy    Ver   7.00  Use new FREMsg module (symbolic level names)   December 10
+# afy    Ver   7.01  Add mailMode subroutine                        December 10
 # ------------------------------------------------------------------------------
 # Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2000-2010
 # Designed and written by V. Balaji, Amy Langenhorst and Aleksey Yakovlev
@@ -48,6 +50,9 @@ use FREUtil();
 use constant VERSION_DEFAULT => 1;
 use constant VERSION_CURRENT => 4;
 
+use constant MAIL_MODE_VARIABLE => 'FRE_SYSTEM_MAIL_MODE';
+use constant MAIL_MODE_DEFAULT => 'a';
+
 # //////////////////////////////////////////////////////////////////////////////
 # ///////////////////////////////////////////////////////// Private utilities //
 # //////////////////////////////////////////////////////////////////////////////
@@ -69,18 +74,18 @@ my $xmlLoadAndValidate = sub($$$)
       {
 	my ($line, $message) = ($@->line(), $@->message());
 	$message =~ s/\n$//s;
-	FREMsg::out($v, 0, "The XML file '$x', line '$line' - $message"); 
+	FREMsg::out($v, FREMsg::FATAL, "The XML file '$x', line '$line' - $message"); 
 	return '';
       }
       else
       {
-	FREMsg::out($v, 2, "The XML file '$x' has been successfully validated"); 
+	FREMsg::out($v, FREMsg::NOTE, "The XML file '$x' has been successfully validated"); 
 	return $document->getDocumentElement();
       }
     }
     else
     {
-      FREMsg::out($v, 0, "The XML schema file '$schemaLocation' doesn't exist or not readable");
+      FREMsg::out($v, FREMsg::FATAL, "The XML schema file '$schemaLocation' doesn't exist or not readable");
       return '';
     }
   }
@@ -99,24 +104,24 @@ my $versionGet = sub($$)
   if (!$version)
   {
     my $versionDefault = VERSION_DEFAULT;
-    FREMsg::out($v, 1, "rtsVersion information isn't found in your configuration file"); 
-    FREMsg::out($v, 1, "Assuming the lowest rtsVersion=$versionDefault.  A newer version is available...");
+    FREMsg::out($v, FREMsg::WARNING, "rtsVersion information isn't found in your configuration file"); 
+    FREMsg::out($v, FREMsg::WARNING, "Assuming the lowest rtsVersion=$versionDefault.  A newer version is available...");
     $version = $versionDefault; 
   }
   elsif ($version < VERSION_CURRENT)
   {
-    FREMsg::out($v, 1, "You are using obsolete rtsVersion.  A newer version is available..."); 
+    FREMsg::out($v, FREMsg::WARNING, "You are using obsolete rtsVersion.  A newer version is available..."); 
   }
   elsif ($version == VERSION_CURRENT)
   {
     my $versionCurrent = VERSION_CURRENT;
-    FREMsg::out($v, 2, "You are using rtsVersion=$versionCurrent"); 
+    FREMsg::out($v, FREMsg::NOTE, "You are using rtsVersion=$versionCurrent"); 
   }
   else
   {
     my $versionCurrent = VERSION_CURRENT;
-    FREMsg::out($v, 1, "rtsVersion $version is greater than latest default version $versionCurrent");
-    FREMsg::out($v, 1, "Assuming the rtsVersion=$versionCurrent"); 
+    FREMsg::out($v, FREMsg::WARNING, "rtsVersion $version is greater than latest default version $versionCurrent");
+    FREMsg::out($v, FREMsg::WARNING, "Assuming the rtsVersion=$versionCurrent"); 
     $version = $versionCurrent;
   }
   return $version;
@@ -154,13 +159,13 @@ my $infoGet = sub($$$)
   my @nodes = $fre->{rootNode}->findnodes($x);
   if (scalar(@nodes) > 0)
   {
-    FREMsg::out($v, 1, "The '$x' path defines more than one data item - all the extra definitions are ignored") if scalar(@nodes) > 1;
+    FREMsg::out($v, FREMsg::WARNING, "The '$x' path defines more than one data item - all the extra definitions are ignored") if scalar(@nodes) > 1;
     my $info = $fre->nodeValue($nodes[0], '.');
     $info =~ s/(?:^\s*|\s*$)//sg;
     my @infoList = split /\s+/, $info;
     if (scalar(@infoList) > 0)
     {
-      FREMsg::out($v, 1, "The '$x' path defines the multi-piece data item '$info' - all the pieces besides the first one are ignored") if scalar(@infoList) > 1;
+      FREMsg::out($v, FREMsg::WARNING, "The '$x' path defines the multi-piece data item '$info' - all the pieces besides the first one are ignored") if scalar(@infoList) > 1;
       return $infoList[0];
     }
     else
@@ -174,17 +179,17 @@ my $infoGet = sub($$$)
   }
 };
 
-my $mkmfTemplateGet = sub($$$)
-# ------ arguments: $fre $caller $platformNode
+my $mkmfTemplateGet = sub($$$$)
+# ------ arguments: $fre $caller $platformNode $verbose
 # ------ return the mkmfTemplate file, defined on the platform level 
 {
-  my ($fre, $c, $n) = @_;
+  my ($fre, $c, $n, $v) = @_;
   if ($c eq 'fremake')
   {
     my @mkmfTemplates = $fre->dataFilesMerged($n, 'mkmfTemplate', 'file');
     if (scalar(@mkmfTemplates) > 0)
     {
-      $fre->out(1, "The platform mkmf template is defined more than once - all the extra definitions are ignored") if scalar(@mkmfTemplates) > 1;
+      FREMsg::out($v, FREMsg::WARNING, "The platform mkmf template is defined more than once - all the extra definitions are ignored") if scalar(@mkmfTemplates) > 1;
       return $mkmfTemplates[0];
     }
     else
@@ -194,7 +199,7 @@ my $mkmfTemplateGet = sub($$$)
       if ($mkFilename eq 'NULL')
       {
 	$mkFilename = $fre->property('FRE.tool.mkmf.template.default');
-	$fre->out(1, "The platform mkmf template can't be derived from the platform <csh> - using the default template '$mkFilename'");
+	FREMsg::out($v, FREMsg::WARNING, "The platform mkmf template can't be derived from the platform <csh> - using the default template '$mkFilename'");
       }    
       return $fre->siteDir() . '/' . $mkFilename;
     }
@@ -205,10 +210,10 @@ my $mkmfTemplateGet = sub($$$)
   }
 };
 
-my $baseCshCompatibleWithTargets = sub($)
-# ------ arguments: $fre
+my $baseCshCompatibleWithTargets = sub($$)
+# ------ arguments: $fre $verbose
 {
-  my $fre = shift;
+  my ($fre, $v) = @_;
   my $versionsMapping = $fre->property('FRE.tool.make.override.netcdf.mapping');
   my $baseCshNetCDF4 = (FREUtil::strFindByPattern($versionsMapping, $fre->baseCsh()) == 4);
   my $targetListHdf5 = FRETargets::containsHDF5($fre->{target});
@@ -218,7 +223,7 @@ my $baseCshCompatibleWithTargets = sub($)
   }
   else
   {
-    $fre->out(0, "Your platform <csh> is configured for netCDF3 - so you aren't allowed to have 'hdf5' in your targets");
+    FREMsg::out($v, FREMsg::FATAL, "Your platform <csh> is configured for netCDF3 - so you aren't allowed to have 'hdf5' in your targets");
     return 0;
   }
 };
@@ -251,7 +256,7 @@ sub new
 
   if (-f $xmlfileAbsPath and -r $xmlfileAbsPath)
   {
-    FREMsg::out($o{verbose}, 2, "The '$caller' begun using the XML file '$xmlfileAbsPath'...");
+    FREMsg::out($o{verbose}, FREMsg::NOTE, "The '$caller' begun using the XML file '$xmlfileAbsPath'...");
     # ----------------------------------------- load the (probably validated) configuration file
     my $rootNode = $xmlLoadAndValidate->($xmlfileAbsPath, $o{validate}, $o{verbose});
     if ($rootNode)
@@ -295,12 +300,12 @@ sub new
 	      $fre->{project} = $fre->platformValue('project') || $fre->property('FRE.scheduler.project');
 	      $fre->{baseCsh} = $fre->platformValue('csh');
 	      # -------------------------------------------------------------------------------------------------- derive the mkmf template
-	      my $mkmfTemplate = $mkmfTemplateGet->($fre, $caller, $platformNode);
+	      my $mkmfTemplate = $mkmfTemplateGet->($fre, $caller, $platformNode, $o{verbose});
 	      if ($mkmfTemplate)
 	      {
 		$fre->{mkmfTemplate} = $mkmfTemplate;
 		# -------------------------------------------------------------------------- verify compatibility of base <csh> with targets
-		if ($baseCshCompatibleWithTargets->($fre))
+		if ($baseCshCompatibleWithTargets->($fre, $o{verbose}))
 		{
 		  # -------------------------------------------------------------------------- read setup-based info (for compatibility only)
 		  $fre->{getFmsData} = $infoGet->($fre, 'setup/getFmsData', $o{verbose});
@@ -343,55 +348,55 @@ sub new
 		  else
 		  {
 		    my $expNamesDuplicated = join ' ', @expNamesDuplicated;
-		    FREMsg::out($o{verbose}, 0, "Experiment names aren't unique: $expNamesDuplicated");
+		    FREMsg::out($o{verbose}, FREMsg::FATAL, "Experiment names aren't unique: $expNamesDuplicated");
 		    return '';
 		  }
 		}
 		else
 		{
-		  FREMsg::out($o{verbose}, 0, "Mismatch between the platform <csh> and the target option value");
+		  FREMsg::out($o{verbose}, FREMsg::FATAL, "Mismatch between the platform <csh> and the target option value");
 		  return '';
 		}
               }
 	      else
 	      {
-        	FREMsg::out($o{verbose}, 0, "A problem with the mkmf template");
+        	FREMsg::out($o{verbose}, FREMsg::FATAL, "A problem with the mkmf template");
 		return '';
 	      }
 	    }
 	    else
 	    {
-              FREMsg::out($o{verbose}, 0, "The platform with name '$o{platform}' isn't defined or defined more than once");
+              FREMsg::out($o{verbose}, FREMsg::FATAL, "The platform with name '$o{platform}' isn't defined or defined more than once");
 	      return '';
 	    }
 	  }
 	  else
 	  {
-            FREMsg::out($o{verbose}, 0, "A problem with FRE configuration files");
+            FREMsg::out($o{verbose}, FREMsg::FATAL, "A problem with FRE configuration files");
 	    return '';
 	  }
 	}
 	else
 	{
-	  FREMsg::out($o{verbose}, 0, $targetErrorMsg);
+	  FREMsg::out($o{verbose}, FREMsg::FATAL, $targetErrorMsg);
 	  return '';
 	}
       }
       else
       {
-	FREMsg::out($o{verbose}, 0, "The platform option is invalid");
+	FREMsg::out($o{verbose}, FREMsg::FATAL, "The platform option is invalid");
 	return '';
       }
     }
     else
     {
-      FREMsg::out($o{verbose}, 0, "The XML file '$xmlfileAbsPath' hasn't been validated");
+      FREMsg::out($o{verbose}, FREMsg::FATAL, "The XML file '$xmlfileAbsPath' hasn't been validated");
       return '';
     }
   }
   else
   {
-    FREMsg::out($o{verbose}, 0, "The XML file '$xmlfileAbsPath' doesn't exist or isn't readable");
+    FREMsg::out($o{verbose}, FREMsg::FATAL, "The XML file '$xmlfileAbsPath' doesn't exist or isn't readable");
     return '';
   }
 
@@ -485,13 +490,13 @@ sub dataFiles($$$)
 	unless (-f $fileName and -r $fileName)
 	{
           my $line = $node->line_number();
-	  $fre->out(1, "XML file line $line: the $l file '$fileName' isn't accessible or doesn't exist");
+	  $fre->out(FREMsg::WARNING, "XML file line $line: the $l file '$fileName' isn't accessible or doesn't exist");
 	}
       }
       else
       {
         my $line = $node->line_number();
-        $fre->out(1, "XML file line $line: the $l file '$fileName' is defined more than once - all the extra definitions are ignored");
+        $fre->out(FREMsg::WARNING, "XML file line $line: the $l file '$fileName' is defined more than once - all the extra definitions are ignored");
       }
     }
   }
@@ -523,13 +528,13 @@ sub dataFilesMerged($$$$)
       unless (-f $fileName and -r $fileName)
       {
         my $line = $node->line_number();
-	$fre->out(1, "XML file line $line: the $l $a '$fileName' isn't accessible or doesn't exist");
+	$fre->out(FREMsg::WARNING, "XML file line $line: the $l $a '$fileName' isn't accessible or doesn't exist");
       }
     }
     else
     {
       my $line = $node->line_number();
-      $fre->out(1, "XML file line $line: the $l $a '$fileName' is defined more than once - all the extra definitions are ignored");
+      $fre->out(FREMsg::WARNING, "XML file line $line: the $l $a '$fileName' is defined more than once - all the extra definitions are ignored");
     }
   }
   
@@ -681,6 +686,32 @@ sub runTime($$)
 {
   my ($fre, $n) = @_;
   return FREUtil::strFindByInterval($fre->property('FRE.scheduler.runtime.max'), $n);
+}
+
+sub mailMode($)
+# ------ arguments: $fre 
+# ------ called as object method
+# ------ return mail mode for the batch scheduler 
+{
+  my $fre = shift;
+  my $m = $ENV{FRE::MAIL_MODE_VARIABLE};
+  if ($m)
+  {
+    if ($m =~ m/^(?:n|a|b|e|ab|ae|be|abe)$/)
+    {
+      return $m;
+    }
+    else
+    {
+      my $v = FRE::MAIL_MODE_VARIABLE;
+      $fre->out(FREMsg::WARNING, "The environment variable '$v' has wrong value '$m' - ignored...");
+      return FRE::MAIL_MODE_DEFAULT;
+    }
+  }
+  else
+  {
+    return FRE::MAIL_MODE_DEFAULT;
+  }
 }
 
 sub out($$@)

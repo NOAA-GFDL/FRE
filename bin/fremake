@@ -1,7 +1,7 @@
 #!/usr/bin/perl
 # -*- cperl -*-
 #
-# $Id: fremake,v 18.0.2.11 2010/09/29 16:57:38 afy Exp $
+# $Id: fremake,v 18.0.2.13 2010/12/27 00:56:55 afy Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: Program to Create a Script to Compile a Model
 # ------------------------------------------------------------------------------
@@ -37,6 +37,8 @@
 # afy    Ver  10.03  Modify processCompileScriptCreate (cosmetics)  September 10
 # afy    Ver  10.04  Modify Usage subroutine (corrections)          September 10
 # afy    Ver  11.00  Add option --partition                         September 10
+# afy    Ver  12.00  Modify processCompileScriptCreate (modules)    December 10
+# afy    Ver  13.00  Modify processCompileScriptCreate (fix)        December 10
 # ------------------------------------------------------------------------------
 # Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2000-2010
 # Designed and written by V. Balaji, Amy Langenhorst and Aleksey Yakovlev
@@ -65,7 +67,7 @@ use FREXML();
 
   package fremake;
 
-  use constant VERSION => '$Id: fremake,v 18.0.2.11 2010/09/29 16:57:38 afy Exp $';
+  use constant VERSION => '$Id: fremake,v 18.0.2.13 2010/12/27 00:56:55 afy Exp $';
 
   use constant OPTLIST =>
   (
@@ -742,6 +744,7 @@ use FREXML();
 
     my $freCommandsHomeDir = FRE::home();
     my $jobs = $fre->property('FRE.tool.make.jobs.default');
+    my $moduleInitDir = $fre->property('FRE.tool.module.initDir') || '$MODULESHOME/init';
 
     # ------------------------------------------------------------------- create the environment setting script
 
@@ -755,7 +758,7 @@ use FREXML();
     $envScript .= "setenv MAKEFLAGS jobs=$jobs\n\n";
 
     $envScript .= "unset echo\n";
-    $envScript .= "source \$MODULESHOME/init/tcsh\n";
+    $envScript .= "source $moduleInitDir/tcsh\n";
     $envScript .= "$baseCsh\n";
     $envScript .= "module list\n";
     $envScript .= "set echo\n\n";
@@ -1026,7 +1029,7 @@ use FREXML();
   );
 
   Getopt::Long::GetOptions(\%opt, fremake::OPTLIST) or (print fremake::Usage() and exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM);
-  if ($opt{Version}) {print fremake::VERSION,"\n" and exit FREDefaults::STATUS_OK;}
+  if ($opt{version}) {print fremake::VERSION,"\n" and exit FREDefaults::STATUS_OK;}
   if ($opt{help}) {print fremake::Help() and exit FREDefaults::STATUS_OK;}
 
   if (scalar(@ARGV) == 0)

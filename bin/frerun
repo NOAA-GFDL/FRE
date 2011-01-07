@@ -1,7 +1,7 @@
 #!/usr/bin/perl
 # -*- cperl -*-
 #
-# $Id: frerun,v 18.0.2.27 2010/11/19 18:14:01 afy Exp $
+# $Id: frerun,v 18.0.2.29 2010/12/27 01:02:01 afy Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: Program to Create a Script to Run a Model
 # ------------------------------------------------------------------------------
@@ -107,6 +107,11 @@
 # afy    Ver  26.01  Rename flag*CombineType => flag*StagingType    November 10
 # afy    Ver  26.02  Rename flag*Combine => flag*CombineHistory     November 10
 # afy    Ver  27.00  Properties for --ncores/walltime defaults      November 10
+# afy    Ver  28.00  Use new FREMsg module (symbolic level names)   December 10
+# afy    Ver  28.01  Add productionParametersExist subroutine       December 10
+# afy    Ver  28.02  Modify init (fileSender/outputStager times)    December 10
+# afy    Ver  28.03  Modify init (mail mode)                        December 10
+# afy    Ver  29.00  Modify init (add moduleInitDir setting)        December 10
 # ------------------------------------------------------------------------------
 # Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2000-2010
 # Designed and written by V. Balaji, Amy Langenhorst and Aleksey Yakovlev
@@ -136,7 +141,7 @@ use FREUtil();
 
   package frerun;
 
-  use constant VERSION => '$Id: frerun,v 18.0.2.27 2010/11/19 18:14:01 afy Exp $';
+  use constant VERSION => '$Id: frerun,v 18.0.2.29 2010/12/27 01:02:01 afy Exp $';
 
   use constant OPTLIST =>
   (
@@ -329,7 +334,7 @@ use FREUtil();
       }
       else
       {
-        $fre->out(0, "The directory '$d' exists, but it's not writable");
+        $fre->out(FREMsg::FATAL, "The directory '$d' exists, but it's not writable");
 	return 0;
       }
     }
@@ -337,12 +342,12 @@ use FREUtil();
     {
       unless (FREUtil::execute('ac-work', "mkdir -p $d"))
       {
-        $fre->out(2, "createDir: $d");
+        $fre->out(FREMsg::NOTE, "createDir: $d");
 	return 1;
       }
       else
       {
-        $fre->out(0, "The directory '$d' can't be created");
+        $fre->out(FREMsg::FATAL, "The directory '$d' can't be created");
 	return 0;
       }
     }
@@ -350,12 +355,12 @@ use FREUtil();
     {
       unless (FREUtil::execute('ac-arch', "mkdir -p $d"))
       {
-        $fre->out(2, "createDir: $d");
+        $fre->out(FREMsg::NOTE, "createDir: $d");
 	return 1;
       }
       else
       {
-        $fre->out(0, "The directory '$d' can't be created");
+        $fre->out(FREMsg::FATAL, "The directory '$d' can't be created");
 	return 0;
       }
     }
@@ -384,7 +389,7 @@ use FREUtil();
     }
     else
     {
-      $fre->out(0, "The main runscript template '$pathname' isn't found");
+      $fre->out(FREMsg::FATAL, "The main runscript template '$pathname' isn't found");
       return (0, FREDefaults::STATUS_FRE_RUN_NO_TEMPLATE);
     }
   }
@@ -422,11 +427,11 @@ use FREUtil();
       my $execName = frerun::execName($z);
       if (-f $execName and -x $execName)
       {
-	$fre->out(2, "Using executable '$execName'...");
+	$fre->out(FREMsg::NOTE, "Using executable '$execName'...");
       }
       else
       {
-	$fre->out(1, "Your executable '$execName' doesn't exist or has wrong permissions");
+	$fre->out(FREMsg::WARNING, "Your executable '$execName' doesn't exist or has wrong permissions");
       }
 
       # ---------------------------------------------------------------------- output data staging
@@ -444,21 +449,21 @@ use FREUtil();
 	      if (!$o{archive})
 	      {
 		$flagOutputStagingType = 'online';
-		$fre->out(1, "The 'offline' output staging can't be used with the --noarchive option - using the 'online' one...");
+		$fre->out(FREMsg::WARNING, "The 'offline' output staging can't be used with the --noarchive option - using the 'online' one...");
 	      }
               elsif ($o{regression})
 	      {
 		$flagOutputStagingType = 'online';
-		$fre->out(1, "The 'offline' output staging can't be used for regression tests - using the 'online' one...");
+		$fre->out(FREMsg::WARNING, "The 'offline' output staging can't be used for regression tests - using the 'online' one...");
 	      }
 	      elsif ($o{unique})
 	      {
 		$flagOutputStagingType = 'online';
-		$fre->out(1, "The 'offline' output staging can't be used for unique runs - using the 'online' one...");
+		$fre->out(FREMsg::WARNING, "The 'offline' output staging can't be used for unique runs - using the 'online' one...");
 	      }
 	      else
 	      {
-                $fre->out(2, "The 'offline' output staging will be used...");
+                $fre->out(FREMsg::NOTE, "The 'offline' output staging will be used...");
 	      }
 	    }
 	    elsif ($flagOutputStagingType eq 'staged')
@@ -466,11 +471,11 @@ use FREUtil();
 	      if (!$o{archive})
 	      {
 		$flagOutputStagingType = 'online';
-		$fre->out(1, "The 'staged' output staging can't be used with the --noarchive option - using the 'online' one...");
+		$fre->out(FREMsg::WARNING, "The 'staged' output staging can't be used with the --noarchive option - using the 'online' one...");
 	      }
 	      else
 	      {
-                $fre->out(2, "The 'staged' output staging will be used...");
+                $fre->out(FREMsg::NOTE, "The 'staged' output staging will be used...");
 	      }
 	    }
 	    elsif ($flagOutputStagingType eq 'bySegment')
@@ -478,34 +483,34 @@ use FREUtil();
 	      if (!$o{archive})
 	      {
 		$flagOutputStagingType = 'online';
-		$fre->out(1, "The 'bySegment' output staging can't be used with the --noarchive option - using the 'online' one...");
+		$fre->out(FREMsg::WARNING, "The 'bySegment' output staging can't be used with the --noarchive option - using the 'online' one...");
 	      }
 	      else
 	      {
-                $fre->out(2, "The 'bySegment' output staging will be used...");
+                $fre->out(FREMsg::NOTE, "The 'bySegment' output staging will be used...");
 	      }
 	    }
 	    else
 	    {
-              $fre->out(2, "The '$flagOutputStagingType' output staging will be used...");
+              $fre->out(FREMsg::NOTE, "The '$flagOutputStagingType' output staging will be used...");
 	    }
 	  }
 	  else
 	  {
 	    $flagOutputStagingType = 'online';
-	    $fre->out(1, "The '$flagOutputStagingType' output staging isn't supported at this site - using the 'online' one...");
+	    $fre->out(FREMsg::WARNING, "The '$flagOutputStagingType' output staging isn't supported at this site - using the 'online' one...");
 	  }
 	}
 	else
 	{
 	  $flagOutputStagingType = 'online';
-	  $fre->out(1, "The '$flagOutputStagingType' output staging type isn't supported - using the 'online' one...");
+	  $fre->out(FREMsg::WARNING, "The '$flagOutputStagingType' output staging type isn't supported - using the 'online' one...");
 	}
       }
       else
       {
         $flagOutputStagingType = 'online';
-        $fre->out(1, "The output staging isn't defined - using the 'online' one...");
+        $fre->out(FREMsg::WARNING, "The output staging isn't defined - using the 'online' one...");
       }
       
       # --------------------------------------------------------------------------------------- history combining
@@ -515,12 +520,12 @@ use FREUtil();
       {
         if ($o{regression})
 	{
-          $fre->out(2, "The history won't be combined...");
+          $fre->out(FREMsg::NOTE, "The history won't be combined...");
 	}
 	else
         {
 	  $flagOutputCombineHistory = 'On';
-	  $fre->out(1, "You can use the --nocombine-history option for regression tests only - ignored...");
+	  $fre->out(FREMsg::WARNING, "You can use the --nocombine-history option for regression tests only - ignored...");
 	}
       }
 
@@ -531,12 +536,12 @@ use FREUtil();
       {
 	if ($o{regression})
 	{
-          $fre->out(2, "The model output will be kept in the disk cache only...");
+          $fre->out(FREMsg::NOTE, "The model output will be kept in the disk cache only...");
 	}
 	else
 	{
           $flagOutputArchive = 'On';
-          $fre->out(1, "You can use the --noarchive option for regression tests only - ignored...");
+          $fre->out(FREMsg::WARNING, "You can use the --noarchive option for regression tests only - ignored...");
 	}
       }
       
@@ -563,16 +568,23 @@ use FREUtil();
       FRETemplate::setVariable(\$s, 'target', $o{target});
       FRETemplate::setVariable(\$s, 'name', $z->name());
       FRETemplate::setVariable(\$s, 'rtsxml', $fre->configFileAbsPathName());
+      FRETemplate::setVariable(\$s, 'moduleInitDir', $fre->property('FRE.tool.module.initDir') || '$MODULESHOME/init');
       FRETemplate::setVariable(\$s, 'freCommandsHomeDir', FRE::home());
       FRETemplate::setVariable(\$s, 'workDir', $z->workDir());
       FRETemplate::setVariable(\$s, 'ptmpDir', $z->ptmpDir());
       FRETemplate::setVariable(\$s, 'archiveDir', $z->archiveDir());
       FRETemplate::setVariable(\$s, 'executable', $execName);
+      FRETemplate::setVariable(\$s, 'mailMode', $fre->mailMode());
       
       FRETemplate::setVariable(\$s, 'fileSenderPartition', $fre->property('FRE.scheduler.partition.transfer'));
       FRETemplate::setVariable(\$s, 'fileSenderQueue', $fre->property('FRE.scheduler.queue.transfer'));
+      FRETemplate::setVariable(\$s, 'fileSenderTimeAscii', $fre->property('FRE.scheduler.runtime.fileSender.ascii') || $fre->property('FRE.scheduler.runtime.max'));
+      FRETemplate::setVariable(\$s, 'fileSenderTimeRestarts', $fre->property('FRE.scheduler.runtime.fileSender.restarts') || $fre->property('FRE.scheduler.runtime.max'));
+      FRETemplate::setVariable(\$s, 'fileSenderTimeHistory', $fre->property('FRE.scheduler.runtime.fileSender.history') || $fre->property('FRE.scheduler.runtime.max'));
+      
       FRETemplate::setVariable(\$s, 'outputStagerPartition', $fre->property('FRE.scheduler.partition.outputStager'));
       FRETemplate::setVariable(\$s, 'outputStagerQueue', $fre->property('FRE.scheduler.queue.outputStager'));
+      FRETemplate::setVariable(\$s, 'outputStagerTime', $fre->property('FRE.scheduler.runtime.outputStager') || $fre->property('FRE.scheduler.runtime.max'));
       
       FRETemplate::setList(\$s, 'ppRefineDiagScriptNames', $z->extractPPRefineDiagScripts());
       FRETemplate::setList(\$s, 'getFmsData', @getFmsData);
@@ -623,7 +635,7 @@ use FREUtil();
 	}
 	elsif ($sArchiveFlag and $tFileName)
 	{
-	  $fre->out(0, "The source archive '$s' can't be linked to the non-directory target '$t'");
+	  $fre->out(FREMsg::FATAL, "The source archive '$s' can't be linked to the non-directory target '$t'");
 	  return (0, FREDefaults::STATUS_FRE_RUN_GENERIC_PROBLEM);
 	}
 	elsif (!$sArchiveFlag and ($tDirectoryFlag or $tFileName))
@@ -634,7 +646,7 @@ use FREUtil();
 	}
 	else
 	{
-	  $fre->out(0, "The target pathname is empty");
+	  $fre->out(FREMsg::FATAL, "The target pathname is empty");
 	  return (0, FREDefaults::STATUS_FRE_RUN_GENERIC_PROBLEM);
 	}
 
@@ -650,13 +662,13 @@ use FREUtil();
       }
       else
       {
-	$fre->out(0, "The target pathname '$t' isn't relative");
+	$fre->out(FREMsg::FATAL, "The target pathname '$t' isn't relative");
 	return (0, FREDefaults::STATUS_FRE_RUN_GENERIC_PROBLEM);
       }
     }
     else
     {
-      $fre->out(0, "The source pathname '$s' isn't absolute");
+      $fre->out(FREMsg::FATAL, "The source pathname '$s' isn't absolute");
       return (0, FREDefaults::STATUS_FRE_RUN_GENERIC_PROBLEM);
     }
 
@@ -672,12 +684,12 @@ use FREUtil();
 
     if ($fileName)
     {
-      $fre->out(2, "name='$n' value='$fileName'");
+      $fre->out(FREMsg::NOTE, "name='$n' value='$fileName'");
       FRETemplate::setVariable(\$s, $n, $fileName);
     }
     else
     {
-      $fre->out(1, "Variable '$n' has no value");
+      $fre->out(FREMsg::WARNING, "Variable '$n' has no value");
       FRETemplate::setVariable(\$s, $n, "''");
     }
 
@@ -722,7 +734,7 @@ use FREUtil();
 	}
 	else
 	{
-	  $fre->out(0, "The pathname '$source' can't be setup in the runscript");
+	  $fre->out(FREMsg::FATAL, "The pathname '$source' can't be setup in the runscript");
 	  return (0, $status);
 	}
       }
@@ -734,7 +746,7 @@ use FREUtil();
 
     if ($dataSets)
     {
-      $fre->out(1, "The usage of 'get_fms_data' datasets is deprecated - please list your input files explicitly in the XML file");
+      $fre->out(FREMsg::WARNING, "The usage of 'get_fms_data' datasets is deprecated - please list your input files explicitly in the XML file");
       $s =~ s/#fmsDataSets_from_xml/get_fms_data$dataSets/;
     }
     else
@@ -815,7 +827,7 @@ use FREUtil();
     my $fre = $z->fre();
     $l =~ s/^\s*!.*$//mg;
     
-    $fre->out(2, "Extracting tables...");
+    $fre->out(FREMsg::NOTE, "Extracting tables...");
 
     # --------------------------------------------------------------------- dataTable
     
@@ -827,7 +839,7 @@ use FREUtil();
     }
     else
     {
-      $fre->out(0, "A problem with the data table");
+      $fre->out(FREMsg::FATAL, "A problem with the data table");
       return (0, FREDefaults::STATUS_FRE_RUN_GENERIC_PROBLEM);
     }
 
@@ -858,7 +870,7 @@ use FREUtil();
     }
     else
     {
-      $fre->out(0, "A problem with the field table");
+      $fre->out(FREMsg::FATAL, "A problem with the field table");
       return (0, FREDefaults::STATUS_FRE_RUN_GENERIC_PROBLEM);
     }
 
@@ -875,7 +887,7 @@ use FREUtil();
     }
     else
     {
-      $fre->out(0, "A problem with the diagnostic table");
+      $fre->out(FREMsg::FATAL, "A problem with the diagnostic table");
       return (0, FREDefaults::STATUS_FRE_RUN_GENERIC_PROBLEM);
     }
 
@@ -889,7 +901,7 @@ use FREUtil();
     }
     else
     {
-      $fre->out(0, "A problem with the tracer tree table");
+      $fre->out(FREMsg::FATAL, "A problem with the tracer tree table");
       return (0, FREDefaults::STATUS_FRE_RUN_GENERIC_PROBLEM);
     }
 
@@ -903,7 +915,7 @@ use FREUtil();
     }
     else
     {
-      $fre->out(0, "A problem with the tracer tree initialization");
+      $fre->out(FREMsg::FATAL, "A problem with the tracer tree initialization");
       return (0, FREDefaults::STATUS_FRE_RUN_GENERIC_PROBLEM);
     }
 
@@ -1005,6 +1017,15 @@ use FREUtil();
 
   }
   
+  sub productionParametersExist($)
+  # ------ arguments: $exp
+  # ------ return 1 if production runtime parameters exist
+  {
+    my $z = shift;
+    my $simTime = $z->extractValue('runtime/production/@simTime');
+    return ($simTime) ? 1 : 0;
+  }
+  
   sub setProductionParameters($$$)
   # ------ arguments: $script $exp $partition
   # ------ return ($sript, $extension, $status)
@@ -1046,15 +1067,15 @@ use FREUtil();
 		if ($segRunTimeMinutes <= $simRunTimeMinutes)
 		{
 		  # ---------------------------------------------------------------------------- print original values
-		  $fre->out(2, "simTime = $simTime months, segTime = $segTime months");
-		  $fre->out(2, "simRunTimeMin = $simRunTimeMinutes minutes, segRunTimeMin = $segRunTimeMinutes minutes");
+		  $fre->out(FREMsg::NOTE, "simTime = $simTime months, segTime = $segTime months");
+		  $fre->out(FREMsg::NOTE, "simRunTimeMin = $simRunTimeMinutes minutes, segRunTimeMin = $segRunTimeMinutes minutes");
 		  # --------------------------------------------------------------------------------- calculate major timing parameters
 		  my $segPerSim = POSIX::ceil($simTime / $segTime);
-		  $fre->out(2, "segPerSim ($segPerSim) = simTime ($simTime) / segTime ($segTime) (rounded up)");
+		  $fre->out(FREMsg::NOTE, "segPerSim ($segPerSim) = simTime ($simTime) / segTime ($segTime) (rounded up)");
 		  my $segPerJob = POSIX::floor($simRunTimeMinutes / $segRunTimeMinutes);
-		  $fre->out(2, "segPerJob ($segPerJob) = simRunTimeMin ($simRunTimeMinutes) / segRunTimeMin ($segRunTimeMinutes) (rounded down)");
+		  $fre->out(FREMsg::NOTE, "segPerJob ($segPerJob) = simRunTimeMin ($simRunTimeMinutes) / segRunTimeMin ($segRunTimeMinutes) (rounded down)");
 		  my $jobPerSim = POSIX::ceil($segPerSim / $segPerJob);  
-		  $fre->out(2, "jobPerSim ($jobPerSim) = segPerSim ($segPerSim) / segPerJob ($segPerJob) (rounded up)");
+		  $fre->out(FREMsg::NOTE, "jobPerSim ($jobPerSim) = segPerSim ($segPerSim) / segPerJob ($segPerJob) (rounded up)");
 		  # ------------------------------------------------------------------------------------------------ create months/days lists
 		  my @ma = ();
 		  while (@ma < $segPerJob) {push(@ma, $segTime);}
@@ -1070,17 +1091,17 @@ use FREUtil();
 		    }
 		    else
 		    {
-        	      $fre->out(1, "The segment length ($segTime months) is not divisor of 12 - the postprocessor will combine output only");
+        	      $fre->out(FREMsg::WARNING, "The segment length ($segTime months) is not divisor of 12 - the postprocessor will combine output only");
         	      $combineFreq = $segTime;
 		    }
 		  }
 		  elsif (12 > $simTime)
 		  {
-		    $fre->out(1, "The production run length ($simTime months) < 1 year - the postprocessor will combine output only");
+		    $fre->out(FREMsg::WARNING, "The production run length ($simTime months) < 1 year - the postprocessor will combine output only");
 		  }
 		  elsif ($segTime % 12 != 0)
 		  {
-		    $fre->out(1, "The segment length ($segTime months) is not divisible by 12 - the postprocessor will combine output only");
+		    $fre->out(FREMsg::WARNING, "The segment length ($segTime months) is not divisible by 12 - the postprocessor will combine output only");
 		  }
 		  # ------------------------------------------------------------------------------------------ set parameters in the script
 		  FRETemplate::setVariable(\$s, 'npes', $np);
@@ -1097,43 +1118,43 @@ use FREUtil();
 		}
 		else
 		{
-		  $fre->out(0, "The segment running time '$segRunTimeMinutes' must not exceed the maximum job running time allowed '$simRunTimeMinutes'");
+		  $fre->out(FREMsg::FATAL, "The segment running time '$segRunTimeMinutes' must not exceed the maximum job running time allowed '$simRunTimeMinutes'");
 		  return (0, 0, FREDefaults::STATUS_FRE_RUN_GENERIC_PROBLEM); 
 		}
 	      }
 	      else
 	      {
-        	$fre->out(0, "Segment running time '$segRunTime' must be nonempty and have the HH:MM:SS format");
+        	$fre->out(FREMsg::FATAL, "Segment running time '$segRunTime' must be nonempty and have the HH:MM:SS format");
 		return (0, 0, FREDefaults::STATUS_FRE_RUN_GENERIC_PROBLEM); 
 	      }
 	    }
 	    else
 	    {
-              $fre->out(0, "Simulation running time '$simRunTime' must be noempty and have the HH:MM:SS format");
+              $fre->out(FREMsg::FATAL, "Simulation running time '$simRunTime' must be noempty and have the HH:MM:SS format");
 	      return (0, 0, FREDefaults::STATUS_FRE_RUN_GENERIC_PROBLEM); 
 	    }
 	  }
 	  else
 	  {
-	    $fre->out(0, "The segment time '$segTime' must not exceed the simulation time '$simTime'");
+	    $fre->out(FREMsg::FATAL, "The segment time '$segTime' must not exceed the simulation time '$simTime'");
 	    return (0, 0, FREDefaults::STATUS_FRE_RUN_GENERIC_PROBLEM); 
 	  }
 	}
 	else
 	{
-          $fre->out(0, "Segment time '$segTime' must be nonempty and have one of (years|year|months|month) units defined");
+          $fre->out(FREMsg::FATAL, "Segment time '$segTime' must be nonempty and have one of (years|year|months|month) units defined");
 	  return (0, 0, FREDefaults::STATUS_FRE_RUN_GENERIC_PROBLEM); 
 	}
       }
       else
       {
-        $fre->out(0, "Simulation time '$simTime' must be nonempty and have one of (years|year|months|month) units defined");
+        $fre->out(FREMsg::FATAL, "Simulation time '$simTime' must be nonempty and have one of (years|year|months|month) units defined");
 	return (0, 0, FREDefaults::STATUS_FRE_RUN_GENERIC_PROBLEM); 
       }
     }
     else
     {
-      $fre->out(0, "Number of processors must be a positive integer");
+      $fre->out(FREMsg::FATAL, "Number of processors must be a positive integer");
       return (0, 0, FREDefaults::STATUS_FRE_RUN_GENERIC_PROBLEM); 
     }      
 
@@ -1151,7 +1172,7 @@ use FREUtil();
     
     my ($fre, $od, $host, $res) = ($z->fre(), $z->archiveDir() . '/' . $x, 'ac-arch', 1);
 
-    $fre->out(2, "Creating output directories for regression tests...");
+    $fre->out(FREMsg::NOTE, "Creating output directories for regression tests...");
 
     if (FREUtil::execute($host, "test -d $od -a -w $od") == 0)
     {
@@ -1173,7 +1194,7 @@ use FREUtil();
       }
       else
       {
-        $fre->out(0, "Output directory '$od/ascii' exists, so you must specify either --overwrite or --unique");
+        $fre->out(FREMsg::FATAL, "Output directory '$od/ascii' exists, so you must specify either --overwrite or --unique");
 	return (0, 0, FREDefaults::STATUS_FRE_RUN_GENERIC_PROBLEM);
       }
     }
@@ -1184,13 +1205,13 @@ use FREUtil();
 
     if ($res == 0)
     {
-      $fre->out(2, "Created output directory $od/ascii");
+      $fre->out(FREMsg::NOTE, "Created output directory $od/ascii");
       FRETemplate::setVariable(\$s, 'outputDir', $od);
       return ($s, $x, FREDefaults::STATUS_OK);
     }
     else
     {
-      $fre->out(0, "Unable to create the output directory '$od/ascii'!");
+      $fre->out(FREMsg::FATAL, "Unable to create the output directory '$od/ascii'!");
       return (0, 0, FREDefaults::STATUS_FS_GENERIC_PROBLEM);
     }
 
@@ -1208,13 +1229,13 @@ use FREUtil();
     
     my ($fre, $od, $host, $res) = ($z->fre(), $z->archiveDir(), 'ac-arch', 1);
     
-    $fre->out(2, "Creating output directories for production run...");
+    $fre->out(FREMsg::NOTE, "Creating output directories for production run...");
 
     if (FREUtil::execute($host, "test -d $od -a -w $od") == 0)
     {
       if ($o{unique})
       {
-        $fre->out(2, "Performing unique production run, no post-processing for this run");
+        $fre->out(FREMsg::NOTE, "Performing unique production run, no post-processing for this run");
 	FRETemplate::setSchedulerDualRuns(\$s, $z);
         my $i = 1;
         while ( -d "$od/$i" ) {$i++;}
@@ -1236,7 +1257,7 @@ use FREUtil();
       }
       else
       {
-        $fre->out(0, "Output directory '$od/ascii' exists, so you must specify --extend, --overwrite or --unique");
+        $fre->out(FREMsg::FATAL, "Output directory '$od/ascii' exists, so you must specify --extend, --overwrite or --unique");
 	return (0, 0, FREDefaults::STATUS_FRE_RUN_GENERIC_PROBLEM);
       } 
     }
@@ -1247,13 +1268,13 @@ use FREUtil();
     
     if ($res == 0)
     {
-      $fre->out(2, "Created output directory $od/ascii");
+      $fre->out(FREMsg::NOTE, "Created output directory $od/ascii");
       FRETemplate::setVariable(\$s, 'outputDir', $od);
       return ($s, $x, FREDefaults::STATUS_OK);
     }
     else
     {
-      $fre->out(0, "Unable to create the output directory '$od/ascii'!");
+      $fre->out(FREMsg::FATAL, "Unable to create the output directory '$od/ascii'!");
       return (0, 0, FREDefaults::STATUS_FS_GENERIC_PROBLEM);
     }
     
@@ -1287,16 +1308,16 @@ use FREUtil();
       my $nmlRepro = (scalar(grep(/make_exchange_reproduce.+true/i, @xgridNml)) > 0);
       if ($nmlRepro and !$targetListRepro)
       {
-        $fre->out(1, "The 'make_exchange_reproduce' is .TRUE. in the 'xgrid_nml' namelist, which contradicts with absence of 'repro' in your targets");
+        $fre->out(FREMsg::WARNING, "The 'make_exchange_reproduce' is .TRUE. in the 'xgrid_nml' namelist, which contradicts with absence of 'repro' in your targets");
       }
       elsif (!$nmlRepro and $targetListRepro)
       {
-        $fre->out(1, "The 'make_exchange_reproduce' is absent or isn't .TRUE. in the 'xgrid_nml' namelist, which contradicts with 'repro' in your targets");
+        $fre->out(FREMsg::WARNING, "The 'make_exchange_reproduce' is absent or isn't .TRUE. in the 'xgrid_nml' namelist, which contradicts with 'repro' in your targets");
       }
     }
     elsif ($targetListRepro)
     {
-      $fre->out(1, "The 'xgrid_nml' namelist isn't found, which contradicts with 'repro' in your targets");
+      $fre->out(FREMsg::WARNING, "The 'xgrid_nml' namelist isn't found, which contradicts with 'repro' in your targets");
     }
   }
   
@@ -1392,7 +1413,7 @@ use FREUtil();
       unless ($hoursNml =~ /.*hours\s*=\s*(\$hours)\s*(.*)/)
       {
         $hoursNml =~ s/( *)(days *=)/$1hours = \$hours,\n$1$2/;
-        $fre->out(2, "Adding hours to coupler_nml...\n$hoursNml\n");
+        $fre->out(FREMsg::NOTE, "Adding hours to coupler_nml...\n$hoursNml\n");
         $l{coupler_nml} = $hoursNml;
       }
     }
@@ -1406,13 +1427,13 @@ use FREUtil();
       my ($namelist, $var, $val) = split(/[:=]/, $nml);
       $namelist =~ s/\s*//g;
       $var =~ s/\s*//g;
-      unless ($namelist and $var) {$fre->out(1, "Got an empty namelist in overrideParams"); next;}
+      unless ($namelist and $var) {$fre->out(FREMsg::WARNING, "Got an empty namelist in overrideParams"); next;}
 
-      $fre->out(2, "overrideParams from xml: $namelist:$var=$val");
+      $fre->out(FREMsg::NOTE, "overrideParams from xml: $namelist:$var=$val");
 
       if (exists($l{$namelist}))
       {
-        $fre->out(2, "original namelist:  $namelist\n$l{$namelist}");
+        $fre->out(FREMsg::NOTE, "original namelist:  $namelist\n$l{$namelist}");
         if ($l{$namelist} =~ /\b($var\s*=\s*)(\S.*)(([,\n]\s*\w+\s*=\s*.*)*)/i)
 	{
           $l{$namelist} =~ s/\b($var\s*=\s*)(\S.*)(([,\n]\s*\w+\s*=\s*.*)*)/$1$val$3/i;
@@ -1427,7 +1448,7 @@ use FREUtil();
         $l{$namelist} = "	$var = $val";
       }
 
-      $fre->out(2, "overridden namelist: $namelist\n$l{$namelist}");
+      $fre->out(FREMsg::NOTE, "overridden namelist: $namelist\n$l{$namelist}");
 
     }
 
@@ -1523,13 +1544,13 @@ use FREUtil();
       {
 	unless (FREDefaults::SiteIsGFDL())
 	{
-	  $fre->out(1, "histx can only be used at GFDL on the Altix platform.  Not using histx...");
+	  $fre->out(FREMsg::WARNING, "histx can only be used at GFDL on the Altix platform.  Not using histx...");
 	  $histx = '';
 	}
       }
       else
       {
-        $fre->out(1, "histx can only be used for regression runs.  Not using histx...");
+        $fre->out(FREMsg::WARNING, "histx can only be used for regression runs.  Not using histx...");
 	$histx = '';
       }
     }
@@ -1543,12 +1564,12 @@ use FREUtil();
 
     if ($ENV{MPIRUN_EXEC})
     {
-      $fre->out(2, "Using your environment variable MPIRUN_EXEC: $ENV{MPIRUN_EXEC}");
+      $fre->out(FREMsg::NOTE, "Using your environment variable MPIRUN_EXEC: $ENV{MPIRUN_EXEC}");
       $csh .= $ENV{MPIRUN_EXEC};
     }
     elsif ($o{debug} eq 'totalview')
     {
-      $fre->out(2, "Will launch TotalView...");
+      $fre->out(FREMsg::NOTE, "Will launch TotalView...");
       $csh .= 'foreach i ( $executable:h/Makefile* )' . "\n";
       $csh .= '  make localize -f $i' . "\n";
       $csh .= 'end' . "\n";
@@ -1556,14 +1577,14 @@ use FREUtil();
     }
     elsif ($o{debug} eq 'setup')
     {
-      $fre->out(2, "Will exit before the mpirun call...");
+      $fre->out(FREMsg::NOTE, "Will exit before the mpirun call...");
       $csh .= "\n";
       $csh .= 'exit 1' . "\n\n";
       $csh .= '/usr/bin/time -p mpirun -np $npes';
     }
     elsif ($histx)
     {
-      $fre->out(2, "Will use histx profiling tool...");
+      $fre->out(FREMsg::NOTE, "Will use histx profiling tool...");
       $csh .= 'source /opt/sgi/histx/setup.csh' . "\n";
       $csh .= '/usr/bin/time -p mpirun -np $npes `which histx` -o hi ' . $histx;
     }
@@ -1574,7 +1595,7 @@ use FREUtil();
 
     $csh .= ' ./$executable:t |& tee fms.out';
 
-    $fre->out(2, "Running executable with:\n$csh");
+    $fre->out(FREMsg::NOTE, "Running executable with:\n$csh");
 
     $s =~ s/#parlib_run_from_xml/$csh/;
     return $s;
@@ -1627,14 +1648,14 @@ use FREUtil();
 	      }
 	      else
 	      {
-        	$fre->out(0, "The runscript '$n' failed! ($res)", "Please see the logfile '$o'...");
+        	$fre->out(FREMsg::FATAL, "The runscript '$n' failed! ($res)", "Please see the logfile '$o'...");
 		return (0, FREDefaults::STATUS_FRE_RUN_EXECUTION_PROBLEM);
 	      }
 	    }
 	    elsif ($o{submit}) 
 	    {
 	      my $submit = $fre->property('FRE.scheduler.submit.command');
-	      $fre->out(2, "Executing '$submit $n'...");
+	      $fre->out(FREMsg::NOTE, "Executing '$submit $n'...");
 	      print qx($submit $n);
 	      return ($s, FREDefaults::STATUS_OK);
 	    }
@@ -1645,7 +1666,7 @@ use FREUtil();
 	      my $name = frerun::outputScriptOption($fre, 'FRE.scheduler.option.name', "${scriptBasename}_chain");
 	      my $resources = FRETemplate::schedulerResourcesAsString($z, $o{ncores}, $o{walltime} * 60, '', '', 'transfer');
 	      my $submitChainCommand = "$submit $name $resources -v FRE_STAGE=CHAIN $n";
-	      $fre->out(2, "Executing '$submitChainCommand'...");
+	      $fre->out(FREMsg::NOTE, "Executing '$submitChainCommand'...");
 	      print qx($submitChainCommand);
 	      return ($s, FREDefaults::STATUS_OK);
 	    }
@@ -1656,7 +1677,7 @@ use FREUtil();
 	      my $name = frerun::outputScriptOption($fre, 'FRE.scheduler.option.name', "${scriptBasename}_input");
 	      my $resources = FRETemplate::schedulerResourcesAsString($z, $o{ncores}, $o{walltime} * 60, '', '', 'transfer');
 	      my $submitInputCommand = "$submit $name $resources -v FRE_STAGE=INPUT $n";
-	      $fre->out(2, "Executing '$submitInputCommand'...");
+	      $fre->out(FREMsg::NOTE, "Executing '$submitInputCommand'...");
 	      my $submitInputMsg = qx($submitInputCommand);
 	      print "$submitInputMsg";
 	      my $jobId = frerun::outputScriptJobId($fre, $submitInputMsg, 'transfer');
@@ -1664,13 +1685,13 @@ use FREUtil();
 	      {
 		my $optionDependsOn = frerun::outputScriptOption($fre, 'FRE.scheduler.option.dependsOn', $jobId);
 		my $submitRunCommand = "$submit $optionDependsOn $n";
-		$fre->out(2, "Executing '$submitRunCommand'...");
+		$fre->out(FREMsg::NOTE, "Executing '$submitRunCommand'...");
 		print qx($submitRunCommand);
 		return ($s, FREDefaults::STATUS_OK);
 	      }
 	      else
 	      {
-		$fre->out(0, "Unable to submit the input data staging job for '$scriptBasename'");
+		$fre->out(FREMsg::FATAL, "Unable to submit the input data staging job for '$scriptBasename'");
 		return ($s, FREDefaults::STATUS_FRE_RUN_EXECUTION_PROBLEM);
 	      }
 	    }
@@ -1683,25 +1704,25 @@ use FREUtil();
 	  }
 	  else
 	  {
-            $fre->out(0, "Unable to change the script '$n' permissions!");
+            $fre->out(FREMsg::FATAL, "Unable to change the script '$n' permissions!");
 	    return (0, FREDefaults::STATUS_FS_GENERIC_PROBLEM);
 	  }
 	}
 	else
 	{
-	  $fre->out(0, "Unable to save the script '$n'!");
+	  $fre->out(FREMsg::FATAL, "Unable to save the script '$n'!");
 	  return (0, FREDefaults::STATUS_FS_GENERIC_PROBLEM);
 	}
       }
       else
       {
-	$fre->out(0, "Unable to create the scripts directory '$scriptsDir'!");
+	$fre->out(FREMsg::FATAL, "Unable to create the scripts directory '$scriptsDir'!");
 	return (0, FREDefaults::STATUS_FS_GENERIC_PROBLEM);
       }
     }
     else
     {
-      $fre->out(0, "Unable to create the stdout directory '$stdoutDir'!");
+      $fre->out(FREMsg::FATAL, "Unable to create the stdout directory '$stdoutDir'!");
       return (0, FREDefaults::STATUS_FS_GENERIC_PROBLEM);
     }
   }
@@ -1744,7 +1765,7 @@ use FREUtil();
   {
     my ($z, $r, $l, %o) = @_;
     my ($expName, $fre, %nml) = ($z->name(), $z->fre(), %{$r});
-    $fre->out(2, "Creating runscripts for the regression test '$l'...");
+    $fre->out(FREMsg::NOTE, "Creating runscripts for the regression test '$l'...");
     my ($runScript, $status) = frerun::init($z, %o);
     if ($runScript)
     {
@@ -1767,15 +1788,15 @@ use FREUtil();
 	    {
 	      for (my $i = 0; $i < scalar(@runNodes); $i++)
 	      {
-                $fre->out(2, "Creating a runscript #$i for the regression test '$l'...");
+                $fre->out(FREMsg::NOTE, "Creating a runscript #$i for the regression test '$l'...");
 	        (my $rc, $status) = frerun::processRegressionRun($runScript, $z, $r, $runNodes[$i], %o);
 		if ($rc)
 		{
-	          $fre->out(2, "A runscript #$i for the regression test '$l' in the experiment '$expName' has been created successfully");
+	          $fre->out(FREMsg::NOTE, "A runscript #$i for the regression test '$l' in the experiment '$expName' has been created successfully");
 		}
 		else
 		{
-                  $fre->out(0, "Unable to create a runscript #$i for the regression test '$l' in the experiment '$expName'");
+                  $fre->out(FREMsg::FATAL, "Unable to create a runscript #$i for the regression test '$l' in the experiment '$expName'");
 		  return (0, $status);
 		}
               }
@@ -1786,42 +1807,42 @@ use FREUtil();
 	      (my $rc, $status) = frerun::processRegressionRun($runScript, $z, $r, $runNodes[0], %o);
 	      if ($rc)
 	      {
-	        $fre->out(2, "A runscript for the regression test '$l' in the experiment '$expName' has been created successfully");
+	        $fre->out(FREMsg::NOTE, "A runscript for the regression test '$l' in the experiment '$expName' has been created successfully");
 		return (1, FREDefaults::STATUS_OK);
 	      }
 	      else
 	      {
-                $fre->out(0, "Unable to create a runscript for the regression test '$l' in the experiment '$expName'");
+                $fre->out(FREMsg::FATAL, "Unable to create a runscript for the regression test '$l' in the experiment '$expName'");
 		return (0, $status);
 	      }
 	    }
 	    else
 	    {
-	      $fre->out(0, "The regression test '$l' doesn't have any runs in the experiment '$expName'");
+	      $fre->out(FREMsg::FATAL, "The regression test '$l' doesn't have any runs in the experiment '$expName'");
 	      return (0, FREDefaults::STATUS_FRE_GENERIC_PROBLEM);
 	    }
 	  }
 	  else
 	  {
-	    $fre->out(0, "The regression test '$l' doesn't exist or defined more than once in the experiment '$expName'");
+	    $fre->out(FREMsg::FATAL, "The regression test '$l' doesn't exist or defined more than once in the experiment '$expName'");
 	    return (0, FREDefaults::STATUS_FRE_GENERIC_PROBLEM);
 	  }
 	}
 	else
 	{
-          $fre->out(0, "Unable to setup tables for the experiment '$expName'");
+          $fre->out(FREMsg::FATAL, "Unable to setup tables for the experiment '$expName'");
 	  return (0, $status);
 	}
       }
       else
       {
-        $fre->out(0, "Unable to setup input data for the experiment '$expName'");
+        $fre->out(FREMsg::FATAL, "Unable to setup input data for the experiment '$expName'");
 	return (0, $status);
       }
     }
     else
     {
-      $fre->out(0, "Unable to initialize the experiment '$expName'");
+      $fre->out(FREMsg::FATAL, "Unable to initialize the experiment '$expName'");
       return (0, $status);
     }
   }
@@ -1831,7 +1852,7 @@ use FREUtil();
   {
     my ($z, $r, %o) = @_;
     my ($expName, $fre, %nml) = ($z->name(), $z->fre(), %{$r});
-    $fre->out(2, "Creating runscripts for the regression tests suite...");
+    $fre->out(FREMsg::NOTE, "Creating runscripts for the regression tests suite...");
     my ($runScript, $status) = frerun::init($z, %o);
     if ($runScript)
     {
@@ -1847,7 +1868,7 @@ use FREUtil();
 	  FRETemplate::setVersionInfo(\$runScript, $z, $0, %o);	    
 	  foreach my $regLabel (frerun::REGRESSION_SUITE)
 	  {
-            $fre->out(2, "Creating runscripts for the regression test '$regLabel'...");
+            $fre->out(FREMsg::NOTE, "Creating runscripts for the regression test '$regLabel'...");
 	    my $x = 'regression[@label="' . $regLabel . '" or @name="' . $regLabel . '"]';
 	    my @regNodes = $z->extractNodes('runtime', $x);
 	    if (scalar(@regNodes) == 1)
@@ -1857,15 +1878,15 @@ use FREUtil();
 	      {
 		for (my $i = 0; $i < scalar(@runNodes); $i++)
 		{
-                  $fre->out(2, "Creating a runscript #$i for the regression test '$regLabel'...");
+                  $fre->out(FREMsg::NOTE, "Creating a runscript #$i for the regression test '$regLabel'...");
 	          (my $rc, $status) = frerun::processRegressionRun($runScript, $z, $r, $runNodes[$i], %o);
 		  if ($rc)
 		  {
-	            $fre->out(2, "A runscript #$i for the regression test '$regLabel' in the experiment '$expName' has been created successfully");
+	            $fre->out(FREMsg::NOTE, "A runscript #$i for the regression test '$regLabel' in the experiment '$expName' has been created successfully");
 		  }
 		  else
 		  {
-                    $fre->out(0, "Unable to create a runscript #$i for the regression test '$regLabel' in the experiment '$expName'");
+                    $fre->out(FREMsg::FATAL, "Unable to create a runscript #$i for the regression test '$regLabel' in the experiment '$expName'");
 		    return (0, $status);
 		  }
         	}
@@ -1875,41 +1896,41 @@ use FREUtil();
 	        (my $rc, $status) = frerun::processRegressionRun($runScript, $z, $r, $runNodes[0], %o);
 		if ($rc)
 		{
-	          $fre->out(2, "A runscript for the regression test '$regLabel' in the experiment '$expName' has been created successfully");
+	          $fre->out(FREMsg::NOTE, "A runscript for the regression test '$regLabel' in the experiment '$expName' has been created successfully");
 		}
 		else
 		{
-                  $fre->out(0, "Unable to create a runscript for the regression test '$regLabel' in the experiment '$expName'");
+                  $fre->out(FREMsg::FATAL, "Unable to create a runscript for the regression test '$regLabel' in the experiment '$expName'");
 		  return (0, $status);
 		}
 	      }
 	      else
 	      {
-		$fre->out(1, "The suite is incomplete - the regression test '$regLabel' doesn't have any runs in the experiment '$expName'");
+		$fre->out(FREMsg::WARNING, "The suite is incomplete - the regression test '$regLabel' doesn't have any runs in the experiment '$expName'");
 	      }
 	    }
 	    else
 	    {
-	      $fre->out(1, "The suite is incomplete - the regression test '$regLabel' doesn't exist or defined more than once in the experiment '$expName'");
+	      $fre->out(FREMsg::WARNING, "The suite is incomplete - the regression test '$regLabel' doesn't exist or defined more than once in the experiment '$expName'");
 	    }
 	  }
 	  return (1, FREDefaults::STATUS_OK);
 	}
 	else
 	{
-          $fre->out(0, "Unable to setup tables for the experiment '$expName'");
+          $fre->out(FREMsg::FATAL, "Unable to setup tables for the experiment '$expName'");
 	  return (0, $status);
 	}
       }
       else
       {
-        $fre->out(0, "Unable to setup input data for the experiment '$expName'");
+        $fre->out(FREMsg::FATAL, "Unable to setup input data for the experiment '$expName'");
 	return (0, $status);
       }
     }
     else
     {
-      $fre->out(0, "Unable to initialize the experiment '$expName'");
+      $fre->out(FREMsg::FATAL, "Unable to initialize the experiment '$expName'");
       return (0, $status);
     }
   }
@@ -1919,7 +1940,7 @@ use FREUtil();
   {
     my ($z, $r, %o) = @_;
     my ($expName, $fre, %nml) = ($z->name(), $z->fre(), %{$r});
-    $fre->out(2, "Creating a runcript for the experiment '$expName'...");
+    $fre->out(FREMsg::NOTE, "Creating a runcript for the experiment '$expName'...");
     my ($runScript, $status) = frerun::init($z, %o);
     if ($runScript)
     {
@@ -1955,37 +1976,37 @@ use FREUtil();
 	      }
 	      else
 	      {
-		$fre->out(0, "Unable to create (or run) a runscript for the experiment '$expName'");
+		$fre->out(FREMsg::FATAL, "Unable to create (or run) a runscript for the experiment '$expName'");
 		return (0, $status);
 	      }
 	    }
 	    else
 	    {
-	      $fre->out(0, "Unable to setup output directories for the experiment '$expName'");
+	      $fre->out(FREMsg::FATAL, "Unable to setup output directories for the experiment '$expName'");
 	      return (0, $status);
 	    }
 	  }
 	  else
 	  {
-	    $fre->out(0, "Unable to setup timing parameters for the experiment '$expName'");
+	    $fre->out(FREMsg::FATAL, "Unable to setup timing parameters for the experiment '$expName'");
 	    return (0, $status);
 	  }
 	}
 	else
 	{
-          $fre->out(0, "Unable to setup tables for the experiment '$expName'");
+          $fre->out(FREMsg::FATAL, "Unable to setup tables for the experiment '$expName'");
 	  return (0, $status);
 	}
       }
       else
       {
-        $fre->out(0, "Unable to setup input data for the experiment '$expName'");
+        $fre->out(FREMsg::FATAL, "Unable to setup input data for the experiment '$expName'");
 	return (0, $status);
       }
     }
     else
     {
-      $fre->out(0, "Unable to initialize the experiment '$expName'");
+      $fre->out(FREMsg::FATAL, "Unable to initialize the experiment '$expName'");
       return (0, $status);
     }
   }
@@ -1995,7 +2016,7 @@ use FREUtil();
   {
     my $z = shift;
     my ($expName, $fre) = ($z->name(), $z->fre());
-    $fre->out(0, "Skipping the experiment '$expName'...");
+    $fre->out(FREMsg::FATAL, "Skipping the experiment '$expName'...");
   }
 
 }
@@ -2127,7 +2148,7 @@ use FREUtil();
     
     my $expName = $exp->name();
     $fre->setCurrentExperimentName($expName);
-    $fre->out(2, "Setting up the experiment '$expName'...");
+    $fre->out(FREMsg::NOTE, "Setting up the experiment '$expName'...");
 
     # ---------------------------------------------------------------- process the experiment
     
@@ -2142,7 +2163,7 @@ use FREUtil();
 	  my @regLabels = ($opt{regression} eq 'suite') ? frerun::REGRESSION_SUITE : $opt{regression};
 	  foreach my $regLabel (@regLabels)
 	  {
-            $fre->out(2, "Extracting namelists for the regression test '$regLabel'...");
+            $fre->out(FREMsg::NOTE, "Extracting namelists for the regression test '$regLabel'...");
 	    my $x = 'regression[@label="' . $regLabel . '" or @name="' . $regLabel . '"]';
 	    my @regNodes = $exp->extractNodes('runtime', $x);
 	    if (scalar(@regNodes) == 1)
@@ -2162,11 +2183,11 @@ use FREUtil();
 	      {
 	        if ($opt{regression} eq 'suite')
 		{
-		  $fre->out(1, "The suite is incomplete - the regression test '$regLabel' doesn't have any runs for the experiment '$expName'");
+		  $fre->out(FREMsg::WARNING, "The suite is incomplete - the regression test '$regLabel' doesn't have any runs for the experiment '$expName'");
 		}
 		else
 		{
-		  $fre->out(0, "The regression test '$regLabel' doesn't have any runs for the experiment '$expName'");
+		  $fre->out(FREMsg::FATAL, "The regression test '$regLabel' doesn't have any runs for the experiment '$expName'");
 		  frerun::skipExp($exp) if scalar(@exps) > 1;
 		  $status = FREDefaults::STATUS_FRE_GENERIC_PROBLEM;
 		  last;
@@ -2177,11 +2198,11 @@ use FREUtil();
 	    {
 	      if ($opt{regression} eq 'suite')
 	      {
-		$fre->out(1, "The suite is incomplete - the regression test '$regLabel' doesn't exist or defined more than once for the experiment '$expName'");
+		$fre->out(FREMsg::WARNING, "The suite is incomplete - the regression test '$regLabel' doesn't exist or defined more than once for the experiment '$expName'");
 	      }
 	      else
 	      {
-		$fre->out(0, "The regression test '$regLabel' doesn't exist or defined more than once for the experiment '$expName'");
+		$fre->out(FREMsg::FATAL, "The regression test '$regLabel' doesn't exist or defined more than once for the experiment '$expName'");
 		frerun::skipExp($exp) if scalar(@exps) > 1;
 		$status = FREDefaults::STATUS_FRE_GENERIC_PROBLEM;
 		last;
@@ -2192,7 +2213,7 @@ use FREUtil();
 	else
 	{
           # ------------------------------------------------- production namelists output
-          $fre->out(2, "Extracting namelists for the experiment '$expName'...");
+          $fre->out(FREMsg::NOTE, "Extracting namelists for the experiment '$expName'...");
           my %nmlOverridden = frerun::overrideProductionNamelists($exp, %nml);
 	  print frerun::namelistsAsString(\%nmlOverridden), "\n";
 	}
@@ -2203,11 +2224,11 @@ use FREUtil();
         (my $rc, $status) = frerun::processRegressionSuite($exp, \%nml, %opt);
 	if ($rc)
 	{
-	  $fre->out(2, "The regression tests suite in the experiment '$expName' has been processed successfully");
+	  $fre->out(FREMsg::NOTE, "The regression tests suite in the experiment '$expName' has been processed successfully");
 	}
 	else
 	{
-	  $fre->out(0, "Unable to process the regression tests suite in the experiment '$expName'");
+	  $fre->out(FREMsg::FATAL, "Unable to process the regression tests suite in the experiment '$expName'");
 	  frerun::skipExp($exp) if scalar(@exps) > 1;
 	}
       }
@@ -2217,45 +2238,51 @@ use FREUtil();
         (my $rc, $status) = frerun::processRegression($exp, \%nml, $opt{regression}, %opt);
 	if ($rc)
 	{
-	  $fre->out(2, "The regression test '$opt{regression}' in the experiment '$expName' has been processed successfully");
+	  $fre->out(FREMsg::NOTE, "The regression test '$opt{regression}' in the experiment '$expName' has been processed successfully");
 	}
 	else
 	{
-	  $fre->out(0, "Unable to process the regression test '$opt{regression}' in the experiment '$expName'");
+	  $fre->out(FREMsg::FATAL, "Unable to process the regression test '$opt{regression}' in the experiment '$expName'");
 	  frerun::skipExp($exp) if scalar(@exps) > 1;
 	}
       }
-      else
+      elsif (frerun::productionParametersExist($exp))
       {
 	# ----------------------------------------------------------------- production runscript creation
 	(my $rc, $status) = frerun::processProduction($exp, \%nml, %opt);
 	if ($rc)
 	{
-	  $fre->out(2, "A runscript for the experiment '$expName' has been created successfully");
+	  $fre->out(FREMsg::NOTE, "A runscript for the experiment '$expName' has been created successfully");
 	  if ($opt{dual})
 	  {
 	    (my $rc, $status) = frerun::processProduction($exp, \%nml, (%opt, 'check' => 1, 'extend' => 0, 'overwrite' => 0, 'transfer' => 0, 'unique' => 1));
 	    if ($rc)
 	    {
-	      $fre->out(2, "A dual runscript for the experiment '$expName' has been created successfully");
+	      $fre->out(FREMsg::NOTE, "A dual runscript for the experiment '$expName' has been created successfully");
 	    }
 	    else
 	    {
-	      $fre->out(0, "Unable to create a dual runscript for the experiment '$expName'");
+	      $fre->out(FREMsg::FATAL, "Unable to create a dual runscript for the experiment '$expName'");
 	      frerun::skipExp($exp) if scalar(@exps) > 1;
 	    }
 	  } 
 	}
 	else
 	{
-	  $fre->out(0, "Unable to create a runscript for the experiment '$expName'");
+	  $fre->out(FREMsg::FATAL, "Unable to create a runscript for the experiment '$expName'");
 	  frerun::skipExp($exp) if scalar(@exps) > 1;
 	}
+      }
+      else
+      {
+        $fre->out(FREMsg::FATAL, "Unable to find runtime production parameters for the experiment '$expName'");
+	frerun::skipExp($exp) if scalar(@exps) > 1;
+        $status = FREDefaults::STATUS_FRE_GENERIC_PROBLEM;
       }
     }
     else
     {
-      $fre->out(0, "Unable to extract namelists for the experiment '$expName'");
+      $fre->out(FREMsg::FATAL, "Unable to extract namelists for the experiment '$expName'");
       frerun::skipExp($exp) if scalar(@exps) > 1;
       $status = FREDefaults::STATUS_FRE_GENERIC_PROBLEM;
     }

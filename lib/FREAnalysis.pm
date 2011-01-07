@@ -164,8 +164,11 @@ sub analysis {
        my $clnumber = $addexptcl;
        $clnumber =~ s/yr$//;
 
-       #my ($archivedir,$gridspec) = queuexml($xmlfile,$exptname);
-       #my $ppRootDir = "$archivedir" . "/pp";
+       chomp( my $ppRootDir = `frelist -dir=postProcess -x $xmlfile $exptname` );
+       chomp( my $gridspec = `frelist -e 'input/dataFile[\@label="gridSpec"]/dataSource' -x $xmlfile $exptname` );
+       if ( ! -f $gridSpec ) {
+          chomp( my $gridspec = `frelist -e 'input/gridSpec/\@file' -x $xmlfile $exptname` );
+       }
        my $staticfile = "$ppRootDir/$component/$component.static.nc";
        my $asrcdir_addexpt;
        if ($tsORav eq "timeSeries") {
@@ -177,7 +180,6 @@ sub analysis {
        if($opt_v) {
        print " addexpt $iExpt xmlfile   = $xmlfile \n";
        print " addexpt $iExpt exptname  = $exptname \n";
-       print " addexpt $iExpt archivedir= $archivedir \n";
        print " addexpt $iExpt ppRootDir = $ppRootDir \n";
        print " addexpt $iExpt staticfile= $staticfile \n";
        print " addexpt $iExpt asrcdir   = $asrcdir_addexpt \n";
@@ -472,11 +474,14 @@ sub writescript {
        print "$scriptoutput\n";
    } elsif ( ! $opt_s ) {
        print STDERR "ANALYSIS: Batch mode specified.\n";
-       print STDERR "TO SUBMIT: qsub $outscript @$aargu\n\n";
+       #print STDERR "TO SUBMIT: msub $outscript @$aargu\n\n";
+       print STDERR "TO SUBMIT: msub $outscript\n\n";
    } else {
        ####### The graphical analysis is specified in batch mode ######
        sleep 3;
-       my $qsub_msg = `qsub $outscript @$argu`;
+       print STDERR "Submitting 'msub $outscript'";
+       #my $qsub_msg = `msub $outscript @$argu`;
+       my $qsub_msg = `msub $outscript`;
        print "$qsub_msg";
    }
 
@@ -580,6 +585,7 @@ sub filltemplate {
     my $fremodule = `echo \$LOADEDMODULES | tr ':' '\n' | egrep '^fre/.+'`;
     #
     $tmpsch =~ s/#\$ -o.*/#\$ -o $printout/;
+    $tmpsch =~ s/#PBS -o.*/#PBS -o $printout/;
     $tmpsch =~ s/#\$ -P.*//;
     $tmpsch =~ s/set WORKDIR\s*$/set WORKDIR = $workdir/m;
     $tmpsch =~ s/set mode\s*$/set mode = $mode/m;
@@ -821,29 +827,6 @@ sub start_end_date {
      return $flag,$astartYear,$aendYear,$databegyr,$dataendyr,@themissing;
 }
 
-sub queuexml {
-  use File::stat;
-
-  my ($xmlfile, $expt) = @_;
-
-  my $parser = XML::LibXML->new();
-  my $root = $parser->parse_file($xmlfile)->getDocumentElement;
-  my $setup = $root->findnodes('setup')->get_node(1);
-  
-  my $archivedir = $setup->findvalue('directory[@type="archive"]');
-  if( "$archivedir" eq "" ) { $archivedir = "/archive/\$USER/rts"; }
-  #fill in things like $USER
-
-  my $xmlstats = stat($xmlfile);
-  my $user = getpwuid($xmlstats->uid);
-  $archivedir =~ s/\$user/$user/g;
-  $archivedir =~ s/\$USER/$user/g;
-  $archivedir =~ s/\$ARCHIVE/\/archive\/$user/g;
-
-  my $gridspec = getxpathval('input/gridSpec/@file',$expt,$root);
-
-  return $archivedir,$gridspec;
-}
 #gets a value from xml, recurse using @inherit and optional second argument $expt  
 sub getxpathval {
    my $path = $_[0]; 

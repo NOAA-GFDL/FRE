@@ -1,8 +1,8 @@
 #! /usr/bin/perl
 
 # $Author: sdu $
-# $Revision: 17.0.2.6 $
-# $Date: 2010/07/07 15:51:55 $
+# $Revision: 17.0.2.8 $
+# $Date: 2011/02/03 21:42:13 $
 
 # Perl script to parse the diag_table.  Count the number of files to
 # be used, and the max number of fields per file used.
@@ -22,10 +22,13 @@ my $help = 0;
 my $verbose = 0;
 my $xmlFile = '';
 my $scriptFile = '';
+my $platform =  FREDefaults::Platform();
 GetOptions ("help|h" => \$help,
 	    "verbose|v" => \$verbose,
 	    "xml|x=s" => \$xmlFile,
-	    "script|s=s" => \$scriptFile) or pod2usage(2);
+	    "script|s=s" => \$scriptFile,
+	    "platform|p=s" => \$platform,
+	   ) or pod2usage(2);
 pod2usage(1) if $help;
 
 # diag_table_chk can be called one of three ways:  
@@ -66,7 +69,7 @@ if ( ! $xmlFile and ! $scriptFile ) { # If no XML or script file specified.
     } else {
       my $inputExperiment = $ARGV[0];
 
-      my %freOps = ( xmlfile => $xmlFile );
+      my %freOps = ( xmlfile => $xmlFile, platform => $platform );
       my $fre = FRE -> new('diag_table_chk',%freOps) or exit(1);
       my $freExp = FREExperiment -> new($fre, $inputExperiment) or exit(1);
       my $diagTableString = $freExp -> extractTable('diagTable');
@@ -160,7 +163,7 @@ while ( <DIAG_TABLE> ) {
 
   my $num_warnings = 0;
 
-  if ( $. == 1  and not $tableNameError ) { # Global descriptior is to be on line 1
+  if ( $. == 1  and not $tableNameError ) { # Global descriptor is to be on line 1
     my $temp_tableName = sanitizeString($line_data[0]);
     if ( $temp_tableName =~ /\s/ ) {
       $tableNameError = 1;
@@ -352,10 +355,18 @@ while ( <DIAG_TABLE> ) {
       }
       # Verify time_method / time_avg is valid
       if ( invalid_timeSample(sanitizeString($line_data[5])) ) {
-	$ num_warnings++;
+	$num_warnings++;
 	push @warnings, ( {
 			   line_number => $.,
 			   message => "Time sampling method must be one of (.true., mean, average, avg, .false., none, point, maximum, max, minimum, min, diurnal[#]).",
+			  } );
+      }
+      # Verify regional / globally output type is valid
+      if ( invalid_OutRegtion(sanitizeString($line_data[6])) ) {
+	$num_warnings++;
+	push @warnings, ( {
+			   line_number => $.,
+			   message => "Region to be output must be 'none' for globally, or '-1, -1, -1, -1, hmin,hmax' for vertical region, or 'xmin,xmax, ymin,ymax, hmin, hmax'.",
 			  } );
       }
       # Verify packing is valid :: must be in range [1,8]
@@ -499,6 +510,24 @@ sub invalid_timeSample {
   }
 }
 
+# Check if region out is valid
+sub invalid_OutRegtion {
+  my $regionOutType = $_[0];
+
+  # 'none' is valid
+  return 0 if ( $regionOutType =~ /^none$/i );
+
+  my @regionArray = split('\s+',$regionOutType);
+  return 1 if ( @regionArray != 6 );
+
+  # Make sure all elements are numbers
+  foreach my $var ( @regionArray ) {
+    return 1 if ( sanitizeString($var) !~ /^(-)?\d+(\.(\d*)?)?$/ );
+  }
+
+  return 0;
+}
+
 # Verify that the given unit is understood.
 # A return value of -1 indicated an unknown unit.
 sub find_unit_ivalue {
@@ -639,7 +668,7 @@ diag_table_chk [-v|--verbose] I<<diag_table>>
 
 diag_table_chk [-v|--verbose] -s I<<run_script>>
 
-diag_table_chk [-v|--verbose] -x I<<xml_file>> I<<experiment>>
+diag_table_chk [-v|--verbose] [-p|--platform I<<fre_platform>> -x I<<xml_file>> I<<experiment>>
 
 =head1 DESCRIPTION
 
@@ -667,6 +696,10 @@ Read the I<diag_table> file from a FRE created runscript.
 
 Read the diagnostic table file from I<<experiment>> from the I<<xml_file>>.
 
+=item B<-p>, B<--platform>
+
+Read the diagnostic table file using the I<<fre_platform>> to configure the directory locations.
+
 =item I<<diag_table>>
 
 The file name of the diagnostic table to check
@@ -678,6 +711,10 @@ A FRE XML formatted file.
 =item I<<run_script>>
 
 A runscript created using the I<frerun> FRE command.
+
+=item I<<fre_platform>>
+
+The FRE run platform..
 
 =back
 

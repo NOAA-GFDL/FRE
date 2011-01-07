@@ -1,11 +1,12 @@
 #!/bin/csh -f
-#PBS -l partition=noaa
+#PBS -l partition=gfdl
 #PBS -N frepptest
-#PBS -l size=2
+#PBS -l size=1
 #PBS -l walltime=00:60:00
-#PBS -q ic10.a
-#PBS -o $HOME/qinfo4fre
+#PBS -o $HOME/qinfo4fre/
+#PBS -r y
+#PBS -j oe
 
-source /opt/modules/default/init/tcsh
+source $MODULESHOME/init/tcsh
 module purge
 

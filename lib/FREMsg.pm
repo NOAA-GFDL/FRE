@@ -1,11 +1,13 @@
 #
-# $Id: FREMsg.pm,v 18.0 2010/03/02 23:58:53 fms Exp $
+# $Id: FREMsg.pm,v 18.0.4.1 2010/12/08 00:32:40 afy Exp $
 # ------------------------------------------------------------------------------
-# FMS/FRE Project: Messages Management Module
+# FMS/FRE Project: System Messaging Module
 # ------------------------------------------------------------------------------
 # afy    Ver   1.00  Initial version                                November 09
+# afy -------------- Branch 18.0.4 -------------------------------- December 10
+# afy    Ver   1.00  Add symbolic names for messages levels         December 10
 # ------------------------------------------------------------------------------
-# Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2000-2009
+# Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2000-2010
 # Designed and written by V. Balaji, Amy Langenhorst and Aleksey Yakovlev
 #
 
@@ -17,7 +19,10 @@ use strict;
 # ////////////////////////////////////////////////////////// Global constants //
 # //////////////////////////////////////////////////////////////////////////////
 
-use constant OUT_PREFIX_LIST => ('*FATAL*: ', 'WARNING: ', '<NOTE> : ', '<INFO> : ');
+use constant FATAL => 0;
+use constant WARNING => 1;
+use constant NOTE => 2;
+use constant INFO => 3;
 
 # //////////////////////////////////////////////////////////////////////////////
 # //////////////////////////////////////////////////////// Exported Functions //
@@ -30,7 +35,7 @@ sub out($$@)
   my ($v, $l) = (shift, shift);
   if (0 <= $l and $l <= $v + 1)
   {
-    my @prefixList = OUT_PREFIX_LIST;
+    my @prefixList = ('*FATAL*: ', 'WARNING: ', '<NOTE> : ', '<INFO> : ');
     my $prefix = ($l <= $#prefixList) ? $prefixList[$l] : $prefixList[$#prefixList];
     my $prefixFiller = ' ' x length($prefix);
     my $firstLine = 1;

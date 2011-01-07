@@ -1,7 +1,7 @@
 #!/bin/csh -f
 #FRE scheduler-options
 # 
-# $Id: runscript.template.main,v 1.1.4.21 2010/11/13 00:51:53 afy Exp $
+# $Id: runscript.template.main,v 1.1.4.26 2011/01/11 18:57:16 afy Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: Runscript Template - NCRC Version
 # ------------------------------------------------------------------------------
@@ -101,8 +101,16 @@
 # afy    Ver  20.06  Use 'hsmput' to save ascii/restarts/history    November 10
 # afy    Ver  20.07  Add alias 'aprun' (temporarily)                November 10
 # afy    Ver  21.00  Rename alias 'aprun' => 'runCommand'           November 10
+# afy    Ver  22.00  Modify alias 'submitOutputStager' (16 => 12)   November 10
+# afy    Ver  22.01  Modify banners (prologue => PBS_JOBNAME)       November 10
+# afy    Ver  23.00  Modify fileSenderTime* constants (16 => 12)    November 10
+# afy    Ver  24.00  Modify aliases 'submit*' (add -m abe)          November 10
+# afy    Ver  25.00  Standardize the script beginning               December 10
+# afy    Ver  25.01  Make all the '*Time' constants settable        December 10
+# afy    Ver  25.02  Add settable constant 'mailMode'               December 10
+# afy    Ver  26.00  Don't check presence of refine scripts         January 11
 # ------------------------------------------------------------------------------
-# Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2000-2010
+# Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2000-2011
 # Designed and written by V. Balaji, Amy Langenhorst and Aleksey Yakovlev
 # 
 
@@ -110,8 +118,9 @@
 #FRE version-info
 #===============================================================================
 
+  echo ====== FRE RUNSCRIPT ======
   echo "Starting on `date`"
-  echo $HOST $HOSTNAME
+  echo "Starting on $HOST $HOSTNAME"
   set echo
   unalias *
 
@@ -121,8 +130,6 @@
   source $MODULESHOME/init/tcsh
   module load banner 
   set echo
-
-  banner prologue
 
   # ---------------- adjust stdout permissions, define constants for non-scheduler runs
 
@@ -137,6 +144,8 @@
     set -r PBS_JOBNAME = 'STDIN'
     set -r PBS_QUEUE = 'batch'
   endif
+
+  banner $PBS_JOBNAME
 
 ################################################################################
 #---------------- global constants and variables, set by frerun ----------------
@@ -161,11 +170,17 @@
   #FRE const(dayslist)
   #FRE const(timeStampFormat)
   #FRE const(baseDate)
+  #FRE const(mailMode)
 
   #FRE const(outputStagerPartition)
   #FRE const(outputStagerQueue)
+  #FRE const(outputStagerTime)
+
   #FRE const(fileSenderPartition)
   #FRE const(fileSenderQueue)
+  #FRE const(fileSenderTimeAscii)
+  #FRE const(fileSenderTimeRestarts)
+  #FRE const(fileSenderTimeHistory)
 
   #FRE flag(flagRunType)
   #FRE flag(flagOutputType)
@@ -269,11 +284,6 @@
   set -r beginruntime = `date "+%s"`
   set -r jobId = `echo $PBS_JOBID | sed -r 's/^([0-9]+).*$/o\1/'`
 
-  # ---------------- options for the FRE file sender
-  set -r fileSenderTimeAscii   = 16:00:00
-  set -r fileSenderTimeRestart = 16:00:00
-  set -r fileSenderTimeHistory = 16:00:00
-
   # ---------------- for compatibility only
   set -r work = $workDir
 
@@ -327,8 +337,8 @@
 
   # ---------------- batch scheduler submit commands
   alias submit `which msub`
-  alias submitFileSender `which msub` -l size=1,partition=$fileSenderPartition -q $fileSenderQueue -V
-  alias submitOutputStager `which msub` -l nodes=1:ppn=8,walltime=16:00:00,partition=$outputStagerPartition -q $outputStagerQueue -V
+  alias submitFileSender `which msub` -l size=1,partition=$fileSenderPartition -q $fileSenderQueue -m $mailMode -V
+  alias submitOutputStager `which msub` -l nodes=1:ppn=8,walltime=$outputStagerTime,partition=$outputStagerPartition -q $outputStagerQueue -m $mailMode -V
 
   # ---------------- archiving command
   alias tar `which tar` -b 1024
@@ -591,29 +601,14 @@
     if ( $#ppRefineDiagScriptNames > 0 ) then
 
       set ppRefineDiagScriptNamesList = ""
-      set ppRefineDiagScriptNamesNotOK = ()
 
       foreach ppRefineDiagScriptName ( $ppRefineDiagScriptNames )
-	if ( -f $ppRefineDiagScriptName && -r $ppRefineDiagScriptName ) then
-          if ( $ppRefineDiagScriptNamesList == "" ) then
-            set ppRefineDiagScriptNamesList = $ppRefineDiagScriptName
-          else
-            set ppRefineDiagScriptNamesList = $ppRefineDiagScriptNamesList,$ppRefineDiagScriptName
-          endif
-	else
-          set ppRefineDiagScriptNamesNotOK = ( $ppRefineDiagScriptNamesNotOK $ppRefineDiagScriptName)
-	endif
+        if ( $ppRefineDiagScriptNamesList == "" ) then
+          set ppRefineDiagScriptNamesList = $ppRefineDiagScriptName
+        else
+          set ppRefineDiagScriptNamesList = $ppRefineDiagScriptNamesList,$ppRefineDiagScriptName
+        endif
       end
-
-      if ( $#ppRefineDiagScriptNamesNotOK > 0 ) then
-	unset echo
-	foreach ppRefineDiagScriptName ( $ppRefineDiagScriptNamesNotOK )
-          echo "A problem with the refine diagnostics script: $ppRefineDiagScriptName"
-	end
-	echo "ERROR: Failed to access refine diagnostics scripts"
-        set echo
-	exit 1
-      endif
 
     endif
 
@@ -807,14 +802,14 @@
           -A $project \
           -N $jobName \
           -o $stdoutDir/ \
-          -l walltime=$fileSenderTimeRestart \
+          -l walltime=$fileSenderTimeRestarts \
           -v file=$restartArchDir.tar \
           `alias fileSender`
         else
 	  submitFileSender \
           -N $jobName \
           -o $stdoutDir/ \
-          -l walltime=$fileSenderTimeRestart \
+          -l walltime=$fileSenderTimeRestarts \
           -v file=$restartArchDir.tar \
           `alias fileSender`
         endif
@@ -1149,7 +1144,7 @@
 #--------------------------- after the main loop -------------------------------
 ################################################################################
 
-  banner epilogue
+  banner ending
 
   # ---------------- reload and resubmit if needed (production runs only)
 

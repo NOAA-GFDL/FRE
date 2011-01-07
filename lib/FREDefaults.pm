@@ -1,5 +1,5 @@
 #
-# $Id: FREDefaults.pm,v 18.0.2.12 2010/11/07 23:05:38 afy Exp $
+# $Id: FREDefaults.pm,v 18.0.2.13 2010/12/08 00:26:05 afy Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: System Defaults Module
 # ------------------------------------------------------------------------------
@@ -33,6 +33,8 @@
 # afy    Ver  11.02  Modify PlatformStandardized (use 'default')    October 10
 # afy    Ver  11.03  Modify Platform (use 'default')                October 10
 # afy    Ver  12.00  Modify GLOBAL_NAMES (add 'stem')               November 10
+# afy    Ver  13.00  Modify siteGet (add NASA)                      December 10
+# afy    Ver  13.01  Add SiteIsNASA subroutine                      December 10
 # ------------------------------------------------------------------------------
 # Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2009-2010
 # Designed and written by V. Balaji, Amy Langenhorst and Aleksey Yakovlev
@@ -83,11 +85,13 @@ use constant DOMAIN_GFDL	=> 'gfdl.noaa.gov';
 use constant DOMAIN_GFDLPP	=> 'princeton.rdhpcs.noaa.gov'; 
 use constant DOMAIN_NCRC	=> 'ncrc.gov'; 
 use constant DOMAIN_NCCS	=> 'ccs.ornl.gov';
+use constant DOMAIN_NASA	=> 'nas.nasa.gov';
 
 use constant SITE_GFDL		=> 'hpcs';
 use constant SITE_GFDLPP	=> 'gfdl';
 use constant SITE_NCRC		=> 'ncrc';
 use constant SITE_NCCS		=> 'doe';
+use constant SITE_NASA		=> 'nasa';
 use constant SITE_UNKNOWN	=> 'unknown';
 
 use constant XMLFILE_DEFAULT	=> 'rts.xml';
@@ -121,6 +125,10 @@ my $siteGet = sub()
   elsif ($domain eq FREDefaults::DOMAIN_NCCS)
   {
     return FREDefaults::SITE_NCCS;
+  }
+  elsif ($domain eq FREDefaults::DOMAIN_NASA)
+  {
+    return FREDefaults::SITE_NASA;
   }
   elsif ($domain)
   {
@@ -170,6 +178,12 @@ sub SiteIsNCCS()
 # ------ arguments: none
 {
   return ($FREDefaultsSite eq FREDefaults::SITE_NCCS);
+}
+
+sub SiteIsNASA()
+# ------ arguments: none
+{
+  return ($FREDefaultsSite eq FREDefaults::SITE_NASA);
 }
 
 sub XMLFile()
