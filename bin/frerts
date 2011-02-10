@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 # -*- cperl -*-
-# $Id: frerts,v 15.1.2.27.2.6 2010/10/18 18:16:32 arl Exp $
+# $Id: frerts,v 15.1.2.27.2.7 2011/02/10 00:05:29 arl Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: Automated launch of fremake, frerun and frecheck.
 # ------------------------------------------------------------------------------
@@ -20,7 +20,7 @@ use Date::Manip();
 {
 package frerts;
 
-use constant VERSION => '$Id: frerts,v 15.1.2.27.2.6 2010/10/18 18:16:32 arl Exp $';
+use constant VERSION => '$Id: frerts,v 15.1.2.27.2.7 2011/02/10 00:05:29 arl Exp $';
 use constant OPTLIST =>
   (
       'help|h',
@@ -85,8 +85,8 @@ Usage: frerts [ options ]
        -d STR, --datestr=STR   Optional string to use in output directory paths.
                                Default is a unique date string.
        -h,     --help          Show this help message, then exit.
-       -p STR, --platform=STR  Platform. GFDL site default is hpcs.hpcs.
-       -s,     --submit        Automatically submit the script with qsub.
+       -p STR, --platform=STR  Platform.
+       -s,     --submit        Automatically submit the script.
        -v,     --verbose       Verbose flag.
        -x STR, --xmlfile=STR   Specify xml file. Default is ./rts.xml.
 
@@ -176,16 +176,16 @@ my $schedjobid = $fre->property('FRE.scheduler.variable.jobID');
 my $schedjoin = $fre->property('FRE.scheduler.option.join');
 
 my $schedmkpartition = '';
-if ( "$fre->property('FRE.scheduler.partition.make')" ne '' ) {
+if ( "$fre->property('FRE.scheduler.make.partition')" ne '' ) {
  $schedmkpartition = $fre->property('FRE.scheduler.option.partition');
- my $part = $fre->property('FRE.scheduler.partition.make');
+ my $part = $fre->property('FRE.scheduler.make.partition');
  $schedmkpartition =~ s/\$/$part/;
 }
 
 my $schedrunpartition = '';
-if ( "$fre->property('FRE.scheduler.partition.run')" ne '' ) {
+if ( "$fre->property('FRE.scheduler.run.partition')" ne '' ) {
  $schedrunpartition = $fre->property('FRE.scheduler.option.partition');
- my $part = $fre->property('FRE.scheduler.partition.run');
+ my $part = $fre->property('FRE.scheduler.run.partition');
  $schedrunpartition =~ s/\$/$part/;
 }
 
@@ -205,8 +205,8 @@ if ( "$project" ne '' ) {
 }
 
 my $compiletime = '02:00:00';
-my $compilenpes = $fre->property('FRE.scheduler.coresPerJob.increment.make');
-my $compilemaxnpes = $fre->property('FRE.scheduler.coresPerJob.max.make');
+my $compilenpes = $fre->property('FRE.scheduler.make.coresPerJob.inc');
+my $compilemaxnpes = $fre->property('FRE.scheduler.make.coresPerJob.max');
 $compilenpes *= 2 unless $compilenpes * 2 > $compilemaxnpes;
 
 my $mkscriptn = "autoRTS.mk.$thisdate.csh";

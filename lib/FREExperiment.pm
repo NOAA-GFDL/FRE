@@ -1,5 +1,5 @@
 #
-# $Id: FREExperiment.pm,v 18.1.2.5 2010/08/13 15:43:03 afy Exp $
+# $Id: FREExperiment.pm,v 18.1.2.6 2011/01/14 00:16:43 afy Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: Experiment Management Module
 # ------------------------------------------------------------------------------
@@ -12,8 +12,18 @@
 # afy    Ver   3.00  Remove executable subroutine                   May 10
 # arl    Ver   4.00  Modify extractCheckoutInfo (read property)     August 10
 # afy    Ver   5.00  Modify extractCheckoutInfo (no CVSROOT)        August 10
+# afy    Ver   6.00  Use new module FREMsg (symbolic levels)        January 11
+# afy    Ver   6.01  Modify extractNodes (no 'required')            January 11
+# afy    Ver   6.02  Modify extractValue (no 'required')            January 11
+# afy    Ver   6.03  Modify extractComponentValue (no 'required')   January 11
+# afy    Ver   6.04  Modify extractSourceValue (no 'required')      January 11
+# afy    Ver   6.05  Modify extractCompileValue (no 'required')     January 11
+# afy    Ver   6.06  Modify extractCheckoutInfo (hashes, checks)    January 11
+# afy    Ver   6.07  Modify extractCompileInfo (hashes, checks)     January 11
+# afy    Ver   6.08  Modify extractCompileInfo (make overrides)     January 11
+# afy    Ver   6.09  Modify extractCompileInfo (libraries order)    January 11
 # ------------------------------------------------------------------------------
-# Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2009-2010
+# Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2009-2011
 # Designed and written by V. Balaji, Amy Langenhorst and Aleksey Yakovlev
 #
 
@@ -21,9 +31,8 @@ package FREExperiment;
 
 use strict;
 
-use Carp();
-
 use FREDefaults();
+use FREMsg();
 use FRETargets();
 use FREUtil();
 
@@ -32,7 +41,6 @@ use FREUtil();
 # //////////////////////////////////////////////////////////////////////////////
 
 use constant DIRECTORIES => FREDefaults::ExperimentDirs();
-use constant REQUIRED => 1;
 
 # //////////////////////////////////////////////////////////////////////////////
 # ////////////////////////////////////////////////////////// Global Variables //
@@ -77,7 +85,7 @@ my $experimentDirsVerify = sub($$$)
       {
 	unless (FREUtil::dirContains($d, $e) > 0)
 	{
-	  $fre->out(0, "The '$t' directory ($d) doesn't contain the experiment name");
+	  $fre->out(FREMsg::FATAL, "The '$t' directory ($d) doesn't contain the experiment name");
 	  $result = 0;
 	  last;
 	}
@@ -96,14 +104,14 @@ my $experimentDirsVerify = sub($$$)
 	  {
 	    my @paths = split('\|', $paths);
 	    my $pathsForOut = join(', ', @paths);
-            $fre->out(0, "The '$t' directory ($d) can't be set up - it must be one of ($pathsForOut)");
+            $fre->out(FREMsg::FATAL, "The '$t' directory ($d) can't be set up - it must be one of ($pathsForOut)");
 	    $result = 0;
 	    last;
 	  }
         }
 	else
 	{
-	  $fre->out(0, "The external property 'directory.$t.paths.mapping' is defined as '$pathsMapping' - this syntax is invalid");
+	  $fre->out(FREMsg::FATAL, "The external property 'directory.$t.paths.mapping' is defined as '$pathsMapping' - this syntax is invalid");
 	  $result = 0;
 	  last;
 	}
@@ -119,14 +127,14 @@ my $experimentDirsVerify = sub($$$)
 	  {
 	    my @roots = split(';', $roots);
 	    my $rootsForOut = join(', ',  @roots);
-	    $fre->out(0, "The '$t' directory ($d) can't be set up - it must be on one of ($rootsForOut) filesystems");
+	    $fre->out(FREMsg::FATAL, "The '$t' directory ($d) can't be set up - it must be on one of ($rootsForOut) filesystems");
             $result = 0;
 	    last;
 	  }
 	}
 	else
 	{
-	  $fre->out(0, "The '$t' directory isn't bound by external properties");
+	  $fre->out(FREMsg::FATAL, "The '$t' directory isn't bound by external properties");
 	  $result = 0;
 	  last;
 	}
@@ -134,7 +142,7 @@ my $experimentDirsVerify = sub($$$)
     }
     else
     {
-      $fre->out(0, "The '$t' directory is empty");
+      $fre->out(FREMsg::FATAL, "The '$t' directory is empty");
       $result = 0;
       last;
     }
@@ -164,7 +172,7 @@ $experimentCreate = sub($$$)
       $experimentDirsCreate->($r, $fre);
       unless ($experimentDirsVerify->($r, $fre, $e))
       {
-	$fre->out(0, "The experiment '$e' can't be set up because of a problem with directories");
+	$fre->out(FREMsg::FATAL, "The experiment '$e' can't be set up because of a problem with directories");
 	return '';
       }
       # ------------------------------------------------------------- find and create the parent if needed
@@ -177,7 +185,7 @@ $experimentCreate = sub($$$)
 	}
 	else
 	{
-	  $fre->out(0, "The experiment '$e' inherits from non-existent experiment '$expParentName'");
+	  $fre->out(FREMsg::FATAL, "The experiment '$e' inherits from non-existent experiment '$expParentName'");
 	  return '';
 	}
       }
@@ -193,7 +201,7 @@ $experimentCreate = sub($$$)
     else
     {
       # ------------------------------------- experiment doesn't exist
-      $fre->out(0, "The experiment '$e' doesn't exist");
+      $fre->out(FREMsg::FATAL, "The experiment '$e' doesn't exist");
       return '';
     }
   }
@@ -204,6 +212,67 @@ $experimentCreate = sub($$$)
   }
 };
 
+my $strMergeWS = sub($)
+# ------ arguments: $string
+# ------ merge all the workspaces to a single space
+{
+  my $s = shift;
+  $s =~ s/(?:^\s+|\s+$)//gso;
+  $s =~ s/\s+/ /gso;
+  return $s;
+};
+
+my $strRemoveWS = sub($)
+# ------ arguments: $string
+# ------ remove all the workspaces
+{
+  my $s = shift;
+  $s =~ s/\s+//gso;
+  return $s;
+};
+
+my $rankSet;
+$rankSet = sub($$$)
+# ------ arguments: $refToComponentHash $refToComponent $depth 
+# ------ recursively set and return the component rank
+# ------ return -1 if loop is found
+{
+  my ($h, $c, $d) = @_;
+  if ($d < scalar(keys %{$h}))
+  {
+    my @requires = split(' ', $c->{requires});
+    if (scalar(@requires) > 0)
+    {
+      my $rank = 0; 
+      foreach my $required (@requires)
+      {
+        my $refReq = $h->{$required};
+	my $rankReq = (defined($refReq->{rank})) ? $refReq->{rank} : $rankSet->($h, $refReq, $d + 1);
+        if ($rankReq < 0)
+	{
+	  return -1;
+	}
+	elsif ($rankReq > $rank)
+	{
+	  $rank = $rankReq;
+	}
+      }
+      $rank++;
+      $c->{rank} = $rank;
+      return $rank;
+    }
+    else
+    {
+      $c->{rank} = 0;
+      return 0;
+    }
+  }
+  else
+  {
+    return -1;
+  }
+};
+    
 # //////////////////////////////////////////////////////////////////////////////
 # ////////////////////////////////////////// Class initialization/termination //
 # //////////////////////////////////////////////////////////////////////////////
@@ -391,13 +460,13 @@ sub description($)
 # ////////////////////////////////////////// Data Extraction With Inheritance //
 # //////////////////////////////////////////////////////////////////////////////
 
-sub extractNodes($$$;$)
-# ------ arguments: $object $xPathRoot $xPathChildren $required (optional)
+sub extractNodes($$$)
+# ------ arguments: $object $xPathRoot $xPathChildren
 # ------ called as object method
 # ------ returns a nodes list corresponding to the $xPathRoot/$xPathChildren, following inherits
 # ------ if xPathRoot returns a list of nodes, only the first node will be taken into account
 {
-  my ($r, $x, $y, $m) = @_;
+  my ($r, $x, $y) = @_;
   my ($exp, $expName, @results) = ($r, $r->name(), ());
   while ($exp and scalar(@results) == 0)
   {
@@ -405,71 +474,66 @@ sub extractNodes($$$;$)
     push @results, $rootNode->findnodes($y) if $rootNode;
     $exp = $exp->parent();
   }
-  Carp::croak("ERROR: '$x,$y' extracts no data for experiment '$expName'\n") if ($m && scalar(@results) == 0);
   return @results;
 }
 
-sub extractValue($$;$)
-# ------ arguments: $object $xPath $required (optional)
+sub extractValue($$)
+# ------ arguments: $object $xPath
 # ------ called as object method
 # ------ return a value corresponding to the $xPath, following inherits
 {
-  my ($r, $x, $m) = @_;
+  my ($r, $x) = @_;
   my ($exp, $expName, $value) = ($r, $r->name(), '');
   while ($exp and !$value)
   {
     $value = $exp->experimentValue($x);
     $exp = $exp->parent();
   }
-  Carp::croak("ERROR: '$x' extracts no data for experiment '$expName'\n") if $m && !$value;
   return $value;
 }
 
-sub extractComponentValue($$$;$)
-# ------ arguments: $object $xPath $componentName $required (optional)
+sub extractComponentValue($$$)
+# ------ arguments: $object $xPath $componentName
 # ------ called as object method
 # ------ return a value corresponding to the $xPath under the <component> node, following inherits
 {
-  my ($r, $x, $c, $m) = @_;
+  my ($r, $x, $c) = @_;
   my ($exp, $expName, $value) = ($r, $r->name(), '');
   while ($exp and !$value)
   {
     $value = $exp->experimentValue('component[@name="' . $c . '"]/' . $x);
     $exp = $exp->parent();
   }
-  Carp::croak("ERROR: '$x' extracts no data for experiment '$expName'\n") if ($m && !$value);
   return $value;
 }
 
-sub extractCompileValue($$$;$)
-# ------ arguments: $object $xPath $componentName $required (optional)
-# ------ called as object method
-# ------ returns a value corresponding to the $xPath under the <component/compile> node, following inherits
-{
-  my ($r, $x, $c, $m) = @_;
-  my ($exp, $expName, $value) = ($r, $r->name(), '');
-  while ($exp and !$value)
-  {
-    $value = $exp->experimentValue('component[@name="' . $c . '"]/compile/' . $x);
-    $exp = $exp->parent();
-  }
-  Carp::croak("ERROR: '$x' extracts no data for experiment '$expName'\n") if ($m && !$value);
-  return $value;
-}
-
-sub extractSourceValue($$$;$)
-# ------ arguments: $object $xPath $componentName $required (optional)
+sub extractSourceValue($$$)
+# ------ arguments: $object $xPath $componentName
 # ------ called as object method
 # ------ return a value corresponding to the $xPath under the <component/source> node, following inherits
 {
-  my ($r, $x, $c, $m) = @_;
+  my ($r, $x, $c) = @_;
   my ($exp, $expName, $value) = ($r, $r->name(), '');
   while ($exp and !$value)
   {
     $value = $exp->experimentValue('component[@name="' . $c . '"]/source/' . $x);
     $exp = $exp->parent();
   }
-  Carp::croak("ERROR: '$x' extracts no data for experiment '$expName'\n") if $m && !$value;
+  return $value;
+}
+
+sub extractCompileValue($$$)
+# ------ arguments: $object $xPath $componentName
+# ------ called as object method
+# ------ returns a value corresponding to the $xPath under the <component/compile> node, following inherits
+{
+  my ($r, $x, $c) = @_;
+  my ($exp, $expName, $value) = ($r, $r->name(), '');
+  while ($exp and !$value)
+  {
+    $value = $exp->experimentValue('component[@name="' . $c . '"]/compile/' . $x);
+    $exp = $exp->parent();
+  }
   return $value;
 }
 
@@ -567,7 +631,7 @@ sub extractMkmfTemplate($$)
     $exp = $exp->parent();
   }
   
-  $fre->out(1, "The '$c' component mkmf template is defined more than once - all the extra definitions are ignored") if scalar(@results) > 1;
+  $fre->out(FREMsg::WARNING, "The '$c' component mkmf template is defined more than once - all the extra definitions are ignored") if scalar(@results) > 1;
   return @results[0];
 
 }
@@ -604,7 +668,7 @@ sub extractDatasets($)
 	    my @lineParts = split('=', $line);
 	    if (scalar(@lineParts) > 2)
 	    {
-	      $fre->out(1, "Too many names for renaming are defined at '$line' - all the extra names are ignored");
+	      $fre->out(FREMsg::WARNING, "Too many names for renaming are defined at '$line' - all the extra names are ignored");
 	    }
 	    my ($source, $target) = @lineParts;
 	    if ($target)
@@ -646,7 +710,7 @@ sub extractNamelists($)
   my $r = shift;
   my ($exp, $fre, %res) = ($r, $r->fre(), ());
 
-  $fre->out(2, "Extracting namelists...");
+  $fre->out(FREMsg::NOTE, "Extracting namelists...");
   
   while ($exp)
   {
@@ -667,7 +731,7 @@ sub extractNamelists($)
 	if (exists($res{$name}))
 	{
 	  my $expName = $exp->name();
-          $fre->out(2, "Using secondary specification of '$name' rather than the original setting in '$expName'");
+          $fre->out(FREMsg::NOTE, "Using secondary specification of '$name' rather than the original setting in '$expName'");
 	}
 	elsif ($name)
 	{
@@ -693,7 +757,7 @@ sub extractNamelists($)
             my ($name, $content) = split('\s', $fileNml, 2);
             if (exists($res{$name}))
 	    {
-              $fre->out(2, "Using secondary specification of '$name' rather than the original setting in '$filePath'");
+              $fre->out(FREMsg::NOTE, "Using secondary specification of '$name' rather than the original setting in '$filePath'");
             }
 	    elsif ($name)
 	    {
@@ -809,7 +873,7 @@ sub extractVariableFile($$)
     $exp = $exp->parent();
   } 
 
-  $fre->out(1, "The variable '$l' is defined more than once - all the extra definitions are ignored") if scalar(@results) > 1;
+  $fre->out(FREMsg::WARNING, "The variable '$l' is defined more than once - all the extra definitions are ignored") if scalar(@results) > 1;
   return @results[0];
 
 }
@@ -863,87 +927,130 @@ sub extractCheckoutInfo($)
 {
 
   my $r = shift;
-  my ($expName, $expNode, $fre) = ($r->name(), $r->node(), $r->fre());
+  my ($fre, $expName, @componentNodes) = ($r->fre(), $r->name(), $r->node()->findnodes('component'));
   
-  my (%lineNumber, %codeBase, %codeTag, %vcBrand, %vcRoot, %sourceCsh);
-
-  foreach my $componentNode ($expNode->findnodes('component'))
+  if (scalar(@componentNodes) > 0)
   {
-    # -------------------------------------------------------------- get and check the component name
-    my $name = $r->nodeValue($componentNode, '@name');
-    $fre->out(2, "COMPONENTLOOP ((($name)))");
-    if (!exists($lineNumber{$name}))
+    my %components;
+    foreach my $componentNode (@componentNodes)
     {
-      $lineNumber{$name} = $componentNode->line_number();
-    }
-    else
-    {
-      $fre->out(0, "Component '$name' is defined more than once - make sure each component has a distinct name");
-      return 0;
-    }
-    # ------------------------------------- get and check library data; skip the component if the library defined  
-    my $libraryPath = $r->extractComponentValue('library/@path', $name);
-    if ($libraryPath)
-    {
-      if (-f $libraryPath)
+      my $name = $r->nodeValue($componentNode, '@name');
+      if ($name)
       {
-	my $libraryHeaderDir = $r->extractComponentValue('library/@headerDir', $name);
-	if ($libraryHeaderDir)
+	$fre->out(FREMsg::NOTE, "COMPONENTLOOP ((($name)))");
+	if (!exists($components{$name}))
 	{
-	  if (-d $libraryHeaderDir)
+	  # ------------------------------------- get and check library data; skip the component if the library defined  
+	  my $libraryPath = $r->extractComponentValue('library/@path', $name);
+	  if ($libraryPath)
 	  {
-            $fre->out(2, "You have requested library '$libraryPath' for component '$name' - we will skip the component checkout");
-            next;
+	    if (-f $libraryPath)
+	    {
+	      my $libraryHeaderDir = $r->extractComponentValue('library/@headerDir', $name);
+	      if ($libraryHeaderDir)
+	      {
+		if (-d $libraryHeaderDir)
+		{
+        	  $fre->out(FREMsg::NOTE, "You have requested library '$libraryPath' for component '$name' - we will skip the component checkout");
+        	  next;
+		}
+		else
+		{
+        	  $fre->out(FREMsg::FATAL, "Component '$name' specifies non-existent library header directory '$libraryHeaderDir'");
+		  return 0;
+		}
+	      }
+	      else
+	      {
+        	$fre->out(FREMsg::FATAL, "Component '$name' specifies library '$libraryPath' but no header directory");
+        	return 0;
+	      }
+	    }
+	    else
+	    {
+              $fre->out(FREMsg::FATAL, "Component '$name' specifies non-existent library '$libraryPath'");
+	      return 0;
+	    }	 
+	  }
+	  # ------------------------------------------------------------------------------- get and check component data for sources checkout
+	  my $codeBase = $strMergeWS->($r->extractSourceValue('codeBase', $name));
+	  if ($codeBase)
+	  {
+	    my $codeTag = $strRemoveWS->($r->extractSourceValue('codeBase/@version', $name));
+	    if ($codeTag)
+	    {
+	      my $vcBrand = $strRemoveWS->($r->extractSourceValue('@versionControl', $name)) || 'cvs';
+	      if ($vcBrand)
+	      {
+		my $vcRoot = $strRemoveWS->($r->extractSourceValue('@root', $name)) || $fre->property('FRE.versioncontrol.cvs.root');
+		if ($vcRoot =~ m/^:ext:/ or (-d $vcRoot and -r $vcRoot))
+		{
+		  # ------------------------------------------------------------------------------------------ save component data into the hash
+        	  my %component = ();
+		  $component{codeBase} = $codeBase;
+		  $component{codeTag} = $codeTag;
+		  $component{vcBrand} = $vcBrand;
+		  $component{vcRoot} = $vcRoot;
+		  $component{sourceCsh} = $r->extractSourceValue('csh', $name);
+        	  $component{lineNumber} = $componentNode->line_number();
+		  # ----------------------------------------------------------------------------------------------- print what we got
+		  $fre->out
+		  (
+		    FREMsg::NOTE,
+		    "name           = $name",
+		    "codeBase       = $component{codeBase}",
+		    "codeTag        = $component{codeTag}",
+		    "vcBrand        = $component{vcBrand}",
+		    "vcRoot         = $component{vcRoot}",
+		    "sourceCsh      = $component{sourceCsh}"
+		  );
+		  # -------------------------------------------------------------- link the component to the components hash
+		  $components{$name} = \%component;
+        	}
+		else
+		{
+        	  $fre->out(FREMsg::FATAL, "Component '$name': the directory '$vcRoot' doesn't exist or not readable");
+		  return 0;
+		}
+              }
+	      else
+	      {
+        	$fre->out(FREMsg::FATAL, "Component '$name': element <source> doesn't specify a version control system");
+		return 0;
+	      }
+	    }
+	    else
+	    {
+              $fre->out(FREMsg::FATAL, "Component '$name': element <source> doesn't specify a version attribute for its code base");
+	      return 0;
+	    }
 	  }
 	  else
 	  {
-            $fre->out(0, "Component '$name' specifies non-existent library header directory '$libraryHeaderDir'");
+            $fre->out(FREMsg::FATAL, "Component '$name': element <source> doesn't specify a code base");
 	    return 0;
 	  }
 	}
 	else
 	{
-          $fre->out(0, "Component '$name' specifies library '$libraryPath' but no header directory");
-          return 0;
+	  $fre->out(FREMsg::FATAL, "Component '$name' is defined more than once - make sure each component has a distinct name");
+	  return 0;
 	}
       }
       else
       {
-        $fre->out(0, "Component '$name' specifies non-existent library '$libraryPath'");
+	$fre->out(FREMsg::FATAL, "Components with empty names aren't allowed");
 	return 0;
-      }	 
+      }
     }
-    # ------------------------------------------------------------------------------------------------ get other component data
-    ($codeBase{$name}	= $r->extractSourceValue('codeBase', $name, FREExperiment::REQUIRED)) =~ s/\s+/ /gm;
-    ($codeTag{$name}	= $r->extractSourceValue('codeBase/@version', $name, FREExperiment::REQUIRED)) =~ s/\s+//gm;
-    ($vcBrand{$name}	= $r->extractSourceValue('@versionControl', $name) || 'cvs') =~ s/\s+//gm;
-    ($vcRoot{$name}	= $r->extractSourceValue('@root', $name) || $fre->property('FRE.versioncontrol.cvs.root')) =~ s/\s+//gm;
-    ($sourceCsh{$name}	= $r->extractSourceValue('csh', $name));
-    # ------------------------------------------------------------------------------------------------ print what we got
-    $fre->out
-    (
-      2,
-      "component      = $name",
-      "codeBase       = $codeBase{$name}",
-      "codeTag        = $codeTag{$name}",
-      "vcBrand        = $vcBrand{$name}",
-      "vcRoot         = $vcRoot{$name}",
-      "sourceCsh      = $sourceCsh{$name}"
-    );
+    return \%components;  
   }
-  
-  my %results =
-  (
-    lineNumber	=> \%lineNumber,
-    codeBase	=> \%codeBase,
-    codeTag	=> \%codeTag,
-    vcBrand	=> \%vcBrand,
-    vcRoot	=> \%vcRoot,
-    sourceCsh	=> \%sourceCsh
-  );
-  
-  return \%results;
-   
+  else
+  {
+    $fre->out(FREMsg::FATAL, "The experiment '$expName' doesn't contain any components");
+    return 0;
+  }
+
 }
 
 sub extractCompileInfo($)
@@ -953,152 +1060,156 @@ sub extractCompileInfo($)
 {
 
   my $r = shift;
-  my ($expName, $expNode, $srcDir, $fre) = ($r->name(), $r->node(), $r->srcDir(), $r->fre());
+  my ($fre, $expName, @componentNodes) = ($r->fre(), $r->name(), $r->node()->findnodes('component'));
   
-  my $mkmfTemplate = $fre->mkmfTemplate();
-  my $baseCsh = $fre->baseCsh();
-
-  my (%exists, %codeBase, %paths, %requires, %includeDirs, %libPath, %libHeaderDir, %srcList, %pathNames, %cppDefs, %compileCsh, %mkmfTemplate);
-   
-  foreach my $componentNode ($expNode->findnodes('component'))
+  if (scalar(@componentNodes) > 0)
   {
-    # ----------------------------------------- get and check the component name
-    my $name = $r->nodeValue($componentNode, '@name');
-    $fre->out(2, "COMPONENTLOOP: ((($name)))");
-    if (!exists($exists{$name}))
+    my %components;
+    foreach my $componentNode (@componentNodes)
     {
-      $exists{$name} = 1;
-    }
-    else
-    {
-      $fre->out
-      (
-        0,
-	"Component names in a FRE experiment must be unique:", 
-	"there is more than one component named '$name' for '$expName'.", 
-	"Make sure each <component> node has a distinct name."
-      );
-      return 0;
-    }
-    # ----------------------------------------------------------- get and check component paths and requires
-    ($codeBase{$name} = $r->extractSourceValue('codeBase', $name, FREExperiment::REQUIRED)) =~ s/\s+/ /gm;
-    ($paths{$name}    = $r->nodeValue($componentNode, '@paths') || $codeBase{$name}) =~ s/\s+/ /gm;
-    ($requires{$name} = $r->nodeValue($componentNode, '@requires'));
-    unless ($paths{$name})
-    {
-      $fre->out
-      (
-        0,
-        "A 'paths' attribute is required for each <component> node:", 
-        "Component '$name' is missing one."
-      );
-      return 0; 
-    }
-    # -------------------------------------------------------------------- get and check include directories
-    (my $includeDirs = $r->extractComponentValue('@includeDir', $name)) =~ s/\s+/ /gm;
-    $includeDirs =~ s/^\s+//gm;
-    $includeDirs =~ s/\s+$//gm;
-    if ($includeDirs)
-    {
-      foreach my $includeDir (split(' ', $includeDirs))
+      # ----------------------------------------- get and check the component name
+      my $name = $r->nodeValue($componentNode, '@name');
+      if ($name)
       {
-        if (! -d $includeDir)
-        {
-          $fre->out(0, "Component '$name' specifies non-existent include directory '$includeDir'");
-  	  return 0;
-	}
-      }
-    }
-    $includeDirs{$name} = $includeDirs;
-    # --------------------------------------- get and check library data; skip the component if the library defined  
-    my $libPath = $r->extractComponentValue('library/@path', $name);
-    if ($libPath)
-    {
-      if (-f $libPath)
-      {
-        $libPath{$name} = $libPath;
-	my $libHeaderDir = $r->extractComponentValue('library/@headerDir', $name);
-	if ($libHeaderDir)
+	$fre->out(FREMsg::NOTE, "COMPONENTLOOP: ((($name)))");
+	if (!exists($components{$name}))
 	{
-	  if (-d $libHeaderDir)
+	  # ----------------------------------------------- get and check component data for compilation
+	  my $paths = $strMergeWS->($r->nodeValue($componentNode, '@paths'));
+	  if ($paths)
 	  {
-            $libHeaderDir{$name} = $libHeaderDir;
-            $fre->out(2, "You have requested library '$libPath' for component '$name': we will skip the component compilation");
-            next;
+	    # -------------------------------------------------------------------- get and check include directories
+	    my $includeDirs = $strMergeWS->($r->extractComponentValue('@includeDir', $name));
+	    if ($includeDirs)
+	    {
+	      foreach my $includeDir (split(' ', $includeDirs))
+	      {
+        	if (! -d $includeDir)
+        	{
+        	  $fre->out(FREMsg::FATAL, "Component '$name' specifies non-existent include directory '$includeDir'");
+  		  return 0;
+		}
+	      }
+	    }
+	    # --------------------------------------------- get and check library data; skip the component if the library defined  
+	    my $libPath = $strRemoveWS->($r->extractComponentValue('library/@path', $name));
+            my $libHeaderDir = $strRemoveWS->($r->extractComponentValue('library/@headerDir', $name));
+	    if ($libPath)
+	    {
+	      if (-f $libPath)
+	      {
+		if ($libHeaderDir)
+		{
+		  if (-d $libHeaderDir)
+		  {
+        	    $fre->out(FREMsg::NOTE, "You have requested library '$libPath' for component '$name': we will skip the component compilation");
+		  }
+		  else
+		  {
+        	    $fre->out(FREMsg::FATAL, "Component '$name' specifies non-existent library header directory '$libHeaderDir'");
+		    return 0;
+		  }
+		}
+		else
+		{
+        	  $fre->out(FREMsg::FATAL, "Component '$name' specifies library '$libPath' but no header directory");
+		  return 0;
+		}
+	      }
+	      else
+	      {
+        	$fre->out(FREMsg::FATAL, "Component '$name' specifies non-existent library '$libPath'");
+		return 0;
+	      }	 
+	    }
+	    # ----------------------------------------------------------------------------------- save component data into the hash
+            my %component = ();
+	    $component{paths} = $paths;
+	    $component{requires} = $strMergeWS->($r->nodeValue($componentNode, '@requires'));
+	    $component{includeDirs} = $includeDirs;
+            $component{libPath} = $libPath;
+            $component{libHeaderDir} = $libHeaderDir;
+	    $component{srcList} = $strMergeWS->($r->extractCompileValue('srcList', $name));
+	    $component{pathNames} = $strMergeWS->($r->extractCompileValue('pathNames/@file', $name));
+	    $component{cppDefs} = FREUtil::strStripPaired($strMergeWS->($r->extractCompileValue('cppDefs', $name)));
+	    $component{makeOverrides} = $strMergeWS->($r->extractCompileValue('makeOverrides', $name));
+	    $component{compileCsh} = $r->extractCompileValue('csh', $name);
+	    $component{mkmfTemplate} = $strRemoveWS->($r->extractMkmfTemplate($name)) || $fre->mkmfTemplate();
+            $component{lineNumber} = $componentNode->line_number();
+	    $component{rank} = undef;
+	    # ------------------------------------------------------------------------------------------- print what we got
+	    $fre->out
+	    (
+	      FREMsg::NOTE,
+	      "name            = $name",
+	      "paths           = $component{paths}",
+	      "requires        = $component{requires}",
+	      "includeDir      = $component{includeDirs}",
+	      "libPath         = $component{libPath}",
+	      "libHeaderDir    = $component{libHeaderDir}",
+	      "srcList         = $component{srcList}",
+	      "pathNames       = $component{pathNames}",
+	      "cppDefs         = $component{cppDefs}",
+	      "makeOverrides   = $component{makeOverrides}",
+	      "compileCsh      = $component{compileCsh}",
+	      "mkmfTemplate    = $component{mkmfTemplate}"
+	    );
+	    # ------------------------------------------------------------ link the component to the components hash
+	    $components{$name} = \%component;
 	  }
 	  else
 	  {
-            $fre->out(0, "Component '$name' specifies non-existent library header directory '$libHeaderDir'");
-	    return 0;
+	    $fre->out(FREMsg::FATAL, "Component '$name' doesn't specify the mandatory 'paths' attribute");
+	    return 0; 
 	  }
 	}
 	else
 	{
-          $fre->out(0, "Component '$name' specifies library '$libPath' but no header directory");
+	  $fre->out(FREMsg::FATAL, "Component '$name' is defined more than once - make sure each component has a distinct name");
 	  return 0;
 	}
       }
       else
       {
-        $fre->out(0, "Component '$name' specifies non-existent library '$libPath'");
+	$fre->out(FREMsg::FATAL, "Components with empty names aren't allowed");
 	return 0;
-      }	 
+      }
     }
-    # --------------------------------------------------------------------------------------- get other component data
-    ($srcList{$name}      = $r->extractCompileValue('srcList', $name)) =~ s/\s+/ /gs;
-    ($pathNames{$name}    = $r->extractCompileValue('pathNames/@file', $name)) =~ s/\s+/ /gs;
-    ($cppDefs{$name}      = $r->extractCompileValue('cppDefs', $name)) =~ s/\s+/ /gs;
-    ($compileCsh{$name}   = $r->extractCompileValue('csh', $name));
-    ($mkmfTemplate{$name} = $r->extractMkmfTemplate($name) || $mkmfTemplate);
-    # ------------------------------------------------------------------------------------------- adjust the data
-    $cppDefs{$name} = FREUtil::strStripPaired($cppDefs{$name});
-    # --------------------------------------------------------------------------------------- print what we got
-    $fre->out
-    (
-      2,
-      "component       = $name",
-      "paths           = $paths{$name}",
-      "requires        = $requires{$name}",
-      "includeDir      = $includeDirs{$name}",
-      "libPath         = $libPath{$name}",
-      "libHeaderDir    = $libHeaderDir{$name}",
-      "srcList         = $srcList{$name}",
-      "pathNames       = $pathNames{$name}",
-      "cppDefs         = $cppDefs{$name}",
-      "compileCsh      = $compileCsh{$name}",
-      "mkmfTemplate    = $mkmfTemplate{$name}"
-    );
-    # ------------------------------------------------------------------------ check the mkmf template
-    unless ($mkmfTemplate{$name})
+    # ------------------------------------------------------------------ verify intercomponent references
+    foreach my $name (keys %components)
     {
-      my $configFileAbsPathName = $fre->configFileAbsPathName();
-      $fre->out
-      (
-        0,
-        "The mkmfTemplate must be specified in the '$configFileAbsPathName'", 
-        "either as setup/platform/mkmfTemplate, or experiment/component/compile/mkmfTemplate"
-      );
-      return 0;
+      my $ref = $components{$name};
+      foreach my $required (split(' ', $ref->{requires}))
+      {
+        if (!exists($components{$required}))
+	{
+	  $fre->out(FREMsg::FATAL, "Component '$name' refers to a non-existent component '$required'");
+	  return 0;
+	}
+      }
+    }      
+    # ------------------------------------------------------------------- compute components ranks      
+    foreach my $name (keys %components)
+    {
+      my $ref = $components{$name};
+      if (!defined($ref->{rank}))
+      {
+        if ($rankSet->(\%components, $ref, 0) < 0)
+	{
+	  $fre->out(FREMsg::FATAL, "Component '$name' refers to itself via a loop");
+	  return 0;
+	}
+      }
     }
+    # ------------------------------------------------------------------------ normal return
+    return \%components;
   }
-  
-  my %results =
-  (
-    baseCsh		=> \$baseCsh,
-    paths		=> \%paths,
-    requires		=> \%requires,
-    includeDirs		=> \%includeDirs,
-    libPath		=> \%libPath,
-    libHeaderDir	=> \%libHeaderDir,
-    srcList		=> \%srcList,
-    pathNames		=> \%pathNames,
-    cppDefs		=> \%cppDefs,
-    compileCsh		=> \%compileCsh,
-    mkmfTemplate	=> \%mkmfTemplate
-  );
-  
-  return \%results;
-   
+  else
+  {
+    $fre->out(FREMsg::FATAL, "The experiment '$expName' doesn't contain any components");
+    return 0;
+  }
+     
 }
 
 # //////////////////////////////////////////////////////////////////////////////

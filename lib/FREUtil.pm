@@ -1,5 +1,5 @@
 #
-# $Id: FREUtil.pm,v 18.0.2.2 2010/09/14 05:29:38 afy Exp $
+# $Id: FREUtil.pm,v 18.0.2.4 2011/02/09 20:08:08 afy Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: Utilities Module
 # ------------------------------------------------------------------------------
@@ -7,8 +7,23 @@
 # afy -------------- Branch 18.0.2 -------------------------------- April 10
 # afy    Ver   1.00  Add jobID subroutine                           April 10
 # afy    Ver   2.00  Remove propertyNameCheck subroutine            September 10
+# afy    Ver   3.00  Remove getdirs subroutine                      January 11
+# afy    Ver   3.01  Remove getmyval subroutine                     January 11
+# afy    Ver   3.02  Remove getexecutable subroutine                January 11
+# afy    Ver   3.03  Remove has_unique_exec subroutine              January 11
+# afy    Ver   3.04  Remove extractNamelists subroutine             January 11
+# afy    Ver   3.05  Remove extract subroutine                      January 11
+# afy    Ver   3.06  Modify environmentVariablesExpand subroutine   January 11
+# afy    Ver   4.00  Remove fillvalue subroutine                    February 11
+# afy    Ver   4.01  Remove remoteExec subroutine                   February 11
+# afy    Ver   4.02  Remove acarch subroutine                       February 11
+# afy    Ver   4.03  Remove absPath subroutine                      February 11
+# afy    Ver   4.04  Remove fileOwner subroutine                    February 11
+# afy    Ver   4.05  Remove dirCommonLevelsNumber subroutine        February 11
+# afy    Ver   4.06  Modify createDir subroutine (no printing)      February 11
+# afy    Ver   4.07  Add pathIsMountable subroutine                 February 11
 # ------------------------------------------------------------------------------
-# Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2000-2010
+# Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2000-2011
 # Designed and written by V. Balaji, Amy Langenhorst and Aleksey Yakovlev
 #
 
@@ -16,14 +31,11 @@ package FREUtil;
 
 use strict; 
 
-use Env();
 use File::Path();
 use File::Spec();
 use File::stat;
 use Date::Manip();
 use XML::LibXML();
-
-use FREMsg();
 
 # //////////////////////////////////////////////////////////////////////////////
 # ////////////////////////////////////////////////////////// Global Constants //
@@ -35,72 +47,6 @@ use constant MAPPING_SEPARATOR => ';';
 # //////////////////////////////////////////////////////////////////////////////
 # //////////////////////////////////////////////////////// Exported Functions //
 # //////////////////////////////////////////////////////////////////////////////
-
-#set up rootdir, archivedir, analysisdir, workdir
-sub getdirs {
-   my ($rootdir, $archivedir, $analysisdir, $workdir, $fmsbindir, $inputdatadir, $includedir, $cvsrootdir, $backupdir, $templatedir);
-   my $xmlstats = stat($::opt_x);
-   my $owner = getpwuid($xmlstats->uid);
-
-   $workdir = $::root->findvalue('setup/directory[@type="work"][last()]');
-
-   $archivedir = $::root->findvalue('setup/directory[@type="archive"][last()]');
-   if( "$archivedir" eq "" ) { $archivedir = "/archive/\$USER/fre"; }
-   $archivedir =~ s/\$user/$owner/g;
-   $archivedir =~ s/\$USER/$owner/g;
-   $archivedir =~ s/\$ARCHIVE/\/archive\/$owner/g;
-
-   $rootdir = $::root->findvalue('setup/directory[@type="root"][last()]') or
-      die "ERROR: Must specify a root directory in $::opt_x\n";
-   $rootdir =~ s/\$user/$owner/g;
-   $rootdir =~ s/\$USER/$owner/g;
-   $rootdir =~ s/\$HOME/\/home\/$owner/g;
-   if($_[0]){
-if( (! -d $rootdir) or (! -w $rootdir) ) { die "ERROR: Can't write to your root directory $rootdir\n"; }
-   }
-
-   $analysisdir = $::root->findvalue('setup/directory[@type="analysis"][last()]');
-   $analysisdir =~ s/\$user/$owner/g;
-   $analysisdir =~ s/\$USER/$owner/g;
-   $analysisdir =~ s/\$ARCHIVE/\/archive\/$owner/g;
-
-   $fmsbindir = $::root->findvalue('setup/directory[@type="fmsBin"][last()]');
-   if( "$fmsbindir" eq "" ) { $fmsbindir = "/home/fms/bin"; }
-
-   $templatedir = $::root->findvalue('setup/directory[@type="templates"][last()]');
-   if( "$templatedir" eq "" ) { $templatedir = "/home/fms/templates"; }
-
-   $inputdatadir = $::root->findvalue('setup/directory[@type="inputData"][last()]');
-   if( "$inputdatadir" eq "" ) { $inputdatadir = "/archive/fms/module_data"; }
-
-   $includedir = $::root->findvalue('setup/directory[@type="include"][last()]');
-   if( "$includedir" eq "" ) { $includedir = "/usr/local/include"; }
-
-   $cvsrootdir = $::root->findvalue('setup/directory[@type="cvsRoot"][last()]');
-   if( "$cvsrootdir" eq "" ) { $cvsrootdir = "/home/fms/cvs"; }
-
-   $backupdir = $::root->findvalue('setup/directory[@type="backup"][last()]');
-   if( "$backupdir" eq "" ) { $backupdir = "/archive/fms/fre_backup"; }
-
-   $::rtsVersion = $::root->findvalue('@rtsVersion');
-   if ( "$::rtsVersion" eq "" ) { 
-      $::rtsVersion = 1;
-      print STDERR "WARNING: rtsVersion information not found in your xml file, assuming rtsVersion 1.\n";
-      print STDERR "         The latest version available is version 2.  Automate conversion with\n"; 
-      print STDERR "            /home/fms/bin/rtsversion2 [in.xml] [out.xml]\n"; 
-      print STDERR "         Run '/home/fms/bin/rtsversion2' with no arguments for a help message.\n";
-   } elsif ( $::rtsVersion == 1 ) {
-      print STDERR "NOTE: You are using rtsVersion 1.  A newer version is available.  \n";
-      print STDERR "      The latest version available is version 2.  Automate conversion with\n";
-      print STDERR "         /home/fms/bin/rtsversion2 [in.xml] [out.xml]\n"; 
-      print STDERR "      Run '/home/fms/bin/rtsversion2' with no arguments for a help message.\n";
-   } elsif ( "$::rtsVersion" > "2" ) {
-      print STDERR "WARNING: rtsVersion $::rtsVersion is greater than 2.\n";
-      print STDERR "         This is either experimental XML or an error.\n";
-   }  
-
-   return ($rootdir, $archivedir, $analysisdir, $workdir, $fmsbindir, $inputdatadir, $includedir, $cvsrootdir, $backupdir, $templatedir);
-}
 
 #make sure experiment exists in xml
 sub checkExptExists {
@@ -147,73 +93,6 @@ sub getxpathval {
    }                                                                                               
 }
 
-#gets a value from xml, not using inherit
-sub getmyval {
-   my $path = $_[0];
-   my $e = $::expt;
-   if ( $_[1] ) { $e = $_[1]; }
-   checkExptExists($e,1); 
-   my $value = $::root->findvalue("experiment[\@label='$e' or \@name='$e']/$path");
-   $value =~ s/\$root/$::rootdir/g;
-   $value =~ s/\$FREROOT/$::rootdir/g;
-   $value =~ s/\$archive/$::archivedir/g;
-   $value =~ s/\$name/$e/g;
-   $value =~ s/\$label/$e/g;                                                                          
-   if ("$value" eq "") {
-      return "";
-   } else {
-      return $value;
-   }  
-}        
-
-#gets executable from xml, recurse using @inherit and optional second argument $expt
-sub getexecutable {
-   my $e = $::expt;
-   if ( $_[0] ) { $e = $_[0]; }
-   checkExptExists($e,1);
-   my $do_compile = has_unique_exec($e);
-   my $value = $::root->findvalue("experiment[\@label='$e' or \@name='$e']/compile/executable");
-   $value =~ s/\$root/$::rootdir/g;
-   $value =~ s/\$FREROOT/$::rootdir/g;
-   $value =~ s/\$archive/$::archivedir/g;
-   $value =~ s/\$name/$e/g;
-   $value =~ s/\$label/$e/g;
-   $value =~ s/ //g;
-   if ("$value" eq "") {
-      if( $do_compile ) { return "$::rootdir\/$e\/exec\/fms_$e.x"; }
-      my $mommy = $::root->findvalue("experiment[\@label='$e' or \@name='$e']/\@inherit");
-      if( "$mommy" eq "" ) {
-         return "$::rootdir\/$e\/exec\/fms_$e.x";
-      } else {
-         return getexecutable($mommy);
-      }
-   } else {
-      $::preventmake=1;
-      return $value;
-   }
-}
-
-#check whether to compile for this experiment or not
-#if any of the following tags exist for this experiment, we should do the compile
-#and not inherit an executable
-sub has_unique_exec {
-   my $e = $::expt;    
-   if ( $_[0] ) { $e = $_[0]; }
-   my $do_compile = 0;
-   if ( getmyval('cvs/codeBase',$e) ne "") { $do_compile=1; }
-   if ( getmyval('cvs/modelConfig',$e) ne "") { $do_compile=1; }
-   if ( getmyval('cvs/cvsUpdates',$e) ne "") { $do_compile=1; }
-   if ( getmyval('compile/srcList',$e) ne "") { $do_compile=1; }
-   if ( getmyval('compile/cppDefs',$e) ne "") { $do_compile=1; }
-   if ( getmyval('compile/mkmfTemplate',$e) ne "") { $do_compile=1; }
-   if ( getmyval('compile/mkmfTemplate/@file',$e) ne "") { $do_compile=1; }
-   if ( getmyval('compile/executable',$e) ne "") { $do_compile=1; }
-   if ( getmyval('compile/csh',$e) ne "") { $do_compile=1; }
-   if ( getmyval('compile/pathNames',$e) ne "") { $do_compile=1; }
-   if ( getmyval('compile/pathNames/@file',$e) ne "") { $do_compile=1; }
-   return $do_compile;
-}
- 
 #write c-shell runscript, chmod, and optionally submit
 #batchCmd = "qsub -pe $defaultQueue $npes -o $stdoutPath -r y -P $project -l h_cpu=$maxRunTime"
 #writescript($cshscript,$outscript,$batchCmd,$defaultQueue,$npes,$stdoutPath,$project,$maxRunTime);
@@ -261,158 +140,6 @@ sub writescript {
    }
 }
  
-#gets a value from xml and substitutes into csh script
-sub fillvalue {
-   #my $script = $_[0];
-   my $var = $_[1];
-
-   my $xp = "";
-   if($::rtsVersion >= 2) {
-      $xp = "*/$var/\@file";
-   } else {
-      $xp = "*/$var";
-   }
-
-   my $value = getxpathval("$xp");
-   if($::opt_v) {print "fillvalue: var=$var xp=$xp value=$value\n";}
-      
-   if ("$value" ne "") {
-      $value =~ s/\n/ /g;
-      my $tmpvalue = $value;
-      my @listtest = split (' ',$tmpvalue);
-      my $numelements = @listtest;
-      if ( $numelements == 1 ) {
-         $_[0] =~ s/set $var/set $var = $value/;
-      } else {
-         $_[0] =~ s/set $var/set $var = ( $value )/;
-      }
-   } else {
-      if ($::opt_v) { print STDERR "WARNING: $var has no value in $::opt_x\n"; }
-      $_[0] =~ s/set $var/set $var = ""/;
-   }
-
-}  
-
-#put the namelists into a hash
-#->read nmls from xml, put into hash, ie $nml{'mpp_nml'}='$content'
-#->read and parse nmls from file(s), put into hash, don't overwrite existing hash entries
-#->if inherit, repeat above with parent expt, don't overwrite existing hash entries
-sub extractNamelists {
-   my $e = $_[0];
-   my $experiment = $::expt;
-   my $verbosity = "";
-   if( "$_[1]" ne "" ) {$verbosity = $_[1];}
-      
-   #get namelists in xml, they take precedence
-   my @xmlnmls = $::root->findnodes("experiment[\@label='$e' or \@name='$e']/input/namelist[\@name]");        
-   foreach my $nmlNode ( @xmlnmls ) {
-      my $name = cleanstr( $nmlNode->findvalue('@name') );
-      my $content = $nmlNode->findvalue('.');
-      $content =~ s/^\s*$//mg;
-      $content =~ s/^\n//;
-      $content =~ s/\s*(?:\/\s*)?$//;
-      if( exists $::nml{$name} ) {
-         if( "$verbosity" ne "quiet" ) {
-            if( "$e" eq "$experiment" ) {
-            print STDERR "ERROR: Namelist $name specified twice within the xml for the same experiment ($e).  Please edit your xml and try again.\n";
-            exit 1;
-            } else {
-            print STDERR "NOTE: Using secondary specification of $name rather than the original setting in $e\n";
-            }
-         }
-      } elsif( "$name" ne "" ) {
-         $::nml{"$name"} = "$content";
-      }
-   }
-   
-   #get namelists from files
-   my @nmlfiles = $::root->findnodes("experiment[\@label='$e' or \@name='$e']/input/namelist[\@file]" );
-   foreach my $nmlNode ( @nmlfiles ) {
-      my $filename = $nmlNode->findvalue('@file');
-      $filename =~ s/\$root/$::rootdir/g;
-      $filename =~ s/\$FREROOT/$::rootdir/g;
-      $filename =~ s/\$archive/$::archivedir/g;
-      $filename =~ s/\$name/$e/g;
-      my $f = `cat $filename`;
-      $f =~ s/^\s*$//mg;
-      $f =~ s/^\s*#.*$//mg;
-      my @filenmls = split(/\/\s*$/m,$f);
-      foreach my $namelist (@filenmls) {
-         $namelist =~ s/^\s*\&//;
-         $namelist =~ s/\s*(?:\/\s*)?$//;
-         (my $name,my $content) = split('\s',$namelist,2);
-         if( exists $::nml{$name} ) {
-            if( "$verbosity" ne "quiet" ) {
-               print STDERR "NOTE: Using secondary specification of $name rather than the original setting in $filename\n";
-            }
-         } elsif( "$name" ne "" ) {
-            $::nml{"$name"} = "$content";
-         }
-      }
-   }
-
-   #if there's a parent experiment, recurse to get those namelists
-   my $mommy = $::root->findvalue("experiment[\@label='$e' or \@name='$e']/\@inherit");
-   if( "$mommy" ne "" ) { extractNamelists($mommy,$verbosity); }
-}
-
-#nested subroutines for other table types
-sub extract {
-   my $tabletype = $_[0];
-   my $e = $_[1];
-   my %hash = ();
-   my $tablestring = "";
-   my $multiple = 1;
-   if ( "$_[2]" eq "onlyone" ) { $multiple = 0; }
-
-   my $fill_hash = sub {
-      my $e = $_[0];
-      my @nodes = $::root->findnodes("experiment[\@label='$e' or \@name='$e']/*/$tabletype");
-      foreach my $n ( @nodes ) {
-         my $file = "";
-         if($::rtsVersion >= 2) {
-            $file = $n->findvalue('@file');
-         } else {
-            $file = $n->findvalue('.');
-         }
-         $file =~ s/\$root/$::rootdir/g;
-         $file =~ s/\$FREROOT/$::rootdir/g;
-         $file =~ s/\$archive/$::archivedir/g;
-         $file =~ s/\$name/$e/g;
-         $file =~ s/\$label/$e/g;
-         if ( "$file" ne "" ) {
-            unless (exists($hash{$file})) {
-               if ( $multiple eq 0 and "$tablestring" ne "") {
-                  print STDERR "WARNING: Only using first specification of $tabletype.\n";
-                  return "";
-               } elsif ( -e $file ) {
-                  $hash{$file} = undef;
-                  $tablestring .= `cat $file`;
-               } else {
-                  print STDERR "ERROR: File $file does not exist\n";
-               }
-            }
-         } else {
-            if ( $multiple eq 0 and "$tablestring" ne "") {
-               print STDERR "WARNING: Only using first specification of $tabletype.\n";
-               return "";
-            }
-            $tablestring .= $n->findvalue('.');
-         }
-      }
-      my $mommy = $::root->findvalue("experiment[\@label='$e' or \@name='$e']/\@inherit");
-      if( "$mommy" ne "" and "$tablestring" eq "" ) {
-         return "$mommy";
-      } else {
-         return "";
-      }
-   };
-
-   while ( "$e" ne "" ) { $e = &$fill_hash($e); }
-   $tablestring =~ s/^\s*\n//;
-   return $tablestring;
-}
-
 #convert a fortran date string ( "1,1,1,0,0,0" ) to a Date::Manip date
 sub parseFortranDate {
    my $date = $_[0];
@@ -603,47 +330,6 @@ sub diagfile {
    return $diag_source;
 }
 
-#manipulate /archive
-sub remoteExec {
-   my $cmd = $_[0];
-   my $remoteExec = $_[1];
-   my $remoteUname = $_[2];
-   chomp(my $unamem = `uname -m`);
-
-   if ( "$unamem" ne "$remoteUname" ) {
-      system "$remoteExec '$cmd'";
-   } else {
-      system "$cmd";
-   }
-}
-
-sub acarch
-# ------ arguments: $command $platform
-# ------ manipulate /archive
-{
-  my ($c, $p) = @_;
-  if ($p eq 'hpcs')
-  {
-    # ------------------------------ hpcs
-    $/ = "";
-    chomp(my $unamem = qx(uname -m));
-    if ("$unamem" eq "i686")
-    {
-      my $qloginHome = '/home/gfdl/qlogin'; 
-      system("$qloginHome/bin/hpcs_ssh_init; $qloginHome/bin/hpcs_ssh ac-arch '$c'");
-    }
-    else
-    {
-      system("$c");
-    }
-  }
-  else
-  {
-    # ----------------------------- others
-    system("$c");
-  }   
-}
-
 sub execute($$)
 # ------ arguments: $host $command
 {
@@ -784,21 +470,34 @@ sub strFindByInterval($$)
   }
 }
 
-sub absPath($)
-# ------ arguments: $filename
-# ------ returns absolute pathname for the $filename 
+sub pathIsMountable($)
+# ------ arguments: $pathname
+# ------ returns 1 if the $pathname is mountable
 {
-  my $p = File::Spec->rel2abs(shift);
-  $p =~ s/\/home\d+?\//\/home\//;
-  return $p;
-}
-
-sub fileOwner($)
-# ------ arguments: $filename
-# ------ returns owner of the $filename
-{
-  my $stat = stat(shift);
-  return getpwuid($stat->uid);
+  my $p = shift;
+  $p = qx(readlink --canonicalize-missing --no-newline $p);
+  if ($p ne '/')
+  {
+    qx(ls $p >& /dev/null);
+    chomp(my @mounts = qx(cut --delimiter=' ' --fields=2 /proc/mounts | grep '/.' | sort --unique));
+    my ($maximal, @maximals) = (pop @mounts, ());
+    while (defined $maximal)
+    {
+      my $current = undef;
+      do {$current = pop @mounts} while defined $current and $maximal =~ m/^$current\//;
+      push @maximals, $maximal;
+      $maximal = $current;
+    }
+    foreach $maximal (@maximals)
+    {
+      return 1 if $p eq $maximal or $p =~ m/^$maximal\//;
+    }
+    return 0;
+  }
+  else
+  {
+    return 1;
+  }
 }
 
 sub fileIsArchive($)
@@ -818,8 +517,8 @@ sub fileArchiveExtensionStrip($)
   return $p;
 }
 
-sub createDir($;$)
-# ------ arguments: $dirName $verbose
+sub createDir($)
+# ------ arguments: $dirName
 # ------ create a (multilevel) directory, passed as an argument 
 # ------ return the created directory or an empty value
 {
@@ -828,12 +527,10 @@ sub createDir($;$)
   eval {@dirs = File::Path::mkpath($dirAbs)};
   if ($@)
   {
-    FREMsg::out($v, 0, "createDir: can't create the '$d' directory");
     return '';
   }
   elsif (scalar(@dirs) > 0)
   {
-    foreach my $d (@dirs) {FREMsg::out($v, 2, "createDir: $d");}
     return $dirs[$#dirs];    
   }
   else
@@ -851,34 +548,12 @@ sub dirContains($$)
   return scalar(grep($_ eq $s, @dlist));
 }
 
-sub dirCommonLevelsNumber($$)
-# ------ arguments: $dirName1 $dirName2
-# ------ return a number of common levels
-{
-  my ($d1, $d2) = @_;
-  my @d1 = split('/', $d1);
-  my @d2 = split('/', $d2);
-  my $res = 0;
-  for (my $i = 0; $i < scalar(@d1) and $i < scalar(@d2); $i++)
-  {
-    if ($d1[$i] eq $d2[$i])
-    {
-      $res++ if $d1[$i];
-    }
-    else
-    {
-      last;
-    } 
-  }
-  return $res;
-}
-
 sub environmentVariablesExpand($)
 # ------ arguments: $string
 # ------ expand environment variable placeholders in the given $string 
 {
   my $s = shift;
-  foreach my $k ('HOME', 'USER', 'FREROOT', 'ARCHIVE')
+  foreach my $k ('HOME', 'USER', 'ARCHIVE')
   {
     last if $s !~ m/\$/;
     if (exists($ENV{$k}))

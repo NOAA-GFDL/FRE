@@ -1,3 +1,4 @@
+$Id: intel.mk,v 1.1.2.1 2011/01/15 00:34:28 afy Exp $
 # template for the Intel fortran compiler
 # typical use with mkmf
 # mkmf -t template.ifc -c"-Duse_libMPI -Duse_netCDF" path_names /usr/local/include
@@ -67,13 +68,8 @@ ifeq ($(NETCDF),3)
   endif
 endif
 
-ifneq ($(findstring netcdf-4.0.1,$(LOADEDMODULES)),)
-  LIBS := -lnetcdff -lnetcdf -lhdf5_hl -lhdf5 -lz
-else
-  LIBS := -lnetcdf
-endif
-
-LIBS += -lmpi -lsma
+LIBS := $(shell nc-config --flibs)
+LIBS += -lmpich
 LDFLAGS += $(LIBS)
 
 #---------------------------------------------------------------------------

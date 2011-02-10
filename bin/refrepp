@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 # -*- cperl -*-
-# $Id: refrepp,v 18.0.8.1 2010/09/20 19:47:10 arl Exp $
+# $Id: refrepp,v 18.0.8.4 2011/03/10 21:06:33 fms Exp $
 # ------------------------------------------------------------------------------
 # refrepp: submit FRE postprocessing jobs to fill in holes
 # ------------------------------------------------------------------------------
@@ -13,25 +13,15 @@ use XML::LibXML;
 use FRE();
 use FREExperiment();
 
-#set default frepp version
-my $frepp = "/home/fms/bin/frepp";
-my $fremodule = `echo \$LOADEDMODULES | tr ':' '\n' | egrep '^fre/.+'`;
-
-if ( exists $ENV{'FREROOT'} ) {
-   $frepp = "$ENV{'FREROOT'}/bin/frepp" if -f "$ENV{'FREROOT'}/bin/frepp";
-} elsif ("$fremodule" ne '') {
-   $frepp = 'frepp';
-} else {
-   print STDERR "WARNING: FREROOT not set!\n";
-}
-
 #option processing
 my @optlist = ( 'xmlfile=s',
                 'component=s',
                 'dir=s',
+                'History=s',
                 'begin=s',
                 'end=s',
                 'frepp=s',
+                'platform|Platform|P=s',
                 'submit',
                 'help',
 		'verbose'
@@ -47,9 +37,11 @@ my $usage = "Usage: $0 [options] exp [exp ...]
       -x|--xmlfile xmlFile (default XML file \$cwd/rts.xml) 
       -c|--component <c>   (process only component <c>, default all) 
       -d|--dir <dir>       (where scripts are stored, default \$rootDir/scripts/postProcess) 
+      -H|--History <dir>   (location of history data for frepp to use)
       -b|--begin <year>    (year to begin processing: should line up with chunk boundaries!), 
       -e|--end   <year>    (year to end processing), 
-      -f|--frepp <file>    the frepp executable to use (default: $frepp)
+      -f|--frepp <file>    the frepp executable to use 
+      -P|--Platform <pl>   the platform name.
       -s|--submit          submit the script as a batch job. 
       -h|--help            print help message. 
       -v|--verbose         verbose messages. 
@@ -64,12 +56,24 @@ if ( $opt{help}) {
    exit 0;
 }
 
+
+#set default frepp version
+exists $ENV{'FRE_COMMANDS_HOME'} or 
+  croak "ERROR: FRE_COMMANDS_HOME not set: have you loaded the fre module?\n";
+
+my $frepp = $ENV{FRE_COMMANDS_HOME}. '/bin/frepp';
+my $freppcheck = $ENV{FRE_COMMANDS_HOME}. '/bin/freppcheck';
 if ( "$opt{frepp}" ne "" ) {
    $frepp = $opt{frepp};
 }
+croak "ERROR: $frepp not found! check your paths and module loads.\n" 
+  unless -f $frepp;
+croak "ERROR: $freppcheck not found! check your paths and module loads.\n" 
+  unless -f $freppcheck;
+
 my $verbose = $opt{verbose};
 my $xmlfile = $opt{xmlfile} || 'rts.xml';
-croak "ERROR: XML file does not exist: $xmlfile\n\n$usage" unless -f $xmlfile;
+croak "ERROR: XML file not found: $xmlfile\n\n$usage" unless -f $xmlfile;
 
 my $fre = FRE->new('refrepp', %opt) or exit(1);
 
@@ -84,7 +88,6 @@ $fre->setCurrentExperimentName($expt);
 my $scriptd = $opt{dir} || $exp->scriptsDir()."/postProcess";
 print "scriptd=$scriptd\n" if $verbose;
 
-croak "freppcheck must be in your \$path: try adding /home/fms/bin to your \$path\n" unless qx/which freppcheck/;
 #scripts available for refrepping...
 opendir DIR, $scriptd or 
  croak "Post-processing script directory $scriptd unavailable!\n";
@@ -124,9 +127,9 @@ foreach my $c ( keys %years ) {
    undef my $dirs;
    undef my $chunks;
    undef my $yearstodo;
-   my $freppcheck = qx/freppcheck -x $xmlfile -c $c -T -M -t $ybegin -y $yend $expt/;
+   my $freppcheck = qx/freppcheck -x $xmlfile -P $opt{platform} -c $c -T -M -t $ybegin -y $yend $expt/;
    if ( $verbose ) {
-      print "Printing output from freppcheck -x $xmlfile -c $c -T -M -t $ybegin -y $yend $expt ...\n";
+      print "Printing output from freppcheck -x $xmlfile -P $opt{platform} -c $c -T -M -t $ybegin -y $yend $expt ...\n";
       print $freppcheck;
    }
    foreach ( split "\n", $freppcheck ) {
@@ -225,34 +228,43 @@ foreach my $c ( keys %years ) {
       undef my $cmdout;
       undef my $hold;
       undef my $jobid;
-      undef my $jobids;
       undef my $script;
+      undef my %jobs;
       foreach $y ( @years ) {
 #create the frepp job
-         $cmd = "$frepp -t $y -c $c -x $xmlfile $expt";
+         my $hdir; 
+         if ( -d $opt{History} ) {
+            $hdir = $opt{History};
+         } else {
+            $hdir = $exp->archiveDir();
+            $hdir =~ s/(.*)\/.*/$1/;
+            chomp( $hdir = qx/ls -1dt $hdir\/*\/history | grep -v '_crash' | tail -1/ );
+         }
+         print "Using history directory $hdir\n" if $verbose;
+         $cmd = "$frepp -t $y -c $c -P $opt{platform} -d $hdir -x $xmlfile $expt";
          $cmdout = qx/$cmd/;
 #get the jobscript name
-         $cmdout =~ /\nTO SUBMIT: qsub (\S+)/m;
+         $cmdout =~ /\nTO SUBMIT: msub -d \$HOME (\S+)/m;
          $script = $1;
          print "cmd=$cmd\n$cmdout\nscript=$script\n" if $verbose;
 #work out its dependencies
          undef $hold;
          foreach ( @chunks ) {
-#          print "chunk=$_ jobids=$jobids ychunk=$ychunk{$y}\n";
-            last if $_ == $ychunk{$y};
-            $hold = $jobids;
-            chop $hold;
-            undef $jobids;
+            print "chunk=$_ hold=$hold ychunk=$ychunk{$y}\n" if $verbose;
+            last if $_ == $ychunk{$y}; # no dependencies on current chunklength
+            $hold .= $jobs{$_};        # next chunk depends on jobs for this chunklength
+            undef $jobs{$_};           # these dependencies have been subsumed into next chunklength, so eliminate them
          }
+         chop $hold;
 #submit the job
-         $cmd = 'qsub';
-         $cmd .= " -hold_jid $hold" if $hold;
+         $cmd = 'msub -d $HOME';
+         $cmd .= " -l depend=afterok:$hold" if $hold;
          $cmdout = qx/$cmd $script/;
 #retrieve the jobid
-         $cmdout =~ /Your job (\d+)/m;
-         $jobid = $1;
-         $jobids .= $jobid . ',';
-         print "cmd=$cmd $script\n$cmdout";
+         $jobid = $cmdout;
+         $jobid =~ s/\n//mg;
+         $jobs{$ychunk{$y}} .= $jobid . ':';
+         print "\ncmd=$cmd $script\n$cmdout\n" if $verbose;
       }
    }
 }

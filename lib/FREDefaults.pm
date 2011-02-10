@@ -1,5 +1,5 @@
 #
-# $Id: FREDefaults.pm,v 18.0.2.13 2010/12/08 00:26:05 afy Exp $
+# $Id: FREDefaults.pm,v 18.0.2.14 2011/01/25 01:08:27 afy Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: System Defaults Module
 # ------------------------------------------------------------------------------
@@ -35,8 +35,12 @@
 # afy    Ver  12.00  Modify GLOBAL_NAMES (add 'stem')               November 10
 # afy    Ver  13.00  Modify siteGet (add NASA)                      December 10
 # afy    Ver  13.01  Add SiteIsNASA subroutine                      December 10
+# afy    Ver  14.00  Replace site 'hpcs' => 'gfdl-ws'               January 11
+# afy    Ver  14.01  Replace SiteIsGFDL => SiteIsGFDLWS             January 11
+# afy    Ver  14.02  Replace SiteIsGFDLPP => SiteIsGFDL             January 11
+# afy    Ver  14.03  Modify PlatformStandardized (dash in names)    January 11
 # ------------------------------------------------------------------------------
-# Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2009-2010
+# Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2009-2011
 # Designed and written by V. Balaji, Amy Langenhorst and Aleksey Yakovlev
 #
 
@@ -81,14 +85,14 @@ use constant STATUS_FRE_RUN_EXECUTION_PROBLEM		=> 62;
 # ////////////////////////////////////////////////////////// Global Constants //
 # //////////////////////////////////////////////////////////////////////////////
 
-use constant DOMAIN_GFDL	=> 'gfdl.noaa.gov';
-use constant DOMAIN_GFDLPP	=> 'princeton.rdhpcs.noaa.gov'; 
+use constant DOMAIN_GFDLWS	=> 'gfdl.noaa.gov';
+use constant DOMAIN_GFDL	=> 'princeton.rdhpcs.noaa.gov'; 
 use constant DOMAIN_NCRC	=> 'ncrc.gov'; 
 use constant DOMAIN_NCCS	=> 'ccs.ornl.gov';
 use constant DOMAIN_NASA	=> 'nas.nasa.gov';
 
-use constant SITE_GFDL		=> 'hpcs';
-use constant SITE_GFDLPP	=> 'gfdl';
+use constant SITE_GFDLWS	=> 'gfdl-ws';
+use constant SITE_GFDL		=> 'gfdl';
 use constant SITE_NCRC		=> 'ncrc';
 use constant SITE_NCCS		=> 'doe';
 use constant SITE_NASA		=> 'nasa';
@@ -110,13 +114,13 @@ my $siteGet = sub()
 # ------ arguments: none
 {
   my $domain = Net::Domain::hostdomain();
-  if ($domain eq FREDefaults::DOMAIN_GFDL)
+  if ($domain eq FREDefaults::DOMAIN_GFDLWS)
+  {
+    return FREDefaults::SITE_GFDLWS;
+  }
+  elsif ($domain eq FREDefaults::DOMAIN_GFDL)
   {
     return FREDefaults::SITE_GFDL;
-  }
-  elsif ($domain eq FREDefaults::DOMAIN_GFDLPP)
-  {
-    return FREDefaults::SITE_GFDLPP;
   }
   elsif ($domain eq FREDefaults::DOMAIN_NCRC)
   {
@@ -156,16 +160,16 @@ sub Site()
   return $FREDefaultsSite;
 }
 
+sub SiteIsGFDLWS()
+# ------ arguments: none
+{
+  return ($FREDefaultsSite eq FREDefaults::SITE_GFDLWS);
+}
+
 sub SiteIsGFDL()
 # ------ arguments: none
 {
   return ($FREDefaultsSite eq FREDefaults::SITE_GFDL);
-}
-
-sub SiteIsGFDLPP()
-# ------ arguments: none
-{
-  return ($FREDefaultsSite eq FREDefaults::SITE_GFDLPP);
 }
 
 sub SiteIsNCRC()
@@ -196,7 +200,8 @@ sub PlatformStandardized($)
 # ------ arguments: $platform
 {
   my $p = shift;
-  if ($p =~ m/^(?:(\w+)\.)?(\w*)$/o)
+  my $letter = qr/(?:\w|-)/o;
+  if ($p =~ m/^(?:($letter+)\.)?($letter*)$/o)
   {
     my $site = (defined($1)) ? $1 : $FREDefaultsSite;
     my $tail = ($2) ? $2 : FREDefaults::PLATFORM_DEFAULT;

@@ -1,5 +1,5 @@
 #
-# $Id: FRETemplate.pm,v 18.0.2.9 2010/12/20 23:43:37 afy Exp $
+# $Id: FRETemplate.pm,v 18.0.2.11 2011/02/09 22:09:30 afy Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: Template Management Module
 # ------------------------------------------------------------------------------
@@ -26,8 +26,13 @@
 # afy    Ver   7.02  Modify schedulerResourcesAsString (use new ^)  September 10
 # afy    Ver   8.00  Modify schedulerResources (add mail mode)      December 10
 # afy    Ver   9.00  Modify schedulerNames (add workDir)            December 10
+# afy    Ver  10.00  Modify schedulerResources (add check)          January 11
+# afy    Ver  10.01  Modify schedulerNames (add check)              January 11
+# afy    Ver  11.00  Modify schedulerResources (segTime/queue)      February 11
+# afy    Ver  11.01  Modify setSchedulerResources (use new ^)       February 11
+# afy    Ver  11.02  Modify schedulerResourcesAsString (use new ^)  February 11
 # ------------------------------------------------------------------------------
-# Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2009-2010
+# Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2009-2011
 # Designed and written by V. Balaji, Amy Langenhorst and Aleksey Yakovlev
 #
 
@@ -66,48 +71,53 @@ my $option = sub($$;$)
 };
 
 my $schedulerResources = sub($$$$$$)
-# ------ arguments: $expt $ncores $time $segmentTime $partition $mode
+# ------ arguments: $expt $jobType $ncores $time $partition $queue
 {
 
-  my ($z, $n, $t, $g, $p, $m) = @_;
-
+  my ($z, $j, $n, $t, $p, $q) = @_;
   my $fre = $z->fre();
-  my $project = $fre->project();
-  my $partition = $p || $fre->property("FRE.scheduler.partition.$m");
-  my $queue = $fre->property("FRE.scheduler.queue.$m");
-  my $coresPerJobInc = $fre->property("FRE.scheduler.coresPerJob.increment.$m");
-  my $coresPerJobMax = $fre->property("FRE.scheduler.coresPerJob.max.$m");
-  my $mailMode = $fre->mailMode();
   
-  my $ncores = ($n < $coresPerJobInc) ? $coresPerJobInc : (($coresPerJobMax < $n) ? $coresPerJobMax : $n);
+  if ($fre->property("FRE.scheduler.enabled"))
+  {
+
+    my $project = $fre->project();
+    my $partition = $p || $fre->property("FRE.scheduler.$j.partition");
+    my $queue = $q || $fre->property("FRE.scheduler.$j.queue");
+    my $coresPerJobInc = $fre->property("FRE.scheduler.$j.coresPerJob.inc") || 1;
+    my $coresPerJobMax = $fre->property("FRE.scheduler.$j.coresPerJob.max") || &POSIX::INT_MAX;
+    my $mailMode = $fre->mailMode();
+
+    my $ncores = ($n < $coresPerJobInc) ? $coresPerJobInc : (($coresPerJobMax < $n) ? $coresPerJobMax : $n);
+
+    my %option =
+    (
+      ncores      => $option->($fre, 'FRE.scheduler.option.ncores', POSIX::ceil($ncores / $coresPerJobInc) * $coresPerJobInc),
+      time        => $option->($fre, 'FRE.scheduler.option.time', $t),
+      partition   => $option->($fre, 'FRE.scheduler.option.partition', $partition),
+      queue       => $option->($fre, 'FRE.scheduler.option.queue', $queue),
+      join        => $option->($fre, 'FRE.scheduler.option.join'),
+      cpuset      => $option->($fre, 'FRE.scheduler.option.cpuset'),
+      rerun       => $option->($fre, 'FRE.scheduler.option.rerun'),
+      mail        => $option->($fre, 'FRE.scheduler.option.mail', $mailMode)
+    );
+
+    %option =
+    (
+      %option,
+      project     => $option->($fre, 'FRE.scheduler.option.project', $project),
+      projectAux  => $option->($fre, 'FRE.scheduler.option.generic', "FRE_PROJECT=$project")
+    ) if $project;
+
+    return \%option;
   
-  my %option =
-  (
-    ncores	=> $option->($fre, 'FRE.scheduler.option.ncores', POSIX::ceil($ncores / $coresPerJobInc) * $coresPerJobInc),
-    time	=> $option->($fre, 'FRE.scheduler.option.time', $t),
-    partition	=> $option->($fre, 'FRE.scheduler.option.partition', $partition),
-    queue	=> $option->($fre, 'FRE.scheduler.option.queue', $queue),
-    join	=> $option->($fre, 'FRE.scheduler.option.join'),
-    cpuset	=> $option->($fre, 'FRE.scheduler.option.cpuset'),
-    rerun	=> $option->($fre, 'FRE.scheduler.option.rerun'),
-    mail	=> $option->($fre, 'FRE.scheduler.option.mail', $mailMode)
-  );
+  }
+  else
+  {
   
-  %option =
-  (
-    %option,
-    project	=> $option->($fre, 'FRE.scheduler.option.project', $project),
-    projectAux	=> $option->($fre, 'FRE.scheduler.option.generic', "FRE_PROJECT=$project")
-  ) if $project;
-  
-  %option =
-  (
-    %option,
-    segmentTime	=> $option->($fre, 'FRE.scheduler.option.segmentTime', $g)
-  ) if $g;
-  
-  return \%option;
-  
+    return undef;
+    
+  }
+
 };
 
 my $schedulerNames = sub($$$)
@@ -115,17 +125,22 @@ my $schedulerNames = sub($$$)
 {
 
   my ($z, $n, $d) = @_;
-
   my $fre = $z->fre();
 
-  my %option =
-  (
-    name	=> $option->($fre, 'FRE.scheduler.option.name', $n),
-    stdout	=> $option->($fre, 'FRE.scheduler.option.stdout', $d),
-    workDir	=> $option->($fre, 'FRE.scheduler.option.workDir', $d)
-  );
-  
-  return \%option; 
+  if ($fre->property("FRE.scheduler.enabled"))
+  {
+    my %option =
+    (
+      name    => $option->($fre, 'FRE.scheduler.option.name', $n),
+      stdout  => $option->($fre, 'FRE.scheduler.option.stdout', $d),
+      workDir => $option->($fre, 'FRE.scheduler.option.workDir', $d)
+    );
+    return \%option; 
+  }
+  else
+  {
+    return undef;
+  }
 
 };
 
@@ -173,33 +188,33 @@ sub setList($$@)
 }
 
 sub setSchedulerResources($$$$$$$)
-# ------ arguments: $refToScript $expt $ncores $time $segmentTime $partition $mode
+# ------ arguments: $refToScript $expt $jobType $ncores $time $partition $queue
 {
 
-  my ($r, $z, $n, $t, $g, $p, $m) = @_;
+  my ($r, $z, $j, $n, $t, $p, $q) = @_;
 
   my $prefix = FRETemplate::PRAGMA_PREFIX;
   my $schedulerOptions = FRETemplate::PRAGMA_SCHEDULER_OPTIONS;
   my $placeholder = qr/^[ \t]*$prefix[ \t]+$schedulerOptions[ \t]*$/mo;
 
   my $schedulerPrefix = $z->fre()->property('FRE.scheduler.prefix');
-  my $h = $schedulerResources->($z, $n, $t, $g, $p, $m);
+  my $h = $schedulerResources->($z, $j, $n, $t, $p, $q);
   
   foreach my $key (sort keys %{$h})
   {
     my $value = $h->{$key}; 
     ${$r} =~ s/($placeholder)/$1\n$schedulerPrefix $value/ if $value; 
   }
-
+  
 }
 
 sub schedulerResourcesAsString($$$$$$)
-# ------ arguments: $expt $ncores $time $segmentTime $partition $mode
+# ------ arguments: $expt $jobType $ncores $time $partition $queue
 {
 
-  my ($z, $n, $t, $g, $p, $m) = @_;
+  my ($z, $j, $n, $t, $p, $q) = @_;
 
-  my ($h, @result) = ($schedulerResources->($z, $n, $t, $g, $p, $m), ());
+  my ($h, @result) = ($schedulerResources->($z, $j, $n, $t, $p, $q), ());
 
   foreach my $key (sort keys %{$h})
   {

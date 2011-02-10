@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 # -*- cperl -*-
-# $Id: frepp,v 18.0.2.52.2.1 2011/01/03 23:58:18 afy Exp $
+# $Id: frepp,v 18.0.2.52.2.1.2.7 2011/02/22 16:48:31 fms Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: History/diagnostics post-processing
 # ------------------------------------------------------------------------------
@@ -33,7 +33,7 @@ use vars qw( $maxyrs $maxdisk $cubic $nlat $nlon $interpMethod $getgridspec $bas
 
   package frepp;
 
-  use constant VERSION => '$Id: frepp,v 18.0.2.52.2.1 2011/01/03 23:58:18 afy Exp $';
+  use constant VERSION => '$Id: frepp,v 18.0.2.52.2.1.2.7 2011/02/22 16:48:31 fms Exp $';
 
 #Usage:    $relfrepp [ -AB:C:O:RY:Z:c:d:f:hlmMp:oqr:S:st:u:vx:z ] experiment [ experiment2 ... ]                 
   use constant OPTLIST =>
@@ -216,7 +216,7 @@ if ( $opt_M and not $opt_p ) { $opt_M = "#\$ -m e";} else { $opt_M = ""; }
 
 if ( $opt_O ) { print STDERR "NOTE: There has been a change to the behavior of the -O option. Your scripts will be written directly to '$opt_O' and not to '$opt_O/scripts/postProcess'\n"; }
 
-$versionId = ' $Id: frepp,v 18.0.2.52.2.1 2011/01/03 23:58:18 afy Exp $';
+$versionId = ' $Id: frepp,v 18.0.2.52.2.1.2.7 2011/02/22 16:48:31 fms Exp $';
 
 $perlerrors = "";
 $component = "";
@@ -225,7 +225,7 @@ $maxdisk=0;
 $do_static = 1;
 $historyfiles="";
 %dtvars = (); 
-$basenpes = 4;
+$basenpes = 1;
 $aggregateTS = 1;
 
 #initialize hsmfiles string
@@ -303,7 +303,7 @@ my $uncpio = 'cpio';
 my $timecmd = '/usr/bin/time';
 my $timereal = 'e';
 my $systimecmd = 'date +\%s';
-my $maxruntime = '20:00:00';  #needs work
+my $maxruntime = '30:00:00';  #needs work
 
 #-------------- SET UP PARSER FOR XML DOCUMENT -------------------------
 #set up FRE4
@@ -389,11 +389,11 @@ foreach $expt ( @ARGV ) {
 
    #get base number of pes, if specified
    my $prodnpes = FREUtil::getxpathval('runtime/production/@npes');
-   if ( $prodnpes > 512 ) {
-      $basenpes = 8;
-   }
+   #if ( $prodnpes > 512 ) {
+   #   $basenpes = 8;
+   #}
    my $ppnpes = FREUtil::getxpathval('postProcess/@npes');
-   if ( "$ppnpes" ne '' and $ppnpes > 1 and $ppnpes <= 16 ) {
+   if ( "$ppnpes" ne '' and $ppnpes > 1 and $ppnpes <= 4 ) {
       $basenpes = $ppnpes;
    }
 
@@ -437,11 +437,10 @@ alias ncks "ncks --64bit --hdr_pad 15000"
 alias ncrcat "ncrcat --64bit -t 2"
 EOF
    } elsif ( "$platform" eq 'x86_64' ) {
-      $basenpes = 1;
-      $cp = 'mpscp';
+      $cp = 'gmpscp';
       $cpio = 'cpio -C 524288';
       $uncpio = 'cpio -C 2097152';
-      $mvfile = 'mpscp';
+      $mvfile = 'gmpscp';
       $platformcsh = $exp->fre()->platformValue('csh');
       $platformcsh .= <<'EOF';
 
@@ -734,6 +733,11 @@ EOF
       } elsif ( $gridspec =~ /tar$/ ) {
          $getgridspec .= <<EOF;
 cd \$work
+if ( -e \$fregrid_remap_file ) then
+   $time_cp $cp \$fregrid_remap_file remap_file
+endif
+set remap_file = remap_file
+
 if ( ! -e mosaic.nc && ! -e grid_spec.nc && ! -e atmos_mosaic.nc ) then
 $time_uncpio tar -xvf $gridspec
 endif
@@ -763,6 +767,13 @@ endif
 set order1 = ( precip prec_ls snow_ls prec_conv snow_conv uw_precip prec_uwc snow_uwc prc_deep_donner snow_deep_donner prc1_deep_donner prc_mca_donner snow_mca_donner ice_mask land_mask zsurf cld_amt_2d conv_freq IWP_all_clouds WP_all_clouds WVP tot_cloud_area tot_ice_amt tot_liq_amt swdn_sfc_clr swdn_sfc swdn_toa_clr swdn_toa swup_sfc_clr swup_sfc swup_toa_clr swup_toa wind_ref wind_ref_max wind_ref_min )
 set attCmds = ()
 unset echo
+EOF
+      $call_fregrid .= <<EOF;
+if ( -e $ppRootDir/.non_default_interp_method ) then
+  source $ppRootDir/.non_default_interp_method
+endif
+EOF
+      $call_fregrid .= <<'EOF';
 foreach order1var ( $order1 )
   foreach modelvar ( `echo $interpvars | sed -e "s/,/ /g"` )
     if ( $modelvar == $order1var ) then
@@ -802,11 +813,11 @@ endif
 EOF
       if ( $basenpes == 1 ) {
          $call_fregrid .= <<EOF;
-$time_fregrid fregrid --input_mosaic \$input_mosaic --input_file \$fregrid_in --interp_method \$interp_method --remap_file \$fregrid_remap_file --nlon \$nlon --nlat \$nlat --scalar_field \$interpvars \$fregrid_wt
+$time_fregrid fregrid --input_mosaic \$input_mosaic --input_file \$fregrid_in --interp_method \$interp_method --remap_file remap_file --nlon \$nlon --nlat \$nlat --scalar_field \$interpvars \$fregrid_wt
 EOF
       } else {
          $call_fregrid .= <<EOF;
-$time_fregrid mpirun -np $basenpes fregrid_parallel --input_mosaic \$input_mosaic --input_file \$fregrid_in --interp_method \$interp_method --remap_file \$fregrid_remap_file --nlon \$nlon --nlat \$nlat --scalar_field \$interpvars \$fregrid_wt
+$time_fregrid mpirun -np $basenpes fregrid_parallel --input_mosaic \$input_mosaic --input_file \$fregrid_in --interp_method \$interp_method --remap_file remap_file --nlon \$nlon --nlat \$nlat --scalar_field \$interpvars \$fregrid_wt
 EOF
       }
       $call_fregrid .= <<EOF;
@@ -829,6 +840,11 @@ else
    $time_ncatted ncatted \$renameatts \$fregrid_in.nc
    #check_ncatted
 endif
+
+if ( ! -e \$fregrid_remap_file ) then
+   $time_cp $cp remap_file.nc \$fregrid_remap_file 
+endif
+
 EOF
 
    if ( $opt_A) {print STDERR "\n ANALYSIS ONLY mode, pp/ files will not be generated\n";}
@@ -1076,8 +1092,10 @@ EOF
          } else {
             $cshscript =~ s/#PBS -l walltime.*/#PBS -l walltime=30:00:00/; 
          }
-         my $npes = $basenpes * 2 unless $basenpes == 1;
-         $cshscript =~ s/pe ic.postp (.+)/pe ic.postp $npes/; 
+         my $npes = $basenpes;
+         $cshscript =~ s/pe ic.postp (.+)/pe ic.postp $npes/;
+         $cshscript =~ s/-l size=(.+)/-l size=$npes/;
+
          $mkdircommand = createdirs( $mkdircommand );
          my $newoutscript = "$outscript"."_av";
          my $new_pbs_job_name = "$pbs_job_name"."_av";
@@ -1330,7 +1348,8 @@ EOF
                $cshscript =~ s/#PBS -l walltime.*/#PBS -l walltime=30:00:00/; 
             }
             my $npes = $basenpes;
-            $cshscript =~ s/pe ic.postp (.+)/pe ic.postp $npes/; 
+            $cshscript =~ s/pe ic.postp (.+)/pe ic.postp $npes/;
+            $cshscript =~ s/-l size=(.+)/-l size=$npes/;
          }
          $cshscript=~ s/(-soft -l fre_info=)/$1ppYears\@$maxyrs+/;
          unless ($opt_A) {FREUtil::writescript($cshscript,$outscript,"$batchSubmit$opt_w");}
@@ -5333,6 +5352,7 @@ EOF
 #!/bin/csh -f
 #PBS -N
 #PBS -l walltime
+#PBS -l size=1
 #PBS -j oe
 #PBS -o
 #PBS -r y
@@ -5446,6 +5466,7 @@ end
 EOF
 
    $cshscripttmpl =~ s/-pe ic.postp 1/-pe ic.postp $basenpes/;
+   $cshscripttmpl =~ s/-l size=1/-l size=$basenpes/;
 
 return $cshscripttmpl;
 }

@@ -7,6 +7,3 @@
 #PBS -r y
 #PBS -j oe
 
-source $MODULESHOME/init/tcsh
-module purge
-

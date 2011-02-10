@@ -230,7 +230,6 @@ if ( "$freppcmd" != '' ) then
    set freppcmd = (`echo $freppcmd | sed "s, , -P $gfdlplatform ,"`)
 
    #extract version of frepp, don't use full path to frepp
-   set freppversion = `echo $freppcmd | cut -d' ' -f 1 | awk 'BEGIN {FS = "/"};{f=NF-2;print $f}'`
    set freppcmd = ("frepp" `echo $freppcmd | cut -d' ' -f 2-`)
 
    #use xml file copied from ncrc
@@ -254,8 +253,10 @@ if ( "$freppcmd" != '' ) then
    set ppjobname = `echo $PBS_JOBNAME | sed 's/output_stager/frepp/'`
    cp $FRE_COMMANDS_HOME/site/ncrc/pptemplate.csh $stdout/$ppjobname
    perl -pi -e "s/frepptest/$ppjobname/" $stdout/$ppjobname
-   echo "module load fre/$freppversion" >> $stdout/$ppjobname
-   echo "module list" >> $stdout/$ppjobname
+
+   echo "#$gfdlplatform platform csh" >> $stdout/$ppjobname
+   xpath.pl -x $xmlfile -e 'setup/platform[@name="'$gfdlplatform'"]/csh' >> $stdout/$ppjobname
+
    echo "set echo" >> $stdout/$ppjobname
    echo "$freppcmd" >> $stdout/$ppjobname
 
@@ -273,7 +274,7 @@ popd
 
 #EVALUATE DUAL RUNS
 
-if ( $check && "$machine" == "c1ms" ) then
+if ( $check ) then
 
  pushd ..
  set myarchivedir = `basename $cwd`

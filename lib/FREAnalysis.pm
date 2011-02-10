@@ -475,13 +475,13 @@ sub writescript {
    } elsif ( ! $opt_s ) {
        print STDERR "ANALYSIS: Batch mode specified.\n";
        #print STDERR "TO SUBMIT: msub $outscript @$aargu\n\n";
-       print STDERR "TO SUBMIT: msub $outscript\n\n";
+       print STDERR "TO SUBMIT: msub -d \$HOME $outscript\n\n";
    } else {
        ####### The graphical analysis is specified in batch mode ######
        sleep 3;
-       print STDERR "Submitting 'msub $outscript'";
+       print STDERR "Submitting 'msub -d \$HOME $outscript'";
        #my $qsub_msg = `msub $outscript @$argu`;
-       my $qsub_msg = `msub $outscript`;
+       my $qsub_msg = `msub -d \$HOME $outscript`;
        print "$qsub_msg";
    }
 
@@ -496,9 +496,19 @@ sub availablechunks {
    my @availablechunkslast = ();
    my ($asrcdir, $component,$clnumber,$src) = @_;
 
-   my @existingall = <$asrcdir/$component.*.nc>;
+   #my @existingall = <$asrcdir/$component.*.nc>; #unacceptable performance on the pp/an nodes
+   opendir(my $dh, "$asrcdir");
+   my @existingall = map { $_ =~ s/(.*)/$asrcdir\/$1/ ; $_; } grep { /$component.*.nc$/ } readdir($dh);
+   closedir($dh); 
+
+   #print "existingall has this many members: $#existingall\n";
+   #print "existingall[0] is $existingall[0]\n";
+
    if (@existingall < 1) {
-      my @cpios = <$asrcdir/$component.*.nc.cpio>;
+      #my @cpios = <$asrcdir/$component.*.nc.cpio>;
+      opendir(my $dh, "$asrcdir");
+      my @cpios = map { $_ =~ s/(.*)/$asrcdir\/$1/ ; $_; } grep { /$component.*.nc.cpio/ } readdir($dh);
+      closedir($dh); 
       if (@cpios < 1) {
          print STDERR "ANALYSIS: No .nc or .nc.cpio files found in: $asrcdir\n";
       } else {
@@ -511,7 +521,9 @@ sub availablechunks {
    # find the first variable, but don't use it for checking date availability
    my @myvars = split( /\./, $existingall[0] );
    my $thevar = $myvars[$#[myvars]-2];
-   my @existingdates = map { $_ =~ s/$asrcdir\/$component\.(.*?)\.(.*)\.nc/$1/; $_; } <$asrcdir/$component.*.nc>;
+
+   my @existingdates = map { $_ =~ s/$asrcdir\/$component\.(.*?)\.(.*)\.nc/$1/; $_; } @existingall;
+
    my %tmphash = ();
    @tmphash{@existingdates} = ();
    my @existing = sort keys %tmphash;
@@ -784,7 +796,7 @@ sub start_end_date {
 
      # user specified years do not have to be on the begin or end of data chunks       
      #----#---- data period needed for the start year
-     my $databegyr = adjYearlow($astartYear,@availablechunksfirst);
+     my $databegyr = padzeros(adjYearlow($astartYear,@availablechunksfirst));
      if (!$databegyr) {print STDERR "ANALYSIS: No required data available\n";next;}
 
 #     #----#---- data period needed for the end year
@@ -794,9 +806,9 @@ sub start_end_date {
      my $dataendyr;
      my $reminder = ($aendYear - $availablechunkslast[0])  % $clnumber;
      if ($reminder == 0) {
-        $dataendyr = $aendYear;
+        $dataendyr = padzeros($aendYear);
      }else{
-        $dataendyr = $aendYear + $clnumber - $reminder;
+        $dataendyr = padzeros($aendYear + $clnumber - $reminder);
      }
 
      #find the position of the user specified start year in availablechunksfirst

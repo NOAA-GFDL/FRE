@@ -1,20 +1,16 @@
-# $Id: intel.mk,v 1.1.2.2 2011/01/27 22:45:58 afy Exp $
-# template for Intel compilers
-# typical use with mkmf:
-# mkmf -t template.mk -c "-Duse_libMPI -Duse_netCDF" path_names /usr/local/include
-
+# $Id: intel.mk,v 1.1.2.1 2011/01/25 01:10:50 afy Exp $
+# template for the Intel fortran compiler
+# typical use with mkmf
+# mkmf -t template.ifc -c"-Duse_libMPI -Duse_netCDF" path_names /usr/local/include
 ############
 # commands #
 ############
-
 FC = ifort
 CC = icc
 LD = ifort
-
-############
-#  flags   #
-############
-
+#########
+# flags #
+#########
 DEBUG =
 REPRO =
 VERBOSE =
@@ -31,6 +27,7 @@ FFLAGS_DEBUG = -O0 -check -check noarg_temp_created -check nopointer -warn -warn
 FFLAGS_OPENMP = -openmp
 FFLAGS_VERBOSE = -v -V -what
 
+
 CFLAGS := -D__IFC 
 CFLAGS_OPT = -O2
 CFLAGS_OPENMP = -openmp
@@ -41,28 +38,27 @@ LDFLAGS_OPENMP := -openmp
 LDFLAGS_VERBOSE := -Wl,-V,--verbose,-cref,-M
 
 ifneq ($(REPRO),)
-  CFLAGS += $(CFLAGS_REPRO)
-  FFLAGS += $(FFLAGS_REPRO)
+CFLAGS += $(CFLAGS_REPRO)
+FFLAGS += $(FFLAGS_REPRO)
 endif
-
 ifneq ($(DEBUG),)
-  CFLAGS += $(CFLAGS_DEBUG)
-  FFLAGS += $(FFLAGS_DEBUG)
+CFLAGS += $(CFLAGS_DEBUG)
+FFLAGS += $(FFLAGS_DEBUG)
 else
-  CFLAGS += $(CFLAGS_OPT)
-  FFLAGS += $(FFLAGS_OPT)
+CFLAGS += $(CFLAGS_OPT)
+FFLAGS += $(FFLAGS_OPT)
 endif
 
 ifneq ($(OPENMP),)
-  CFLAGS += $(CFLAGS_OPENMP)
-  FFLAGS += $(FFLAGS_OPENMP)
-  LDFLAGS += $(LDFLAGS_OPENMP)
+CFLAGS += $(CFLAGS_OPENMP)
+FFLAGS += $(FFLAGS_OPENMP)
+LDFLAGS += $(LDFLAGS_OPENMP)
 endif
 
 ifneq ($(VERBOSE),)
-  CFLAGS += $(CFLAGS_VERBOSE)
-  FFLAGS += $(FFLAGS_VERBOSE)
-  LDFLAGS += $(LDFLAGS_VERBOSE)
+CFLAGS += $(CFLAGS_VERBOSE)
+FFLAGS += $(FFLAGS_VERBOSE)
+LDFLAGS += $(LDFLAGS_VERBOSE)
 endif
 
 ifeq ($(NETCDF),3)
@@ -72,13 +68,7 @@ ifeq ($(NETCDF),3)
   endif
 endif
 
-ifneq ($(findstring pd-netcdf.4.0.1,$(LOADEDMODULES)),)
-  LIBS := -lnetcdff -lnetcdf -lhdf5_hl -lhdf5 -lz
-else
-  LIBS := -lnetcdf
-endif
-
-LIBS += -lmpi -lsma
+LIBS := $(shell nc-config --flibs)
 LDFLAGS += $(LIBS)
 
 #---------------------------------------------------------------------------

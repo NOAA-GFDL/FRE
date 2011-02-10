@@ -1,5 +1,5 @@
 #
-# $Id: FRE.pm,v 18.0.2.7 2010/12/08 00:41:38 afy Exp $
+# $Id: FRE.pm,v 18.0.2.9 2011/02/09 19:51:56 afy Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: Main Library Module
 # ------------------------------------------------------------------------------
@@ -22,8 +22,10 @@
 # afy    Ver   6.03  Modify new (don't process partition)           September 10
 # afy    Ver   7.00  Use new FREMsg module (symbolic level names)   December 10
 # afy    Ver   7.01  Add mailMode subroutine                        December 10
+# afy    Ver   8.00  Modify new (add the site locality test)        January 11
+# afy    Ver   9.00  Modify home (use FRE_COMMANDS_HOME)            February 11
 # ------------------------------------------------------------------------------
-# Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2000-2010
+# Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2000-2011
 # Designed and written by V. Balaji, Amy Langenhorst and Aleksey Yakovlev
 #
 
@@ -31,7 +33,6 @@ package FRE;
 
 use strict;
 
-use File::Basename();
 use File::Spec();
 use XML::LibXML();
 
@@ -237,8 +238,7 @@ sub home
 # ------ called as class method
 # ------ return the FRE commands home 
 {
-  my $binDir = File::Basename::dirname($0);
-  return ($binDir =~ m/(.*)\/bin$/) ? $1 : ($binDir . '/..');
+  return $ENV{FRE_COMMANDS_HOME};
 }
 
 # //////////////////////////////////////////////////////////////////////////////
@@ -266,119 +266,128 @@ sub new
       (my $platformSite, $o{platform}) = $platformSiteGet->($o{platform});
       if ($platformSite)
       {
-	# ----------------------------------------------------------------------- standardize the target string
-	($o{target}, my $targetErrorMsg) = FRETargets::standardize($o{target});
-	if ($o{target})
+        # -------------------------------------------------------------- verify locality of the platform site
+	if (($platformSite eq FREDefaults::Site()) or ($caller eq 'frelist'))
 	{
-	  # -------------------------------------- initialize properties object (properties expansion happens here)
- 	  my $siteDir = FRE::home() . '/site/' . $platformSite;
-	  my $properties = FREProperties->new($rootNode, $platformSite, $siteDir, %o);
-	  if ($properties)
+	  # ----------------------------------------------------------------------- standardize the target string
+	  ($o{target}, my $targetErrorMsg) = FRETargets::standardize($o{target});
+	  if ($o{target})
 	  {
-	    $properties->propertiesList($o{verbose});
-	    # ----------------------------------------------- locate the platform node (no backward compatibility anymore)
-	    my $platformNode = $platformNodeGet->($rootNode);
-	    if ($platformNode)
+	    # -------------------------------------- initialize properties object (properties expansion happens here)
+ 	    my $siteDir = FRE::home() . '/site/' . $platformSite;
+	    my $properties = FREProperties->new($rootNode, $platformSite, $siteDir, %o);
+	    if ($properties)
 	    {
-              # --------------------------------------------------------------------------------------------- create the object
-	      my $fre = {};
-	      bless $fre, $class;
-	      # --------------------------------------------------------------- save caller name and global options in the object
-	      $fre->{caller} = $caller;
-	      $fre->{platformSite} = $platformSite;
-	      $fre->{platform} = $o{platform};
-	      $fre->{target} = $o{target};
-	      $fre->{verbose} = $o{verbose};
-              # ------------------------------------------------------------------------ save calculated earlier values in the object
-	      $fre->{xmlfileAbsPath} = $xmlfileAbsPath;
-              $fre->{rootNode} = $rootNode;
-	      $fre->{version} = $version;
-	      $fre->{siteDir} = $siteDir;
-	      $fre->{properties} = $properties;
-	      $fre->{platformNode} = $platformNode;
-	      # ---------------------------------------------------------------------------- calculate and save misc values in the object 
-	      $fre->{project} = $fre->platformValue('project') || $fre->property('FRE.scheduler.project');
-	      $fre->{baseCsh} = $fre->platformValue('csh');
-	      # -------------------------------------------------------------------------------------------------- derive the mkmf template
-	      my $mkmfTemplate = $mkmfTemplateGet->($fre, $caller, $platformNode, $o{verbose});
-	      if ($mkmfTemplate)
+	      $properties->propertiesList($o{verbose});
+	      # ----------------------------------------------- locate the platform node (no backward compatibility anymore)
+	      my $platformNode = $platformNodeGet->($rootNode);
+	      if ($platformNode)
 	      {
-		$fre->{mkmfTemplate} = $mkmfTemplate;
-		# -------------------------------------------------------------------------- verify compatibility of base <csh> with targets
-		if ($baseCshCompatibleWithTargets->($fre, $o{verbose}))
+        	# --------------------------------------------------------------------------------------------- create the object
+		my $fre = {};
+		bless $fre, $class;
+		# --------------------------------------------------------------- save caller name and global options in the object
+		$fre->{caller} = $caller;
+		$fre->{platformSite} = $platformSite;
+		$fre->{platform} = $o{platform};
+		$fre->{target} = $o{target};
+		$fre->{verbose} = $o{verbose};
+        	# ------------------------------------------------------------------------ save calculated earlier values in the object
+		$fre->{xmlfileAbsPath} = $xmlfileAbsPath;
+        	$fre->{rootNode} = $rootNode;
+		$fre->{version} = $version;
+		$fre->{siteDir} = $siteDir;
+		$fre->{properties} = $properties;
+		$fre->{platformNode} = $platformNode;
+		# ---------------------------------------------------------------------------- calculate and save misc values in the object 
+		$fre->{project} = $fre->platformValue('project') || $fre->property('FRE.scheduler.project');
+		$fre->{baseCsh} = $fre->platformValue('csh');
+		# -------------------------------------------------------------------------------------------------- derive the mkmf template
+		my $mkmfTemplate = $mkmfTemplateGet->($fre, $caller, $platformNode, $o{verbose});
+		if ($mkmfTemplate)
 		{
-		  # -------------------------------------------------------------------------- read setup-based info (for compatibility only)
-		  $fre->{getFmsData} = $infoGet->($fre, 'setup/getFmsData', $o{verbose});
-		  $fre->{fmsRelease} = $infoGet->($fre, 'setup/fmsRelease', $o{verbose});
-		  # -------------------------------------------------------------------- read experiment nodes, save their names and nodes
-		  my (%counter, %expNode, $expNames);
-		  foreach my $node ($rootNode->findnodes('experiment'))
+		  $fre->{mkmfTemplate} = $mkmfTemplate;
+		  # -------------------------------------------------------------------------- verify compatibility of base <csh> with targets
+		  if ($baseCshCompatibleWithTargets->($fre, $o{verbose}))
 		  {
-		    my $name = $fre->nodeValue($node, '@name') || $fre->nodeValue($node, '@label');
-		    $counter{$name}++;
-		    $expNode{$name} = $node;
-		    $expNames .= ' ' if $expNames;
-		    $expNames .= $name;
-		  }
-		  # ----------------------------------------------------------------------- check experiment names uniqueness
-		  my @expNamesDuplicated = grep($counter{$_} > 1, keys(%counter));
-		  if (scalar(@expNamesDuplicated) == 0)
-		  {
-		    # ------------------------------------------------ save experiment names and nodes in the object
-		    $fre->{expNodes} = \%expNode;
-		    $fre->{expNames} = $expNames;
-		    # -------------------------------------------------------------------- print what we got
-		    $fre->out
-		    (
-		      2,
-		      "siteDir        = $fre->{siteDir}", 
-		      "platform       = $fre->{platform}",
-		      "target         = $fre->{target}",
-		      "project        = $fre->{project}", 
-		      "mkmfTemplate   = $fre->{mkmfTemplate}"
-		    );
-		    # ----------------------------------------------------------- call tracing
-		    if ($fre->property('FRE.call.trace'))
+		    # -------------------------------------------------------------------------- read setup-based info (for compatibility only)
+		    $fre->{getFmsData} = $infoGet->($fre, 'setup/getFmsData', $o{verbose});
+		    $fre->{fmsRelease} = $infoGet->($fre, 'setup/fmsRelease', $o{verbose});
+		    # -------------------------------------------------------------------- read experiment nodes, save their names and nodes
+		    my (%counter, %expNode, $expNames);
+		    foreach my $node ($rootNode->findnodes('experiment'))
 		    {
-		      FRETrace::insert($siteDir, $caller, $xmlfileAbsPath, \%o);
+		      my $name = $fre->nodeValue($node, '@name') || $fre->nodeValue($node, '@label');
+		      $counter{$name}++;
+		      $expNode{$name} = $node;
+		      $expNames .= ' ' if $expNames;
+		      $expNames .= $name;
 		    }
-		    # ------------------------------------------------- normal return
-		    return $fre;
+		    # ----------------------------------------------------------------------- check experiment names uniqueness
+		    my @expNamesDuplicated = grep($counter{$_} > 1, keys(%counter));
+		    if (scalar(@expNamesDuplicated) == 0)
+		    {
+		      # ------------------------------------------------ save experiment names and nodes in the object
+		      $fre->{expNodes} = \%expNode;
+		      $fre->{expNames} = $expNames;
+		      # -------------------------------------------------------------------- print what we got
+		      $fre->out
+		      (
+			2,
+			"siteDir        = $fre->{siteDir}", 
+			"platform       = $fre->{platform}",
+			"target         = $fre->{target}",
+			"project        = $fre->{project}", 
+			"mkmfTemplate   = $fre->{mkmfTemplate}"
+		      );
+		      # ----------------------------------------------------------- call tracing
+		      if ($fre->property('FRE.call.trace'))
+		      {
+			FRETrace::insert($siteDir, $caller, $xmlfileAbsPath, \%o);
+		      }
+		      # ------------------------------------------------- normal return
+		      return $fre;
+		    }
+		    else
+		    {
+		      my $expNamesDuplicated = join ' ', @expNamesDuplicated;
+		      FREMsg::out($o{verbose}, FREMsg::FATAL, "Experiment names aren't unique: $expNamesDuplicated");
+		      return '';
+		    }
 		  }
 		  else
 		  {
-		    my $expNamesDuplicated = join ' ', @expNamesDuplicated;
-		    FREMsg::out($o{verbose}, FREMsg::FATAL, "Experiment names aren't unique: $expNamesDuplicated");
+		    FREMsg::out($o{verbose}, FREMsg::FATAL, "Mismatch between the platform <csh> and the target option value");
 		    return '';
 		  }
-		}
+        	}
 		else
 		{
-		  FREMsg::out($o{verbose}, FREMsg::FATAL, "Mismatch between the platform <csh> and the target option value");
+        	  FREMsg::out($o{verbose}, FREMsg::FATAL, "A problem with the mkmf template");
 		  return '';
 		}
-              }
+	      }
 	      else
 	      {
-        	FREMsg::out($o{verbose}, FREMsg::FATAL, "A problem with the mkmf template");
+        	FREMsg::out($o{verbose}, FREMsg::FATAL, "The platform with name '$o{platform}' isn't defined or defined more than once");
 		return '';
 	      }
 	    }
 	    else
 	    {
-              FREMsg::out($o{verbose}, FREMsg::FATAL, "The platform with name '$o{platform}' isn't defined or defined more than once");
+              FREMsg::out($o{verbose}, FREMsg::FATAL, "A problem with FRE configuration files");
 	      return '';
 	    }
 	  }
 	  else
 	  {
-            FREMsg::out($o{verbose}, FREMsg::FATAL, "A problem with FRE configuration files");
+	    FREMsg::out($o{verbose}, FREMsg::FATAL, $targetErrorMsg);
 	    return '';
 	  }
 	}
 	else
 	{
-	  FREMsg::out($o{verbose}, FREMsg::FATAL, $targetErrorMsg);
+	  FREMsg::out($o{verbose}, FREMsg::FATAL, "You are not allowed to run the '$caller' tool with the '$o{platform}' platform on this site");
 	  return '';
 	}
       }
