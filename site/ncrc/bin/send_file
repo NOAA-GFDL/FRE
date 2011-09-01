@@ -1,0 +1,200 @@
+#!/bin/csh -f
+#PBS -N send_file
+#PBS -j oe
+#PBS -l walltime=16:00:00,size=1
+#PBS -o send_file.$PBS_JOBID
+#PBS -q eslogin
+#PBS -l partition=es
+#PBS -r y
+
+  echo ====== SEND_FILE ======
+  echo "Starting on `date`"
+  echo "Starting on host '$HOST', hostname '$HOSTNAME'"
+  unalias *
+  set beginruntime = `date "+%s"`
+
+  set argv = (`getopt hiq $*`)
+#---------------------------------------------------
+  while ("$argv[1]" != "--")
+      switch ($argv[1])
+          case -h:
+              set help; breaksw
+          case -i:
+              set interactive; breaksw
+          case -q:
+              set quiet; breaksw
+      endsw
+      shift argv
+  end
+  shift argv
+#---------------------------------------------------
+
+  if ( ! $?file && ! $?help ) then
+    set file = ""
+    if ( "$?argv" && "$argv" != '' ) then
+      set file = $argv[1]
+    else
+      echo "ERROR: missing filename"
+      set help
+    endif
+  endif
+
+  if ( $?help ) then
+    cat << EOF
+
+    Name:  send_file
+
+Synopsis:  send a file from Gaea filesystems to GFDL's /archive filesystem.
+           This script is intended to be run from the login nodes.
+           The archive path will be constructed from the Gaea path as follows:
+              
+              /lustre/ltfs/scratch/username
+              /lustre/ltfs/stage/username
+              /ncrc/home*/username
+
+           will be translated to
+
+              /archive/\$USER
+
+           and the remaining portion of the filename will be replicated.  For example,
+
+              send_file /lustre/ltfs/scratch/user1/fms/testing/fileA
+
+           will send the file to
+
+              /archive/\$USER/fms/testing/fileA
+
+   Usage:  send_file filename
+
+              The filename can use the relative or full path.
+              This will submit a batch job to send the file to GFDL's archive filesystem.
+
+           send_file -i filename 
+
+              This will send the file interactively instead of in batch.
+
+EOF
+    exit 1
+  endif
+
+  setenv X509_USER_PROXY "$HOME/.x509_user_proxy"
+  test -f $X509_USER_PROXY || \
+   echo "WARNING: X509_USER_PROXY file $X509_USER_PROXY does not exist... \
+           certificate-based transfers may not work."
+
+  test $?GLOBUS_LOCATION -eq 0 && setenv GLOBUS_LOCATION /sw/xt6/globus/default
+  source $GLOBUS_LOCATION/etc/globus-user-env.csh 
+
+#make sure FRE is loaded
+  test $?MODULESHOME -eq 0 && setenv MODULESHOME /opt/modules/3.2.6.5
+  source $MODULESHOME/init/csh
+  if ( ! $?FRE_COMMANDS_HOME ) then
+     module rm fre
+     if ( $?freversion ) then   # can set via msub -v
+        module load fre/$freversion
+     else
+        echo "NOTE: FRE not loaded in this shell, executing 'module load fre'"
+        module load fre
+     endif
+  endif
+
+#parse paths
+  set firstchar = `echo $file | cut -c1`
+  if ( "$firstchar" != "/" ) set file = "$cwd/$file"
+
+#detect where you are on gaea, either /ncrc/... or /lustre/...
+  set fs = `echo $file |cut -f2 -d/`
+  if( $fs == "lustre" )then
+      set tmpbase = `echo $file |cut -d/ -f1-4`
+      set u = `echo $file |cut -d/ -f5`
+      set f = `echo $file |cut -d/ -f6-`
+  else
+      set tmpbase = `echo $file |cut -d/ -f1-3`
+      set u = `echo $file |cut -d/ -f4`
+      set f = `echo $file |cut -d/ -f5-`
+  endif
+  set inpath = $f:h
+  set filename = $f:t
+  if ( `echo $f | grep -c '/'` == 0 ) then
+     set inpath = ''
+  else 
+     set inpath = "$inpath/"
+  endif
+
+  set outpath = $inpath
+
+  if ( ! -f "$tmpbase/$u/$inpath$filename" ) then
+     echo "ERROR: '$tmpbase/$u/$inpath$filename' is not a file"
+     exit 1
+  endif
+
+  echo "Sending $tmpbase/$u/$inpath$filename"
+  echo "Writing to /archive/$USER/$outpath"
+
+  set computehost = `echo $HOST | grep -c ms-batch`
+  if ( $?PBS_JOBID && ! $computehost ) then
+    #if ( -f $PBS_O_WORKDIR/$PBS_JOBID.OU ) then
+    #  chmod 644 $PBS_O_WORKDIR/$PBS_JOBID.OU
+    #endif
+  else
+    if ( ! $?interactive ) then
+      msub -v file=$tmpbase/$u/$inpath$filename $0
+      exit $status
+    endif
+  endif
+
+#send file with gcp
+  set gcp = `which gcp`
+  if ( ! -f "$gcp" ) then
+     echo "ERROR: gcp not found: '$gcp'"
+     exit 1
+  endif
+
+  set verbosity = ""
+  if ( ! $?quiet ) then
+     set verbosity = " -d"
+     echo ' '
+  endif
+
+  echo "Running '$gcp -cd$verbosity $file gfdl:/archive/$USER/$outpath'"
+  $gcp -cd$verbosity $file gfdl:/archive/$USER/$outpath
+  set tmpstatus = $status
+  if ( $tmpstatus != 0 ) then
+    unset echo
+    echo "ERROR: in gcp ($tmpstatus)"
+    exit $tmpstatus
+  endif
+
+# submit remote command (frepp) if necessary
+  if ( $?remotejob ) then
+    if ( "$remotejob" != "" ) then
+      msub $remotejob
+      set tmpstatus = $status
+      if ( $tmpstatus != 0 ) then
+         msub $remotejob
+         set tmpstatus = $status
+         if ( $tmpstatus != 0 ) then
+            unset echo
+            echo "ERROR: Unable to submit remote job"
+            Mail -s "ERROR: Unable to submit remote job from Gaea" $USER <<END
+This command has failed to be submitted to the scheduler on Gaea 
+with Moab exit status $tmpstatus:
+
+msub $remotejob
+END
+         else
+            unset echo
+            echo "NOTE: submitted remote job with successful return status on second try"
+         endif
+      else
+         unset echo
+         echo "NOTE: submitted remote job with successful return status"
+      endif
+    endif
+  endif
+
+  set endruntime = `date "+%s"`
+  set ttlruntime = `echo "$endruntime - $beginruntime" | bc -l`
+  echo Finished successfully in $ttlruntime seconds.
+  exit 0
+

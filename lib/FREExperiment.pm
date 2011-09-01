@@ -1,5 +1,5 @@
 #
-# $Id: FREExperiment.pm,v 18.1.2.6 2011/01/14 00:16:43 afy Exp $
+# $Id: FREExperiment.pm,v 18.1.2.6.2.1 2011/09/01 19:29:05 fms Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: Experiment Management Module
 # ------------------------------------------------------------------------------
@@ -366,6 +366,14 @@ sub stdoutDir($)
 {
   my $r = shift;
   return $r->{stdoutDir};
+}
+
+sub stateDir($)
+# ------ arguments: $object
+# ------ called as object method
+{
+  my $r = shift;
+  return $r->{stateDir};
 }
 
 sub workDir($)

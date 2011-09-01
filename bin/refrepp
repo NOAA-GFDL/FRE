@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 # -*- cperl -*-
-# $Id: refrepp,v 18.0.8.4 2011/03/10 21:06:33 fms Exp $
+# $Id: refrepp,v 18.0.8.9 2011/08/15 17:24:58 arl Exp $
 # ------------------------------------------------------------------------------
 # refrepp: submit FRE postprocessing jobs to fill in holes
 # ------------------------------------------------------------------------------
@@ -21,7 +21,8 @@ my @optlist = ( 'xmlfile=s',
                 'begin=s',
                 'end=s',
                 'frepp=s',
-                'platform|Platform|P=s',
+                'platform|Platform|p=s',
+                'target|Target|t=s',
                 'submit',
                 'help',
 		'verbose'
@@ -41,7 +42,8 @@ my $usage = "Usage: $0 [options] exp [exp ...]
       -b|--begin <year>    (year to begin processing: should line up with chunk boundaries!), 
       -e|--end   <year>    (year to end processing), 
       -f|--frepp <file>    the frepp executable to use 
-      -P|--Platform <pl>   the platform name.
+      -p|--platform <pl>   the platform name.
+      -t|--target <tar>    the target name.
       -s|--submit          submit the script as a batch job. 
       -h|--help            print help message. 
       -v|--verbose         verbose messages. 
@@ -87,6 +89,7 @@ $fre->setCurrentExperimentName($expt);
 #get the post-processing script directory
 my $scriptd = $opt{dir} || $exp->scriptsDir()."/postProcess";
 print "scriptd=$scriptd\n" if $verbose;
+my $stated = $exp->stateDir()."/postProcess";
 
 #scripts available for refrepping...
 opendir DIR, $scriptd or 
@@ -98,9 +101,9 @@ closedir DIR;
 undef my %years;
 foreach ( @files ) {
    next if /\.o\d+$/;           # eliminate output files
-   print "file=$_ " if $verbose;
+   print "file=$_ " if $verbose and $ENV{'DEBUG'};
    if( /$expt\_(\w*)_(\d\d\d\d).*/ ) {
-      print "comp=$1 year=$2\n" if $verbose;
+      print "comp=$1 year=$2\n" if $verbose and $ENV{'DEBUG'};
       $years{$1} .= $2 . ' ' unless $years{$1} =~ /\b$2\b/; # remove last trailing space later
    }
 }
@@ -127,11 +130,9 @@ foreach my $c ( keys %years ) {
    undef my $dirs;
    undef my $chunks;
    undef my $yearstodo;
-   my $freppcheck = qx/freppcheck -x $xmlfile -P $opt{platform} -c $c -T -M -t $ybegin -y $yend $expt/;
-   if ( $verbose ) {
-      print "Printing output from freppcheck -x $xmlfile -P $opt{platform} -c $c -T -M -t $ybegin -y $yend $expt ...\n";
-      print $freppcheck;
-   }
+   print "Printing output from freppcheck -x $xmlfile -p $opt{platform} -t $opt{target} -c $c -a -b $ybegin -e $yend $expt ...\n" if $verbose;
+   my $freppcheck = qx/freppcheck -x $xmlfile -p $opt{platform} -t $opt{target} -c $c -a -b $ybegin -e $yend $expt/;
+   print $freppcheck if $verbose;
    foreach ( split "\n", $freppcheck ) {
       if ( /missing[\w\s]* in (.*)/ ) {
          $dir = $1;
@@ -142,7 +143,7 @@ foreach my $c ( keys %years ) {
             my $d = $dir;
             $d =~ s/_\d+yr/_1yr/;
             $d =~ s/\s+$//;     # the output of freppcheck sometimes has trailing whitespace
-            print "d= $d dirs= $dirs\n" if $verbose;
+            print "d= $d dirs= $dirs\n" if $verbose and $ENV{'DEBUG'};
             if ( -d $d ) {
                $dirs .= $d . ' ' unless $dirs =~ /\b$d\b/;
             }
@@ -172,7 +173,7 @@ foreach my $c ( keys %years ) {
             push @chunkstrings, $chunkstring if $chunkstring;
             $y += $chunk;
          }
-         print "dir= $dir chunk=$chunk strings=@chunkstrings\n" if $verbose;
+         print "dir= $dir chunk=$chunk strings=@chunkstrings\n" if $verbose and $ENV{'DEBUG'};
          undef my %undone;
          if ( opendir DIR, $dir ) {
             my @files = readdir DIR;
@@ -182,7 +183,7 @@ foreach my $c ( keys %years ) {
                next unless /\.nc$/; # only check .nc files
                foreach $chunkstring ( @chunkstrings ) {
                   $done{$chunkstring} = 1 if /$c\.$chunkstring\.[^\.]*\.nc/;
-                  print "file=$_ chunkstring=$chunkstring done=$done{$chunkstring}\n" if $verbose;
+                  print "file=$_ chunkstring=$chunkstring done=$done{$chunkstring}\n" if $verbose and $ENV{'DEBUG'};
                }
             }
             foreach ( @chunkstrings ) {
@@ -241,16 +242,29 @@ foreach my $c ( keys %years ) {
             chomp( $hdir = qx/ls -1dt $hdir\/*\/history | grep -v '_crash' | tail -1/ );
          }
          print "Using history directory $hdir\n" if $verbose;
-         $cmd = "$frepp -t $y -c $c -P $opt{platform} -d $hdir -x $xmlfile $expt";
+         if ( -e "$stated/$c.$y" ) {
+            print "Removing state file: $stated/$c.$y\n";
+            unlink "$stated/$c.$y" or warn "Could not unlink $stated/$c.$y: $!";
+         }
+         print "Running: '$frepp -t $y -c $c -P $opt{platform} -T $opt{target} -d $hdir -x $xmlfile $expt'\n" if $verbose;
+         $cmd = "$frepp -t $y -c $c -P $opt{platform} -T $opt{target} -d $hdir -x $xmlfile $expt 2>&1";
          $cmdout = qx/$cmd/;
 #get the jobscript name
          $cmdout =~ /\nTO SUBMIT: msub -d \$HOME (\S+)/m;
          $script = $1;
-         print "cmd=$cmd\n$cmdout\nscript=$script\n" if $verbose;
+         if ( $cmdout =~ /ERROR:/ ) {
+            print "cmd=$cmd\n$cmdout\n";
+            die "ERROR: refrepp caught an error from frepp, exiting.\n";
+         } elsif ( ! -f $script ) {
+            print "cmd=$cmd\n$cmdout\nscript=$script\n";
+            die "ERROR: frepp script not found: '$script' Exiting.\n";
+         } else {
+            print "cmd=$cmd\n$cmdout\nscript=$script\n" if $verbose;
+         }
 #work out its dependencies
          undef $hold;
          foreach ( @chunks ) {
-            print "chunk=$_ hold=$hold ychunk=$ychunk{$y}\n" if $verbose;
+            print "chunk=$_ hold=$hold ychunk=$ychunk{$y}\n" if $verbose and $ENV{'DEBUG'};
             last if $_ == $ychunk{$y}; # no dependencies on current chunklength
             $hold .= $jobs{$_};        # next chunk depends on jobs for this chunklength
             undef $jobs{$_};           # these dependencies have been subsumed into next chunklength, so eliminate them

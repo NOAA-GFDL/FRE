@@ -1,0 +1,156 @@
+#!/usr/bin/perl
+# $Id: hsmput,v 18.0.10.8 2011/07/12 23:23:21 vb Exp $
+# script for calling hsmput.mk
+require 5;
+use strict;
+use Carp;                       # error messages in modules
+use Cwd;
+use Getopt::Long;
+use File::Spec;
+use File::Basename;
+#option processing
+my %opt;
+my @optlist = ( 'archroot=s',
+                'ptmproot=s',
+                'workroot=s',
+                'delete',
+                'zip',
+                'remotepath=s',
+                'localcp=s',
+                'gcp=s',
+                'store=s',
+                'checksum',
+                'time',
+                'force',
+                'nocopy',
+                'makefile=s',
+                'quiet',
+		'verbose',
+                'help'
+	      );
+my $usage = "Usage: $0 [options] path [path...] 
+  Options: 
+      -a|--archroot <dir> anchor point on remote storage 
+      -p|--ptmproot <dir> anchor point on long-term scratch 
+      -w|--workroot <dir> anchor point on local fast scratch 
+      -r|--remotepath     remote directory for offsite archival 
+      -s|--store          archive type (cpio, tar or directory) 
+      -c|--checksum       run checksums on transfers 
+      -d|--delete         delete source if *remote* transfer is successful
+      -z|--zip            create compressed archive (only tar at present) 
+      -t|--time           turn on timers 
+      -f|--force          force transfer even if local file up-to-date 
+      -n|--nocopy         dry run, no actual data transfer
+      -m|--makefile       makefile that this invokes 
+      -q|--quiet          minimal output. 
+      -v|--verbose        verbose output. 
+      -h|--help           print help message. 
+  Arguments must be files or directories. 
+  Container directory may be a tar/cpio archive on remote storage.\n";
+croak "\n$usage" unless GetOptions( \%opt, @optlist );
+# The following options exist but aren't listed on the help line:
+#       -l|--localcp        fast network copy command 
+#       -g|--gcp            path to gcp (temporary for NCRC only) 
+
+#help: print usage and exit
+if ( $opt{help}) {
+   print "$0 puts files to archive storage.\n\n";
+   print "$usage\n";
+   exit 0;
+}
+
+my $verbose = $opt{verbose};
+
+# if delete is on checksums must be on
+$opt{checksum} = $opt{checksum} || $opt{delete};
+
+my $homeDir = sub($)
+{
+  my $p = shift;
+  my $binDir = dirname((File::Spec->file_name_is_absolute($p)) ? $p : File::Spec->rel2abs($p));
+  return ($binDir =~ m/(.*)\/bin$/) ? $1 : ($binDir . '/..');
+};
+
+my $makefile = $opt{makefile} || $homeDir->($0) . '/site/hsmput.mk';
+croak "Non-existent makefile $makefile\n" unless -f $makefile;
+print "Using Makefile $makefile ...\n" if $verbose;
+
+my $archroot = $opt{archroot} || $ENV{ARCHROOT};
+my $ptmproot = $opt{ptmproot} || $ENV{PTMPROOT};
+my $workroot = $opt{workroot} || $ENV{WORKROOT};
+print "Using archroot=$archroot ptmproot=$ptmproot workroot=$workroot\n" if $verbose;
+my $cmd = "make ARCHROOT=$archroot PTMPROOT=$ptmproot WORKROOT=$workroot";
+$cmd .= " GCP=\"$opt{gcp}\"" if $opt{gcp};
+$cmd .= " LOCALCP=\"$opt{localcp}\"" if $opt{localcp};
+$cmd .= ' verbose=-v' if $verbose;
+$cmd .= ' check=ON' if $opt{checksum};
+$cmd .= ' time=ON' if $opt{time};
+$cmd .= ' force=ON' if $opt{force};
+$cmd .= ' delete=ON' if $opt{delete};
+$cmd .= ' zip=ON' if $opt{zip};
+$cmd .= " remotepath=$opt{remotepath}" if $opt{remotepath};
+$cmd .= ' -n' if $opt{nocopy};
+$cmd .= ' -B' if $opt{force};
+$cmd .= ' -s' if $opt{quiet};
+$cmd .= " -r -f $makefile";
+
+undef my $result;
+undef my $target;
+undef my $source;
+undef my $result;
+undef my $okfile;
+foreach ( @ARGV ) {
+   croak "$0 source $_ cannot be an absolute pathname!\n\n$usage" 
+     if File::Spec->file_name_is_absolute($_);
+   $source = "$workroot/" . $_;
+# pass to archive
+   $target = "$archroot/" . File::Spec->abs2rel($source,$workroot);
+   if ( $opt{store} ) {
+      if ( -d $source ) {
+#we pass any extension through, but hsmput.mk only understands cpio
+#and tar; dir is a special keyword which means copy directory without
+#tarring
+         $target .= '.' . $opt{store} unless $opt{store} eq 'dir';
+      } else {
+         print "No $opt{store} processing for simple file $source ...\n";
+      }
+      print "+ $cmd $target.ok\n" if $verbose;
+      $result = qx/$cmd $target.ok/;
+      croak "Unable to make $target.ok\n$result\n" if $?;
+      print $result unless $result =~ / is up to date./;
+      chdir $target or chdir dirname($target);
+      if ( $opt{checksum} ) {
+         $result = qx/md5sum -c $target.ok/;
+         if ( $? ) {            # checksum failed
+            carp "WARNING: transfer unsuccessful, deleting files:";
+            deleteFiles("$target.ok");
+            exit 2;
+         } else {               # checksum passed
+            if ( $opt{delete} ) {
+               chdir $source or chdir dirname($source);
+               deleteFiles("$target.ok");
+            }
+         }
+      }
+   }
+   exit 0 if $opt{delete};
+# pass to ptmp
+   $target = "$ptmproot/" . File::Spec->abs2rel($source,$workroot);
+   print "+ $cmd $target.ok\n" if $verbose;
+   $result = qx/$cmd $target.ok/;
+   croak "Unable to make $target.ok\n$result\n" if $?;
+   print $result unless $result =~ / is up to date./;
+   chdir $target or chdir dirname($target);
+   print qx/md5sum -c $target.ok/ if $opt{checksum};
+}
+
+sub deleteFiles ($) {
+   my $checksumFile = shift;
+   open FILE, "<$checksumFile" or 
+     croak "Unable to open $checksumFile for reading ...!\n";
+   print 'In ' . getcwd() . "\n";
+   while ( <FILE> ) {
+      s/.*\*//;
+      print "file=$_";
+   }
+}

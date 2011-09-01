@@ -274,14 +274,15 @@ sub analysis {
      $figureDir =~ s/"//g;
      $figureDir =~ s/\/$//g;
      print "ANALYSIS: Figures will be written to $figureDir\n" if $opt_v;
-     unless (-d "$figureDir") { 
-        print "ANALYSIS: Creating output dir $figureDir\n";# if $opt_v;
-        if ( substr($figureDir,0,8) eq '/archive' ) {
-            acarch("mkdir -p $figureDir ");
-        } else {
-            system "mkdir -p $figureDir ";
-        }
-     }
+     #might be in /net, so can't mkdir directly, analysis scripts must create this.
+     #unless (-d "$figureDir") { 
+     #   print "ANALYSIS: Creating output dir $figureDir\n";# if $opt_v;
+     #   if ( substr($figureDir,0,8) eq '/archive' ) {
+     #       acarch("mkdir -p $figureDir ");
+     #   } else {
+     #       system "mkdir -p $figureDir ";
+     #   }
+     #}
 
      ### $aoutscriptdir_final: $aoutscriptdir appended with expts 
      my $aoutscriptdir_final;
@@ -498,7 +499,7 @@ sub availablechunks {
 
    #my @existingall = <$asrcdir/$component.*.nc>; #unacceptable performance on the pp/an nodes
    opendir(my $dh, "$asrcdir");
-   my @existingall = map { $_ =~ s/(.*)/$asrcdir\/$1/ ; $_; } grep { /$component.*.nc$/ } readdir($dh);
+   my @existingall = map { $_ =~ s/(.*)/$asrcdir\/$1/ ; $_; } sort( grep { /$component.*.nc$/ } readdir($dh) );
    closedir($dh); 
 
    #print "existingall has this many members: $#existingall\n";
@@ -507,7 +508,7 @@ sub availablechunks {
    if (@existingall < 1) {
       #my @cpios = <$asrcdir/$component.*.nc.cpio>;
       opendir(my $dh, "$asrcdir");
-      my @cpios = map { $_ =~ s/(.*)/$asrcdir\/$1/ ; $_; } grep { /$component.*.nc.cpio/ } readdir($dh);
+      my @cpios = map { $_ =~ s/(.*)/$asrcdir\/$1/ ; $_; } sort( grep { /$component.*.nc.cpio/ } readdir($dh) );
       closedir($dh); 
       if (@cpios < 1) {
          print STDERR "ANALYSIS: No .nc or .nc.cpio files found in: $asrcdir\n";
@@ -595,6 +596,7 @@ sub filltemplate {
     my $printout = "$aScriptout.printout";  #change this to send the stdout to stdoutdir... but will break analysis scripts. -arl
     my $tmpsch = `cat $aScript`;
     my $fremodule = `echo \$LOADEDMODULES | tr ':' '\n' | egrep '^fre/.+'`;
+    my $freanalysismodule = `echo \$LOADEDMODULES | tr ':' '\n' | egrep '^fre-analysis/.+'`;
     #
     $tmpsch =~ s/#\$ -o.*/#\$ -o $printout/;
     $tmpsch =~ s/#PBS -o.*/#PBS -o $printout/;
@@ -627,6 +629,7 @@ sub filltemplate {
     $tmpsch =~ s/set nlat\s*$/set nlat = $arrayofExptsH_ref->[0]->{nlat}/m;
     $tmpsch =~ s/set frexml\s*$/set frexml = $frexml/m;
     $tmpsch =~ s/set fremodule\s*$/set fremodule = $fremodule/m;
+    $tmpsch =~ s/set freanalysismodule\s*$/set freanalysismodule = $freanalysismodule/m;
     $tmpsch =~ s/set stdoutdir\s*$/set stdoutdir = $stdoutdir/m;
     $tmpsch =~ s/setenv FREROOT.*/setenv FREROOT $ENV{FREROOT}/m;
     

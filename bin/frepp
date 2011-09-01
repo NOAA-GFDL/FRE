@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 # -*- cperl -*-
-# $Id: frepp,v 18.0.2.52.2.1.2.7 2011/02/22 16:48:31 fms Exp $
+# $Id: frepp,v 18.0.2.52.2.1.2.75 2011/09/01 21:52:14 arl Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: History/diagnostics post-processing
 # ------------------------------------------------------------------------------
@@ -23,17 +23,18 @@ use FREUtil;
 
 
 use vars qw( $expt %nml $err $username %dtvars $root);
-use vars qw( $mkdircommand $hDate $t0 $tEND $ppRootDir $component $cpiomonTS $aggregateTS $historyfiles);
+use vars qw( $mkdircommand $hDate $t0 $tEND $sim0 $ppRootDir $component $cpiomonTS $aggregateTS $historyfiles);
 use vars qw( $do_static $segTime $segUnits $caltype);
 use vars qw( $analysisdir $absfrepp $relfrepp $perlerrors );
-use vars qw( $archivedir $rootdir $workdir $rtsVersion $platform $versionId $batchSubmit );
+use vars qw( $archivedir $rootdir $workdir $tempCache $rtsVersion $platform $versionId $batchSubmit );
 use vars qw( $maxyrs $maxdisk $cubic $nlat $nlon $interpMethod $getgridspec $basenpes $call_fregrid );
+use vars qw( $checktransfer $statefile $state $writestate $didsomething );
 
 {
 
   package frepp;
 
-  use constant VERSION => '$Id: frepp,v 18.0.2.52.2.1.2.7 2011/02/22 16:48:31 fms Exp $';
+  use constant VERSION => '$Id: frepp,v 18.0.2.52.2.1.2.75 2011/09/01 21:52:14 arl Exp $';
 
 #Usage:    $relfrepp [ -AB:C:O:RY:Z:c:d:f:hlmMp:oqr:S:st:u:vx:z ] experiment [ experiment2 ... ]                 
   use constant OPTLIST =>
@@ -53,6 +54,7 @@ use vars qw( $maxyrs $maxdisk $cubic $nlat $nlon $interpMethod $getgridspec $bas
 
       'MailOnComplete|M',
       'quiet|q',
+      'debug|Q',
       'verbose|v',
       'VeryVerbose|V',
       'help|h',
@@ -60,10 +62,12 @@ use vars qw( $maxyrs $maxdisk $cubic $nlat $nlon $interpMethod $getgridspec $bas
       'submit|s',
       'xmlfile|x=s',
       'platform|Platform|P=s',
+      'target|Target|T=s',
 
       'refineDiag|D=s',
       'refineDiagOnly|H',
       'wait|w=s',
+      'Walltime|W=s',
       
       'unique|u=s',
       'month|m',
@@ -71,7 +75,7 @@ use vars qw( $maxyrs $maxdisk $cubic $nlat $nlon $interpMethod $getgridspec $bas
       'Basedate|B=s',
       'Segment|S=s',
       'oldStyleTimestamps|e',
-      'overwrite|o',
+      'override|o',
       'statistics|z'
   );
 
@@ -88,15 +92,16 @@ use vars qw( $maxyrs $maxdisk $cubic $nlat $nlon $interpMethod $getgridspec $bas
 
    Getopt::Long::GetOptions(\%opt, frepp::OPTLIST) or (print 'bad opts' and die "\n");
    if ($opt{Version}) {print frepp::VERSION,"\n" and exit(0);}
-   use vars qw( $opt_d $opt_D $opt_f $opt_l $opt_o $opt_p $opt_M $opt_m $opt_q $opt_t $opt_r $opt_x $opt_s $opt_v $opt_V  $opt_A $opt_B $opt_C $opt_O $opt_R $opt_S $opt_Y $opt_Z $opt_c $opt_H $opt_h $opt_o $opt_u $opt_z $opt_w $opt_P );
+   use vars qw( $opt_d $opt_D $opt_f $opt_l $opt_p $opt_M $opt_m $opt_q $opt_Q $opt_t $opt_r $opt_x $opt_s $opt_v $opt_V  $opt_A $opt_B $opt_C $opt_O $opt_R $opt_S $opt_Y $opt_Z $opt_c $opt_H $opt_h $opt_o $opt_u $opt_z $opt_w $opt_P $opt_T );
 $opt_d=$opt{dir};
 $opt_f=$opt{filelist};
 $opt_l=$opt{limitstatic};
-$opt_o=$opt{overwrite};
+$opt_o=$opt{override};
 $opt_p=$opt{plus};
 $opt_M=$opt{MailOnComplete};
 $opt_m=$opt{month};
 $opt_q=$opt{quiet};
+$opt_Q=$opt{debug};
 $opt_t=$opt{time};
 $opt_r=$opt{runparams};
 $opt_x=$opt{xmlfile};
@@ -114,12 +119,12 @@ $opt_Z=$opt{AnalysisEndYear};
 $opt_c=$opt{component};
 $opt_H=$opt{refineDiagOnly};
 $opt_h=$opt{help};
-$opt_o=$opt{overwrite};
 $opt_u=$opt{unique};
 $opt_z=$opt{statistics};
 $opt_D=$opt{refineDiag};
 $opt_w=$opt{wait};
 $opt_P=$opt{platform};
+$opt_T=$opt{target};
 
 ################### PROCESS ARGS, SET DEFAULTS #########################
 if ( -l $0 ) {
@@ -139,7 +144,7 @@ Synopsis: $relfrepp is the FRE postprocessing utility.
 Usage:    $relfrepp [ -AB:C:O:RY:Z:c:d:f:hlmMp:oqr:S:st:u:vx:z ] experiment [ experiment2 ... ]                 
                                                                                       
           OPTIONS FOR COMBINING MULTIPROCESSOR HISTORY FILES
-          -f filelist  = list of files in \$archive/\$name/history to nc_combine
+          -f filelist  = list of files in \$archiveDir/history to nc_combine
 
           OPTIONS FOR REFINING HISTORY FILES BEFORE POSTPROCESSING
           -D script    = comma separated list of scripts to run on history data
@@ -153,8 +158,10 @@ Usage:    $relfrepp [ -AB:C:O:RY:Z:c:d:f:hlmMp:oqr:S:st:u:vx:z ] experiment [ ex
           -l           = limit static variable processing to the diag source file in the xml
           -m           = use month as base unit instead of year, for short runs, BETA
                          You can use "-t 19820301" to start from March 1982
-          -d dir       = path to history data [default \$archive/\$name/history]
-          -w jobname   = place hold on current job so that it waits for jobname to complete
+          -d dir       = path to history data 
+          -w jobid     = place hold on current job so that it waits for jobid to complete
+                         (PP/AN cannot set holds based on job names, it is not supported by moab)
+          -o           = override job dependencies
 
           OPTIONS FOR ANALYSIS FIGURES
           -A           = run analysis only
@@ -169,7 +176,9 @@ Usage:    $relfrepp [ -AB:C:O:RY:Z:c:d:f:hlmMp:oqr:S:st:u:vx:z ] experiment [ ex
 
           OPTIONS FOR TIMING/DEBUGGING/STATISTICS
           -M           = send mail to user when job is complete
-          -q           = don't print the error checks into the script.  For evaluating csh.
+          -W           = change the max wallclock time for the job, ie, -W 00:20:00
+          -Q           = don't print the error checks into the script.  For evaluating csh.
+          -q           = don't print the analysis figure checks to stdout.
           -v           = verbose flag                                                   
           -V           = very verbose flag                                                   
 
@@ -177,6 +186,8 @@ Usage:    $relfrepp [ -AB:C:O:RY:Z:c:d:f:hlmMp:oqr:S:st:u:vx:z ] experiment [ ex
           -h           = show this help message, then exit
           -r runparams = regression test run.  Combine netcdf files, but no further processing
           -s           = automatically submit the script to the batch scheduler
+          -P platform  = platform (default on PP/AN: gfdl.default)
+          -T target    = target (default on PP/AN: prod)
           -x xmlfile   = specify xml file (default: ./rts.xml)
           experiment   = experiment to create scripts for; must be found in xml file    
 
@@ -216,7 +227,12 @@ if ( $opt_M and not $opt_p ) { $opt_M = "#\$ -m e";} else { $opt_M = ""; }
 
 if ( $opt_O ) { print STDERR "NOTE: There has been a change to the behavior of the -O option. Your scripts will be written directly to '$opt_O' and not to '$opt_O/scripts/postProcess'\n"; }
 
-$versionId = ' $Id: frepp,v 18.0.2.52.2.1.2.7 2011/02/22 16:48:31 fms Exp $';
+unless ( $opt_c ) {
+   print STDERR "NOTE: adding '-c split'; frepp will do each component in a separate batch job\n";
+   $opt_c = 'split';
+}
+
+$versionId = ' $Id: frepp,v 18.0.2.52.2.1.2.75 2011/09/01 21:52:14 arl Exp $';
 
 $perlerrors = "";
 $component = "";
@@ -227,6 +243,7 @@ $historyfiles="";
 %dtvars = (); 
 $basenpes = 1;
 $aggregateTS = 1;
+$didsomething = 0;
 
 #initialize hsmfiles string
 my $hsmfiles="";
@@ -246,7 +263,7 @@ if ( ! -f "/home/$username/.rhosts" ) {
 
 #variables for timing statistics
 $opt_z = 1;
-if ($opt_q) { $opt_z = 0; }
+if ($opt_Q) { $opt_z = 0; }
 my $time_ncatted = "";
 my $time_ncks = "";
 my $time_ncmerge = "";
@@ -303,7 +320,8 @@ my $uncpio = 'cpio';
 my $timecmd = '/usr/bin/time';
 my $timereal = 'e';
 my $systimecmd = 'date +\%s';
-my $maxruntime = '30:00:00';  #needs work
+my $maxruntime = '60:00:00';  #needs work
+if ( "$opt{Walltime}" ne '' ) { $maxruntime = "$opt{Walltime}"; }
 
 #-------------- SET UP PARSER FOR XML DOCUMENT -------------------------
 #set up FRE4
@@ -349,12 +367,22 @@ foreach $expt ( @ARGV ) {
    my $scriptsdir = $exp->scriptsDir();
    my $stdoutdir = $exp->stdoutDir();
    my $ptmpDir = $exp->ptmpDir();
+   my $tempCache = (split /\//,$workdir)[0] . "/tempCache";
+   my $statedir = $exp->stateDir()."/postProcess";
    my $outscriptdir = "$scriptsdir/postProcess";
    if ( $opt_O ) {$outscriptdir = "$opt_O";}
    unless ( -d "$outscriptdir" or $opt_A ) { system "mkdir -p $outscriptdir"; }
    unless ( -d "$stdoutdir/postProcess" or $opt_A ) { system "mkdir -p $stdoutdir/postProcess"; }
+   if ( $opt_u ) { $statedir .= "/$opt_u"; }
+   unless ( -d "$statedir" or $opt_A ) { system "mkdir -p $statedir"; }
    my $aoutscriptdir = "$scriptsdir/analysis";
    if ( $opt_O ) {$aoutscriptdir = "$opt_O";} 
+   my $shortxml = $abs_xml_path;
+   $shortxml =~ s/.+\/(.+\.xml)(\.$expt\.o.+)?/$1/;
+   #if ( -e "$archivedir/$shortxml" ) { 
+   #   print "Running ln -s $abs_xml_path $archivedir/$shortxml\n" if $opt_v;
+   #   system("ln -s $abs_xml_path $archivedir/$shortxml"); 
+   #}
 
    my $tmphistdir = "";
    if ( "$workdir" eq "" ) { 
@@ -377,8 +405,10 @@ foreach $expt ( @ARGV ) {
       $opt_d = "$archivedir/history";
    }
    my $histDir = $opt_d;
-   if ( ! -d "$histDir" ) { print STDERR "\nERROR: Your history dir does not exist! ($histDir)\n"; }
-   print "\nDIRECTORIES: FRE4\nworkdir $workdir\nrootdir $rootdir\narchivedir $archivedir\nanalysisdir $analysisdir\noutscriptdir $outscriptdir\naoutscriptdir $aoutscriptdir\nhistDir $histDir\nptmpDir $ptmpDir\n\n" if $opt_v;
+   #if ( ! -d "$histDir" ) { print STDERR "\nERROR: Your history dir does not exist! ($histDir)\n"; }
+   print STDERR "\nNOTE: Creating history dir ($histDir)\n" if $opt_v;
+   if ( ! -d "$histDir" ) { system "mkdir -p $histDir"; }
+   print "\nDIRECTORIES: FRE4\nworkdir $workdir\nrootdir $rootdir\narchivedir $archivedir\nanalysisdir $analysisdir\noutscriptdir $outscriptdir\naoutscriptdir $aoutscriptdir\nhistDir $histDir\nptmpDir $ptmpDir\nstatedir $statedir\n\n" if $opt_v;
 
    my $refinedir = "$opt_d"."_refineDiag";
    $ptmpDir .= $archivedir;
@@ -437,10 +467,10 @@ alias ncks "ncks --64bit --hdr_pad 15000"
 alias ncrcat "ncrcat --64bit -t 2"
 EOF
    } elsif ( "$platform" eq 'x86_64' ) {
-      $cp = 'gmpscp';
+      $cp = 'gmpscp -d';
       $cpio = 'cpio -C 524288';
       $uncpio = 'cpio -C 2097152';
-      $mvfile = 'gmpscp';
+      $mvfile = 'gmpscp -d';
       $platformcsh = $exp->fre()->platformValue('csh');
       $platformcsh .= <<'EOF';
 
@@ -493,6 +523,7 @@ EOF
    my $version_info = "$version_head";
    if ( $opt_f ) { $version_info .= "-f '$opt_f' "; }
    if ( $opt_P ) { $version_info .= "-P $opt_P "; }
+   if ( $opt_T ) { $version_info .= "-T $opt_T "; }
    if ( $opt_D ) { $version_info .= "-D $opt_D "; }
    if ( $opt_t ) { $version_info .= "-t $opt_t "; }
    if ( $opt_p ) { $version_info .= "-p $opt_p "; }
@@ -518,38 +549,39 @@ EOF
    }
 
    my $cshscripttmpl = getTemplate($platform);
-   #csh_from_xml...
-   if ( "$platformcsh" ne "" ) { $platformcsh = "#platform_csh_from_xml\n$platformcsh"; }
-   #if ( "$platform" ne "ia64" ) {$cshscripttmpl =~ s/#platform_csh_from_xml/$platformcsh/; }
-   $cshscripttmpl =~ s/#platform_csh_from_xml/$platformcsh/;
 
    #environment setup for FRE
    my $freCommandsHomeDir = FRE::home();
    my $siteconfig = <<EOF;
-  setenv FRE_COMMANDS_HOME $freCommandsHomeDir
-  setenv PATH \$FRE_COMMANDS_HOME/bin:\$PATH
-  setenv FREROOT \$FRE_COMMANDS_HOME
-
-  if ( ! \$?FRE_TRANSFER_HOME ) then
-    setenv FRE_TRANSFER_HOME $freCommandsHomeDir
-    setenv PATH \$FRE_TRANSFER_HOME/bin:\$PATH
-  endif
-
-  if ( ! \$?FRE_NCTOOLS_HOME ) then
-    setenv FRE_NCTOOLS_HOME $freCommandsHomeDir
-    setenv PATH \$FRE_NCTOOLS_HOME/bin:\$PATH
-  endif
-
-  if ( ! \$?FRE_ANALYSIS_HOME ) then
-    setenv FRE_ANALYSIS_HOME $freCommandsHomeDir
-    setenv PATH \$FRE_ANALYSIS_HOME/bin:\$PATH
-  endif
-
-  alias hsmget 'hsmget -m \$FRE_TRANSFER_HOME/site/hpcs/hsmget.mk -t -q'
-  alias hsmput 'hsmput -m \$FRE_TRANSFER_HOME/site/hpcs/hsmput.mk -t -q'
+  setenv FRE_COMMANDS_HOME_FREPP $freCommandsHomeDir
 EOF
-
    $cshscripttmpl =~ s/#get_site_config/$siteconfig/;
+
+   #platform_csh_from_xml and check for FRE version mismatch
+   if ( "$platformcsh" ne "" ) { 
+      $platformcsh = <<EOF;
+#platform_csh_from_xml
+$platformcsh
+if ( "\$FRE_COMMANDS_HOME" != "\$FRE_COMMANDS_HOME_FREPP" ) then
+  echo "ERROR: FRE version mismatch:" 
+  echo "       Frepp version: \$FRE_COMMANDS_HOME_FREPP"
+  echo "       XML loads version: \$FRE_COMMANDS_HOME"
+  exit 1
+endif
+EOF
+      my $fremodule = `echo $ENV{LOADEDMODULES} | tr ':' '\n' | egrep '^fre/.+'`;
+      chomp $fremodule;
+      my $xmlfremodule = $platformcsh;
+      $xmlfremodule =~ s/.*module load (fre\/\S+)\s*.*/$1/s;
+      if ( "$fremodule" ne "$xmlfremodule" ) {
+         print STDERR "ERROR: FRE version mismatch. Must use the same version of FRE in the shell and XML.\n";
+         print STDERR "       frepp version: $fremodule\n";
+         print STDERR "         xml version: $xmlfremodule\n";
+         exit 1;
+      }
+   }
+   $cshscripttmpl =~ s/#platform_csh_from_xml/$platformcsh/;
+
    #if you didn't specify -f, you didn't want to combine any files
    if ( ! $opt_f ) { $cshscripttmpl =~ s/#combine history files.*//s; }
 
@@ -560,13 +592,14 @@ EOF
       $cshscripttmpl =~ s/#PBS -N/#PBS -N $pbs_job_name/; 
       $cshscripttmpl =~ s/#PBS -l walltime/#PBS -l walltime=$maxruntime/;
       $cshscripttmpl =~ s/#PBS -o/#PBS -o $stdoutdir\/postProcess\//;
-      $cshscripttmpl =~ s/setenv SGE_STDOUT_PATH/setenv SGE_STDOUT_PATH $stdoutdir\/postProcess\/$pbs_job_name.\$JOB_ID/;
+      $cshscripttmpl =~ s/setenv SGE_STDOUT_PATH/setenv SGE_STDOUT_PATH $stdoutdir\/postProcess\/$pbs_job_name.o\$JOB_ID/;
    }
    $cshscripttmpl =~ s/(-soft -l fre_info=)/$1ppVersion\@$relfrepp -hard/;
    $cshscripttmpl =~ s/version_info/$versionId\n$version_info/;
    $cshscripttmpl =~ s/set name/set name = $expt/;
    $cshscripttmpl =~ s/set rtsxml/set rtsxml = $abs_xml_path/;
    $cshscripttmpl =~ s/set work/set work = $workdir/;
+   $cshscripttmpl =~ s/set tempCache/set tempCache = $tempCache/;
    $cshscripttmpl =~ s/set root/set root = $rootdir/;
    $cshscripttmpl =~ s/set archive/set archive = $archivedir/;
    $cshscripttmpl =~ s/set scriptName/set scriptName = $outscript/;
@@ -576,7 +609,8 @@ EOF
 
    if ( $opt_r ) {  #if a regression test, no further postprocessing
       $cshscripttmpl =~ s/(-soft -l fre_info=)/$1ppYears\@$maxyrs+/;
-      FREUtil::writescript($cshscripttmpl,$outscript,"$batchSubmit$opt_w");
+      writescript($cshscripttmpl,$outscript,"$batchSubmit$opt_w",$statefile);
+      $opt_w = '';
       next;
    }
    my $ppNode = FREUtil::getppNode($expt);
@@ -587,7 +621,8 @@ EOF
       $cshscripttmpl =~ s/#PBS -l walltime.*/#PBS -l walltime=01:00:00/;
    }
       $cshscripttmpl =~ s/(-soft -l fre_info=)/$1ppYears\@$maxyrs+/;
-      FREUtil::writescript($cshscripttmpl,$outscript,"$batchSubmit$opt_w");
+      writescript($cshscripttmpl,$outscript,"$batchSubmit$opt_w",$statefile);
+      $opt_w = '';
       next; 
    }
    if ( "$opt_M" ne "" ) {
@@ -642,17 +677,20 @@ EOF
       unless ( $opt_H ) {
          $cshscripttmpl .= "\n/usr/bin/perl $absfrepp -x $abs_xml_path -t $opt_t -s -v ";
          if ( $opt_P ) { $cshscripttmpl .= "-P $opt_P "; }
+         if ( $opt_T ) { $cshscripttmpl .= "-T $opt_T "; }
          if ( $opt_d ) { $cshscripttmpl .= "-d $opt_d "; }
          if ( $opt_u ) { $cshscripttmpl .= "-u $opt_u "; }
          if ( $opt_c ) { $cshscripttmpl .= "-c $opt_c "; }
          if ( $opt_m ) { $cshscripttmpl .= "-m "; }
          if ( $opt_M ) { $cshscripttmpl .= "-M "; }
+         if ( $opt_o ) { $cshscripttmpl .= "-o "; }
          #add hold for prerequisite job
-         if ( $opt_p ) {
-            my $prev = FREUtil::modifydate($opt_t,"- 1 years");
-            $prev = FREUtil::graindate($prev,"day");
-            $cshscripttmpl .= "-w $expt"."_$prev "; 
-         }
+         #this only works for SGE, not moab, so commenting this now
+         #if ( $opt_p ) {
+         #   my $prev = FREUtil::modifydate($opt_t,"- 1 years");
+         #   $prev = FREUtil::graindate($prev,"day");
+         #   $cshscripttmpl .= "-w $expt"."_$prev "; 
+         #}
          $cshscripttmpl .= "$expt\n";
          $cshscripttmpl .= errorstr("$relfrepp had a problem creating next script $expt"."_$opt_t");
       }
@@ -664,16 +702,50 @@ EOF
 
       $cshscripttmpl .= mailerrors($outscript);
    if ( "$platform" eq 'ia64' ) {
-      $cshscripttmpl =~ s/#\$ -l h_cpu.*/#\$ -l h_cpu=30:00:00/;
+      $cshscripttmpl =~ s/#\$ -l h_cpu.*/#\$ -l h_cpu=$maxruntime/;
    } else {
-      $cshscripttmpl =~ s/#PBS -l walltime.*/#PBS -l walltime=30:00:00/;
+      $cshscripttmpl =~ s/#PBS -l walltime.*/#PBS -l walltime=$maxruntime/;
    }
       $cshscripttmpl =~ s/(-soft -l fre_info=)/$1ppYears\@$maxyrs+/;
-      FREUtil::writescript($cshscripttmpl,$outscript,"$batchSubmit$opt_w");
+      writescript($cshscripttmpl,$outscript,"$batchSubmit$opt_w",$statefile);
+      $opt_w = '';
       next; 
    } else {
       $cshscripttmpl =~ s/set histDir = .*/set histDir = $tmphistdir/;
    }
+
+   $writestate = '';
+   unless ( $opt_A ) {
+      $cshscripttmpl =~ s/#write_to_statefile/echo \$JOB_ID > \$statefile/;
+      $writestate = <<EOF;
+  if ( "\$prevjobstate" == "ERROR" ) then
+     echo FATAL > \$statefile
+  else
+     echo ERROR > \$statefile
+  endif
+EOF
+   }
+
+   $checktransfer = <<EOF;
+if ( \$status ) then
+         echo ERROR: data transfer attempt failed twice, exiting.
+         Mail -s "\$name year \$historyyear cannot be postprocessed" \$USER <<END
+Your FRE post-processing job ( \$JOB_ID ) has exited because of a data transfer failure.
+
+This job can be resubmitted via:
+
+$this_frepp_cmd
+
+Job details:
+\$name running on \$HOST
+Batch job stdout:
+\$SGE_STDOUT_PATH
+END
+         $writestate
+         sleep 30
+         exit 7
+      endif
+EOF
 
    #assemble a command to create archive directories
    if ($opt_v) { print "Creating archive directories...\n"; }
@@ -681,20 +753,14 @@ EOF
    if ( $opt_u ) { $ppRootDir .= "_$opt_u"; }
    if ( $opt_A and ! -d "$ppRootDir")  { print "ERROR: directory $ppRootDir not found. Exiting.\n"; exit 1; } 
    $mkdircommand = "";
-      unless ( $opt_A ) {
-         if ( ! -d "$archivedir/ascii") {
-            $mkdircommand .= "mkdir -p $archivedir/ascii ";
-         } else {
-            $mkdircommand .= "mkdir -p ";
-         }
-         $mkdircommand .= "$ppRootDir/.dec $ppRootDir/.checkpoint ";
-      }
-
-      $cshscripttmpl .= <<EOF;
-   touch $ppRootDir/.frepp_history
-   echo '#$versionId' >> $ppRootDir/.frepp_history
-   cat >> $ppRootDir/.frepp_history <<END
-$version_info
+   $mkdircommand .= "mkdir -p $ppRootDir/.dec $ppRootDir/.checkpoint " unless $opt_A;
+   my $nocommentver = $version_info;
+   $nocommentver =~ s/#//g;
+   $cshscripttmpl .= <<EOF;
+   touch $statedir/frepp.log
+   echo '#$versionId' >> $statedir/frepp.log
+   cat >> $statedir/frepp.log <<END
+$nocommentver
 
 END
 
@@ -714,8 +780,7 @@ EOF
 
       my $gridspec = $exp->extractVariableFile('gridSpec');
       if ( "$gridspec" eq '' ) {
-         $gridspec = "/archive/mh2/om3/preprocessing/grid_spec_v7.nc";
-         print STDERR "WARNING: gridSpec not found in $opt_x. gridSpec is set to $gridspec\n";
+         die "ERROR: gridSpec for platform $opt_P was not found in $opt_x.\n";
       } elsif (! -e $gridspec) {
          die "ERROR: gridSpec file does not exist: $gridspec\n"; 
       } else {
@@ -734,7 +799,12 @@ EOF
          $getgridspec .= <<EOF;
 cd \$work
 if ( -e \$fregrid_remap_file ) then
-   $time_cp $cp \$fregrid_remap_file remap_file
+   $time_cp $cp \$fregrid_remap_file remap_file.nc
+   if ( \$status ) then
+      echo "WARNING: data transfer failure, retrying..."
+      $time_cp $cp \$fregrid_remap_file remap_file.nc
+      $checktransfer
+   endif
 endif
 set remap_file = remap_file
 
@@ -799,9 +869,17 @@ if (\$#attCmds > 0) then
 endif
 
 if ( "\$fregrid_wt" != '' ) then
-   $time_hsmget hsmget -t -q -a $opt_d -p $ptmpDir/history -w $tmphistdir \$fregrid_in_date.nc/\\*land_static\\*
-   ln -s \$histDir/\$fregrid_in_date.nc/*land_static* .
    set fregrid_yr = `echo \$fregrid_in_date | cut -c 1-4`
+   foreach fregridwtfile ( `ls $opt_d/\${fregrid_yr}????.nc.*` )
+      set fregridwtfile = \$fregridwtfile:t:r
+      $time_hsmget hsmget -v -m \$FRE_COMMANDS_HOME/site/gfdl/hsmget.mk -t -a $opt_d -p $ptmpDir/history -w $tmphistdir \$fregridwtfile/\\*land_static\\*
+      if ( \$status ) then
+         echo "WARNING: hsmget reported failure, retrying..."
+         $time_hsmget hsmget -v -m \$FRE_COMMANDS_HOME/site/gfdl/hsmget.mk -t -a $opt_d -p $ptmpDir/history -w $tmphistdir \$fregridwtfile/\\*land_static\\*
+         $checktransfer
+      endif
+   end
+   ln -s \$histDir/\${fregrid_yr}????.nc/*land_static* .
    foreach i ( 1 2 3 4 5 6 )
       foreach fregrid_mo ( 02 03 04 05 06 07 08 09 10 11 12 )
         if ( ! -e \${fregrid_yr}\${fregrid_mo}01.land_static.tile\$i.nc ) then
@@ -843,6 +921,11 @@ endif
 
 if ( ! -e \$fregrid_remap_file ) then
    $time_cp $cp remap_file.nc \$fregrid_remap_file 
+   if ( \$status ) then
+      echo "WARNING: data transfer failure, retrying..."
+      $time_cp $cp remap_file.nc \$fregrid_remap_file
+      $checktransfer
+   endif
 endif
 
 EOF
@@ -855,11 +938,42 @@ EOF
       @ppComponentNodes = $ppNode->findnodes("component[\@type='$opt_c']");      
    }
 
+   if ( "@ppComponentNodes" eq '' ) {
+      if ( $opt_c and "$opt_c" ne "split") {
+         print STDERR "ERROR: No such component: $opt_c\n";
+      } else {
+         print STDERR "ERROR: No available components\n";
+      }
+   }
+
    #process each component
    foreach my $ppcNode ( @ppComponentNodes ) {
       $cpiomonTS = "";
       $component = $ppcNode->findvalue('@type');
       print STDERR "\nCreating script for postprocessing component '$component'\n" if $opt_v;
+      my $this_component_cmd = $this_frepp_cmd;
+      $this_component_cmd =~ s/ -c split / -c $component /;
+      $checktransfer = <<EOF;
+if ( \$status ) then
+         echo ERROR: data transfer attempt failed twice, exiting.
+         Mail -s "\$name year \$historyyear component $component cannot be postprocessed" \$USER <<END
+Your FRE post-processing job ( \$JOB_ID ) has exited because of a data transfer failure.
+
+This job can be resubmitted via:
+
+$this_component_cmd
+
+Job details:
+\$name running on \$HOST
+Batch job stdout:
+\$SGE_STDOUT_PATH
+END
+         $writestate
+         sleep 30
+         exit 7
+      endif
+EOF
+
 
       if ( $opt_c ) {   #append component name to job and file name
          $cshscript = $cshscripttmpl;
@@ -869,10 +983,53 @@ EOF
          $pbs_job_name = "$expt"."_$component"."_$opt_t";
          $cshscript =~ s/set scriptName = .*/set scriptName = $outscript/;
          $cshscript =~ s/#PBS -N .*/#PBS -N $pbs_job_name/;
-         $cshscript =~ s/setenv SGE_STDOUT_PATH.*/setenv SGE_STDOUT_PATH $stdoutdir\/postProcess\/$pbs_job_name.\$JOB_ID/;
+         $cshscript =~ s/setenv SGE_STDOUT_PATH.*/setenv SGE_STDOUT_PATH $stdoutdir\/postProcess\/$pbs_job_name.o\$JOB_ID/;
          $cshscript =~ s/(-w $expt)/$1_$component/;
          $cshscript =~ s/(-soft -l fre_info=)/$1ppComponent\@$component+/;
          $opt_w =~ s/( -hold_jid $expt)(.*)(_\d\d\d\d\d\d\d\d)/$1_$component$3/;
+         $statefile = "$statedir/$component.".substr($opt_t,0,4);
+
+         #check status of this frepp year
+         if ( -e $statefile ) {
+            open( STATEFILE, "<$statefile") or die $!;
+            $state = FREUtil::cleanstr( <STATEFILE> );
+            close STATEFILE;
+            print "This year ($opt_t) has a state file with state '$state' for $component.\n";
+            if ("$state" eq "OK") {
+               if ( $opt_o ) {
+                  print "Redoing anyway because 'overwrite state files' was specified...\n";
+               } else {
+                  print "This year ($opt_t) has already been completed for $component.\n";
+                  #should we continue here in case of opt_p?
+                  next;
+               }
+            } elsif ("$state" eq "FATAL") {
+               print "This year ($opt_t) got an error in multiple attempts, exiting.  To retry, delete the state file $statefile\n";
+               #what if this is the -c split job? continue to other components
+               exit 1;
+            } elsif ("$state" eq "ERROR") {
+               print "This year ($opt_t) got an error in the last frepp attempt, resubmitting $component...\n";
+            } elsif ( "$state" eq '' ) {
+               print "ERROR: statefile $statefile exists but is empty, exiting.\n";
+               #what if this is the -c split job? continue to other components
+               exit 1;
+            } else {
+               #check that jobid is still running
+               my $jobrunning = FREUtil::cleanstr( `/home/arl/bin/mq | grep $state | grep Running | wc -l` );
+               #my $jobrunning = FREUtil::cleanstr( `/bin/csh -c "module load moab; showq -u $ENV{'USER'} -n -v --noblock | grep $ENV{'JOBID'} | grep Running | wc -l"` );
+               #my $jobrunning = FREUtil::cleanstr( `/bin/csh -c "set echo; module load moab; mdiag -j $ENV{'JOBID'} | grep $ENV{'JOBID'} |grep Running |wc -l"` ); 
+               print "Checking state in $statefile: $state: jobrunning: $jobrunning\n";
+               if ( $jobrunning ) {
+                  print "Previous frepp job ($state) for $opt_t still running for $component, exiting.\n";
+                  next;
+               } else {
+                  print "Previous frepp job for $opt_t was lost, resubmitting $component...\n";
+               }
+            }
+         }
+         $cshscript =~ s/set prevjobstate.*/set prevjobstate = '$state'/;
+         $cshscript =~ s/set statefile.*/set statefile = '$statefile'/;
+
       }
 
       #check if need to convert cube sphere grid to lat lon
@@ -940,7 +1097,7 @@ EOF
 
       my $startdate = $ppcNode->findvalue('@start');
       if ( "$startdate" eq "" ) { $startdate = $ppNode->findvalue('@start'); }
-      my $sim0 = "";
+      $sim0 = "";
       my $run0 = &FREUtil::parseFortranDate($basedate);
       if ( "$startdate" ne "" ) {
          $startdate = FREUtil::padzeros($startdate);
@@ -984,13 +1141,19 @@ EOF
       }
       my $simEND = FREUtil::modifydate($run0,"+ $simTime $simUnits - 1 sec");
 
-      if ( $simEND < $tEND ) {
-         $tEND = $simEND;
-         print "      adjusting tEND to simulation end: $tEND\n";
+      if ( $simEND < $tEND and ! $opt_A) {
+         if ( $simEND < $t0 ) {
+            print "ERROR: The simulation time calculated from the basedate in your diag_table ($basedate) and the simulation length from the xml ($simTime $simUnits) ends before this year of postprocessing ($opt_t).  Please fix your basedate.\n";
+            exit 1;
+         } else { 
+            $tEND = $simEND;
+            print "      adjusting tEND to simulation end: $tEND\n";
+         }
       }
       #print "      simEND is $simEND (from basedate + xml simTime)\n";
 
       my $scriptcopy = $cshscript;
+      my @depyears = ();
 
       #STATIC
       my @monthnodes = $ppcNode->findnodes('timeSeries[@freq="monthly"]');
@@ -1009,10 +1172,11 @@ EOF
       #TIMEAVERAGES - MONTHLY
       my @taNodes = sort by_interval $ppcNode->findnodes('timeAverage[@source="monthly"]');
       my @intervals = map { $_->findvalue('@interval') } @taNodes;
-       my $diag_source  = " ";
+      my $diag_source  = " ";
       foreach my $taNode ( @taNodes ) {
          $hsmfiles = $hsmfiles . jpkSrcFiles($taNode) . ",";
-         (my $int,my $subint) = get_subint($taNode,@intervals);
+         (my $int,my $subint,my @dep) = get_subint($taNode,@intervals);
+         push ( @depyears, @dep );
          if ( $opt_v ) {
             print STDERR "      monthly av int=$int subint=$subint";
             if ( "$subint" eq "" ) { print STDERR "history\n"; } else { print STDERR "\n"; } 
@@ -1028,31 +1192,29 @@ EOF
          }
          $cshscript .= analysis( $taNode, $expt, $gridspec, $staticfile,"timeAverage",$diag_source,$ppRootDir,$component," " ,$analysisdir,$aoutscriptdir,$workdir,$archivedir,$opt_t,$opt_O,$opt_Y,$opt_Z,$opt_V,$sim0,$opt_R,$opt_s,$histDir,$nlat,$nlon,$abs_xml_path,$stdoutdir);
       }
+      
 
       #TIMEAVERAGES - ANNUAL 
       my @taNodes = sort by_interval $ppcNode->findnodes('timeAverage[@source="annual" and @interval!="1yr"]');
       my @intervals = map { $_->findvalue('@interval') } @taNodes;
       my @annavnodes = $ppcNode->findnodes('timeAverage[@source="annual" and @interval="1yr"]');
-      if ( (scalar @taNodes) or (scalar @annavnodes) ) {
-         my $taNode = "";
-         if ( scalar @annavnodes ) {
-            $taNode = $ppcNode->findnodes('timeAverage[@source="annual" and @interval="1yr"]')->get_node(1);
-         } else {
-            my $newnode = XML::LibXML::Element->new( 'timeAverage' );
-            $newnode->setAttribute( 'source','annual' );
-            $newnode->setAttribute( 'interval','1yr' );
-            $ppcNode->appendChild($newnode);
-            $taNode = $ppcNode->findnodes('timeAverage[@source="annual" and @interval="1yr"]')->get_node(1);
+      my $annCalcInterval = '';
+      if ( scalar @annavnodes and not scalar @taNodes ) {
+         my $taNode = $ppcNode->findnodes('timeAverage[@source="annual" and @interval="1yr"]')->get_node(1);
+         $annCalcInterval = $taNode->findvalue('@calcInterval');
+         if ( not scalar @taNodes or "$annCalcInterval" eq "1yr" ) {
+            $hsmfiles = $hsmfiles . jpkSrcFiles($taNode) . ",";
+            if (! $opt_A ) { 
+               print STDERR "      annual av int=1yr subint=history\n" if $opt_v;
+               $cshscript .= annualAV1yrfromhist( $taNode, $sim0, 1 );
+            }
+            $cshscript .= analysis( $taNode, $expt, $gridspec, $staticfile,"timeAverage",$diag_source,$ppRootDir,$component,\%dtvars,$analysisdir,$aoutscriptdir,$workdir,$archivedir,$opt_t,$opt_O,$opt_Y,$opt_Z,$opt_V,$sim0,$opt_R,$opt_s,$histDir,$nlat,$nlon,$abs_xml_path,$stdoutdir);
          }
-         if (! $opt_A ) { 
-            print STDERR "      annual av int=1yr subint=history\n" if $opt_v;
-            $cshscript .= annualAV1yrfromhist( $taNode, $sim0 );
-         }
-         $cshscript .= analysis( $taNode, $expt, $gridspec, $staticfile,"timeAverage",$diag_source,$ppRootDir,$component,\%dtvars,$analysisdir,$aoutscriptdir,$workdir,$archivedir,$opt_t,$opt_O,$opt_Y,$opt_Z,$opt_V,$sim0,$opt_R,$opt_s,$histDir,$nlat,$nlon,$abs_xml_path,$stdoutdir);
       }
       foreach my $taNode ( @taNodes ) {
          $hsmfiles = $hsmfiles . jpkSrcFiles($taNode) . ",";
-         (my $int,my $subint) = get_subint($taNode,@intervals);
+         (my $int,my $subint,my @dep) = get_subint($taNode,@intervals);
+         push ( @depyears, @dep );
          if ( $opt_v ) {
             print STDERR "      annual av int=$int subint=$subint";
             if ( "$subint" eq "" ) { print STDERR "1\n"; } else { print STDERR "\n"; }
@@ -1061,17 +1223,19 @@ EOF
             if ($subint) {
                $cshscript .= annualAVfromav( $taNode, $sim0, $subint ); 
             } else {
-               $cshscript .= annualAVxyrfromann( $taNode, $sim0 );
+               $cshscript .= annualAVxyrfromann( $taNode, $sim0, $ppcNode, scalar @annavnodes, $annCalcInterval );
             }
          }
          $cshscript .= analysis( $taNode, $expt, $gridspec, $staticfile,"timeAverage",$diag_source,$ppRootDir,$component,\%dtvars,$analysisdir,$aoutscriptdir,$workdir,$archivedir,$opt_t,$opt_O,$opt_Y,$opt_Z,$opt_V,$sim0,$opt_R,$opt_s,$histDir,$nlat,$nlon,$abs_xml_path,$stdoutdir);
       }
+
       #TIMEAVERAGES - SEASONAL
       my @taNodes = sort by_interval $ppcNode->findnodes('timeAverage[@source="seasonal"]');
       my @intervals = map { $_->findvalue('@interval') } @taNodes;
       foreach my $taNode ( @taNodes ) {
          $hsmfiles = $hsmfiles . jpkSrcFiles($taNode) . ",";
-         (my $int,my $subint) = get_subint($taNode,@intervals);
+         (my $int,my $subint,my @dep) = get_subint($taNode,@intervals);
+         push ( @depyears, @dep );
 
          if (! $opt_A ) {
             if ($subint) {
@@ -1084,13 +1248,13 @@ EOF
          }
          $cshscript .= analysis( $taNode, $expt, $gridspec, $staticfile,"timeAverage",$diag_source,$ppRootDir,$component,\%dtvars,$analysisdir,$aoutscriptdir,$workdir,$archivedir,$opt_t,$opt_O,$opt_Y,$opt_Z,$opt_V,$sim0,$opt_R,$opt_s,$histDir,$nlat,$nlon,$abs_xml_path,$stdoutdir);
       }
-
+      
       #if ocean 100 year pp, then submit the averages now in a separate job
       if ( $maxyrs > 20 and $component eq 'ocean' ) { 
          if ( "$platform" eq 'ia64' ) {
-            $cshscript =~ s/#\$ -l h_cpu.*/#\$ -l h_cpu=30:00:00/; 
+            $cshscript =~ s/#\$ -l h_cpu.*/#\$ -l h_cpu=$maxruntime/; 
          } else {
-            $cshscript =~ s/#PBS -l walltime.*/#PBS -l walltime=30:00:00/; 
+            $cshscript =~ s/#PBS -l walltime.*/#PBS -l walltime=$maxruntime/; 
          }
          my $npes = $basenpes;
          $cshscript =~ s/pe ic.postp (.+)/pe ic.postp $npes/;
@@ -1100,22 +1264,39 @@ EOF
          my $newoutscript = "$outscript"."_av";
          my $new_pbs_job_name = "$pbs_job_name"."_av";
          $cshscript =~ s/set scriptName = .*/set scriptName = $newoutscript/;
-         $cshscript =~ s/setenv SGE_STDOUT_PATH.*/setenv SGE_STDOUT_PATH $stdoutdir\/postProcess\/$new_pbs_job_name.\$JOB_ID/;
+         $cshscript =~ s/setenv SGE_STDOUT_PATH.*/setenv SGE_STDOUT_PATH $stdoutdir\/postProcess\/$new_pbs_job_name.o\$JOB_ID/;
          $cshscript =~ s/#PBS -N .*/#PBS -N $new_pbs_job_name/;
          my @hf = dmget_files();
          my @hsmf = jpk_hsmget_files();
          if ( scalar @hf ) {
+            my @reqStartMonths = segStartMonths($segTime,$segUnits);
+            my $histPerYear = scalar(@reqStartMonths);
             my $hsmget_history = <<EOF;
 cd $opt_d
 foreach h ( @hf )
  set historyyear = `echo \$h | cut -c 1-4`
- set availhf = ( `ls \$historyyear????.nc.cpio \$historyyear????.nc.tar` )
- if ( "\$availhf" == "" ) then
+
+ foreach reqStartMonth ( @reqStartMonths )
+  set historyfile = \$historyyear\$reqStartMonth.nc.tar
+  set hsmdate = \$historyfile:r
+  foreach hsmfile ( @hsmf ) 
+   $time_hsmget hsmget -v -m \$FRE_COMMANDS_HOME/site/gfdl/hsmget.mk -t -a $opt_d -p $ptmpDir/history -w $tmphistdir \$hsmdate/\\*.\$hsmfile.\\*
+   if ( \$status ) then
+      echo "WARNING: hsmget reported failure, retrying..."
+      $time_hsmget hsmget -v -m \$FRE_COMMANDS_HOME/site/gfdl/hsmget.mk -t -a $opt_d -p $ptmpDir/history -w $tmphistdir \$hsmdate/\\*.\$hsmfile.\\*
+      $checktransfer
+   endif
+  end
+ end
+
+ set availhf = ( `ls -1 \$historyyear????.nc.tar | wc -l` )
+ if ( "\$availhf" == "$histPerYear" ) then
    Mail -s "\$name year \$historyyear cannot be postprocessed" \$USER <<END
-Your FRE post-processing job ( \$JOB_ID ) has exited because no history files
-were found for year \$historyyear in directory:
+Your FRE post-processing job ( \$JOB_ID ) has exited because there is incomplete
+history data for year \$historyyear in directory:
 $opt_d
 
+There should be $histPerYear files, but \$availhf file(s) were found.
 Please transfer or create the needed history file(s) and then resubmit frepp:
 
 $this_frepp_cmd
@@ -1125,15 +1306,11 @@ Job details:
 Batch job stdout:
 \$SGE_STDOUT_PATH
 END
+    $writestate
     sleep 30
     exit 6
  endif
- foreach historyfile ( \$availhf )
-  set hsmdate = \$historyfile:r
-  foreach hsmfile ( @hsmf ) 
-   $time_hsmget hsmget -t -q -a $opt_d -p $ptmpDir/history -w $tmphistdir \$hsmdate/\\*.\$hsmfile.\\*
-  end
- end
+
 end
 if ( -d $refinedir ) then
 cd $refinedir
@@ -1142,7 +1319,12 @@ foreach h ( @hf )
  foreach historyfile ( `ls \$historyyear????.nc.cpio \$historyyear????.nc.tar`)
   set hsmdate = \$historyfile:r
   foreach hsmfile ( @hsmf ) 
-   $time_hsmget hsmget -t -q -a $refinedir -p /$ptmpDir/history_refineDiag -w $tmphistdir \$hsmdate/\\*.\$hsmfile.\\*
+   $time_hsmget hsmget -v -m \$FRE_COMMANDS_HOME/site/gfdl/hsmget.mk -t -a $refinedir -p /$ptmpDir/history_refineDiag -w $tmphistdir \$hsmdate/\\*.\$hsmfile.\\*
+   if ( \$status ) then
+      echo "WARNING: hsmget reported failure, retrying..."
+      $time_hsmget hsmget -v -m \$FRE_COMMANDS_HOME/site/gfdl/hsmget.mk -t -a $refinedir -p /$ptmpDir/history_refineDiag -w $tmphistdir \$hsmdate/\\*.\$hsmfile.\\*
+      $checktransfer
+   endif
   end
  end
 end
@@ -1155,7 +1337,10 @@ EOF
          if ( "$platform" eq 'ia64' ) { $cshscript .= "qstat -j \$JOB_ID | grep ^usage\n"; }
          $cshscript .= "echo END-OF-SCRIPT for postprocessing job $t0-$tEND for $expt\n";
          $cshscript=~ s/(-soft -l fre_info=)/$1ppYears\@$maxyrs+/;
-         unless ($opt_A) {FREUtil::writescript($cshscript,$newoutscript,"$batchSubmit$opt_w");}
+         unless ($opt_A) {
+            writescript($cshscript,$newoutscript,"$batchSubmit$opt_w",$statefile);
+            $opt_w = '';
+         }
          $cshscript = $scriptcopy;
       }
 
@@ -1167,7 +1352,8 @@ EOF
          my $diag_source = &FREUtil::diagfile($ppcNode,"$hrfreq"); 
          foreach my $tsNode ( @tsNodes ) {
             $hsmfiles = $hsmfiles . jpkSrcFiles($tsNode) . ",";
-            (my $cl,my $subchunk) = get_subint($tsNode,@chunks);
+            (my $cl,my $subchunk,my @dep) = get_subint($tsNode,@chunks);
+            push ( @depyears, @dep );
             if ( $opt_v ) {
                print STDERR "      $hrfreq ts chunklength=$cl subchunk=$subchunk";
                if ( "$subchunk" eq "" ) { print STDERR "history\n"; } else { print STDERR "\n"; }
@@ -1190,7 +1376,8 @@ EOF
       my $diag_source = &FREUtil::diagfile($ppcNode,"daily");
       foreach my $tsNode ( @tsNodes ) {
          $hsmfiles = $hsmfiles . jpkSrcFiles($tsNode) . ",";
-         (my $cl,my $subchunk) = get_subint($tsNode,@chunks);
+         (my $cl,my $subchunk,my @dep) = get_subint($tsNode,@chunks);
+         push ( @depyears, @dep );
          if ( $opt_v ) {
             print STDERR "      daily ts chunklength=$cl subchunk=$subchunk";
             if ( "$subchunk" eq "" ) { print STDERR "history\n"; } else { print STDERR "\n"; }
@@ -1212,7 +1399,8 @@ EOF
       my $diag_source = &FREUtil::diagfile($ppcNode,"monthly");
       foreach my $tsNode ( @tsNodes ) {
          $hsmfiles = $hsmfiles . jpkSrcFiles($tsNode) . ",";
-         (my $cl,my $subchunk) = get_subint($tsNode,@chunks);
+         (my $cl,my $subchunk,my @dep) = get_subint($tsNode,@chunks);
+         push ( @depyears, @dep );
          if ( $opt_v ) {
             print STDERR "      monthly ts chunklength=$cl subchunk=$subchunk";
             if ( "$subchunk" eq "" ) { print STDERR "history\n"; } else { print STDERR "\n"; }
@@ -1234,7 +1422,8 @@ EOF
       my $diag_source = &FREUtil::diagfile($ppcNode,"annual","annual");
       foreach my $tsNode ( @tsNodes ) {
          $hsmfiles = $hsmfiles . jpkSrcFiles($tsNode) . ",";
-         (my $cl,my $subchunk) = get_subint($tsNode,@chunks);
+         (my $cl,my $subchunk,my @dep) = get_subint($tsNode,@chunks);
+         push ( @depyears, @dep );
          if ( $opt_v ) {
             print STDERR "      annual ts chunklength=$cl subchunk=$subchunk";
             if ( "$subchunk" eq "" ) { print STDERR "..."; } else { print STDERR "\n"; }
@@ -1256,7 +1445,8 @@ EOF
       my $diag_source = &FREUtil::diagfile($ppcNode,"seasonal","seasonal");
       foreach my $tsNode ( @tsNodes ) {
          $hsmfiles = $hsmfiles . jpkSrcFiles($tsNode) . ",";
-         (my $cl,my $subchunk) = get_subint($tsNode,@chunks);
+         (my $cl,my $subchunk,my @dep) = get_subint($tsNode,@chunks);
+         push ( @depyears, @dep );
          if ( $opt_v ) {
             print STDERR "      seasonal ts chunklength=$cl subchunk=$subchunk";
             if ( "$subchunk" eq "" ) { print STDERR "..."; } else { print STDERR "\n"; }
@@ -1270,6 +1460,134 @@ EOF
             }
          }
          $cshscript .= analysis( $tsNode, $expt, $gridspec,$staticfile,"timeSeries",$diag_source,$ppRootDir,$component,\%dtvars,$analysisdir,$aoutscriptdir,$workdir,$archivedir,$opt_t,$opt_O,$opt_Y,$opt_Z,$opt_V,$sim0,$opt_R,$opt_s,$histDir,$nlat,$nlon,$abs_xml_path,$stdoutdir);
+      }
+
+      unless ( $didsomething ) {
+         print STDERR "NOTE: No calculations necessary for year $opt_t.\n";
+         exit 0;
+      }
+
+      #PROCESS DEPENDENCIES
+      my $depholds = "";
+      my $redothisyear = 0;
+      unless ( $opt_A ) {
+
+      #sort, unique dependencies
+      my %seen = (); my @u = grep { ! $seen{$_} ++ } @depyears;
+      @depyears=sort {$a <=> $b} @u;
+      print "\nThis frepp year depends on: @depyears\n" if $opt_v;
+      
+      foreach my $depyear ( @depyears ) {
+         my $depfile = "$statedir/$component.$depyear";
+         my $redo = 0;
+         my $depstate = '';
+         if ( -e $depfile ) {
+            open( DEPFILE, "<$depfile") or die $!;
+            $depstate = FREUtil::cleanstr( <DEPFILE> );
+            close DEPFILE;
+            print "Required year $depyear has a state file with state '$depstate' for $component.\n";
+            if ("$depstate" eq "OK") {
+               #ok, keep going
+               if ( $opt_o ) {
+                  if ( $opt_s ) {
+                     print "Redoing anyway because 'overwrite state files' was specified...\n";
+                     $redo = 1;
+                     $redothisyear = 1;
+                  }
+               } else {
+                  #print "Required year ($opt_t) has already been completed for $component.\n";
+               }
+            } elsif ("$depstate" eq "FATAL") {
+               print "Required year $depyear got an error in multiple attempts, exiting.  To retry, delete the state file $depfile\n";
+               #what if this is the -c split job? continue to other components
+               exit 1;
+            } elsif ("$depstate" eq "ERROR") {
+               if ( $opt_s ) {
+                  print "Required year $depyear got an error in the last frepp attempt, resubmitting $component...\n";
+                  $redo = 1;
+                  $redothisyear = 1;
+               } else {
+                  print "WARNING: Required year $depyear got an error in the last frepp attempt and should be rerun.\n";
+               }
+            } elsif ( "$depstate" eq '' ) {
+               print "ERROR: statefile $depfile exists but is empty, exiting.\n";
+               #what if this is the -c split job? continue to other components
+               exit 1;
+            } else {
+               #check that jobid is still running
+               my $jobrunning = FREUtil::cleanstr( `/home/arl/bin/mq | grep $depstate | grep Running | wc -l` );
+               #my $jobrunning = FREUtil::cleanstr( `/bin/csh -c "module load moab; showq -u $ENV{'USER'} -n -v --noblock | grep $ENV{'JOBID'} | grep Running | wc -l"` );
+               #my $jobrunning = FREUtil::cleanstr( `/bin/csh -c "set echo; module load moab; mdiag -j $ENV{'JOBID'} | grep $ENV{'JOBID'} |grep Running |wc -l"` ); 
+               print "Checking state of job $depstate: jobrunning=$jobrunning\n";
+               if ( $jobrunning ) {
+                  print "Required year $depyear still working, placing a hold for $component.\n";
+                  $depholds .= "$depstate:";
+               } else {
+                  if ( $opt_s ) {
+                     print "Required year $depyear job was lost, resubmitting $component...\n";
+                     $redo = 1;
+                     $redothisyear = 1;
+                  } else {
+                     print "WARNING: Required year $depyear job was lost and should be rerun.\n";
+                  }
+               }
+            }
+         } else {
+            if ( $opt_s ) {
+               print "Required year $depyear missing, resubmitting $component...\n";
+               $redo = 1;
+               $redothisyear = 1;
+            } else {
+               print "WARNING: Required year $depyear missing. Use 'frepp -s' to submit with dependencies.\n";
+            }
+         }
+         if ( $redo ) {
+            my $cmd = call_frepp($abs_xml_path, $outscript, $component, "$depyear");
+            print "$cmd\n";
+            my $depjobid=`$cmd`;
+            print "$depjobid\n";
+            $depjobid =~ s/^$//mg;
+            my @njobid = split '\n',$depjobid;
+            $depjobid = $njobid[-1];
+            $depjobid =~ s/New jobid='(.*)'/$1/ if $depjobid =~ /New jobid/;
+            $depjobid =~ s/Previous frepp job \((.*)\).*/$1/ if $depjobid =~ /still running for /;
+            unless ( $depjobid =~ /has already been completed/ ) {
+               print "Dependent job for $depyear='$depjobid'\n";
+               my $depstatefile = "$statedir/$component.$depyear";
+               if ( "$depjobid" eq '' ) {
+                  print "No jobid resulted from the Moab job submission of $depyear.\n";
+                  #if ( "$depstate" eq "ERROR" ) {
+                  #   print DEPSTATEFILE "FATAL\n";
+                  #} else {
+                  #   print DEPSTATEFILE "ERROR\n";
+                  #}
+                  print "ERROR: Unable to submit dependent jobs, exiting.\n";
+                  exit 1;
+               } elsif ( "$depjobid" !~ /gfdl.\d+/ ) {
+                  print "ERROR: the jobid returned has the wrong format: a frepp/moab issue occurred.\n";
+                  exit 1;
+               } else {
+                  $depholds .= "$depjobid:";
+                  open( DEPSTATEFILE, ">$depstatefile") or die $!;
+                  print DEPSTATEFILE "$depjobid\n";
+                  close DEPSTATEFILE;
+               }
+            }
+         }
+         
+      }
+      }
+      #I'm not sure whether "redothisyear" means that old dependencies in the current list could be wrong? -arl
+      if ( $redothisyear and ! $opt_A ) {
+         print "This year ($opt_t) has unmet dependencies for $component, submitting with holds.\n";
+      } else {
+         print "All dependencies met or known for $opt_t for $component.\n" if $opt_v;
+      }
+
+      if ( "$depholds" ne "" ) {
+         chop $depholds;
+         $opt_w = " -l depend=afterok:$depholds";
+         print "Setting holds for $opt_t: $opt_w\n";
       }
 
 
@@ -1286,17 +1604,34 @@ EOF
          my @hf = dmget_files();
          my @hsmf = jpk_hsmget_files();
          if ( scalar @hf ) {
+            my @reqStartMonths = segStartMonths($segTime,$segUnits);
+            my $histPerYear = scalar(@reqStartMonths);
             my $hsmget_history = <<EOF;
 cd $opt_d
 foreach h ( @hf )
  set historyyear = `echo \$h | cut -c 1-4`
- set availhf = ( `ls \$historyyear????.nc.cpio \$historyyear????.nc.tar` )
- if ( "\$availhf" == "" ) then
+ 
+ foreach reqStartMonth ( @reqStartMonths )
+  set historyfile = \$historyyear\$reqStartMonth.nc.tar
+  set hsmdate = \$historyfile:r
+  foreach hsmfile ( @hsmf ) 
+   $time_hsmget hsmget -v -m \$FRE_COMMANDS_HOME/site/gfdl/hsmget.mk -t -a $opt_d -p $ptmpDir/history -w $tmphistdir \$hsmdate/\\*.\$hsmfile.\\*
+   if ( \$status ) then
+      echo "WARNING: hsmget reported failure, retrying..."
+      $time_hsmget hsmget -v -m \$FRE_COMMANDS_HOME/site/gfdl/hsmget.mk -t -a $opt_d -p $ptmpDir/history -w $tmphistdir \$hsmdate/\\*.\$hsmfile.\\*
+      $checktransfer
+   endif
+  end
+ end
+
+ set availhf = ( `ls -1 \$historyyear????.nc.tar | wc -l` )
+ if ( "\$availhf" != "$histPerYear" ) then
    Mail -s "\$name year \$historyyear cannot be postprocessed" \$USER <<END
-Your FRE post-processing job ( \$JOB_ID ) has exited because no history files
-were found for year \$historyyear in directory:
+Your FRE post-processing job ( \$JOB_ID ) has exited because there is incomplete
+history data for year \$historyyear in directory:
 $opt_d
 
+There should be $histPerYear files, but \$availhf file(s) were found.
 Please transfer or create the needed history file(s) and then resubmit frepp:
 
 $this_frepp_cmd
@@ -1306,15 +1641,11 @@ Job details:
 Batch job stdout:
 \$SGE_STDOUT_PATH
 END
+    $writestate
     sleep 30
     exit 6
  endif
- foreach historyfile ( \$availhf )
-  set hsmdate = \$historyfile:r
-  foreach hsmfile ( @hsmf ) 
-   $time_hsmget hsmget -t -q -a $opt_d -p $ptmpDir/history -w $tmphistdir \$hsmdate/\\*.\$hsmfile.\\*
-  end
- end
+
 end
 if ( -d $refinedir ) then
 cd $refinedir
@@ -1323,7 +1654,12 @@ foreach h ( @hf )
  foreach historyfile ( `ls \$historyyear????.nc.cpio \$historyyear????.nc.tar`)
   set hsmdate = \$historyfile:r
   foreach hsmfile ( @hsmf ) 
-   $time_hsmget hsmget -t -q -a $refinedir -p $ptmpDir/history_refineDiag -w $tmphistdir \$hsmdate/\\*.\$hsmfile.\\*
+   $time_hsmget hsmget -v -m \$FRE_COMMANDS_HOME/site/gfdl/hsmget.mk -t -a $refinedir -p $ptmpDir/history_refineDiag -w $tmphistdir \$hsmdate/\\*.\$hsmfile.\\*
+   if ( \$status ) then
+      echo "WARNING: hsmget reported failure, retrying..."
+      $time_hsmget hsmget -v -m \$FRE_COMMANDS_HOME/site/gfdl/hsmget.mk -t -a $refinedir -p $ptmpDir/history_refineDiag -w $tmphistdir \$hsmdate/\\*.\$hsmfile.\\*
+      $checktransfer
+   endif
   end
  end
 end
@@ -1331,7 +1667,7 @@ endif
 EOF
             $cshscript =~ s/#dmget_history_files/$hsmget_history/;
          }
-         $cshscript .= call_frepp($abs_xml_path, $outscript, $component, $simEND);
+         $cshscript .= call_frepp($abs_xml_path, $outscript, $component, "");
          if ( "$platform" eq 'ia64' ) { $cshscript .= "qstat -j \$JOB_ID | grep ^usage\n"; }
          $cshscript .= "echo END-OF-SCRIPT for postprocessing job $t0-$tEND for $expt\n";
          if ( $maxyrs < 2 ) { 
@@ -1343,16 +1679,29 @@ EOF
          }
          if ( $maxyrs >= 20 ) { 
             if ( "$platform" eq 'ia64' ) {
-               $cshscript =~ s/#\$ -l h_cpu.*/#\$ -l h_cpu=30:00:00/; 
+               $cshscript =~ s/#\$ -l h_cpu.*/#\$ -l h_cpu=$maxruntime/; 
             } else {
-               $cshscript =~ s/#PBS -l walltime.*/#PBS -l walltime=30:00:00/; 
+               $cshscript =~ s/#PBS -l walltime.*/#PBS -l walltime=$maxruntime/; 
             }
             my $npes = $basenpes;
             $cshscript =~ s/pe ic.postp (.+)/pe ic.postp $npes/;
             $cshscript =~ s/-l size=(.+)/-l size=$npes/;
          }
          $cshscript=~ s/(-soft -l fre_info=)/$1ppYears\@$maxyrs+/;
-         unless ($opt_A) {FREUtil::writescript($cshscript,$outscript,"$batchSubmit$opt_w");}
+         my $writefinalstate = <<EOF;
+
+if ( \$errors_found == 0 ) then
+  echo OK > $statefile
+else if ( "\$prevjobstate" == "ERROR" ) then
+  echo FATAL > $statefile
+else
+  echo ERROR > $statefile
+endif
+EOF
+         unless ($opt_A) {
+            writescript("$cshscript"."$writefinalstate",$outscript,"$batchSubmit$opt_w",$statefile);
+            $opt_w = '';
+         }
       }
    }
 
@@ -1381,12 +1730,18 @@ Job details:
 Batch job stdout:
 \$SGE_STDOUT_PATH
 END
+    $writestate
     sleep 30
     exit 6
  endif
  foreach historyfile ( \$availhf )
   set hsmdate = \$historyfile:r
-  $time_hsmget hsmget -a $opt_d -p $ptmpDir/history -w $tmphistdir \$hsmdate/\\*
+  $time_hsmget hsmget -v -m \$FRE_COMMANDS_HOME/site/gfdl/hsmget.mk -t -a $opt_d -p $ptmpDir/history -w $tmphistdir \$hsmdate/\\*
+  if ( \$status ) then
+      echo "WARNING: hsmget reported failure, retrying..."
+      $time_hsmget hsmget -v -m \$FRE_COMMANDS_HOME/site/gfdl/hsmget.mk -t -a $opt_d -p $ptmpDir/history -w $tmphistdir \$hsmdate/\\*
+      $checktransfer
+  endif
  end
 end
 if ( -d $refinedir ) then
@@ -1395,7 +1750,12 @@ foreach h ( @hf )
  set historyyear = `echo \$h | cut -c 1-4`
  foreach historyfile ( `ls \$historyyear????.nc.cpio \$historyyear????.nc.tar`)
   set hsmdate = \$historyfile:r
-  $time_hsmget hsmget -a $refinedir -p $ptmpDir/history_refineDiag -w $tmphistdir \$hsmdate/\\*
+  $time_hsmget hsmget -v -m \$FRE_COMMANDS_HOME/site/gfdl/hsmget.mk -t -a $refinedir -p $ptmpDir/history_refineDiag -w $tmphistdir \$hsmdate/\\*
+  if ( \$status ) then
+      echo "WARNING: hsmget reported failure, retrying..."
+      $time_hsmget hsmget -v -m \$FRE_COMMANDS_HOME/site/gfdl/hsmget.mk -t -a $refinedir -p $ptmpDir/history_refineDiag -w $tmphistdir \$hsmdate/\\*
+      $checktransfer
+  endif
  end
 end
 endif
@@ -1414,7 +1774,10 @@ EOF
          }
       }
       $cshscript=~ s/(-soft -l fre_info=)/$1ppYears\@$maxyrs+/;
-      unless ($opt_A) {FREUtil::writescript($cshscript,$outscript,"$batchSubmit$opt_w");}
+      unless ($opt_A) {
+         writescript($cshscript,$outscript,"$batchSubmit$opt_w",$statefile);
+         $opt_w = '';
+      }
    }
 
    sysmailuser();
@@ -1464,6 +1827,7 @@ sub dmget_files {
    foreach (@historyfilesa) { 
       push(@hf, $_) unless ($seen{$_}++); #uniq
    } 
+   @hf = sort(@hf);
    if ($opt_v) {print "historyfiles used: @hf\n\n";}
    $historyfiles = '';
    return @hf;
@@ -1504,15 +1868,22 @@ sub call_frepp {
    my $abs_xml_path = $_[0];
    my $outscript = $_[1];
    my $component = $_[2];
-   my $simEND = $_[3];
+   my $year = $_[3];
+   my $depjobs = $_[4];
    my $csh = "";
 
-   if ( $opt_p ) {
-      my $togo = $opt_p - 1;
-      my $nextyear = FREUtil::modifydate($tEND,"+ 1 sec");
-      my $nextyearf = FREUtil::graindate($nextyear,"day");
-      $csh .= "\n/usr/bin/perl $absfrepp -x $abs_xml_path -t $nextyearf -p $togo -s -v ";
+   my $nextyear = FREUtil::modifydate($tEND,"+ 1 sec");
+   my $nextyearf = FREUtil::graindate($nextyear,"day");
+
+   if ( "$depjobs" ne "" ) {
+      chop $depjobs;  
+      $depjobs = "-w $depjobs ";
+   }
+
+   if ( "$year" ne "" ) {
+      $csh .= "\n/usr/bin/perl $absfrepp -x $abs_xml_path -t $year -s -q $depjobs";
       if ( $opt_P ) { $csh .= "-P $opt_P "; }
+      if ( $opt_T ) { $csh .= "-T $opt_T "; }
       if ( $opt_d ) { $csh .= "-d $opt_d "; }
       if ( $opt_D ) { $csh .= "-D '$opt_D' "; }
       if ( $opt_u ) { $csh .= "-u $opt_u "; }
@@ -1520,14 +1891,29 @@ sub call_frepp {
       if ( $opt_m ) { $csh .= "-m "; }
       if ( $opt_M ) { $csh .= "-M "; }
       if ( $opt_H ) { $csh .= "-H "; }
+      if ( $opt_o ) { $csh .= "-o "; }
+      $csh .= "$expt\n";
+   } elsif ( $opt_p ) {
+      my $togo = $opt_p - 1;
+      if ( $togo > 0 ) { $togo = "-p $togo"; } else { $togo = ''; }
+      $csh .= "\n/usr/bin/perl $absfrepp -x $abs_xml_path -t $nextyearf $togo -s -v ";
+      if ( $opt_P ) { $csh .= "-P $opt_P "; }
+      if ( $opt_T ) { $csh .= "-T $opt_T "; }
+      if ( $opt_d ) { $csh .= "-d $opt_d "; }
+      if ( $opt_D ) { $csh .= "-D '$opt_D' "; }
+      if ( $opt_u ) { $csh .= "-u $opt_u "; }
+      if ( $opt_c ) { $csh .= "-c $component "; }
+      if ( $opt_m ) { $csh .= "-m "; }
+      if ( $opt_M ) { $csh .= "-M "; }
+      if ( $opt_H ) { $csh .= "-H "; }
+      if ( $opt_o ) { $csh .= "-o "; }
       $csh .= "$expt\n";
       $csh .= errorstr("$relfrepp had a problem creating next script $expt"."_$nextyearf");
       $csh .= mailerrors($outscript);
    } else { #call frepp -A for analysis scripts
-      my $nextyear = FREUtil::modifydate($tEND,"+ 1 sec");
-      my $nextyearf = FREUtil::graindate($nextyear,"day");
       $csh .= "\n/usr/bin/perl $absfrepp -A -x $abs_xml_path -t $nextyearf -s -v ";
       if ( $opt_P ) { $csh .= "-P $opt_P "; }
+      if ( $opt_T ) { $csh .= "-T $opt_T "; }
       if ( $opt_d ) { $csh .= "-d $opt_d "; }
       if ( $opt_u ) { $csh .= "-u $opt_u "; }
       if ( $opt_c ) { $csh .= "-c $component "; }
@@ -1545,6 +1931,9 @@ sub call_frepp {
 #set up checkpointing 
 sub setcheckpt {
    my $checkpt = "$component"."_$_[0]";
+   unless ( "$_[0]" eq "staticvars" ) { $didsomething = 1; 
+      #print STDERR "DID SOMETHING: $checkpt\n";
+   }
    my $csh = <<EOF;
 
 if ( \$errors_found == 0 ) then
@@ -1576,7 +1965,7 @@ EOF
 #had to use a temp file in case strings get too long, want to preserve end-of-lines.
 sub errorstr {
    my $msg = $_[0];
-   if ( $opt_q ) { return ""; }
+   if ( $opt_Q ) { return ""; }
    my $str = <<EOF;
 
 if ( \$status != 0 ) then
@@ -1591,7 +1980,7 @@ EOF
 
 sub retryonerrorstart {
    my $cmd = $_[0];
-   if ( $opt_q ) { return "if ( \$status != 0 ) then\n"; }
+   if ( $opt_Q ) { return "if ( \$status != 0 ) then\n"; }
    my $str = <<EOF;
    set thisstatus = \$status
    if ( \$thisstatus != 0 ) then
@@ -1603,7 +1992,7 @@ EOF
 
 sub retryonerrorend {
    my $msg = $_[0];
-   if ( $opt_q ) { return "endif\n"; }
+   if ( $opt_Q ) { return "endif\n"; }
    my $str = <<EOF;
       set thisstatus = \$status
       if ( \$thisstatus != 0 ) then
@@ -1625,7 +2014,7 @@ EOF
 sub fatalerrorstr {
    my $msg = $_[0];
    my $outscript = $_[1];
-   if ( $opt_q ) { return ""; }
+   if ( $opt_Q ) { return ""; }
    my $createmailfile = mailerrors("$archivedir");
    my $sendemail = mailcomponent();
 
@@ -1654,7 +2043,7 @@ EOF
 #call this at the end of each piece of postprocessing, or you'll have too few/many messages
 sub mailerrors {
    my $outdir = $_[0];
-   if ( $opt_q ) { return ""; }
+   if ( $opt_Q ) { return ""; }
    my $str = <<EOF;
 
 if ( -e \$work/.errors ) then
@@ -1684,13 +2073,14 @@ EOF
 #mail the user the csh errors that may have accumulated in $work/.errorssend
 #call this at the end of each component
 sub mailcomponent {
-   if ( $opt_q ) { return ""; }
+   if ( $opt_Q ) { return ""; }
    my $str = <<EOF;
 
 if ( -e \$work/.errorssend ) then
 set errorlines = `cat \$work/.errorssend | wc -l`
 if ( \$errorlines ) then
 Mail -s "$relfrepp CSH ERROR: $expt $component $opt_t" $username < \$work/.errorssend
+$writestate
 sleep 30
 endif
 $time_rm rm -rf \$work/.errors*
@@ -1743,10 +2133,8 @@ sub end_systime {
 set systime2 = `$systimecmd`
 @ ttlsystime = \$systime2 - \$systime1
 echo TOTAL SYSTEM TIME = \$ttlsystime
-set numfiles = `ls -1 \$outdir | wc -l`
-echo TOTAL FILES IN OUTDIR: \$numfiles
-set diskusage = `du -ks \$outdir | cut -f1`
-echo TOTAL DISK USAGE IN OUTDIR: \$diskusage
+set diskusage = `du -ksh \$TMPDIR | cut -f1`
+echo TOTAL DISK USAGE IN TMPDIR "\$TMPDIR": \$diskusage
 echo '================================================'
 
 EOF
@@ -1909,6 +2297,30 @@ EOF
    }
 
    return $csh;
+}
+
+#
+sub segStartMonths {
+   my $segTime = $_[0];
+   my $segUnits = $_[1];
+   
+   if (($segTime==1 and "$segUnits" eq "years") or ($segTime==12 and "$segUnits" eq "months")) {
+      return qw(0101);
+   } elsif ( $segTime == 6 ) {
+      return qw(0101,0701);
+   } elsif ( $segTime == 4 ) {
+      return qw(0101,0501,0901);
+   } elsif ( $segTime == 3 ) {
+      return qw(0101,0401,0701,1001);
+   } elsif ( $segTime == 2 ) {
+      return qw(0101,0301,0501,0701,0901,1101);
+   } elsif ( $segTime == 1 and "$segUnits" eq "months") {
+      return qw(0101,0201,0301,0401,0501,0601,0701,0801,0901,1001,1101,1201);
+   } else {
+      print STDERR "ERROR: segTime $segTime not supported.  Try 1,2,3,4,6 or 12 month segments.\n";
+      return ();
+   }
+
 }
 
 #make csh for splitting history files into monthly files
@@ -2183,7 +2595,26 @@ sub get_subint {
    foreach (@ints) {
       if ( $interval and $_ and $interval > $_ and ($interval % $_) == 0 ) { $subint = $_; }
    }
-   return ($interval,$subint);
+
+   #get dependant years
+   my @depyears = ();
+   my $thisyear = substr($t0,0,4);
+   my $simstart = substr($sim0,0,4);
+   
+   #print "in get_subint with thisyear=$thisyear, simstart=$simstart, interval=$interval, subint=$subint\n";
+
+   unless ( "$subint" eq '' ) {
+      my $i=1;
+      while ( ($thisyear-($subint*$i)) > ($thisyear-$interval) and ($thisyear-($subint*$i)) >= $simstart ) {
+         if ( ( ($thisyear-$simstart+1) % $interval) == 0 ) {
+            push ( @depyears, FREUtil::padzeros($thisyear-($subint*$i)) );
+            #print "in get_subint, adding dep=$thisyear-($subint*$i)  --  @depyears\n";
+         }
+         $i++;
+      }
+   }
+
+   return ($interval,$subint,@depyears);
 }
 
 #least common multiple
@@ -2214,24 +2645,12 @@ sub gcd {
 
 #create a cpio and dmput original files.  Also dmput only when a cpio is not created.
 sub createcpio {
-   my $outdir = $_[0];
-   my $prefix = $_[1];
-   my $abbrev = $_[2];
-   my $dmputOnly = $_[3];
+   my $cache = $_[0];
+   my $outdir = $_[1];
+   my $prefix = $_[2];
+   my $abbrev = $_[3];
+   my $dmputOnly = $_[4];
    my $csh = "";
-
-   my $csh_orig = <<EOF;
-cd $outdir
-set numfilestocpio = `ls $prefix.*.nc | wc -l`
-if ( \$numfilestocpio > 0 ) then
-ls -1 $prefix.*.nc | $time_mkcpio $cpio -oKvO $prefix.$abbrev.nc.cpio
-$time_dmput dmput $outdir/$prefix.$abbrev.nc.cpio &
-endif
-#set filestorm = `ls $prefix.*.nc`
-#set filesize = `du -k $prefix.$abbrev.nc.cpio | cut -f1` #du -k should work on dmput files... Balaji
-#if ( \$filesize ) $time_rm rm -rf \$filestorm
-cd \$work
-EOF
 
    if ( $dmputOnly ) {
       $csh = <<EOF;
@@ -2242,17 +2661,27 @@ EOF
 
    } else {
       $csh = <<EOF;
-cd $outdir
+cd $cache
 set numfilestocpio = `ls $prefix.*.nc | wc -l`
 if ( \$numfilestocpio > 0 ) then
 
-if ( ! -e $prefix.$abbrev.nc.cpio ) then
-   $time_dmget dmget "$prefix.*.nc"
+if ( ! -e $outdir/$prefix.$abbrev.nc.cpio ) then
    ls -1 $prefix.*.nc | $time_mkcpio $cpio -oKvO \$work/$prefix.$abbrev.nc.cpio
-   $time_mv $mvfile \$work/$prefix.$abbrev.nc.cpio ./$prefix.$abbrev.nc.cpio
+   $time_mv $mvfile \$work/$prefix.$abbrev.nc.cpio $outdir/$prefix.$abbrev.nc.cpio
+   if ( \$status ) then
+      echo "WARNING: data transfer failure, retrying..."
+      $time_mv $mvfile \$work/$prefix.$abbrev.nc.cpio $outdir/$prefix.$abbrev.nc.cpio
+      $checktransfer
+   endif
    $time_rm rm \$work/$prefix.$abbrev.nc.cpio
 else 
-   $time_dmget dmget "$prefix.*.nc" $prefix.$abbrev.nc.cpio
+   $time_dmget dmget $outdir/$prefix.$abbrev.nc.cpio
+   $time_cp $cp $outdir/$prefix.$abbrev.nc.cpio .
+   if ( \$status ) then
+      echo "WARNING: data transfer failure, retrying..."
+      $time_cp $cp $outdir/$prefix.$abbrev.nc.cpio .
+      $checktransfer
+   endif
    set files = ( `ls $prefix.*.nc` )
    set filesincpio = ( `$cpio -itI $prefix.$abbrev.nc.cpio` )
    set exist = ()
@@ -2265,16 +2694,30 @@ else
    end
    if ( \$#exist == 0 ) then
       ls -1 $prefix.*.nc | $time_mkcpio $cpio -oKvAO $prefix.$abbrev.nc.cpio
+      $time_mv $mvfile $prefix.$abbrev.nc.cpio $outdir/$prefix.$abbrev.nc.cpio
+      if ( \$status ) then
+         echo "WARNING: data transfer failure, retrying..."
+         $time_mv $mvfile $prefix.$abbrev.nc.cpio $outdir/$prefix.$abbrev.nc.cpio
+         $checktransfer
+      endif
+      $time_rm rm $prefix.$abbrev.nc.cpio
    else
       mkdir \$work/mkcpio
       cd \$work/mkcpio
       $time_uncpio $cpio -ivI $outdir/$prefix.$abbrev.nc.cpio
       cd $outdir
-      $time_cp $cp \$files \$work/mkcpio
+      #this is a local cp within vftmp
+      $time_cp cp \$files \$work/mkcpio
       cd \$work/mkcpio
       ls -1 $prefix.*.nc | $time_mkcpio $cpio -oKvO $prefix.$abbrev.nc.cpio
       $time_mv $mvfile $prefix.$abbrev.nc.cpio $outdir/$prefix.$abbrev.nc.cpio
-      $time_rm rm $prefix.$abbrev.nc.cpio
+      if ( \$status ) then
+         echo "WARNING: data transfer failure, retrying..."
+         $time_mv $mvfile $prefix.$abbrev.nc.cpio $outdir/$prefix.$abbrev.nc.cpio
+         $checktransfer
+      endif
+      cd \$work
+      $time_rm rm -rf \$work/mkcpio
    endif
 endif
 
@@ -2330,6 +2773,7 @@ sub checkingAV {
    my $lastyr = FREUtil::graindate($_[4],'year');
    my $missingstr = "";
 
+   if ( $opt_q ) { return ""; }
    my @seasons = ();
    if ($src eq "monthly" ) {
        @seasons = ("01","02","03","04","05","06","07","08","09","10","11","12");
@@ -2375,8 +2819,10 @@ sub checkingTS {
    my $firstyr = FREUtil::graindate($_[3],'year');
    my $lastyr = FREUtil::graindate($_[4],'year');
    my $diagfile = $_[5];
+   my $var = $_[6];
    my $missingstr = "";
 
+   if ( $opt_q ) { return ""; }
    my @checkvars = split( /,/, $dtvars{$diagfile} );
    # just check one variable for now
    my $n = 0;
@@ -2393,6 +2839,10 @@ sub checkingTS {
          print "WARNING: Cannot find a variable to check for $diagfile, not checking\n";
          return "";
       }
+   }
+   if ("$var" ne '') { 
+      $var =~ s/ .*//;
+      $thecheckvar = $var;
    }
 
    my @missingfiles = ();
@@ -2471,7 +2921,8 @@ sub annualTS {
    my $freq = 'annual';
    my $source = 'monthly'; #always use monthly, don't need $tsNode->findvalue('@source');
    my $chunkLength = $_[0]->findvalue('@chunkLength');
-   my $outdir = "$ppRootDir/$component/ts/$freq/$chunkLength";
+   my $outdirpath = "$component/ts/$freq/$chunkLength";
+   my $outdir = "$ppRootDir/$outdirpath";
    if("$chunkLength" eq "") { 
          mailuser("Cannot create $component $freq timeSeries unless you set a chunkLength.");
          print STDERR "ERROR: Cannot create $component $freq timeSeries unless you set a chunkLength.\n";
@@ -2487,7 +2938,7 @@ sub annualTS {
          last;
       }
    }
-   my $reqpath = "$ppRootDir/$component/ts/monthly/$TSchunkLength";
+   my $reqpath = "\$tempCache/$component/ts/monthly/$TSchunkLength";
 
    if( "$TSchunkLength" eq "" ) {
       my @existing = <$reqpath/*/*>;
@@ -2513,7 +2964,7 @@ sub annualTS {
          $TSchunkLength =~ s/\///g;
          print STDERR "$component $freq timeSeries calculation found data at ts/monthly/$TSchunkLength\n" if $opt_v;
       }
-      $reqpath = "$ppRootDir/$component/ts/monthly/$TSchunkLength";
+      $reqpath = "\$tempCache/$component/ts/monthly/$TSchunkLength";
    }
 
    my $tmp = FREUtil::modifydate($tEND,"+1 sec");
@@ -2538,11 +2989,11 @@ sub annualTS {
    }        
    if ( "$diag_source" eq "" ) { $diag_source = $_[0]->findvalue('../@source'); }
    if( "$diag_source" eq "") { $diag_source = $component."_month"; }
-   my $missing = checkingTS($freq,$chunkLength,$outdir,$sim0,$t0,$diag_source);
-   if ( "$missing" ne "" ) { mailuser($missing); }
 
    #get variables
    my $variables = FREUtil::cleanstr( $_[0]->findvalue('variables') );
+   #my $missing = checkingTS($freq,$chunkLength,$outdir,$sim0,$t0,$diag_source,$variables);
+   #if ( "$missing" ne "" ) { mailuser($missing); }
    print STDERR "           from xml, vars are '$variables'\n" if $opt_v;
    $variables =~ s/ /.nc /g;
    if("$variables" ne "") {$variables =~ s/$/.nc/g};
@@ -2566,6 +3017,7 @@ cd \$work
 find \$work/* -maxdepth 1 -exec rm -rf {} \\;
 set outdir = $outdir
 if ( ! -e \$outdir ) mkdir -p \$outdir
+if ( ! -e \$tempCache/$outdirpath ) mkdir -p \$tempCache/$outdirpath
 EOF
    if ($opt_z) { $csh .= begin_systime(); }
    foreach my $chunkyear (0 .. ($int-1)) {
@@ -2588,22 +3040,25 @@ EOF
          my $filelist = "";
          foreach my $year ($begin .. $tYEARf) {
             $year=FREUtil::padzeros($year);
-            $filelist .= "\$outdir/$component.$year.\$var ";
+            $filelist .= "\$tempCache/$component.$year.\$var ";
             $getlist .= "$component.$year.*.nc ";
          }
          if ( $aggregateTS ) {
-            $makecpio = createcpio( $outdir,"$component.$begin-$tYEARf",FREUtil::timeabbrev($freq),($tYEARf-$begin>20));
+            $makecpio = createcpio( "\$tempCache/$outdirpath", $outdir,"$component.$begin-$tYEARf",FREUtil::timeabbrev($freq),($tYEARf-$begin>20));
          }
          $catfiles = <<EOF;
-$time_dmget dmget -d \$outdir "$getlist"
-$check_dmget
 if ( -e $chunkedoutfile ) rm -f $chunkedoutfile
 $time_ncrcat ncrcat -h -O $filelist $chunkedoutfile
 $check_ncrcat
 $time_ncatted ncatted -h -O -a filename,global,m,c,"$chunkedoutfile" $chunkedoutfile
 $check_ncatted
 $time_mv $mvfile $chunkedoutfile $outdir
-$time_rm rm $chunkedoutfile
+if ( \$status ) then
+   echo "WARNING: data transfer failure, retrying..."
+   $time_mv $mvfile $chunkedoutfile $outdir
+   $checktransfer
+endif
+$time_mv $mv $chunkedoutfile \$tempCache/$outdirpath
 $time_rm rm -f $filelist
 EOF
       }
@@ -2613,7 +3068,7 @@ EOF
       if ("$variables" eq "") {
          $forloop = <<EOF; 
   foreach file ( $reqpath/$component.$tBEGf-$tENDf.*.nc )
-    set var = `echo \$file | sed 's#$reqpath/$component.$tBEGf-$tENDf.##'`
+    set var = `echo \$file | sed "s#.*/##;s/$component.$tBEGf-$tENDf.//"`
 EOF
       } else {
          $forloop .= <<EOF;
@@ -2623,25 +3078,33 @@ EOF
       }      
 
       $csh .= <<EOF;
-  #year $chunkyear ($tYEARf)
-  $time_dmget dmget  -d $reqpath "$component.$tBEGf-$tENDf.*.nc"
-  $check_dmget
+
 $forloop
+    if ( $chunkyear == 0 ) then
+      $time_cp $cp \$file .
+      if ( \$status ) then
+         echo "WARNING: data transfer failure, retrying..."
+         $time_cp $cp \$file .
+         $checktransfer
+      endif
+    endif
+    set file = "./\$file:t"
     set string = `ncdump -h \$file | grep UNLIMITED`
     $check_ncdump
     set timename   = `echo \$string[1]`
     $time_ncks ncks -a -h -F -d \$timename,$startmonth,$endmonth \$file year.nc > ncks.out
     $check_ncks
-    $time_timavg \$TIMAVG -o $component.$tYEARf.\$var year.nc
+    $time_timavg \$TIMAVG -o \$tempCache/$component.$tYEARf.\$var year.nc
     $retry_timavg
-       $time_timavg \$TIMAVG -o $component.$tYEARf.\$var year.nc
+       $time_timavg \$TIMAVG -o \$tempCache/$component.$tYEARf.\$var year.nc
     $check_timavg
-    $time_mv $mvfile $component.$tYEARf.\$var $outdir
-    $time_rm rm $component.$tYEARf.\$var
     $time_rm rm -f year.nc
     $catfiles
   end
   $makecpio
+  else
+    echo ERROR: Error: input files do not exist
+  endif
 
 EOF
 
@@ -2659,7 +3122,8 @@ sub seasonalTS {
    my $freq = 'seasonal';
    my $source = 'monthly'; #always use monthly, don't need $tsNode->findvalue('@source');
    my $chunkLength = $_[0]->findvalue('@chunkLength');
-   my $outdir = "$ppRootDir/$component/ts/$freq/$chunkLength";
+   my $outdirpath = "$component/ts/$freq/$chunkLength";
+   my $outdir = "$ppRootDir/$outdirpath";
 
       #check if need to convert cube sphere grid to lat lon
       if ( $cubic ) {
@@ -2683,21 +3147,21 @@ sub seasonalTS {
          last;
       }
    }
-   my $reqpath = "$ppRootDir/$component/ts/monthly/$TSchunkLength";
+   my $reqpath = "$component/ts/monthly/$TSchunkLength";
    if( "$TSchunkLength" eq "" ) {
-      my @existing = <$reqpath/*/*>;
+      my @existing = <$ppRootDir/$reqpath/*/*>;
       if ( scalar(@existing) eq 0 ) {
          mailuser("Cannot create $component $freq timeSeries unless you generate <timeSeries freq='monthly' chunkLength='Xyr'>");
          print STDERR "\nERROR: Cannot create $component $freq timeSeries unless you generate <timeSeries freq='monthly' chunkLength='Xyr'>\n";
          return "";
       } else {
-         my @reqfiles = <$reqpath/*>;
-         chomp( $TSchunkLength = `ls -1 $reqpath | sort -g | head -1` );
-         $TSchunkLength =~ s/$reqpath//;
+         my @reqfiles = <$ppRootDir/$reqpath/*>;
+         chomp( $TSchunkLength = `ls -1 $ppRootDir/$reqpath | sort -g | head -1` );
+         $TSchunkLength =~ s/$ppRootDir\/$reqpath//;
          $TSchunkLength =~ s/\///g;
          print STDERR "$component $freq timeSeries calculation found data at ts/monthly/$TSchunkLength\n" if $opt_v;
       }
-      $reqpath = "$ppRootDir/$component/ts/monthly/$TSchunkLength";
+      $reqpath = "$component/ts/monthly/$TSchunkLength";
    }
    if ($opt_v) {print "      TSchunkLength is $TSchunkLength\n";}
    my $tmp = FREUtil::modifydate($tEND,"+1 sec");
@@ -2721,8 +3185,6 @@ sub seasonalTS {
    }        
    if ( "$diag_source" eq "" ) { $diag_source = $_[0]->findvalue('../@source'); }
    if( "$diag_source" eq "") { $diag_source = $component."_month"; }
-   my $missing = checkingTS($freq,$chunkLength,$outdir,$sim0,$t0,$diag_source);
-   if ( "$missing" ne "" ) { mailuser($missing); }
 
    #set dates
    my $tENDprev = FREUtil::modifydate($tEND,"- $lcmchunk years");
@@ -2734,11 +3196,13 @@ sub seasonalTS {
 
    #get variables
    my $variables = FREUtil::cleanstr( $_[0]->findvalue('variables') );
+   #my $missing = checkingTS($freq,$chunkLength,$outdir,$sim0,$t0,$diag_source,$variables);
+   #if ( "$missing" ne "" ) { mailuser($missing); }
    my $forloop = "";
    if ("$variables" eq "") {
       $forloop = <<EOF;
-  foreach file ( $reqpath/$component.$tBEGf-$tENDf.*.nc )
-    set var = `echo \$file | sed 's#$reqpath/$component.$tBEGf-$tENDf.##'`
+  foreach file ( \$tempCache/$reqpath/$component.$tBEGf-$tENDf.*.nc )
+    set var = `echo \$file | sed "s#.*/##;s/$component.$tBEGf-$tENDf.//"`
 EOF
    } else {
       print STDERR "           from xml, vars are '$variables'\n" if $opt_v;
@@ -2746,7 +3210,7 @@ EOF
       if("$variables" ne "") {$variables =~ s/$/.nc/g};
       $forloop .= <<EOF;
   foreach var ( $variables )
-    set file = $reqpath/$component.$tBEGf-$tENDf.\$var
+    set file = \$tempCache/$reqpath/$component.$tBEGf-$tENDf.\$var
 EOF
    }     
 
@@ -2768,8 +3232,8 @@ cd \$work
 find \$work/* -maxdepth 1 -exec rm -rf {} \\;
 set outdir = $outdir
 if ( ! -e \$outdir ) mkdir -p \$outdir
-$time_dmget dmget -d $reqpath "$component.$tBEGf-$tENDf.*.nc"
-$check_dmget
+if ( ! -e \$tempCache/$outdirpath ) mkdir -p \$tempCache/$outdirpath
+#$time_dmget dmget -d $reqpath "$component.$tBEGf-$tENDf.*.nc"
 EOF
    if ($opt_z) { $csh .= begin_systime(); }
    my $totalseasons = 4 * $lcmchunk;
@@ -2796,14 +3260,19 @@ EOF
             $filelist .= "$component.$year.$abbrev.\$var ";
          }
          if( $abbrev =~ "SON" and $aggregateTS ) {
-            $makecpio = createcpio( $outdir,"$component.$begin-$year",FREUtil::timeabbrev($freq),($year-$begin>20) );
+            $makecpio = createcpio( "\$tempCache/$outdirpath",$outdir,"$component.$begin-$year",FREUtil::timeabbrev($freq),($year-$begin>20) );
          }
          $catfiles = <<EOF;
 if ( -e $chunkedoutfile ) rm -f $chunkedoutfile
 $time_ncrcat ncrcat -h -O $filelist $chunkedoutfile
 $check_ncrcat
 $time_mv $mvfile $chunkedoutfile \$outdir
-$time_rm rm $chunkedoutfile
+if ( \$status ) then
+   echo "WARNING: data transfer failure, retrying..."
+   $time_mv $mvfile $chunkedoutfile \$outdir
+   $checktransfer
+endif
+$time_mv $mv $chunkedoutfile \$tempCache/$outdirpath
 $time_rm rm -f $filelist
 
 EOF
@@ -2814,6 +3283,18 @@ EOF
             $csh .= <<EOF;
   #season $season ($tSEASONf) note: december used twice
 $forloop
+    if ( ! -f \$file ) then
+      if ( -f $ppRootDir/$reqpath/\$file:t ) then
+         $time_cp $cp $ppRootDir/$reqpath/\$file:t \$file 
+         if ( \$status ) then
+            echo "WARNING: data transfer failure, retrying..."
+            $time_cp $cp $ppRootDir/$reqpath/\$file:t \$file
+            $checktransfer
+         endif
+      else
+         echo ERROR: necessary file not found: $ppRootDir/$reqpath/\$file:t
+      endif
+    endif
     set string = `ncdump -h \$file | grep UNLIMITED`
     set timename   = `echo \$string[1]`
     $time_ncks ncks -a -h -F -d \$timename,1,2 -d \$timename,12,12 \$file janfeb.nc > ncks.out
@@ -2833,20 +3314,46 @@ EOF
             my $check_hist = errorstr("Could not acquire previous december from history file");
             $csh .= <<EOF;
   #season $season ($tSEASONf)
-$time_dmget dmget -d $reqpath "$component.*-$tENDprevf.*.nc"
+#$time_dmget dmget -d $reqpath "$component.*-$tENDprevf.*.nc"
 $forloop
+    if ( ! -f \$file ) then
+      if ( -f $ppRootDir/$reqpath/\$file:t ) then
+         $time_cp $cp $ppRootDir/$reqpath/\$file:t \$file 
+         if ( \$status ) then
+            echo "WARNING: data transfer failure, retrying..."
+            $time_cp $cp $ppRootDir/$reqpath/\$file:t \$file
+            $checktransfer
+         endif
+      else
+         echo ERROR: necessary file not found: $ppRootDir/$reqpath/\$file:t
+      endif
+    endif
     set string = `ncdump -h \$file | grep UNLIMITED`
     set timename   = `echo \$string[1]`
     $time_ncks ncks -a -h -F -d \$timename,1,2 \$file janfeb.nc > ncks.out
     $check_ncks
     #get december from previous file
     set prev = (`ls ./$component.*-$tENDprevf.\$var`)
-    if ( "\$prev" == "" ) set prev = (`ls $reqpath/$component.*-$tENDprevf.\$var`)
-    if ( "\$prev" == "" && -e "$reqpath/$component.*-$tENDprevf.mon.nc.cpio") then
-      $time_dmget dmget -d $reqpath "$component.*-$tENDprevf.mon.nc.cpio"
-      $check_dmget
-      $time_uncpio $uncpio -ivI $reqpath/$component.*-$tENDprevf.mon.nc.cpio '*12.*.nc'
-      $time_dmput dmput -d $reqpath "$component.*-$tENDprevf.mon.nc.cpio" &
+    if ( "\$prev" == "" ) then
+      set prev = (`ls $ppRootDir/$reqpath/$component.*-$tENDprevf.\$var`)
+      $time_cp $cp \$prev .
+      if ( \$status ) then
+         echo "WARNING: data transfer failure, retrying..."
+         $time_cp $cp \$prev .
+         $checktransfer
+      endif
+      set prev = "./\$prev:t"
+    endif
+    if ( "\$prev" == "" && -e "$ppRootDir/$reqpath/$component.*-$tENDprevf.mon.nc.cpio") then
+      $time_dmget dmget -d $ppRootDir/$reqpath "$component.*-$tENDprevf.mon.nc.cpio"
+      $time_cp $cp $ppRootDir/$reqpath/$component.*-$tENDprevf.mon.nc.cpio .
+      if ( \$status ) then
+         echo "WARNING: data transfer failure, retrying..."
+         $time_cp $cp $ppRootDir/$reqpath/$component.*-$tENDprevf.mon.nc.cpio .
+         $checktransfer
+      endif
+      $time_uncpio $uncpio -ivI $component.*-$tENDprevf.mon.nc.cpio '*12.*.nc'
+      $time_dmput dmput $reqpath "$component.*-$tENDprevf.mon.nc.cpio" &
       set prev = (`ls ./$component.*-$tENDprevf.\$var`)
     endif
     if ( "\$prev" != "" ) then
@@ -2876,7 +3383,6 @@ EOF
             set prevyear = $prevyear
             if ( ! -e \${prevyear}1201.$diag_source.nc ) then
                $time_dmget dmget "$opt_d/$prevhist"
-               $check_dmget
                $time_uncpio $uncpio -ivI $opt_d/$prevhist '*.$diag_source.nc'
                $check_cpio
                $time_dmput dmput "$opt_d/$prevhist" &
@@ -2916,6 +3422,18 @@ EOF
          $csh .= <<EOF;
   #season $season ($tSEASONf)
 $forloop
+    if ( ! -f \$file ) then
+      if ( -f $ppRootDir/$reqpath/\$file:t ) then
+         $time_cp $cp $ppRootDir/$reqpath/\$file:t \$file
+         if ( \$status ) then
+            echo "WARNING: data transfer failure, retrying..."
+            $time_cp $cp $ppRootDir/$reqpath/\$file:t \$file
+            $checktransfer
+         endif
+      else
+         echo ERROR: necessary file not found: $ppRootDir/$reqpath/\$file:t
+      endif
+    endif
     set string = `ncdump -h \$file | grep UNLIMITED`
     set timename   = `echo \$string[1]`
     $time_ncks ncks -a -h -F -d \$timename,$startmonth,$endmonth \$file season.nc > ncks.out
@@ -2964,7 +3482,7 @@ sub monthlyAVfromhist {
    my $tENDf = FREUtil::graindate($tEND,$src);
    my $range = FREUtil::graindate($tEND,'year');
    if (scalar @hDates > 1) { $range = FREUtil::padzeros($range-$int+1)."-$range"; }
-   foreach my $d (@hDates) { $historyfiles .= "$d"."0101.nc.cpio "; }
+   foreach my $d (@hDates) { $historyfiles .= "$d"."0101.nc.tar "; }
 
    my $diag_source =  $_[0]->findvalue('@diag_source');
    my @monthnodes = $ppcNode->findnodes('timeSeries[@freq="monthly"]');
@@ -2980,8 +3498,8 @@ sub monthlyAVfromhist {
    $variables =~ s/ /,/g;
 
    #check for missing files
-   my $missing = checkingAV($src,$interval,$outdir,$sim0,$t0,$diag_source);
-   if ( "$missing" ne "" ) { mailuser($missing); }
+   #my $missing = checkingAV($src,$interval,$outdir,$sim0,$t0,$diag_source);
+   #if ( "$missing" ne "" ) { mailuser($missing); }
 
    my $zInterp = $ppcNode->findvalue('@zInterp');
    my $do_zInterp = 0;
@@ -3088,6 +3606,11 @@ end
    $check_ncatted
 
    $time_mv $mvfile $component.$range.\$monthf.nc \$outdir/$component.$range.\$monthf.nc
+   if ( \$status ) then
+      echo "WARNING: data transfer failure, retrying..."
+      $time_mv $mvfile $component.$range.\$monthf.nc \$outdir/$component.$range.\$monthf.nc
+      $checktransfer
+   endif
    $time_rm rm $component.$range.\$monthf.nc
    $time_dmput dmput \$outdir/$component.$range.\$monthf.nc &
 
@@ -3099,6 +3622,11 @@ EOF
    $time_ncatted ncatted -h -O -a filename,global,m,c,"$component.$range.\$monthf$tile.nc" $component.$range.\$monthf$tile.nc
    $check_ncatted
    $time_mv $mvfile $component.$range.\$monthf$tile.nc \$outdir/$component.$range.\$monthf$tile.nc
+   if ( \$status ) then
+      echo "WARNING: data transfer failure, retrying..."
+      $time_mv $mvfile $component.$range.\$monthf$tile.nc \$outdir/$component.$range.\$monthf$tile.nc
+      $checktransfer
+   endif
    $time_rm rm $component.$range.\$monthf$tile.nc
    $time_dmput dmput \$outdir/$component.$range.\$monthf$tile.nc &
    @ i++
@@ -3153,6 +3681,11 @@ EOF
    $time_ncatted ncatted -h -O -a filename,global,m,c,"$component.$range.\$monthf.nc" $component.$range.\$monthf.nc
    $check_ncatted
    $time_mv $mvfile $component.$range.\$monthf.nc \$outdir/$component.$range.\$monthf.nc
+   if ( \$status ) then
+      echo "WARNING: data transfer failure, retrying..."
+      $time_mv $mvfile $component.$range.\$monthf.nc \$outdir/$component.$range.\$monthf.nc
+      $checktransfer
+   endif
    $time_rm rm $component.$range.\$monthf.nc
    $time_dmput dmput \$outdir/$component.$range.\$monthf.nc &
 
@@ -3174,15 +3707,21 @@ EOF
 sub annualAV1yrfromhist {
    #taNode = $_[0] ;
    my $sim0 = $_[1];
-   my $ppcNode = $_[0]->parentNode;
+   my $write2arch = $_[2];
+   my $yr2do = $_[3];
 
+   my $ppcNode = $_[0]->parentNode;
    my $src = 'annual';
    my $interval = $_[0]->findvalue('@interval');
    my $chunkLength = $_[0]->findvalue('@chunkLength');
+
+   if ( "$yr2do" eq '' ) { $yr2do = $opt_t; }
+   my $yr2do0 = &ParseDate($yr2do);
    my $sim0f = FREUtil::graindate($sim0,$src);
-   my $t0f = FREUtil::graindate($t0,$src);
-   my $tENDf = FREUtil::graindate($tEND,$src);
-   my $hDateyr = substr($hDate,0,4);
+   my $t0f = FREUtil::graindate($yr2do0,$src);
+   my $yr2doEND = FREUtil::modifydate($yr2do0,'+1 year -1 sec');
+   my $tENDf = FREUtil::graindate($yr2doEND,$src);
+   my $hDateyr = substr($yr2do,0,4);
 
    my $diag_source = $_[0]->findvalue('@diagSource');
    my @monthnodes = $ppcNode->findnodes('timeSeries[@freq="monthly"]');
@@ -3193,9 +3732,10 @@ sub annualAV1yrfromhist {
    if ( "$diag_source" eq "" ) { $diag_source = $_[0]->findvalue('../@source'); }
    if ( "$diag_source" eq "") { $diag_source = $component."_month"; }
 
-   $historyfiles .= "$hDate".".nc.cpio ";
+   $historyfiles .= "$yr2do".".nc.tar ";
    my $interval = "1yr";
-   my $outdir = "$ppRootDir/$component/av/$src"."_$interval";
+   my $outdirpath = "$component/av/$src"."_$interval";
+   my $outdir = "$ppRootDir/$outdirpath";
 
    #get variables
    my $variables = FREUtil::cleanstr( $_[0]->findvalue('variables') );
@@ -3220,11 +3760,17 @@ sub annualAV1yrfromhist {
    my $check_fregrid = errorstr("FREGRID ($component $src averages)");
    my $check_ncrename = errorstr("NCRENAME ($component $src averages)");
    my $csh = setcheckpt('annualAV1yrfromhist');
+   if ( "$write2arch" eq "1" ) {
+      $csh .= "set write2arch = 1\n";
+   } else {
+      $csh .= "set write2arch = 0\n";
+   }
    $csh .= <<EOF;
 #####################################
 echo 'timeAverage ($component $src averages)'
 set outdir = $outdir 
-if ( ! -e \$outdir ) mkdir -p \$outdir
+if ( ! -e \$outdir && \$write2arch ) mkdir -p \$outdir
+if ( ! -e \$tempCache/$outdirpath ) mkdir -p \$tempCache/$outdirpath
 cd \$work
 find \$work/* -maxdepth 1 -exec rm -rf {} \\;
 EOF
@@ -3254,13 +3800,13 @@ $retry_timavg
 $check_timavg
 
 EOF
-      $csh .= zInterpolate($zInterp,"modellevels$tile.nc","$hDate.$diag_source$tile.nc",$caltype,$variables);
+      $csh .= zInterpolate($zInterp,"modellevels$tile.nc","$yr2do.$diag_source$tile.nc",$caltype,$variables);
 
    } else {
       $csh .= <<EOF;
-$time_timavg \$TIMAVG -o $hDate.$diag_source$tile.nc annual$tile.nc
+$time_timavg \$TIMAVG -o $yr2do.$diag_source$tile.nc annual$tile.nc
 $retry_timavg
-   $time_timavg \$TIMAVG -o $hDate.$diag_source$tile.nc annual$tile.nc
+   $time_timavg \$TIMAVG -o $yr2do.$diag_source$tile.nc annual$tile.nc
 $check_timavg
 $time_rm rm -f annual$tile.nc
    
@@ -3271,8 +3817,8 @@ if ($cubic == 2) { #CUBIC to LATLON
 
    my $fregrid_wt = '';
    if ( $component =~/land/ and $dtvars{all_land_static} =~/\bland_frac\b/ ) {
-      print "       land_frac found, weighting exchange grid cell with $hDate.land_static\n" if $opt_v;
-      $fregrid_wt = "--weight_file $hDate.land_static --weight_field land_frac";
+      print "       land_frac found, weighting exchange grid cell with $yr2do.land_static\n" if $opt_v;
+      $fregrid_wt = "--weight_file $yr2do.land_static --weight_field land_frac";
    }
    my $call_and_check_fregrid = $call_fregrid;
    $call_and_check_fregrid =~ s/#check_fregrid/$check_fregrid/;
@@ -3283,8 +3829,8 @@ if ($cubic == 2) { #CUBIC to LATLON
 end
 
     set fregrid_wt = "$fregrid_wt"
-    set fregrid_in_date = $hDate
-    set fregrid_in = $hDate.$diag_source
+    set fregrid_in_date = $yr2do
+    set fregrid_in = $yr2do.$diag_source
     set nlat = $nlat ; set nlon = $nlon
     set interp_method = $interpMethod
     set ncvars_arg = -st23
@@ -3296,20 +3842,34 @@ mv \$fregrid_in.nc $component.$tENDf.ann.nc
 $time_ncatted ncatted -h -O -a filename,global,m,c,"$component.$tENDf.ann.nc" $component.$tENDf.ann.nc
 $check_ncatted
 
-$time_mv $mvfile $component.$tENDf.ann.nc \$outdir/$component.$tENDf.ann.nc
-$time_rm rm $component.$tENDf.ann.nc
-$time_dmput dmput \$outdir/$component.$tENDf.ann.nc &
+$time_mv $mv $component.$tENDf.ann.nc \$tempCache/$outdirpath/$component.$tENDf.ann.nc
+if ( \$write2arch ) then
+   $time_mv $mvfile \$tempCache/$outdirpath/$component.$tENDf.ann.nc \$outdir/$component.$tENDf.ann.nc
+   if ( \$status ) then
+      echo "WARNING: data transfer failure, retrying..."
+      $time_mv $mvfile \$tempCache/$outdirpath/$component.$tENDf.ann.nc \$outdir/$component.$tENDf.ann.nc
+      $checktransfer
+   endif
+endif
 
 EOF
 
    } else { #CUBIC - no conversion
    $csh .= <<EOF;
-mv $hDate.$diag_source$tile.nc $component.$tENDf.ann$tile.nc
+mv $yr2do.$diag_source$tile.nc $component.$tENDf.ann$tile.nc
 $time_ncatted ncatted -h -O -a filename,global,m,c,"$component.$tENDf.ann$tile.nc" $component.$tENDf.ann$tile.nc
 $check_ncatted
-$time_mv $mvfile $component.$tENDf.ann$tile.nc \$outdir/$component.$tENDf.ann$tile.nc
-$time_rm rm $component.$tENDf.ann$tile.nc
-$time_dmput dmput \$outdir/$component.$tENDf.ann$tile.nc &
+
+$time_mv $mv $component.$tENDf.ann$tile.nc \$tempCache/$outdirpath/$component.$tENDf.ann$tile.nc
+if ( \$write2arch ) then
+   $time_mv $mvfile \$tempCache/$outdirpath/$component.$tENDf.ann$tile.nc \$outdir/$component.$tENDf.ann$tile.nc
+   if ( \$status ) then
+      echo "WARNING: data transfer failure, retrying..."
+      $time_mv $mvfile \$tempCache/$outdirpath/$component.$tENDf.ann$tile.nc \$outdir/$component.$tENDf.ann$tile.nc
+      $checktransfer
+   endif
+endif
+
 @ i ++
 end
 EOF
@@ -3351,9 +3911,15 @@ EOF
    $csh .= <<EOF;
 $time_ncatted ncatted -h -O -a filename,global,m,c,"$component.$tENDf.ann.nc" $component.$tENDf.ann.nc
 $check_ncatted
-$time_mv $mvfile $component.$tENDf.ann.nc \$outdir/$component.$tENDf.ann.nc
-$time_rm rm $component.$tENDf.ann.nc
-$time_dmput dmput \$outdir/$component.$tENDf.ann.nc &
+$time_mv $mv $component.$tENDf.ann.nc \$tempCache/$outdirpath/$component.$tENDf.ann.nc
+if ( \$write2arch ) then
+   $time_mv $mvfile \$tempCache/$outdirpath/$component.$tENDf.ann.nc \$outdir/$component.$tENDf.ann.nc
+   if ( \$status ) then
+      echo "WARNING: data transfer failure, retrying..."
+      $time_mv $mvfile \$tempCache/$outdirpath/$component.$tENDf.ann.nc \$outdir/$component.$tENDf.ann.nc
+      $checktransfer
+   endif
+endif
 $time_rm rm -f annual.nc
 
 EOF
@@ -3368,6 +3934,9 @@ EOF
 sub annualAVxyrfromann {
    #taNode = $_[0] ;
    my $sim0 = $_[1];
+   my $ppcNode = $_[2];
+   my $annavnodes = $_[3];
+   my $annCalcInterval = $_[3];
 
    my $src = 'annual';
    my $interval = $_[0]->findvalue('@interval');
@@ -3375,7 +3944,8 @@ sub annualAVxyrfromann {
    my $sim0f = FREUtil::graindate($sim0,$src);
    my $t0f = FREUtil::graindate($t0,$src);
    my $tENDf = FREUtil::graindate($tEND,$src);
-   my $outdir = "$ppRootDir/$component/av/$src"."_$interval";
+   my $outdirpath = "$component/av/$src"."_$interval";
+   my $outdir = "$ppRootDir/$outdirpath";
    my $tmp = FREUtil::modifydate($tEND,"+ 1 sec");
    my $yrsSoFar = &Delta_Format( &DateCalc($sim0,$tmp,\$err,1) ,0,"%yd");
    my $int = $interval;
@@ -3395,19 +3965,39 @@ sub annualAVxyrfromann {
    }
    if ( "$diag_source" eq "" ) { $diag_source = $_[0]->findvalue('../@source'); }
    if ( "$diag_source" eq "") { $diag_source = $component."_month"; }
-   my $missing = checkingAV($src,$interval,$outdir,$sim0,$t0,$diag_source);
-   if ( "$missing" ne "" ) { mailuser($missing); }
+   #my $missing = checkingAV($src,$interval,$outdir,$sim0,$t0,$diag_source);
+   #if ( "$missing" ne "" ) { mailuser($missing); }
 
-   my $csh = setcheckpt("annualAVxyrfromann_$interval");
+   my $csh = '';
+
+   #always do 1yr ann av calculation, but only archive if annCalcInterval not 1yr
+   if ( "$annCalcInterval" eq "1yr" and $annavnodes ) { $annavnodes = 0; }
+   my $newnode = XML::LibXML::Element->new( 'timeAverage' );
+   $newnode->setAttribute( 'source','annual' );
+   $newnode->setAttribute( 'interval','1yr' );
+   $ppcNode->appendChild($newnode);
+   my $annNode = $ppcNode->findnodes('timeAverage[@source="annual" and @interval="1yr"]')->get_node(1);
+   foreach my $i ( 0 .. ($int-1) ) {
+      my $annyr = substr($opt_t,0,4);
+      $annyr -= $i;
+      $annyr = FREUtil::padzeros($annyr)."0101";
+      #print "\nNOTE: Calling annualAV1yrfromhist( $annNode, $sim0, 0, $annyr )\n\n";
+      $csh .= annualAV1yrfromhist( $annNode, $sim0, $annavnodes, $annyr );
+   }
+
+   $csh .= setcheckpt("annualAVxyrfromann_$interval");
    $csh .= <<EOF;
 
 #####################################
 echo 'timeAverage ($component $src $interval averages)'
 set outdir = $outdir 
 if ( ! -e \$outdir ) mkdir -p \$outdir
+if ( ! -e \$tempCache/$component/av/annual_1yr ) mkdir -p \$tempCache/$component/av/annual_1yr 
+if ( ! -e \$tempCache/$outdirpath ) mkdir -p \$tempCache/$outdirpath
 set anndir = $ppRootDir/$component/av/annual_1yr
 cd \$work
 find \$work/* -maxdepth 1 -exec rm -rf {} \\;
+cd \$tempCache/$component/av/annual_1yr
 EOF
    if ($opt_z) { $csh .= begin_systime(); }
 
@@ -3437,45 +4027,69 @@ EOF
    if ($cubic != 1) { # LATLON
 
       $csh .= <<EOF;
-$time_dmget dmget -d \$anndir "$getlist"
-$check_dmget
+foreach file ($filelist)
+   set f = \$file:t
+   if ( ! -f \$f ) then
+      $time_cp $cp \$file .
+      if ( \$status ) then
+         echo "WARNING: data transfer failure, retrying..."
+         $time_cp $cp \$file .
+         $checktransfer
+      endif
+   endif
+end
 if ( -e xyears.nc ) rm -f xyears.nc
-$time_ncrcat ncrcat -h -O $filelist xyears.nc
+$time_ncrcat ncrcat -h -O $getlist \$work/xyears.nc
 $check_ncrcat
-$time_timavg \$TIMAVG -o $component.$first-$endinterval.ann.nc xyears.nc
+$time_timavg \$TIMAVG -o \$tempCache/$outdirpath/$component.$first-$endinterval.ann.nc \$work/xyears.nc
 $retry_timavg
-   $time_timavg \$TIMAVG -o $component.$first-$endinterval.ann.nc xyears.nc
+   $time_timavg \$TIMAVG -o \$tempCache/$outdirpath/$component.$first-$endinterval.ann.nc \$work/xyears.nc
 $check_timavg
-$time_ncatted ncatted -h -O -a filename,global,m,c,"$component.$first-$endinterval.ann.nc" $component.$first-$endinterval.ann.nc
+$time_ncatted ncatted -h -O -a filename,global,m,c,"$component.$first-$endinterval.ann.nc" \$tempCache/$outdirpath/$component.$first-$endinterval.ann.nc
 $check_ncatted
-$time_mv $mvfile $component.$first-$endinterval.ann.nc \$outdir/$component.$first-$endinterval.ann.nc
-$time_rm rm $component.$first-$endinterval.ann.nc
-$time_dmput dmput \$outdir/$component.$first-$endinterval.ann.nc &
-$time_rm rm -f xyears.nc
+$time_mv $mvfile \$tempCache/$outdirpath/$component.$first-$endinterval.ann.nc \$outdir/$component.$first-$endinterval.ann.nc
+if ( \$status ) then
+   echo "WARNING: data transfer failure, retrying..."
+   $time_mv $mvfile \$tempCache/$outdirpath/$component.$first-$endinterval.ann.nc \$outdir/$component.$first-$endinterval.ann.nc
+   $checktransfer
+endif
+$time_rm rm -f \$work/xyears.nc
 EOF
    } else { # CUBIC
       my $tile = '.tile$i';
       $csh .= <<EOF;
-$time_dmget dmget -d \$anndir "$getlist"
-$check_dmget
+foreach file ($filelist)
+   set f = \$file:t
+   if ( ! -f \$f ) then
+      $time_cp $cp \$file .
+      if ( \$status ) then
+         echo "WARNING: data transfer failure, retrying..."
+         $time_cp $cp \$file .
+         $checktransfer
+      endif
+   endif
+end
 set i = 1
 while ( \$i <= 6 )
    if ( -e xyears.nc ) rm -f xyears.nc
    set filelist = ""
-   foreach file ($filelist)
-      if (\$file =~ \*$tile\*) set filelist = "\$filelist \$file"
+   foreach file ($getlist)
+      if (\$file =~ \*$tile\*) set filelist = ( \$filelist \$file )
    end
-   $time_ncrcat ncrcat -h -O \$filelist xyears.nc
+   $time_ncrcat ncrcat -h -O \$filelist \$work/xyears.nc
    $check_ncrcat
-   $time_timavg \$TIMAVG -o $component.$first-$endinterval.ann$tile.nc xyears.nc
+   $time_timavg \$TIMAVG -o \$tempCache/$outdirpath/$component.$first-$endinterval.ann$tile.nc \$work/xyears.nc
    $retry_timavg
-     $time_timavg \$TIMAVG -o $component.$first-$endinterval.ann$tile.nc xyears.nc
+     $time_timavg \$TIMAVG -o \$tempCache/$outdirpath/$component.$first-$endinterval.ann$tile.nc \$work/xyears.nc
    $check_timavg
-   $time_ncatted ncatted -h -O -a filename,global,m,c,"$component.$first-$endinterval.ann$tile.nc" $component.$first-$endinterval.ann$tile.nc
+   $time_ncatted ncatted -h -O -a filename,global,m,c,"$component.$first-$endinterval.ann$tile.nc" \$tempCache/$outdirpath/$component.$first-$endinterval.ann$tile.nc
    $check_ncatted
-   $time_mv $mvfile $component.$first-$endinterval.ann$tile.nc \$outdir/$component.$first-$endinterval.ann$tile.nc
-   $time_rm rm $component.$first-$endinterval.ann$tile.nc
-   $time_dmput dmput \$outdir/$component.$first-$endinterval.ann$tile.nc &
+   $time_mv $mvfile \$tempCache/$outdirpath/$component.$first-$endinterval.ann$tile.nc \$outdir/$component.$first-$endinterval.ann$tile.nc
+   if ( \$status ) then
+      echo "WARNING: data transfer failure, retrying..."
+      $time_mv $mvfile \$tempCache/$outdirpath/$component.$first-$endinterval.ann$tile.nc \$outdir/$component.$first-$endinterval.ann$tile.nc
+      $checktransfer
+   endif
    $time_rm rm -f xyears.nc
    @ i++
 end
@@ -3563,13 +4177,22 @@ $dmgetvars
 foreach var ( $variables )
    if ( ! -e $indir/\$in.\$var.nc ) then
       $time_dmget dmget $indir/\$in.day.nc.cpio
-      $check_dmget
-      $time_uncpio $uncpio -ivI $indir/\$in.day.nc.cpio \$in.\$var.nc 
+      $time_cp $cp $indir/\$in.day.nc.cpio .
+      if ( \$status ) then
+         echo "WARNING: data transfer failure, retrying..."
+         $time_cp $cp $indir/\$in.day.nc.cpio .
+         $checktransfer
+      endif
+      $time_uncpio $uncpio -ivI \$in.day.nc.cpio \$in.\$var.nc 
       $check_cpio
       $time_dmput dmput "$indir/\$in.day.nc.cpio" &
-      set indir = '.'
    else
-      set indir = $indir
+      $time_cp $cp $indir/\$in.\$var.nc .
+      if ( \$status ) then
+         echo "WARNING: data transfer failure, retrying..."
+         $time_cp $cp $indir/\$in.\$var.nc .
+         $checktransfer
+      endif
    endif
 
    set d1 = 0
@@ -3595,8 +4218,8 @@ foreach var ( $variables )
           set y2 = \$y1
         endif
 
-        set t = `ncdump -h \$indir/\$in.\$var.nc | grep -i '.*=.*unlimited.*currently' | awk '{print \$1}'`
-        $time_ncks ncks -d \$t,\$d1,\$d2 -ahF \$indir/\$in.\$var.nc \$y1\$m1.\$var.daily.nc
+        set t = `ncdump -h \$in.\$var.nc | grep -i '.*=.*unlimited.*currently' | awk '{print \$1}'`
+        $time_ncks ncks -d \$t,\$d1,\$d2 -ahF \$in.\$var.nc \$y1\$m1.\$var.daily.nc
         $check_ncks
         $time_timavg \$TIMAVG -o \$y1\$m1.\$var.nc \$y1\$m1.\$var.daily.nc
         $retry_timavg
@@ -3613,6 +4236,11 @@ foreach var ( $variables )
    $check_ncatted
    set tmpstring = `ncdump -h \$out.\$var.nc | grep UNLIMITED`
    $time_mv $mvfile \$out.\$var.nc $outdir
+   if ( \$status ) then
+      echo "WARNING: data transfer failure, retrying..."
+      $time_mv $mvfile \$out.\$var.nc $outdir
+      $checktransfer
+   endif
    $time_rm rm \$out.\$var.nc
    $time_rm rm -f ??????.\$var.nc
    @ len = \$#tmpstring - 1
@@ -3633,6 +4261,11 @@ if ( \$numfilestocpio > 0 ) then
 if ( ! -e \$out.mon.nc.cpio ) then
    ls -1 \$varfiles | $time_mkcpio $cpio -oKvO \$work/\$out.mon.nc.cpio
    $time_mv $mvfile \$work/\$out.mon.nc.cpio \$outdir/\$out.mon.nc.cpio
+   if ( \$status ) then
+      echo "WARNING: data transfer failure, retrying..."
+      $time_mv $mvfile \$work/\$out.mon.nc.cpio \$outdir/\$out.mon.nc.cpio
+      $checktransfer
+   endif
    $time_rm rm \$work/\$out.mon.nc.cpio
 else  
    $time_dmget dmget \$out.mon.nc.cpio
@@ -3654,9 +4287,19 @@ else
       $time_uncpio $cpio -ivI \$outdir/\$out.mon.nc.cpio
       cd \$outdir
       $time_cp $cp \$files \$work/mkcpio
+      if ( \$status ) then
+         echo "WARNING: data transfer failure, retrying..."
+         $time_cp $cp \$files \$work/mkcpio
+         $checktransfer
+      endif
       cd \$work/mkcpio
       ls -1 \$out.*.nc | $time_mkcpio $cpio -oKvO \$out.mon.nc.cpio
       $time_mv $mvfile \$out.mon.nc.cpio \$outdir
+      if ( \$status ) then
+         echo "WARNING: data transfer failure, retrying..."
+         $time_mv $mvfile \$out.mon.nc.cpio \$outdir
+         $checktransfer
+      endif
       $time_rm rm \$out.mon.nc.cpio
    endif
 endif
@@ -3697,7 +4340,8 @@ sub directTS{
       mailuser("Cannot create $component $freq timeSeries unless you set a chunkLength.");
       return "";
    } 
-   my $outdir = "$ppRootDir/$component/ts/$freq/$chunkLength";
+   my $outdirpath = "$component/ts/$freq/$chunkLength";
+   my $outdir = "$ppRootDir/$outdirpath";
 
    #lol shortrunfrepp
    my $iunit = "months";
@@ -3727,10 +4371,6 @@ sub directTS{
    $mkdircommand .= "$outdir ";
    if( $chunkLength > $maxyrs ) { $maxyrs = $chunkLength; }
 
-   #check that all files up to current time exist
-   my $missing = checkingTS($freq,$chunkLength,$outdir,$sim0,$t0,$source);
-   if ( "$missing" ne "" ) { mailuser($missing); }
-
    my $hDateyr = substr($hDate,0,4);
    my @hDates = ( FREUtil::padzeros($hDateyr-$chunkLength+1) .. "$hDateyr" );
    if ($opt_m) {
@@ -3748,9 +4388,9 @@ sub directTS{
     $start = FREUtil::graindate($start,$freq);
    }
    if($opt_m){
-      foreach my $d (@hDates) { $historyfiles .= "$d"."01.nc.cpio "; }
+      foreach my $d (@hDates) { $historyfiles .= "$d"."01.nc.tar "; }
    } else {
-      foreach my $d (@hDates) { $historyfiles .= "$d"."0101.nc.cpio "; }
+      foreach my $d (@hDates) { $historyfiles .= "$d"."0101.nc.tar "; }
    }
    #determine whether to interpolate z levels
    my $zInterp = $ppcNode->findvalue('@zInterp');
@@ -3759,6 +4399,9 @@ sub directTS{
 
    #get variables
    my $uservariables = FREUtil::cleanstr( $_[0]->findvalue('variables') );
+   #check that all files up to current time exist
+   #my $missing = checkingTS($freq,$chunkLength,$outdir,$sim0,$t0,$source,$uservariables);
+   #if ( "$missing" ne "" ) { mailuser($missing); }
    $uservariables =~ s/ /,/g;
    my $availablevars = $dtvars{"all_$source"};
    $availablevars =~ s/^/,/g;
@@ -3778,6 +4421,7 @@ sub directTS{
    if ("$variables" ne "") {
       print STDERR "        from xml, vars are '$variables'\n" if $opt_v;
    }
+
    my $numtimelevels = gettimelevels($freq,$chunkLength);
    #my $check_cpio = errorstr("CPIO ($component $freq ts from $source)");
    my $check_cpio_msg = "CPIO ($component $freq ts from $source)";
@@ -3805,6 +4449,7 @@ cd \$work
 find \$work/* -maxdepth 1 -exec rm -rf {} \\;
 set outdir = $outdir
 if ( ! -e \$outdir ) mkdir -p \$outdir
+if ( ! -e \$tempCache/$outdirpath ) mkdir -p \$tempCache/$outdirpath
 
 EOF
    if ($opt_z) { $csh .= begin_systime(); }
@@ -3972,7 +4617,12 @@ foreach file ( *.nc )
      test \$length = $numtimelevels
      $check_levels
      $time_mv $mvfile \$file \$outdir/$component.$start-$tENDf.\$label
-     $time_rm rm \$file
+     if ( \$status ) then
+         echo "WARNING: data transfer failure, retrying..."
+         $time_mv $mvfile \$file \$outdir/$component.$start-$tENDf.\$label
+         $checktransfer
+     endif
+     $time_mv $mv \$file \$tempCache/$outdirpath/$component.$start-$tENDf.\$label
 end
 cd \$work
 $time_rm rm -rf byVar
@@ -3985,9 +4635,9 @@ EOF
       my $abbrev = FREUtil::timeabbrev($freq);
       my $cpioTS = '';
       if ( $cubic == 1 ) {
-         $cpioTS = createcpio( $outdir,"$component.$start-$tENDf.tile?",$abbrev,$chunkLength>20 );
+         $cpioTS = createcpio( "\$tempCache/$outdirpath",$outdir,"$component.$start-$tENDf.tile?",$abbrev,$chunkLength>20 );
       } else {
-         $cpioTS = createcpio( $outdir,"$component.$start-$tENDf",$abbrev,$chunkLength>20 );
+         $cpioTS = createcpio( "\$tempCache/$outdirpath",$outdir,"$component.$start-$tENDf",$abbrev,$chunkLength>20 );
       }
       if ("$freq" eq "monthly") { $cpiomonTS .= $cpioTS; } 
       else { $csh .= $cpioTS; }
@@ -4034,8 +4684,8 @@ sub monthlyAVfromav {
    }
    if ( "$diag_source" eq "" ) { $diag_source = $_[0]->findvalue('../@source'); }
    if ( "$diag_source" eq "") { $diag_source = $component."_month"; }
-   my $missing = checkingAV($src,$interval,$outdir,$sim0,$t0,$diag_source);
-   if ( "$missing" ne "" ) { mailuser($missing); }
+   #my $missing = checkingAV($src,$interval,$outdir,$sim0,$t0,$diag_source);
+   #if ( "$missing" ne "" ) { mailuser($missing); }
 
    my $sim0f = FREUtil::graindate($sim0,$src);
    my $t0f = FREUtil::graindate($t0,$src);
@@ -4047,16 +4697,22 @@ sub monthlyAVfromav {
    my $subend = FREUtil::padzeros($start + $subint - 1); 
    my $filelist = "";
    until( $subend > $end ) {
-      if($substart == $subend) {$filelist .= "$component.$substart.\$monthf.nc ";}
-      else {$filelist .= "$component.$substart-$subend.\$monthf.nc ";}
+      if($substart == $subend) {$filelist .= "$component.$substart.\$monthf\$tile.nc ";}
+      else {$filelist .= "$component.$substart-$subend.\$monthf\$tile.nc ";}
       $substart = FREUtil::padzeros($substart + $subint);
       $subend = FREUtil::padzeros($subend + $subint);
    }
    my $getlist = $filelist;
-   $getlist =~ s/\$monthf/*/g;
+   $getlist =~ s/\$monthf\$tile/*/g;
 #   print "filelist is $filelist\n";
 #   print "getlist is $getlist\n";
-
+   my $tilestart = "set tile = ''";
+   my $tileend = '';
+   if ( $cubic == 1 ) {
+      $tilestart = "set tileN=1\nwhile (\$tileN <= 6)\nset tile = .tile\$tileN";
+      $tileend = "@ tileN++\nend";
+   }
+   
    my $check_ncatted = errorstr("NCATTED ($component $src $interval averages)");
    my $check_ncrcat = errorstr("NCRCAT ($component $src $interval averages)");
    my $check_timavg = retryonerrorend("TIMAVG ($component $src $interval averages)");
@@ -4077,28 +4733,44 @@ EOF
 
 cd $srcdir
 $time_dmget dmget "$getlist"
-$check_dmget
+set files = (`ls $getlist`)
+cd \$work
+foreach file (\$files)
+   $time_cp $cp $srcdir/\$file .
+   if ( \$status ) then
+      echo "WARNING: data transfer failure, retrying..."
+      $time_cp $cp $srcdir/\$file .
+      $checktransfer
+   endif
+end
+
+$tilestart
 
 set month = 1
 while (\$month <= 12)
    set monthf = `echo \$month | sed 's/.*/0&/;s/.\\(..\\)/\\1/'`
-   cd $srcdir
-   if ( -e \$work/month.nc ) rm -f \$work/month.nc
-   $time_ncrcat ncrcat -h -O $filelist \$work/month.nc
+   if ( -e month.nc ) rm -f month.nc
+   $time_ncrcat ncrcat -h -O $filelist month.nc
    $check_ncrcat
-   cd \$work
-   $time_timavg \$TIMAVG -o $component.$start-$end.\$monthf.nc month.nc
+   $time_timavg \$TIMAVG -o $component.$start-$end.\$monthf\$tile.nc month.nc
    $retry_timavg
-      $time_timavg \$TIMAVG -o $component.$start-$end.\$monthf.nc month.nc
+      $time_timavg \$TIMAVG -o $component.$start-$end.\$monthf\$tile.nc month.nc
    $check_timavg
-   $time_ncatted ncatted -h -O -a filename,global,m,c,"$component.$start-$end.\$monthf.nc" $component.$start-$end.\$monthf.nc
+   $time_ncatted ncatted -h -O -a filename,global,m,c,"$component.$start-$end.\$monthf\$tile.nc" $component.$start-$end.\$monthf\$tile.nc
    $check_ncatted
-   $time_mv $mvfile $component.$start-$end.\$monthf.nc \$outdir
-   $time_rm rm $component.$start-$end.\$monthf.nc
-   $time_dmput dmput \$outdir/$component.$start-$end.\$monthf.nc &
+   $time_mv $mvfile $component.$start-$end.\$monthf\$tile.nc \$outdir
+   if ( \$status ) then
+      echo "WARNING: data transfer failure, retrying..."
+      $time_mv $mvfile $component.$start-$end.\$monthf\$tile.nc \$outdir
+      $checktransfer
+   endif
+   $time_rm rm $component.$start-$end.\$monthf\$tile.nc
+   $time_dmput dmput \$outdir/$component.$start-$end.\$monthf\$tile.nc &
    $time_rm rm -f month.nc
    @ month++
 end
+
+$tileend
 
 EOF
 
@@ -4141,8 +4813,8 @@ sub annualAVfromav {
    }
    if ( "$diag_source" eq "" ) { $diag_source = $_[0]->findvalue('../@source'); }
    if ( "$diag_source" eq "") { $diag_source = $component."_month"; }
-   my $missing = checkingAV($src,$interval,$outdir,$sim0,$t0,$diag_source);
-   if ( "$missing" ne "" ) { mailuser($missing); }
+   #my $missing = checkingAV($src,$interval,$outdir,$sim0,$t0,$diag_source);
+   #if ( "$missing" ne "" ) { mailuser($missing); }
 
    my $csh = setcheckpt("annualAVfromav_$interval");
    $csh .= <<EOF;
@@ -4162,9 +4834,16 @@ EOF
       my $subend = FREUtil::padzeros($first + $subint - 1);
       my $filelist = "";
       until( $subend > $tENDf ) {
-         $filelist .= "$component.$substart-$subend.ann.nc ";
+         $filelist .= "$component.$substart-$subend.ann\$tile.nc ";
          $substart = FREUtil::padzeros($substart + $subint);
          $subend = FREUtil::padzeros($subend + $subint);
+      }
+
+      my $tilestart = "set tile = ''";
+      my $tileend = '';
+      if ( $cubic == 1 ) {
+         $tilestart = "set tileN=1\nwhile (\$tileN <= 6)\nset tile = .tile\$tileN";
+         $tileend = "@ tileN++\nend";
       }
 
       my $check_ncrcat = errorstr("NCRCAT ($component $src $interval averages)");
@@ -4175,20 +4854,38 @@ EOF
       $csh .= <<EOF;
 cd $srcdir
 $time_dmget dmget "$filelist"
-$check_dmget
-if ( -e \$work/xyears.nc ) rm -f \$work/xyears.nc
-$time_ncrcat ncrcat -h -O $filelist \$work/xyears.nc
-$check_ncrcat
+
+$tilestart
+
 cd \$work
-$time_timavg \$TIMAVG -o $component.$first-$endinterval.ann.nc xyears.nc
+foreach file ($filelist)
+   $time_cp $cp $srcdir/\$file .
+   if ( \$status ) then
+      echo "WARNING: data transfer failure, retrying..."
+      $time_cp $cp $srcdir/\$file .
+      $checktransfer
+   endif
+end
+
+if ( -e xyears.nc ) rm -f xyears.nc
+$time_ncrcat ncrcat -h -O $filelist xyears.nc
+$check_ncrcat
+$time_timavg \$TIMAVG -o $component.$first-$endinterval.ann\$tile.nc xyears.nc
 $retry_timavg
-   $time_timavg \$TIMAVG -o $component.$first-$endinterval.ann.nc xyears.nc
+   $time_timavg \$TIMAVG -o $component.$first-$endinterval.ann\$tile.nc xyears.nc
 $check_timavg
-$time_ncatted ncatted -h -O -a filename,global,m,c,"$component.$first-$endinterval.ann.nc" $component.$first-$endinterval.ann.nc
+$time_ncatted ncatted -h -O -a filename,global,m,c,"$component.$first-$endinterval.ann\$tile.nc" $component.$first-$endinterval.ann\$tile.nc
 $check_ncatted
-$time_mv $mvfile $component.$first-$endinterval.ann.nc \$outdir/$component.$first-$endinterval.ann.nc
-$time_rm rm $component.$first-$endinterval.ann.nc
+$time_mv $mvfile $component.$first-$endinterval.ann\$tile.nc \$outdir/$component.$first-$endinterval.ann\$tile.nc
+if ( \$status ) then
+   echo "WARNING: data transfer failure, retrying..."
+   $time_mv $mvfile $component.$first-$endinterval.ann\$tile.nc \$outdir/$component.$first-$endinterval.ann\$tile.nc
+   $checktransfer
+endif
+$time_rm rm $component.$first-$endinterval.ann\$tile.nc
 $time_rm rm -f xyears.nc
+
+$tileend
 
 EOF
       $first = FREUtil::padzeros($endinterval+1);
@@ -4215,7 +4912,7 @@ sub staticvars {
    my $check_ncrename = errorstr("NCRENAME ($component static variables)");
    my $check_ncatted = errorstr("NCATTED ($component static variables)");
 
-   $historyfiles .= "$hDate".".nc.cpio ";
+   $historyfiles .= "$hDate".".nc.tar ";
 
    my $csh = setcheckpt('staticvars');
    $csh .= <<EOF;
@@ -4225,8 +4922,18 @@ if ( ! -e $ppRootDir/$component/$component.static.nc ) then
    cd \$work
    find \$work/* -maxdepth 1 -exec rm -rf {} \\;
    mkdir -p $ppRootDir/$component
-   $time_hsmget hsmget -t -q -a $opt_d -p $ptmpDir/history -w $tmphistdir $hDate.nc/\\*$diag_source\\*
-   $time_hsmget hsmget -t -q -a $refinedir -p $ptmpDir/history_refineDiag -w $tmphistdir $hDate.nc/\\*$diag_source\\*
+   $time_hsmget hsmget -v -m \$FRE_COMMANDS_HOME/site/gfdl/hsmget.mk -t -a $opt_d -p $ptmpDir/history -w $tmphistdir $hDate.nc/\\*$diag_source\\*
+   if ( \$status ) then
+      echo "WARNING: hsmget reported failure, retrying..."
+      $time_hsmget hsmget -v -m \$FRE_COMMANDS_HOME/site/gfdl/hsmget.mk -t -a $opt_d -p $ptmpDir/history -w $tmphistdir $hDate.nc/\\*$diag_source\\*
+      $checktransfer
+   endif
+   $time_hsmget hsmget -v -m \$FRE_COMMANDS_HOME/site/gfdl/hsmget.mk -t -a $refinedir -p $ptmpDir/history_refineDiag -w $tmphistdir $hDate.nc/\\*$diag_source\\*
+   if ( \$status ) then
+      echo "WARNING: hsmget reported failure, retrying..."
+      $time_hsmget hsmget -v -m \$FRE_COMMANDS_HOME/site/gfdl/hsmget.mk -t -a $refinedir -p $ptmpDir/history_refineDiag -w $tmphistdir $hDate.nc/\\*$diag_source\\*
+      $checktransfer
+   endif
    foreach file ( `ls \$histDir/*/*nc`) 
      ln -s \$file .
    end
@@ -4244,8 +4951,18 @@ if ( ! -e $ppRootDir/$component/$component.static.tile6.nc ) then
    cd \$work
    find \$work/* -maxdepth 1 -exec rm -rf {} \\;
    mkdir -p $ppRootDir/$component
-   $time_hsmget hsmget -t -q -a $opt_d -p $ptmpDir/history -w $tmphistdir $hDate.nc/\\*$diag_source\\*
-   $time_hsmget hsmget -t -q -a $refinedir -p $ptmpDir/history_refineDiag -w $tmphistdir $hDate.nc/\\*$diag_source\\*
+   $time_hsmget hsmget -v -m \$FRE_COMMANDS_HOME/site/gfdl/hsmget.mk -t -a $opt_d -p $ptmpDir/history -w $tmphistdir $hDate.nc/\\*$diag_source\\*
+   if ( \$status ) then
+      echo "WARNING: hsmget reported failure, retrying..."
+      $time_hsmget hsmget -v -m \$FRE_COMMANDS_HOME/site/gfdl/hsmget.mk -t -a $opt_d -p $ptmpDir/history -w $tmphistdir $hDate.nc/\\*$diag_source\\*
+      $checktransfer
+   endif
+   $time_hsmget hsmget -v -m \$FRE_COMMANDS_HOME/site/gfdl/hsmget.mk -t -a $refinedir -p $ptmpDir/history_refineDiag -w $tmphistdir $hDate.nc/\\*$diag_source\\*
+   if ( \$status ) then
+      echo "WARNING: hsmget reported failure, retrying..."
+      $time_hsmget hsmget -v -m \$FRE_COMMANDS_HOME/site/gfdl/hsmget.mk -t -a $refinedir -p $ptmpDir/history_refineDiag -w $tmphistdir $hDate.nc/\\*$diag_source\\*
+      $checktransfer
+   endif
    foreach file ( `ls \$histDir/*/*nc`)
      ln -s \$file .
    end
@@ -4288,6 +5005,17 @@ EOF
    set output_files = ( )
    set tiles = (`ls $hDate.$diag_source*.tile1.nc | grep -v grid_spec`)
    foreach tfile ( \$tiles ) 
+     if ( ! -w \$tfile ) then
+      set i = 1
+      while ( \$i <= 6 )
+        set tf = \$tfile:r:r.tile\$i.nc
+        $time_cp cp \$tf copy 
+        $time_rm rm -f \$tf
+        $time_mv $mv copy \$tf
+        chmod 644 \$tf
+        @ i ++
+      end
+     endif
      set fregrid_wt = "$fregrid_wt"
      set fregrid_in_date = $hDate
      set fregrid_in = \$tfile:r:r
@@ -4347,12 +5075,14 @@ sub TSfromts {
 
    my $freq = $_[0]->findvalue('@freq');
    my $chunkLength = $_[0]->findvalue('@chunkLength');
-   my $outdir = "$ppRootDir/$component/ts/$freq/$chunkLength";
+   my $outdirpath = "$component/ts/$freq/$chunkLength";
+   my $outdir = "$ppRootDir/$outdirpath";
    if("$chunkLength" eq "") { 
          mailuser("Cannot create $component $freq timeSeries unless you set a chunkLength.");
          print STDERR "ERROR: Cannot create $component $freq timeSeries unless you set a chunkLength.\n";
          return "";
    }
+   my $subchunkyr = "$subchunk"."yr";
    my $reqpath = "$ppRootDir/$component/ts/$freq/$subchunk"."yr";
    my $tmp = FREUtil::modifydate($tEND,"+1 sec");
    my $yrsSoFar = &Delta_Format( &DateCalc($sim0,$tmp,\$err,1) ,0,"%yd");
@@ -4372,8 +5102,6 @@ sub TSfromts {
    }
    if ( "$diag_source" eq "" ) { $diag_source = $_[0]->findvalue('../@source'); }
    if( "$diag_source" eq "") { $diag_source = $component."_month"; }
-   my $missing = checkingTS($freq,$chunkLength,$outdir,$sim0,$t0,$diag_source);
-   if ( "$missing" ne "" ) { mailuser($missing); }
 
    my $tENDf = FREUtil::graindate( $tEND, $freq );
    my $start = FREUtil::modifydate($tEND,"-$cl years +1 sec");
@@ -4404,6 +5132,8 @@ sub TSfromts {
 
    #get variables
    my $variables = FREUtil::cleanstr( $_[0]->findvalue('variables') );
+   #my $missing = checkingTS($freq,$chunkLength,$outdir,$sim0,$t0,$diag_source,$variables);
+   #if ( "$missing" ne "" ) { mailuser($missing); }
    if ("$variables" ne "") { print STDERR "           from xml, vars are '$variables'\n" if $opt_v; }
    $variables =~ s/ /.nc /g;
    if("$variables" ne "") {$variables =~ s/$/.nc/g};
@@ -4432,6 +5162,7 @@ cd \$work
 find \$work/* -maxdepth 1 -exec rm -rf {} \\;
 set outdir = $outdir 
 if ( ! -e \$outdir ) mkdir -p \$outdir
+if ( ! -e \$tempCache/$outdirpath ) mkdir -p \$tempCache/$outdirpath
 
 EOF
    if ($opt_z) { $csh .= begin_systime(); }
@@ -4448,9 +5179,16 @@ if ( \$cpiosexist ) then
    set mylist = (`ls $cpiolist`)
    cd \$work
    foreach cpio ( \$mylist )
-      $time_uncpio $uncpio -ivI $reqpath/\$cpio || ( echo "$check_cpio_msg"; echo "$check_cpio_msg" > \$work/.errors ) 
+      $time_cp $cp $reqpath/\$cpio .
+      if ( \$status ) then
+         echo "WARNING: data transfer failure, retrying..."
+         $time_cp $cp $reqpath/\$cpio .
+         $checktransfer
+      endif
+      $time_uncpio $uncpio -ivI \$cpio || ( echo "$check_cpio_msg"; echo "$check_cpio_msg" > \$work/.errors ) 
    end
    set varlist = `ls -1 $getlist | cut -f3- -d'.' | sort -u`
+   $varlist_from_xml
 else
    cd $reqpath
    set varlistprev = start
@@ -4467,19 +5205,39 @@ else
    end
    test \$#varlist != 0 -o "\$varlistprev" != "error" 
    $check_vars
+   $varlist_from_xml
+   $time_dmget dmget "$getlist"
+   cd \$work
+   foreach var (\$varlist)
+      foreach file ( $filelist )
+         if ( ! -f \$tempCache/$component/ts/$freq/$subchunkyr/\$file ) then
+            $time_cp $cp $reqpath/\$file \$tempCache/$component/ts/$freq/$subchunkyr/\$file
+            if ( \$status ) then
+               echo "WARNING: data transfer failure, retrying..."
+               $time_cp $cp $reqpath/\$file \$tempCache/$component/ts/$freq/$subchunkyr/\$file
+               $checktransfer
+            endif
+         endif
+         ln -s \$tempCache/$component/ts/$freq/$subchunkyr/\$file .
+      end
+   end
 endif
 
-$varlist_from_xml
-$time_dmget dmget "$getlist"
 
+cd \$work
 foreach var (\$varlist)
-     if ( -e \$work/$component.$startf-$tENDf.\$var ) rm -f \$work/$component.$startf-$tENDf.\$var
-     $time_ncrcat ncrcat -h -O $filelist \$work/$component.$startf-$tENDf.\$var
+     if ( -e $component.$startf-$tENDf.\$var ) rm -f $component.$startf-$tENDf.\$var
+     $time_ncrcat ncrcat -h -O $filelist $component.$startf-$tENDf.\$var
      $check_ncrcat
-     $time_ncatted ncatted -h -O -a filename,global,m,c,"$component.$startf-$tENDf.\$var" \$work/$component.$startf-$tENDf.\$var
+     $time_ncatted ncatted -h -O -a filename,global,m,c,"$component.$startf-$tENDf.\$var" $component.$startf-$tENDf.\$var
      $check_ncatted
-     $time_mv $mvfile \$work/$component.$startf-$tENDf.\$var $outdir
-     $time_rm rm \$work/$component.$startf-$tENDf.\$var
+     $time_mv $mvfile $component.$startf-$tENDf.\$var $outdir
+     if ( \$status ) then
+         echo "WARNING: data transfer failure, retrying..."
+         $time_mv $mvfile $component.$startf-$tENDf.\$var $outdir
+         $checktransfer
+     endif
+     $time_mv $mv \$work/$component.$startf-$tENDf.\$var \$tempCache/$outdirpath
      set tmpstring = `ncdump -h \$outdir/$component.$startf-$tENDf.\$var | grep UNLIMITED`
      @ len = \$#tmpstring - 1
      set length = `echo \$tmpstring[\$len] | cut -c2-`
@@ -4490,7 +5248,7 @@ end
 EOF
 
    if ( $aggregateTS ) {
-      $csh .= createcpio( $outdir,"$component.$startf-$tENDf",FREUtil::timeabbrev($freq),$cl>20 );
+      $csh .= createcpio( "\$tempCache/$outdirpath",$outdir,"$component.$startf-$tENDf",FREUtil::timeabbrev($freq),$cl>20 );
    }
    if ($opt_z) { $csh .= end_systime(); }
    $csh .= mailerrors($outdir);
@@ -4507,13 +5265,16 @@ sub seaTSfromts {
 
    my $freq = $_[0]->findvalue('@freq');
    my $chunkLength = $_[0]->findvalue('@chunkLength');
-   my $outdir = "$ppRootDir/$component/ts/$freq/$chunkLength";
+   my $outdirpath = "$component/ts/$freq/$chunkLength";
+   my $outdir = "$ppRootDir/$outdirpath";
    if("$chunkLength" eq "") { 
          mailuser("Cannot create $component $freq timeSeries unless you set a chunkLength.");
          print STDERR "ERROR: Cannot create $component $freq timeSeries unless you set a chunkLength.\n";
          return "";
    }
+   my $subchunkyr = "$subchunk"."yr";
    my $reqpath = "$ppRootDir/$component/ts/$freq/$subchunk"."yr";
+   my $req = "$component/ts/$freq/$subchunk"."yr";
    my $tmp = FREUtil::modifydate($tEND,"+1 sec");
    my $yrsSoFar = &Delta_Format( &DateCalc($sim0,$tmp,\$err,1) ,0,"%yd");
    my $cl = $chunkLength;
@@ -4532,8 +5293,6 @@ sub seaTSfromts {
    }        
    if ( "$diag_source" eq "" ) { $diag_source = $_[0]->findvalue('../@source'); }
    if( "$diag_source" eq "") { $diag_source = $component."_month"; }
-   my $missing = checkingTS($freq,$chunkLength,$outdir,$sim0,$t0,$diag_source);
-   if ( "$missing" ne "" ) { mailuser($missing); }
 
    my $tENDf = FREUtil::graindate( $tEND, 'year');
    my $start = FREUtil::modifydate($tEND,"-$cl years +1 sec");
@@ -4554,6 +5313,8 @@ sub seaTSfromts {
 
    #get variables
    my $variables = FREUtil::cleanstr( $_[0]->findvalue('variables') );
+   #my $missing = checkingTS($freq,$chunkLength,$outdir,$sim0,$t0,$diag_source,$variables);
+   #if ( "$missing" ne "" ) { mailuser($missing); }
    my $setvarlist = "";
    if ("$variables" eq "") {
       $setvarlist = "set varlist = (`ls -1 | grep -v '.nc.cpio' | cut -f4-5 -d'.' | sort -u`)\n";
@@ -4583,7 +5344,7 @@ sub seaTSfromts {
    my $dmgetcommand = "";
    foreach my $piece ( @pieces ) {
       $piece =~ s/\$sea.\$var/*.nc/g;
-      $dmgetcommand .= "$time_dmget dmget \"$piece\"\n$check_dmget\n";
+      $dmgetcommand .= "$time_dmget dmget \"$piece\"\n";
    } 
    my $csh = setcheckpt("seaTSfromts_$chunkLength");
    $csh .= <<EOF;
@@ -4593,6 +5354,7 @@ cd \$work
 find \$work/* -maxdepth 1 -exec rm -rf {} \\;
 set outdir = $outdir 
 if ( ! -e \$outdir ) mkdir -p \$outdir
+if ( ! -e \$tempCache/$outdirpath ) mkdir -p \$tempCache/$outdirpath
 
 EOF
    if ($opt_z) { $csh .= begin_systime(); }
@@ -4606,16 +5368,37 @@ end
 if ( \$cpiosexist ) then
    $time_dmget dmget $cpiolist
    set mylist = (`ls $cpiolist`)
-   cd $workdir
+   cd \$work
    foreach cpio ( \$mylist )
-      $time_uncpio $uncpio -ivI $reqpath/\$cpio || ( echo "$check_cpio_msg"; echo "$check_cpio_msg" > \$work/.errors ) 
+      $time_cp $cp $reqpath/\$cpio .
+      if ( \$status ) then
+         echo "WARNING: data transfer failure, retrying..."
+         $time_cp $cp $reqpath/\$cpio .
+         $checktransfer
+      endif
+      $time_uncpio $uncpio -ivI \$cpio || ( echo "$check_cpio_msg"; echo "$check_cpio_msg" > \$work/.errors ) 
    end
    $setvarlist
 else
    $setvarlist
    $dmgetcommand
+   cd \$work
+   foreach var (\$varlist)
+      foreach file ( $filelist )
+         if ( ! -f \$tempCache/$req/\$file ) then
+            $time_cp $cp $reqpath/\$file \$tempCache/$req/\$file
+            if ( \$status ) then
+               echo "WARNING: data transfer failure, retrying..."
+               $time_cp $cp $reqpath/\$file \$tempCache/$req/\$file
+               $checktransfer
+            endif
+         endif
+         ln -s \$tempCache/$req/\$file .
+      end
+   end
 endif
 
+cd \$work
 foreach sea (DJF MAM JJA SON)
    foreach var (\$varlist)
       set missingfiles = 0
@@ -4626,17 +5409,22 @@ foreach sea (DJF MAM JJA SON)
       end
       if ( \$missingfiles == 0 ) then
 
-      if ( -e \$work/$component.$startf-$tENDf.\$sea.\$var ) rm -f \$work/$component.$startf-$tENDf.\$sea.\$var
-      $time_ncrcat ncrcat -h -O $filelist \$work/$component.$startf-$tENDf.\$sea.\$var
+      if ( -e $component.$startf-$tENDf.\$sea.\$var ) rm -f $component.$startf-$tENDf.\$sea.\$var
+      $time_ncrcat ncrcat -h -O $filelist $component.$startf-$tENDf.\$sea.\$var
       $check_ncrcat
-      $time_ncatted ncatted -h -O -a filename,global,m,c,"$component.$startf-$tENDf.\$sea.\$var" \$work/$component.$startf-$tENDf.\$sea.\$var
+      $time_ncatted ncatted -h -O -a filename,global,m,c,"$component.$startf-$tENDf.\$sea.\$var" $component.$startf-$tENDf.\$sea.\$var
       $check_ncatted
-      set tmpstring = `ncdump -h \$work/$component.$startf-$tENDf.\$sea.\$var | grep UNLIMITED`
+      set tmpstring = `ncdump -h $component.$startf-$tENDf.\$sea.\$var | grep UNLIMITED`
       @ len = \$#tmpstring - 1
       set length = `echo \$tmpstring[\$len] | cut -c2-`
       test \$length = $numtimelevels
-      $time_mv $mvfile \$work/$component.$startf-$tENDf.\$sea.\$var \$outdir
-      $time_rm rm \$work/$component.$startf-$tENDf.\$sea.\$var
+      $time_mv $mvfile $component.$startf-$tENDf.\$sea.\$var \$outdir
+      if ( \$status ) then
+         echo "WARNING: data transfer failure, retrying..."
+         $time_mv $mvfile $component.$startf-$tENDf.\$sea.\$var \$outdir
+         $checktransfer
+      endif
+      $time_mv $mv $component.$startf-$tENDf.\$sea.\$var \$tempCache/$outdirpath
       $check_levels
 
       endif
@@ -4645,7 +5433,7 @@ end
 
 EOF
    if ( $aggregateTS ) {
-      $csh .= createcpio( $outdir,"$component.$startf-$tENDf",FREUtil::timeabbrev($freq),$cl>20 );
+      $csh .= createcpio( "\$tempCache/$outdirpath",$outdir,"$component.$startf-$tENDf",FREUtil::timeabbrev($freq),$cl>20 );
    }
    if ($opt_z) { $csh .= end_systime(); }
    $csh .= mailerrors($outdir);
@@ -4678,7 +5466,7 @@ sub seasonalAVfromhist {
    my $tBEG = FREUtil::modifydate($tEND,"- $int years + 1 sec");
    my $range = FREUtil::graindate($tEND,'year');
    if (scalar @hDates > 1) { $range = FREUtil::padzeros($range-$int+1)."-$range"; }
-   foreach my $d (@hDates) { $historyfiles .= "$d"."0101.nc.cpio "; }
+   foreach my $d (@hDates) { $historyfiles .= "$d"."0101.nc.tar "; }
 
    my $diag_source =  $_[0]->findvalue('@diagSource');
    my @monthnodes = $ppcNode->findnodes('timeSeries[@freq="monthly"]');
@@ -4694,8 +5482,8 @@ sub seasonalAVfromhist {
    $variables =~ s/ /,/g;
 
    #check for missing files
-   my $missing = checkingAV($src,$interval,$outdir,$sim0,$t0,$diag_source);
-   if ( "$missing" ne "" ) { mailuser($missing); }
+   #my $missing = checkingAV($src,$interval,$outdir,$sim0,$t0,$diag_source);
+   #if ( "$missing" ne "" ) { mailuser($missing); }
 
    my $zInterp = $ppcNode->findvalue('@zInterp');
    my $do_zInterp = 0;
@@ -4790,6 +5578,11 @@ if ( ! -e $seahist.$diag_source.tile1.nc ) then
    if ( -e $ppRootDir/.dec/$seahist.$diag_source.tile1.nc ) then
       $time_dmget dmget $ppRootDir/.dec/$seahist.$diag_source.tile?.nc
       $time_cp $cp $ppRootDir/.dec/$seahist.$diag_source.tile?.nc .
+      if ( \$status ) then
+         echo "WARNING: data transfer failure, retrying..."
+         $time_cp $cp $ppRootDir/.dec/$seahist.$diag_source.tile?.nc .
+         $checktransfer
+      endif
       $time_rm rm -f $ppRootDir/.dec/$seahist.$diag_source.tile?.nc
    else if ( -e $opt_d/$prevhist ) then
       $time_dmget dmget $opt_d/$prevhist
@@ -4903,6 +5696,11 @@ EOF
     $check_ncatted
 
 $time_mv $mvfile $component.$tSEASONf.nc \$outdir
+if ( \$status ) then
+   echo "WARNING: data transfer failure, retrying..."
+   $time_mv $mvfile $component.$tSEASONf.nc \$outdir
+   $checktransfer
+endif
 $time_rm rm $component.$tSEASONf.nc
 if ( -e \$outdir/$component.$tSEASONf.nc ) $time_rm rm -f sea1.nc sea2.nc sea3.nc sea4.nc sea5.nc sea6.nc
 EOF
@@ -4924,6 +5722,11 @@ EOF
    my $nextdec = FREUtil::graindate($tSEASON,'day').".$diag_source";
    $csh .= <<EOF;
 $time_mv $mvfile $nextdec.tile* $ppRootDir/.dec
+if ( \$status ) then
+   echo "WARNING: data transfer failure, retrying..."
+   $time_mv $mvfile $nextdec.tile* $ppRootDir/.dec
+   $checktransfer
+endif
 $time_rm rm $nextdec.tile*
 EOF
 
@@ -4990,6 +5793,11 @@ end
     $check_ncatted
 
 $time_mv $mvfile $component.$dates.nc \$outdir/$component.$dates.nc
+if ( \$status ) then
+   echo "WARNING: data transfer failure, retrying..."
+   $time_mv $mvfile $component.$dates.nc \$outdir/$component.$dates.nc
+   $checktransfer
+endif
 $time_rm rm $component.$dates.nc
 $time_dmput dmput \$outdir/$component.$dates.nc &
 $time_rm rm -f sea1.nc sea2.nc sea3.nc sea4.nc sea5.nc sea6.nc
@@ -5039,6 +5847,11 @@ if ( ! -e $seahist.$diag_source.nc ) then
    if ( -e $ppRootDir/.dec/$seahist.$diag_source.nc ) then
       $time_dmget dmget $ppRootDir/.dec/$seahist.$diag_source.nc
       $time_cp $cp $ppRootDir/.dec/$seahist.$diag_source.nc .
+      if ( \$status ) then
+         echo "WARNING: data transfer failure, retrying..."
+         $time_cp $cp $ppRootDir/.dec/$seahist.$diag_source.nc .
+         $checktransfer
+      endif
       $time_rm rm -f $ppRootDir/.dec/$seahist.$diag_source.nc
    else if ( -e $opt_d/$prevhist ) then
       $time_dmget dmget $opt_d/$prevhist
@@ -5083,7 +5896,16 @@ $retry_timavg
 $check_timavg
 
 EOF
-            $csh .= zInterpolate($zInterp,'modellevels.nc',"\$outdir/$component.$tSEASONf.nc",$caltype,$variables);
+            $csh .= zInterpolate($zInterp,'modellevels.nc',"$component.$tSEASONf.nc",$caltype,$variables);
+$csh .= <<EOF;
+$time_mv $mvfile $component.$tSEASONf.nc \$outdir
+if ( \$status ) then
+   echo "WARNING: data transfer failure, retrying..."
+   $time_mv $mvfile $component.$tSEASONf.nc \$outdir
+   $checktransfer
+endif
+
+EOF
          } else {
             $csh .= <<EOF;
 $time_timavg \$TIMAVG -o $component.$tSEASONf.nc sea.nc
@@ -5091,6 +5913,11 @@ $retry_timavg
    $time_timavg \$TIMAVG -o $component.$tSEASONf.nc sea.nc
 $check_timavg
 $time_mv $mvfile $component.$tSEASONf.nc \$outdir
+if ( \$status ) then
+   echo "WARNING: data transfer failure, retrying..."
+   $time_mv $mvfile $component.$tSEASONf.nc \$outdir
+   $checktransfer
+endif
 $time_rm rm $component.$tSEASONf.nc
 if ( -e \$outdir/$component.$tSEASONf.nc ) $time_rm rm -f sea.nc
 EOF
@@ -5112,6 +5939,11 @@ EOF
    my $nextdec = FREUtil::graindate($tSEASON,'day').".$diag_source.nc";
    $csh .= <<EOF;
 $time_mv $mvfile $nextdec $ppRootDir/.dec
+if ( \$status ) then
+   echo "WARNING: data transfer failure, retrying..."
+   $time_mv $mvfile $nextdec $ppRootDir/.dec
+   $checktransfer
+endif
 $time_rm rm $nextdec
 cd out
 EOF
@@ -5152,6 +5984,11 @@ EOF
 $time_ncatted ncatted -h -O -a filename,global,m,c,"\$outdir/$component.$dates.nc" $component.$dates.nc
 $check_ncatted 
 $time_mv $mvfile $component.$dates.nc \$outdir/$component.$dates.nc
+if ( \$status ) then
+   echo "WARNING: data transfer failure, retrying..."
+   $time_mv $mvfile $component.$dates.nc \$outdir/$component.$dates.nc
+   $checktransfer
+endif
 $time_rm rm $component.$dates.nc
 $time_dmput dmput \$outdir/$component.$dates.nc &
 $time_rm rm sea.nc
@@ -5199,8 +6036,8 @@ sub seasonalAVfromav {
    }
    if ( "$diag_source" eq "" ) { $diag_source = $_[0]->findvalue('../@source'); }
    if ( "$diag_source" eq "") { $diag_source = $component."_month"; }
-   my $missing = checkingAV($src,$interval,$outdir,$sim0,$t0,$diag_source);
-   if ( "$missing" ne "" ) { mailuser($missing); }
+   #my $missing = checkingAV($src,$interval,$outdir,$sim0,$t0,$diag_source);
+   #if ( "$missing" ne "" ) { mailuser($missing); }
 
    my $end = FREUtil::graindate($tEND,'year');
    my $start = FREUtil::padzeros($end-$int+1);
@@ -5240,14 +6077,20 @@ EOF
 
 cd $srcdir
 $time_dmget dmget "$getlist"
-$check_dmget
 
 foreach sea (DJF MAM JJA SON)
-     cd $srcdir
-     if ( -e \$work/\$sea.nc ) rm -f \$work/\$sea.nc
-     $time_ncrcat ncrcat -h -O $filelist \$work/\$sea.nc
-     $check_ncrcat
      cd \$work
+     foreach file ($filelist)
+        $time_cp $cp $srcdir/\$file .
+        if ( \$status ) then
+           echo "WARNING: data transfer failure, retrying..."
+           $time_cp $cp $srcdir/\$file .
+           $checktransfer
+        endif
+     end
+     if ( -e \$sea.nc ) rm -f \$sea.nc
+     $time_ncrcat ncrcat -h -O $filelist \$sea.nc
+     $check_ncrcat
      $time_timavg \$TIMAVG -o $component.$start-$end.\$sea.nc \$sea.nc
      $retry_timavg
         $time_timavg \$TIMAVG -o $component.$start-$end.\$sea.nc \$sea.nc
@@ -5255,6 +6098,11 @@ foreach sea (DJF MAM JJA SON)
      $time_ncatted ncatted -h -O -a filename,global,m,c,"$component.$start-$end.\$sea.nc" $component.$start-$end.\$sea.nc
      $check_ncatted
      $time_mv $mvfile $component.$start-$end.\$sea.nc \$outdir/$component.$start-$end.\$sea.nc
+     if ( \$status ) then
+         echo "WARNING: data transfer failure, retrying..."
+         $time_mv $mvfile $component.$start-$end.\$sea.nc \$outdir/$component.$start-$end.\$sea.nc
+         $checktransfer
+     endif
      $time_rm rm $component.$start-$end.\$sea.nc
      $time_dmput dmput \$outdir/$component.$start-$end.\$sea.nc &
      $time_rm rm -f \$sea.nc 
@@ -5296,7 +6144,12 @@ foreach historyfile ( `ls \$historyyear????.nc.cpio \$historyyear????.nc.tar`)
    set refineDiagDir = "$tmphistdir/history_refineDiag/\$hsmdate"
    mkdir -p \$refineDiagDir
 
-   $time_hsmget hsmget -a $opt_d -p $ptmpDir/history -w \$work \$hsmdate/\\*
+   $time_hsmget hsmget -v -m \$FRE_COMMANDS_HOME/site/gfdl/hsmget.mk -t -a $opt_d -p $ptmpDir/history -w \$work \$hsmdate/\\*
+   if ( \$status ) then
+      echo "WARNING: hsmget reported failure, retrying..."
+      $time_hsmget hsmget -v -m \$FRE_COMMANDS_HOME/site/gfdl/hsmget.mk -t -a $opt_d -p $ptmpDir/history -w \$work \$hsmdate/\\*
+      $checktransfer
+   endif
    cd \$work/\$hsmdate
 
    #source user refineDiag scripts
@@ -5312,26 +6165,115 @@ EOF
 
    #append the new variables to the refineDiag.log file
    cd \$refineDiagDir
-   foreach refinedFile ( `ls *nc` )
-      echo "$refinedir/\$hsmdate.cpio,\$refinedFile" >> $stdoutdir/postProcess/refineDiag.log
-      \$NCVARS -st01234 \$refinedFile >> $stdoutdir/postProcess/refineDiag.log
-   end
+   set refinedCount = `ls -1 *nc | wc -l`
+   if ( \$refinedCount ) then
 
-   #save new or modified refineDiag history file
-   if ( -f $newhistorydir/\$hsmdate.cpio ) then
-      $time_hsmget hsmget -a $newhistorydir -p $ptmpDir/history_refineDiag -w $tmphistdir/modify_refineDiag \$hsmdate/\\*
-      mv -f * $tmphistdir/modify_refineDiag/\$hsmdate/
-      mv -f $tmphistdir/modify_refineDiag/\$hsmdate/* .
-      rm -rf $tmphistdir/modify_refineDiag
-      $time_hsmput hsmput -s cpio -a $newhistorydir -p $ptmpDir/history_refineDiag -w $tmphistdir/history_refineDiag \$hsmdate
-   else
-      $time_hsmput hsmput -s cpio -a $newhistorydir -p $ptmpDir/history_refineDiag -w $tmphistdir/history_refineDiag \$hsmdate
+      foreach refinedFile ( `ls *nc` )
+         echo "$refinedir/\$hsmdate.tar,\$refinedFile" >> $stdoutdir/postProcess/refineDiag.log
+         \$NCVARS -st01234 \$refinedFile >> $stdoutdir/postProcess/refineDiag.log
+      end
+
+      #save new or modified refineDiag history file
+      if ( -f $newhistorydir/\$hsmdate.tar ) then
+         $time_hsmget hsmget -v -m \$FRE_COMMANDS_HOME/site/gfdl/hsmget.mk -t -a $newhistorydir -p $ptmpDir/history_refineDiag -w $tmphistdir/modify_refineDiag \$hsmdate/\\*
+         if ( \$status ) then
+            echo "WARNING: hsmget reported failure, retrying..."
+            $time_hsmget hsmget -v -m \$FRE_COMMANDS_HOME/site/gfdl/hsmget.mk -t -a $newhistorydir -p $ptmpDir/history_refineDiag -w $tmphistdir/modify_refineDiag \$hsmdate/\\*
+            $checktransfer
+         endif
+         mv -f * $tmphistdir/modify_refineDiag/\$hsmdate/
+         mv -f $tmphistdir/modify_refineDiag/\$hsmdate/* .
+         rm -rf $tmphistdir/modify_refineDiag
+         $time_hsmput hsmput -v -m \$FRE_COMMANDS_HOME/site/gfdl/hsmput.mk -t -s tar -a $newhistorydir -p $ptmpDir/history_refineDiag -w $tmphistdir/history_refineDiag \$hsmdate
+         if ( \$status ) then
+            echo "WARNING: hsmput reported failure, retrying..."
+            $time_hsmput hsmput -v -m \$FRE_COMMANDS_HOME/site/gfdl/hsmput.mk -t -s tar -a $newhistorydir -p $ptmpDir/history_refineDiag -w $tmphistdir/history_refineDiag \$hsmdate
+            $checktransfer
+         endif
+      else
+         $time_hsmput hsmput -v -m \$FRE_COMMANDS_HOME/site/gfdl/hsmput.mk -t -s tar -a $newhistorydir -p $ptmpDir/history_refineDiag -w $tmphistdir/history_refineDiag \$hsmdate
+         if ( \$status ) then
+            echo "WARNING: hsmput reported failure, retrying..."
+            $time_hsmput hsmput -v -m \$FRE_COMMANDS_HOME/site/gfdl/hsmput.mk -t -s tar -a $newhistorydir -p $ptmpDir/history_refineDiag -w $tmphistdir/history_refineDiag \$hsmdate
+            $checktransfer
+         endif
+      endif
    endif
 end
 EOF
 
    return $csh;
 }
+
+
+#write c-shell runscript, chmod, and optionally submit
+#batchCmd = "qsub -pe $defaultQueue $npes -o $stdoutPath -r y -P $project -l h_cpu=$maxRunTime"
+#writescript($cshscript,$outscript,$batchCmd,$defaultQueue,$npes,$stdoutPath,$project,$maxRunTime);
+sub writescript {
+   #my $script = $_[0];
+   my $outscript = $_[1];
+   my $batchCmd = $_[2];
+   my $statefile = $_[3];
+   my $defaultQueue = $_[4];
+   my $npes = $_[5];
+   my $stdoutPath = $_[6];
+   my $project = $_[7];
+   my $maxRunTime = $_[8];
+
+   if("$defaultQueue" ne "") { $batchCmd =~ s/\$defaultQueue/$defaultQueue/g; }
+      else { $batchCmd =~ s/\$defaultQueue//g; }
+   if("$npes" ne "") { $batchCmd =~ s/\$npes/$npes/g; }
+      else { $batchCmd =~ s/\$npes//g; }
+   if("$stdoutPath" ne "") { $batchCmd =~ s/\$stdoutPath/$stdoutPath/g; }
+      else { $batchCmd =~ s/\$stdoutPath//g; }
+   if("$project" ne "") { $batchCmd =~ s/\$project/$project/g; }
+      else { $batchCmd =~ s/\$project//g; }
+   if("$maxRunTime" ne "") { $batchCmd =~ s/\$maxRunTime/$maxRunTime/g; }
+      else { $batchCmd =~ s/\$maxRunTime//g; }
+
+   #print "Preparing '$batchCmd'\n";
+
+   (my $volume,my $directory,my $filename) = File::Spec->splitpath( $outscript );
+   if( ! -e $directory ) { mkdir $directory || die "Cannot make directory $directory\n"; }
+
+   open(OUT,"> $outscript");
+   print OUT $_[0];
+   close(OUT);
+
+   my $status = system("chmod 755 $outscript");
+   if( $status ) { die "Sorry, I couldn't chmod $outscript"; }
+
+   if( $opt_s ) {
+      $batchCmd = "sleep 2;$batchCmd";
+      print "\nExecuting '$batchCmd $outscript'\n" if $opt_v;
+      my $qsub_msg = `$batchCmd $outscript`;
+      print "\n$qsub_msg";
+
+         $qsub_msg =~ s/^$//mg;
+         my @njobid = split '\n',$qsub_msg;
+         my $newjobid = $njobid[-1];
+         $newjobid =~ s/New jobid='(.*)'/$1/ if $newjobid =~ /New jobid/;
+         $newjobid =~ s/Previous frepp job \((.*)\).*/$1/ if $newjobid =~ /still running for /;
+         #print "New jobid='$newjobid'\n";
+         if ( "$newjobid" eq '' ) {
+            print "No jobid resulted from the Moab job submission of $opt_t.\n";
+            print "ERROR: Unable to submit job, exiting.\n";
+            exit 1;
+         } elsif ( "$newjobid" !~ /gfdl.\d+/ ) {
+            print "ERROR: the jobid returned has the wrong format: a frepp/moab issue occurred.\n";
+            exit 1;
+         }
+         if("$statefile" ne "") {
+            open( STATEFILE, ">$statefile") or die $!;
+            print STATEFILE "$newjobid\n";
+            close STATEFILE;
+         }
+
+   } else {
+      print "\nTO SUBMIT: $batchCmd $outscript\n";
+   }
+}
+
 
 
 sub getTemplate {
@@ -5382,14 +6324,19 @@ EOF
   set name
   set rtsxml
   set work
+  set tempCache
   set root
   set archive
   set scriptName
   set oname
   set rawcpios
   set histDir
+  set prevjobstate
+  set statefile
 
 #platform_csh_from_xml
+
+#write_to_statefile
 
   setenv FMS_FRE_FREPP
   set NCVARS = list_ncvars.csh
@@ -5400,6 +6347,7 @@ EOF
   set checkptfile = $scriptName:t
   set errors_found = 0
   if (! -d $work) mkdir -p $work
+  if (! -d $tempCache) mkdir -p $tempCache
   which ncks
   which ncrcat
 

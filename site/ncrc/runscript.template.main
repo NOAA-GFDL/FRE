@@ -1,7 +1,7 @@
 #!/bin/csh -f
 #FRE scheduler-options
 # 
-# $Id: runscript.template.main,v 1.1.4.26 2011/01/11 18:57:16 afy Exp $
+# $Id: runscript.template.main,v 1.1.4.26.4.6 2011/09/13 23:00:46 fms Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: Runscript Template - NCRC Version
 # ------------------------------------------------------------------------------
@@ -135,9 +135,9 @@
 
   if ( $?PBS_ENVIRONMENT ) then
     if ( $PBS_ENVIRONMENT == 'PBS_BATCH' ) then
-      if ( $?PBS_O_WORKDIR ) then
-        chmod 644 $PBS_O_WORKDIR/$PBS_JOBID.OU
-      endif
+      #if ( $?PBS_O_WORKDIR ) then
+      #  chmod 644 $PBS_O_WORKDIR/$PBS_JOBID.OU
+      #endif
     endif 
   else
     set -r PBS_JOBID = '000000'
@@ -204,18 +204,17 @@
 
   # ---------------- FRE environment variables, which have to be set after the platform csh:
 
-  # FRE_TRANSFER_HOME	- root of the fre-transfer module
   # FRE_NCTOOLS_HOME	- toot of the fre-nctools module
 
   # ---------------- FRE scripts/executables, which have to be accessible via the PATH after the platform csh:
 
   # combine-ncc		- part of the fre-nctools module
   # compare_dual.csh	- part of the fre-commands module
-  # hsmget		- part of the fre-transfer module 
-  # hsmput		- part of the fre-transfer module 
+  # hsmget		- part of the fre-commands module 
+  # hsmput		- part of the fre-commands module 
   # mppnccombine	- part of the fre-nctools module
   # prepare_dir.csh	- part of the fre-commands module
-  # send_file		- part of the fre-transfer module
+  # send_file		- part of the fre-commands module
   # time_stamp.csh	- part of the fre-commands module
 
   # ---------------- this alias can be overridden by a user
@@ -227,15 +226,6 @@
   unset echo
   #FRE setup-platform-csh
   set echo
-
-  # ---------------- exit if no fre-transfer module is loaded
-
-  if ( ! $?FRE_TRANSFER_HOME ) then
-    unset echo
-    echo "ERROR: The script '$scriptName' must load a 'fre-transfer' module"
-    set echo
-    exit 1
-  endif
 
   # ---------------- exit if no fre-nctools module is loaded
 
@@ -288,18 +278,19 @@
   set -r work = $workDir
 
   # ---------------- HSM site-dependent directory
-  set -r hsmSiteDir = $FRE_TRANSFER_HOME/site/ncrc
+  set -r hsmSiteDir = $FRE_COMMANDS_HOME/site/ncrc
 
   # ---------------- top directory for all the HSM-copied files
   set -r hsmDir = $workDir/hsm
 
   # ---------------- selection patterns for grep
   set -r patternGrepTail = '\.[0-9]{4}$'
-  set -r patternGrepAscii = '\<out\>|\<results\>'
-  set -r patternGrepRestarts = '\<res\>'
-  set -r patternGrepRestartsOrNC = '\<res\>|\<nc\>'
+  set -r patternGrepAscii = '\<out\>|\<results\>|\<timestats\>|\<velocity_truncations\>'
+  set -r patternGrepRestart = '\<res\>|\<nc\>|\.input.\tgz$'
+  set -r patternGrepRestartNextDrop = '\<res\>'
+  set -r patternGrepRestartNextMove = '\<res\>|\<nc\>'
   set -r patternGrepRegion = '^rregion'
-  set -r patternGrepNC = '\<nc\>'
+  set -r patternGrepHistory = '\<nc\>'
 
   # ---------------- FRE string date generation for file name labels
   alias timeStamp `which time_stamp.csh` -f $timeStampFormat
@@ -314,12 +305,12 @@
   alias frepp `which frepp` -v -c split -s
 
   # ---------------- FRE data copying between work directory and archive directory via ptmp directory
-  alias hsmget `which hsmget` -q -t -m $hsmSiteDir/hsmget.mk -w $hsmDir -p '$ptmpDir' -a /
+  alias hsmget `which hsmget` -t -m $hsmSiteDir/hsmget.mk -w $hsmDir -p '$ptmpDir' -a /
 
   if ( $?flagOutputArchiveOn ) then
-    alias hsmput `which hsmput` -q -t -m $hsmSiteDir/hsmput.mk -w $hsmDir -p '$ptmpDir' -a / -s tar
+    alias hsmput `which hsmput` -t -m $hsmSiteDir/hsmput.mk -w $hsmDir -p '$ptmpDir' -a / -s tar
   else
-    alias hsmput `which hsmput` -q -t -m $hsmSiteDir/hsmput.mk -w $hsmDir -p '$ptmpDir' -a /
+    alias hsmput `which hsmput` -t -m $hsmSiteDir/hsmput.mk -w $hsmDir -p '$ptmpDir' -a /
   endif
 
   # ---------------- FRE script for sending files to GFDL
@@ -327,7 +318,9 @@
 
   # ---------------- FRE netCDF files combining utilities
   alias mppnccombine `which mppnccombine` -64
+  alias mppnccombine_mpi aprun -n 1 -N 1 `which mppnccombine_mpi` -64 -h 16384 -r
   alias slmnccombine `which combine-ncc` 
+  alias slmnccombine_mpi aprun -n 1 -N 1 `which combine-ncc` 
 
   # ---------------- FRE output stager 
   alias outputStager $freCommandsHomeDir/site/ncrc/fresavehist
@@ -606,7 +599,7 @@
         if ( $ppRefineDiagScriptNamesList == "" ) then
           set ppRefineDiagScriptNamesList = $ppRefineDiagScriptName
         else
-          set ppRefineDiagScriptNamesList = $ppRefineDiagScriptNamesList,$ppRefineDiagScriptName
+          set ppRefineDiagScriptNamesList = $ppRefineDiagScriptNamesList\&$ppRefineDiagScriptName
         endif
       end
 
@@ -756,7 +749,7 @@
 
     pushd $workDir/RESTART
 
-    set restartFiles = ( `ls -1 | egrep "$patternGrepRestartsOrNC"` )
+    set restartFiles = ( `ls -1 | egrep "$patternGrepRestart"` )
 
     if ( $#restartFiles > 0 ) then
 
@@ -789,9 +782,8 @@
       endif
 
       if ( $irun < $segmentsPerJob ) then
-        find $workDir/INPUT   -maxdepth 1 -type f | egrep "$patternGrepRestarts" | xargs -r rm -f
-        find $workDir/RESTART -maxdepth 1 -type f | egrep "$patternGrepRestarts" | xargs -r mv -f -t ../INPUT
-        find $workDir/RESTART -maxdepth 1 -type f | egrep "$patternGrepNC"       | xargs -r mv -f -t ../INPUT
+        find $workDir/INPUT   -maxdepth 1 -type f | egrep "$patternGrepRestartNextDrop" | xargs -r rm -f
+        find $workDir/RESTART -maxdepth 1 -type f | egrep "$patternGrepRestartNextMove" | xargs -r mv -f -t ../INPUT
       endif
 
       if ( $?flagOutputTransferOn ) then
@@ -829,13 +821,27 @@
 
       set filesNotOK = ()
 
+      if ( $?MPICH_RANK_REORDER_METHOD ) then
+        set mpi_rrm_save = $MPICH_RANK_REORDER_METHOD
+        unsetenv MPICH_RANK_REORDER_METHOD
+      endif
       foreach file ( $regionFiles )
-	set inputFiles = ( `ls -1 | egrep "$file$patternGrepTail"` )
-	if ( $#inputFiles > 0 ) then
-          ( mppnccombine $file $inputFiles || set filesNotOK = ( $filesNotOK $file ) ; mv -f $file `echo $file | sed "s/$patternGrepRegion//"` && rm -f $inputFiles ) &
-	endif
+        set inputFiles = ( `ls -1 | egrep "$file$patternGrepTail"` )
+        if ( $#inputFiles > 0 ) then
+          mppnccombine_mpi $file $inputFiles
+        endif
       end
       wait
+      foreach file ( $regionFiles )
+        if ( -s $file ) then
+          mv -f $file `echo $file | sed "s/$patternGrepRegion//"`
+        else
+          set filesNotOK = ( $filesNotOK $file )
+        endif
+      end
+      if ( $?mpi_rrm_save ) then
+        setenv MPICH_RANK_REORDER_METHOD $mpi_rrm_save
+      endif
 
       if ( $#filesNotOK > 0) then
 	unset echo
@@ -857,19 +863,34 @@
 
       if ( $?flagOutputCombineHistoryOn ) then
 
-	set historyFiles = ( `ls -1 | egrep "$patternGrepNC.*$patternGrepTail" | sed -r "s/$patternGrepTail//g" | sort -u` )
+	set historyFiles = ( `ls -1 | egrep "$patternGrepHistory.*$patternGrepTail" | sed -r "s/$patternGrepTail//g" | sort -u` )
 
         if ( $#historyFiles > 0 ) then
 
           set filesNotOK = ()
 
-	  foreach file ( $historyFiles )
+          if ( $?MPICH_RANK_REORDER_METHOD ) then
+            set mpi_rrm_save = $MPICH_RANK_REORDER_METHOD
+            unsetenv MPICH_RANK_REORDER_METHOD
+          endif
+          foreach file ( $historyFiles )
             set inputFiles = ( `ls -1 | egrep "$file$patternGrepTail"` )
-            if ( $#inputFiles > 0) then
-	      ( mppnccombine $file $inputFiles || set filesNotOK = ( $filesNotOK $file ) ; test -s $file && rm -f $inputFiles ) &
+            if ( $#inputFiles > 0 ) then
+              mppnccombine_mpi $file $inputFiles
             endif
-	  end
-	  wait
+          end
+          wait
+          foreach file ( $historyFiles )
+            if ( -s $file ) then
+              mv -f $file `echo $file | sed "s/$patternGrepRegion//"`
+            else
+              set filesNotOK = ( $filesNotOK $file )
+            endif
+          end
+          if ( $?mpi_rrm_save ) then
+            setenv MPICH_RANK_REORDER_METHOD $mpi_rrm_save
+          endif
+
 
 	  if ( $#filesNotOK > 0) then
 	    unset echo
@@ -887,7 +908,7 @@
 
       endif
 
-      set historyCombinedFiles = ( `ls -1 | egrep "$patternGrepNC"$` )
+      set historyCombinedFiles = ( `ls -1 | egrep "$patternGrepHistory"$` )
 
       if ( $#historyCombinedFiles > 0 ) then
 
@@ -945,7 +966,7 @@
 
       endif
 
-      set historyUncombinedFiles = ( `ls -1 | egrep "$patternGrepNC.*$patternGrepTail"` )
+      set historyUncombinedFiles = ( `ls -1 | egrep "$patternGrepHistory.*$patternGrepTail"` )
 
       if ( $#historyUncombinedFiles > 0 ) then
 
@@ -1046,7 +1067,7 @@
 
       prepareDir $tempHistoryDateDir || exit 1
 
-      find $workDir -maxdepth 1 -type f | egrep "$patternGrepNC" | xargs -r mv -f -t $tempHistoryDateDir
+      find $workDir -maxdepth 1 -type f | egrep "$patternGrepHistory" | xargs -r mv -f -t $tempHistoryDateDir
 
       pushd $stdoutDir
       set jobName = $scriptName:t.$jobId.output_stager.$begindate
@@ -1176,26 +1197,31 @@
 
     pushd $restartWorkDir
 
-    set restartFilesUncombined = ( `ls -1 | egrep "($patternGrepRestartsOrNC).*$patternGrepTail"` )
+    set restartFilesUncombined = ( `ls -1 | egrep "($patternGrepRestartNextMove).*$patternGrepTail"` )
 
     if ( $#restartFilesUncombined > 0 ) then
 
-      set restartFiles = ( `ls -1 | egrep "($patternGrepRestartsOrNC).*$patternGrepTail" | sed -r "s/$patternGrepTail//g" | sort -u` )
+      set restartFiles = ( `ls -1 | egrep "($patternGrepRestartNextMove).*$patternGrepTail" | sed -r "s/$patternGrepTail//g" | sort -u` )
 
       foreach file ( $restartFiles )
 	set inputFiles = ( `ls -1 | egrep "$file$patternGrepTail"` )
 	if ( $#inputFiles > 0 ) then
 	  set compressed = `ncdump -h $inputFiles[1] | grep 'tile_index:compress' | wc -l`
 	  if ( $compressed > 0 ) then
-            slmnccombine $inputFiles $file && rm -f $inputFiles
+            slmnccombine_mpi $inputFiles $file
             if ( $status ) then
               unset echo
               echo "ERROR: in execution of slmnccombine on restarts"
               set echo
               exit 1
+            else
+              rm -f $inputFiles
             endif
 	  else
-            mppnccombine $file $inputFiles && rm -f $inputFiles
+            if ( $?MPICH_RANK_REORDER_METHOD ) then
+              unsetenv MPICH_RANK_REORDER_METHOD
+            endif
+            mppnccombine_mpi $file $inputFiles
             if ( $status ) then
               unset echo
               echo "ERROR: in execution of mppnccombine on restarts"

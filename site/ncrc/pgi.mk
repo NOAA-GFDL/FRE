@@ -24,35 +24,34 @@ INCLUDE = -I$(NETCDF_ROOT)/include
 
 FPPFLAGS = $(INCLUDE)
 FFLAGS = -i4 -r8 -byteswapio -Mcray=pointer
-FFLAGS_OPT = -O2 -Mflushz -Mvect=nosse -Mnoscalarsse -Mallocatable=03 -D_F2000
-FFLAGS_DEBUG = -g -traceback -Ktrap=fp
+FFLAGS_OPT = -O3 -Mflushz -Mvect=nosse -Mnoscalarsse -Mallocatable=03 -D_F2000
+FFLAGS_DEBUG = -O0 -g -traceback -Ktrap=fp
+FFLAGS_REPRO = -O2 -Mflushz
 FFLAGS_OPENMP = -mp
 FFLAGS_VERBOSE = -v
 
 CPPFLAGS = $(INCLUDE)
 CFLAGS_OPT = -O2
-CFLAGS_DEBUG = -g -traceback -Ktrap=fp
+CFLAGS_DEBUG = -O0 -g -traceback -Ktrap=fp
 CFLAGS_OPENMP = -mp
 CFLAGS_VERBOSE = -v
 
-# pathscale wants main program outside libraries, do
-# setenv MAIN_PROGRAM coupler_main.o or something before make
 LDFLAGS := -byteswapio
 LDFLAGS_VERBOSE := -v
 
 MAKEFLAGS +=--jobs=2
 
 ifneq ($(REPRO),)
-CFLAGS += $(CFLAGS_REPRO) $(CFLAGS_OPT)
-FFLAGS += $(FFLAGS_REPRO) $(FFLAGS_OPT)
+CFLAGS += $(CFLAGS_REPRO)
+FFLAGS += $(FFLAGS_REPRO)
+else ifneq ($(DEBUG),)
+CFLAGS += $(CFLAGS_DEBUG)
+FFLAGS += $(FFLAGS_DEBUG)
 else
 CFLAGS += $(CFLAGS_OPT)
 FFLAGS += $(FFLAGS_OPT)
 endif
-ifneq ($(DEBUG),)
-CFLAGS += $(CFLAGS_DEBUG)
-FFLAGS += $(FFLAGS_DEBUG)
-endif
+
 ifneq ($(OPENMP),)
 CFLAGS += $(CFLAGS_OPENMP)
 FFLAGS += $(FFLAGS_OPENMP)

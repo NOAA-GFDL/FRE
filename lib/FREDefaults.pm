@@ -1,5 +1,5 @@
 #
-# $Id: FREDefaults.pm,v 18.0.2.14 2011/01/25 01:08:27 afy Exp $
+# $Id: FREDefaults.pm,v 18.0.2.14.2.1 2011/09/01 19:29:04 fms Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: System Defaults Module
 # ------------------------------------------------------------------------------
@@ -103,7 +103,7 @@ use constant PLATFORM_DEFAULT	=> 'default';
 use constant TARGET_DEFAULT 	=> 'prod';
 
 use constant GLOBAL_NAMES	=> 'site,siteDir,suite,platform,target,name,root,stem';
-use constant EXPERIMENT_DIRS	=> 'root,src,exec,scripts,stdout,work,ptmp,archive,postProcess,analysis';
+use constant EXPERIMENT_DIRS	=> 'root,src,exec,scripts,stdout,state,work,ptmp,archive,postProcess,analysis';
 use constant DEFERRED_NAMES	=> 'name';
 
 # //////////////////////////////////////////////////////////////////////////////
