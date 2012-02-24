@@ -1,5 +1,5 @@
 #
-# $Id: FREExperiment.pm,v 18.1.2.6.2.1 2011/09/01 19:29:05 fms Exp $
+# $Id: FREExperiment.pm,v 18.1.2.12 2012/02/21 19:14:15 afy Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: Experiment Management Module
 # ------------------------------------------------------------------------------
@@ -22,14 +22,33 @@
 # afy    Ver   6.07  Modify extractCompileInfo (hashes, checks)     January 11
 # afy    Ver   6.08  Modify extractCompileInfo (make overrides)     January 11
 # afy    Ver   6.09  Modify extractCompileInfo (libraries order)    January 11
+# afy    Ver   7.00  Modify placeholdersExpand (check '$' presence) April 11
+# afy    Ver   7.01  Add property subroutine (similar to FRE.pm)    April 11
+# afy    Ver   7.02  Modify experimentDirsCreate (call property)    April 11
+# afy    Ver   7.03  Modify experimentDirsVerify (call property)    April 11
+# afy    Ver   7.04  Modify extractCheckoutInfo (call property)     April 11
+# afy    Ver   7.05  Modify experimentCreate (don't pass '$fre')    April 11
+# afy    Ver   8.00  Add dir subroutine                             May 11
+# afy    Ver   8.01  Add stateDir subroutine                        May 11
+# afy    Ver   8.02  Modify dir-returning subroutines (call dir)    May 11
+# afy    Ver   9.00  Modify dir-returning subroutines (cosmetics)   May 11
+# afy    Ver  10.00  Add extractRegressionRunInfo subroutine        November 11
+# afy    Ver  10.01  Add extractProductionRunInfo subroutine        November 11
+# afy    Ver  10.02  Add executable subroutine                      November 11
+# afy    Ver  10.03  Add executableCanBeBuilt subroutine            November 11
+# afy    Ver  10.04  Modify extractExecutable subroutine            November 11
+# afy    Ver  11.00  Add extractRegressionLabels subroutine         January 12
+# afy    Ver  12.00  Add sdtoutTmpDir subroutine                    February 12
 # ------------------------------------------------------------------------------
-# Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2009-2011
+# Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2009-2012
 # Designed and written by V. Balaji, Amy Langenhorst and Aleksey Yakovlev
 #
 
 package FREExperiment;
 
 use strict;
+
+use List::Util();
 
 use FREDefaults();
 use FREMsg();
@@ -41,6 +60,7 @@ use FREUtil();
 # //////////////////////////////////////////////////////////////////////////////
 
 use constant DIRECTORIES => FREDefaults::ExperimentDirs();
+use constant REGRESSION_SUITE => ('basic', 'restarts', 'scaling');
 
 # //////////////////////////////////////////////////////////////////////////////
 # ////////////////////////////////////////////////////////// Global Variables //
@@ -59,22 +79,23 @@ my $experimentFind = sub($)
   return (exists($FREExperimentMap{$e})) ? $FREExperimentMap{$e} : '';
 };
 
-my $experimentDirsCreate = sub($$)
-# ------ arguments:  $object $fre
+my $experimentDirsCreate = sub($)
+# ------ arguments: $object
 {
-  my ($r, $fre) = @_;
+  my $r = shift;
   foreach my $t (FREExperiment::DIRECTORIES)
   {
-    $r->{$t . 'Dir'} = $r->placeholdersExpand($fre->property($t . 'Dir'));
+    my $dirName = $t . 'Dir';
+    $r->{$dirName} = $r->property($dirName);
   }
 };
 
-my $experimentDirsVerify = sub($$$)
-# ------ arguments: $object $fre $expName
+my $experimentDirsVerify = sub($$)
+# ------ arguments: $object $expName
 {
-  my ($r, $fre, $e) = @_;
+  my ($r, $e) = @_;
   my $result = 1;
-  my @expNamed = split(';', $fre->property('FRE.directory.expNamed'));
+  my ($fre, @expNamed) = ($r->fre(), split(';', $r->property('FRE.directory.expNamed')));
   foreach my $t (FREExperiment::DIRECTORIES)
   {
     my $d = $r->{$t . 'Dir'};
@@ -91,7 +112,7 @@ my $experimentDirsVerify = sub($$$)
 	}
       }
       # -------------------------------------------------------- check placement the directory on the filesystem
-      my $pathsMapping = $fre->property('FRE.directory.' . $t . '.paths.mapping');
+      my $pathsMapping = $r->property('FRE.directory.' . $t . '.paths.mapping');
       if ($pathsMapping)
       {
         chomp(my $groupName = qx(id -gn));
@@ -118,7 +139,7 @@ my $experimentDirsVerify = sub($$$)
       }
       else
       {
-        my $roots = $fre->property('FRE.directory.' . $t . '.roots');
+        my $roots = $r->property('FRE.directory.' . $t . '.roots');
 	if ($roots)
 	{
 	  my $rootsForMatch = $roots;
@@ -169,8 +190,8 @@ $experimentCreate = sub($$$)
       $r->{name} = $e;
       $r->{node} = $fre->experimentNode($e);
       # ------------------------------------------------------ create and verify directories
-      $experimentDirsCreate->($r, $fre);
-      unless ($experimentDirsVerify->($r, $fre, $e))
+      $experimentDirsCreate->($r);
+      unless ($experimentDirsVerify->($r, $e))
       {
 	$fre->out(FREMsg::FATAL, "The experiment '$e' can't be set up because of a problem with directories");
 	return '';
@@ -273,6 +294,22 @@ $rankSet = sub($$$)
   }
 };
     
+my $regressionRunNode = sub($$)
+# ------ arguments: $object $label
+{
+  my ($r, $l) = @_;
+  my @regNodes = $r->extractNodes('runtime', 'regression[@label="' . $l . '" or @name="' . $l . '"]');
+  return (scalar(@regNodes) == 1) ? $regNodes[0] : undef;
+};
+
+my $productionRunNode = sub($)
+# ------ arguments: $object
+{
+  my $r = shift;
+  my @prdNodes = $r->extractNodes('runtime', 'production');
+  return (scalar(@prdNodes) == 1) ? $prdNodes[0] : undef;
+};
+
 # //////////////////////////////////////////////////////////////////////////////
 # ////////////////////////////////////////// Class initialization/termination //
 # //////////////////////////////////////////////////////////////////////////////
@@ -328,12 +365,20 @@ sub parent($)
   return $r->{parent};
 }
 
+sub dir($$)
+# ------ arguments: $object $dirType
+# ------ called as object method
+{
+  my ($r, $t) = @_;
+  return $r->{$t . 'Dir'};
+}
+
 sub rootDir($)
 # ------ arguments: $object
 # ------ called as object method
 {
   my $r = shift;
-  return $r->{rootDir};
+  return $r->dir('root');
 }
 
 sub srcDir($)
@@ -341,7 +386,7 @@ sub srcDir($)
 # ------ called as object method
 {
   my $r = shift;
-  return $r->{srcDir};
+  return $r->dir('src');
 }
 
 sub execDir($)
@@ -349,7 +394,7 @@ sub execDir($)
 # ------ called as object method
 {
   my $r = shift;
-  return $r->{execDir};
+  return $r->dir('exec');
 }
 
 sub scriptsDir($)
@@ -357,7 +402,7 @@ sub scriptsDir($)
 # ------ called as object method
 {
   my $r = shift;
-  return $r->{scriptsDir};
+  return $r->dir('scripts');
 }
 
 sub stdoutDir($)
@@ -365,7 +410,15 @@ sub stdoutDir($)
 # ------ called as object method
 {
   my $r = shift;
-  return $r->{stdoutDir};
+  return $r->dir('stdout');
+}
+
+sub stdoutTmpDir($)
+# ------ arguments: $object
+# ------ called as object method
+{
+  my $r = shift;
+  return $r->dir('stdoutTmp');
 }
 
 sub stateDir($)
@@ -373,7 +426,7 @@ sub stateDir($)
 # ------ called as object method
 {
   my $r = shift;
-  return $r->{stateDir};
+  return $r->dir('state');
 }
 
 sub workDir($)
@@ -381,7 +434,7 @@ sub workDir($)
 # ------ called as object method
 {
   my $r = shift;
-  return $r->{workDir};
+  return $r->dir('work');
 }
 
 sub ptmpDir($)
@@ -389,7 +442,7 @@ sub ptmpDir($)
 # ------ called as object method
 {
   my $r = shift;
-  return $r->{ptmpDir};
+  return $r->dir('ptmp');
 }
 
 sub archiveDir($)
@@ -397,7 +450,7 @@ sub archiveDir($)
 # ------ called as object method
 {
   my $r = shift;
-  return $r->{archiveDir};
+  return $r->dir('archive');
 }
 
 sub postProcessDir($)
@@ -405,7 +458,7 @@ sub postProcessDir($)
 # ------ called as object method
 {
   my $r = shift;
-  return $r->{postProcessDir};
+  return $r->dir('postProcess');
 }
 
 sub analysisDir($)
@@ -413,7 +466,7 @@ sub analysisDir($)
 # ------ called as object method
 {
   my $r = shift;
-  return $r->{analysisDir};
+  return $r->dir('analysis');
 }
 
 sub tmpDir($)
@@ -426,16 +479,26 @@ sub tmpDir($)
 
 sub placeholdersExpand($$)
 # ------ arguments: $object $string
+# ------ called as object method
 # ------ expand all the experiment level placeholders in the given $string
 {
   my ($r, $s) = @_;
-  if (exists($r->{name}))
+  if (index($s, '$') >= 0)
   {
     my $v = $r->{name};
     $s =~ s/\$(?:\(name\)|\{name\}|name)/$v/g;
   }
   return $s;
 }
+
+sub property($$)
+# ------ arguments: $object $propertyName
+# ------ called as object method
+# ------ return the value of the property $propertyName, expanded on the experiment level
+{
+  my ($r, $k) = @_;
+  return $r->placeholdersExpand($r->fre()->property($k));
+};
 
 sub nodeValue($$$)
 # ------ arguments: $object $node $xPath
@@ -464,6 +527,38 @@ sub description($)
   return $r->experimentValue('description');
 }
 
+sub executable($)
+# ------ arguments: $object
+# ------ called as object method
+# ------ return standard executable name for the given experiment
+{
+  my $r = shift;
+  my ($execDir, $name) = ($r->execDir(), $r->name());
+  return "$execDir/fms_$name.x";
+}
+
+sub executableCanBeBuilt($)
+# ------ arguments: $object
+# ------ called as object method
+# ------ return 1 if the executable for the given experiment can be built
+{
+  my $r = shift;
+  return
+  (
+    $r->experimentValue('*/source/codeBase') ne ''
+    ||
+    $r->experimentValue('*/source/csh') ne ''
+    ||
+    $r->experimentValue('*/compile/cppDefs') ne ''
+    ||
+    $r->experimentValue('*/compile/srcList') ne ''
+    ||
+    $r->experimentValue('*/compile/pathNames') ne ''
+    ||
+    $r->experimentValue('*/compile/csh') ne ''
+  );       
+}
+
 # //////////////////////////////////////////////////////////////////////////////
 # ////////////////////////////////////////// Data Extraction With Inheritance //
 # //////////////////////////////////////////////////////////////////////////////
@@ -471,11 +566,11 @@ sub description($)
 sub extractNodes($$$)
 # ------ arguments: $object $xPathRoot $xPathChildren
 # ------ called as object method
-# ------ returns a nodes list corresponding to the $xPathRoot/$xPathChildren, following inherits
+# ------ return a nodes list corresponding to the $xPathRoot/$xPathChildren, following inherits
 # ------ if xPathRoot returns a list of nodes, only the first node will be taken into account
 {
   my ($r, $x, $y) = @_;
-  my ($exp, $expName, @results) = ($r, $r->name(), ());
+  my ($exp, @results) = ($r, ());
   while ($exp and scalar(@results) == 0)
   {
     my $rootNode = $exp->node()->findnodes($x)->get_node(1);
@@ -491,7 +586,7 @@ sub extractValue($$)
 # ------ return a value corresponding to the $xPath, following inherits
 {
   my ($r, $x) = @_;
-  my ($exp, $expName, $value) = ($r, $r->name(), '');
+  my ($exp, $value) = ($r, '');
   while ($exp and !$value)
   {
     $value = $exp->experimentValue($x);
@@ -506,7 +601,7 @@ sub extractComponentValue($$$)
 # ------ return a value corresponding to the $xPath under the <component> node, following inherits
 {
   my ($r, $x, $c) = @_;
-  my ($exp, $expName, $value) = ($r, $r->name(), '');
+  my ($exp, $value) = ($r, '');
   while ($exp and !$value)
   {
     $value = $exp->experimentValue('component[@name="' . $c . '"]/' . $x);
@@ -521,7 +616,7 @@ sub extractSourceValue($$$)
 # ------ return a value corresponding to the $xPath under the <component/source> node, following inherits
 {
   my ($r, $x, $c) = @_;
-  my ($exp, $expName, $value) = ($r, $r->name(), '');
+  my ($exp, $value) = ($r, '');
   while ($exp and !$value)
   {
     $value = $exp->experimentValue('component[@name="' . $c . '"]/source/' . $x);
@@ -533,10 +628,10 @@ sub extractSourceValue($$$)
 sub extractCompileValue($$$)
 # ------ arguments: $object $xPath $componentName
 # ------ called as object method
-# ------ returns a value corresponding to the $xPath under the <component/compile> node, following inherits
+# ------ return a value corresponding to the $xPath under the <component/compile> node, following inherits
 {
   my ($r, $x, $c) = @_;
-  my ($exp, $expName, $value) = ($r, $r->name(), '');
+  my ($exp, $value) = ($r, '');
   while ($exp and !$value)
   {
     $value = $exp->experimentValue('component[@name="' . $c . '"]/compile/' . $x);
@@ -548,78 +643,33 @@ sub extractCompileValue($$$)
 sub extractExecutable($)
 # ------ arguments: $object
 # ------ called as object method
-# ------ return executable name (if found) and experiment object, following inherits
+# ------ return predefined executable name (if found) and experiment object, following inherits
 {
 
   my $r = shift;
-  my ($exp, $value) = ($r, '');
+  my ($exp, $fre, $makeSenseToCompile, @results) = ($r, $r->fre(), undef, ());
 
-  my $hasUniqueExecutable = sub()
+  while ($exp)
   {
-    if ($r->fre()->version() <= 2)
-    {
-      return
-      (
-	$exp->experimentValue('cvs/codeBase')
-	or
-	$exp->experimentValue('cvs/modelConfig')
-	or
-	$exp->experimentValue('cvs/cvsUpdates')
-	or
-	$exp->experimentValue('compile/srcList')
-	or
-	$exp->experimentValue('compile/cppDefs')
-	or
-	$exp->experimentValue('compile/mkmfTemplate')
-	or
-	$exp->experimentValue('compile/mkmfTemplate/@file')
-	or
-	$exp->experimentValue('compile/executable')
-	or
-	$exp->experimentValue('compile/csh')
-	or
-	$exp->experimentValue('compile/pathNames')
-	or
-	$exp->experimentValue('compile/pathNames/@file')
-      );
-    }
-    else
-    {
-      return
-      (
-	$exp->experimentValue('*/source/codeBase')
-	or
-	$exp->experimentValue('*/source/csh')
-	or
-	$exp->experimentValue('*/compile/srcList')
-	or
-	$exp->experimentValue('*/compile/cppDefs')
-	or
-	$exp->experimentValue('*/compile/mkmfTemplate')
-	or
-	$exp->experimentValue('*/compile/mkmfTemplate/@file')
-	or
-	$exp->experimentValue('*/compile/executable')
-	or
-	$exp->experimentValue('*/compile/csh')
-	or
-	$exp->experimentValue('*/compile/pathNames')
-	or
-	$exp->experimentValue('*/compile/pathNames/@file')
-      );       
-    }
-  };
-
-  while (1)
-  {
-    $value = $exp->experimentValue('executable/@file');
-    my $makesSenseToCompile = $hasUniqueExecutable->();
-    my $expParent = $exp->parent();
-    last if $value || $makesSenseToCompile || !$expParent;
-    $exp = $expParent;
+    $makeSenseToCompile = $exp->executableCanBeBuilt();
+    @results = $fre->dataFilesMerged($exp->node(), 'executable', 'file');
+    last if scalar(@results) > 0 || $makeSenseToCompile;
+    $exp = $exp->parent();
   }
 
-  return ($value, $exp);
+  if (scalar(@results) > 0)
+  {
+    $fre->out(FREMsg::WARNING, "The executable name is predefined more than once - all the extra definitions are ignored") if scalar(@results) > 1;
+    return (@results[0], $exp);
+  }
+  elsif ($makeSenseToCompile)
+  {
+    return (undef, $exp);
+  }
+  else
+  {
+    return (undef, undef);
+  }
 
 }
 
@@ -990,7 +1040,7 @@ sub extractCheckoutInfo($)
 	      my $vcBrand = $strRemoveWS->($r->extractSourceValue('@versionControl', $name)) || 'cvs';
 	      if ($vcBrand)
 	      {
-		my $vcRoot = $strRemoveWS->($r->extractSourceValue('@root', $name)) || $fre->property('FRE.versioncontrol.cvs.root');
+		my $vcRoot = $strRemoveWS->($r->extractSourceValue('@root', $name)) || $r->property('FRE.versioncontrol.cvs.root');
 		if ($vcRoot =~ m/^:ext:/ or (-d $vcRoot and -r $vcRoot))
 		{
 		  # ------------------------------------------------------------------------------------------ save component data into the hash
@@ -1218,6 +1268,232 @@ sub extractCompileInfo($)
     return 0;
   }
      
+}
+
+sub extractRegressionLabels($)
+# ------ arguments: $object
+{
+  my $r = shift;
+  my @labels = ();
+  foreach my $node ($r->extractNodes('runtime', 'regression'))
+  {
+    my $label = $r->nodeValue($node, '@label') || $r->nodeValue($node, '@name');
+    push @labels, $label if $label;
+  }
+  return @labels;
+}
+
+sub extractRegressionRunInfo($$)
+# ------ arguments: $object $label
+# ------ called as object method
+# ------ return a reference to the regression run info
+{
+  my ($r, $l) = @_;
+  my ($fre, $expName) = ($r->fre(), $r->name()); 
+  if ($l eq 'suite')
+  {
+    my ($ok, %runs) = (1, ());
+    foreach my $label (REGRESSION_SUITE)
+    {
+      my $runsForLabel = $r->extractRegressionRunInfo($label);
+      if ($runsForLabel)
+      {
+        foreach my $postfix (keys(%{$runsForLabel}))
+	{
+	  if (!exists($runs{$postfix}))
+	  {
+	    $runs{$postfix} = $runsForLabel->{$postfix};
+	  }
+	  else
+	  {
+	    my $i = $runsForLabel->{$postfix}->{number};
+            $fre->out(FREMsg::FATAL, "The experiment '$expName', the regression test '$label', run '$i' - a run with these timing parameters already exists");
+	    $ok = 0; 
+	  }
+	}
+      }
+      else
+      {
+        $ok = 0;
+      }
+    }
+    return ($ok) ? \%runs : 0;
+  }
+  else
+  {
+    my $regNode = $regressionRunNode->($r, $l);
+    if ($regNode)
+    {
+      my @runNodes = $regNode->findnodes('run');
+      if (scalar(@runNodes) > 0)
+      {
+	my ($ok, %runs) = (1, ());
+	for (my $i = 0; $i < scalar(@runNodes); $i++)
+	{
+	  my $nps = $r->nodeValue($runNodes[$i], '@npes');
+	  my $msl = $r->nodeValue($runNodes[$i], '@months');
+	  my $dsl = $r->nodeValue($runNodes[$i], '@days');
+	  my $hsl = $r->nodeValue($runNodes[$i], '@hours');
+	  my $srt = $r->nodeValue($runNodes[$i], '@runTimePerJob');
+	  if ($nps > 0)
+	  {
+	    my $patternRunTime = qr/^\d\d:\d\d:\d\d$/;
+	    if ($srt =~ m/$patternRunTime/)
+	    {
+	      if ($msl or $dsl or $hsl)
+	      {
+		my @msa = split(' ', $msl);
+		my @dsa = split(' ', $dsl);
+		my @hsa = split(' ', $hsl);
+		my $spj = List::Util::max(scalar(@msa), scalar(@dsa), scalar(@hsa));
+		while (scalar(@msa) < $spj) {push(@msa, '0');}
+		while (scalar(@dsa) < $spj) {push(@dsa, '0');}
+		while (scalar(@hsa) < $spj) {push(@hsa, '0');}
+		my $postfix = ($hsl) ? "${spj}x$msa[0]m$dsa[0]d$hsa[0]h_${nps}pe" : "${spj}x$msa[0]m$dsa[0]d_${nps}pe";
+		if (!exists($runs{$postfix}))
+		{
+        	  my %run = ();
+		  $run{label} = $l;
+		  $run{number} = $i;
+		  $run{npes} = $nps;
+		  $run{months} = join(' ', @msa);
+		  $run{days} = join(' ', @dsa);
+		  $run{hours} = join(' ', @hsa);
+ 		  $run{runTimeMinutes} = FREUtil::makeminutes($srt);
+		  $runs{$postfix} = \%run;
+		}
+		else
+		{
+        	  $fre->out(FREMsg::FATAL, "The experiment '$expName', the regression test '$l', run '$i' - a run with these timing parameters already exists");
+		  $ok = 0; 
+		}
+	      }
+	      else
+	      {
+        	$fre->out(FREMsg::FATAL, "The experiment '$expName', the regression test '$l', run '$i' - timing parameters must be defined");
+		$ok = 0; 
+	      }
+	    }
+	    else
+	    {
+              $fre->out(FREMsg::FATAL, "The experiment '$expName', the regression test '$l', run '$i' - the running time '$srt' must be nonempty and have the HH:MM:SS format");
+	      $ok = 0; 
+	    }
+	  }
+	  else
+	  {
+	    $fre->out(FREMsg::FATAL, "The experiment '$expName', the regression test '$l', run '$i' - a positive number of cores to run on must be defined");
+	    $ok = 0;
+	  }
+	}
+	return ($ok) ? \%runs : 0;
+      }
+      else
+      {
+	$fre->out(FREMsg::FATAL, "The experiment '$expName' - the regression test '$l' doesn't have any runs");
+	return 0;
+      }
+    }
+    else
+    {
+      $fre->out(FREMsg::FATAL, "The experiment '$expName' - the regression test '$l' doesn't exist or defined more than once");
+      return 0;
+    }
+  }
+}
+
+sub extractProductionRunInfo($)
+# ------ arguments: $object
+# ------ called as object method
+# ------ return a reference to the production run info
+{
+  my $r = shift;
+  my ($fre, $expName) = ($r->fre(), $r->name());
+  my $prdNode = $productionRunNode->($r);
+  if ($prdNode)
+  {
+    my $nps = $r->nodeValue($prdNode, '@npes');
+    my $smt = $r->nodeValue($prdNode, '@simTime');
+    my $smu = $r->nodeValue($prdNode, '@units');
+    my $srt = $r->nodeValue($prdNode, '@runTime') || $fre->runTime($nps);
+    my $gmt = $r->nodeValue($prdNode, 'segment/@simTime');
+    my $gmu = $r->nodeValue($prdNode, 'segment/@units');
+    my $grt = $r->nodeValue($prdNode, 'segment/@runTime');
+    if ($nps > 0)
+    {
+      my $patternUnits = qr/^(?:years|year|months|month)$/;
+      if (($smt > 0) and ($smu =~ m/$patternUnits/))
+      {
+        if (($gmt > 0) and ($gmu =~ m/$patternUnits/))
+	{
+	  my $patternYears = qr/^(?:years|year)$/;
+	  $smt *= 12 if $smu =~ m/$patternYears/;
+	  $gmt *= 12 if $gmu =~ m/$patternYears/;
+	  if ($gmt <= $smt)
+	  {
+	    my $patternRunTime = qr/^\d\d:\d\d:\d\d$/;
+	    if ($srt =~ m/$patternRunTime/)
+	    {
+	      if ($grt =~ m/$patternRunTime/)
+	      {
+		my ($srtMinutes, $grtMinutes) = (FREUtil::makeminutes($srt), FREUtil::makeminutes($grt));
+		if ($grtMinutes <= $srtMinutes)
+		{
+		  my %run = ();
+		  $run{npes} = $nps;
+		  $run{simTimeMonths} = $smt;
+		  $run{simRunTimeMinutes} = $srtMinutes;
+		  $run{segTimeMonths} = $gmt;
+		  $run{segRunTimeMinutes} = $grtMinutes;
+		  return \%run;
+		}
+		else
+		{
+		  $fre->out(FREMsg::FATAL, "The experiment '$expName' - the segment running time '$grtMinutes' must not exceed the maximum job running time allowed '$srtMinutes'");
+		  return 0; 
+		}
+	      }
+	      else
+	      {
+        	$fre->out(FREMsg::FATAL, "The experiment '$expName' - the segment running time '$grt' must be nonempty and have the HH:MM:SS format");
+		return 0; 
+	      }
+	    }
+	    else
+	    {
+              $fre->out(FREMsg::FATAL, "The experiment '$expName' - the simulation running time '$srt' must be nonempty and have the HH:MM:SS format");
+	      return 0; 
+	    }
+	  }
+	  else
+	  {
+	    $fre->out(FREMsg::FATAL, "The experiment '$expName' - the segment model time '$gmt' must not exceed the simulation model time '$smt'");
+	    return 0; 
+	  }
+	}
+	else
+	{
+          $fre->out(FREMsg::FATAL, "The experiment '$expName' - the segment model time '$gmt' must be nonempty and have one of (years|year|months|month) units defined");
+	  return 0; 
+	}
+      }
+      else
+      {
+        $fre->out(FREMsg::FATAL, "The experiment '$expName' - the simulation model time '$smt' must be nonempty and have one of (years|year|months|month) units defined");
+	return 0; 
+      }
+    }
+    else
+    {
+      $fre->out(FREMsg::FATAL, "The experiment '$expName' - a positive number of cores to run on must be defined");
+      return 0; 
+    }
+  }
+  else
+  {
+    $fre->out(FREMsg::FATAL, "The experiment '$expName' - production timing parameters aren't defined or defined more than once");
+    return 0;
+  }
 }
 
 # //////////////////////////////////////////////////////////////////////////////

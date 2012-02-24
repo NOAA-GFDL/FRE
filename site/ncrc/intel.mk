@@ -32,7 +32,7 @@ INCLUDE = -I$(NETCDF_ROOT)/include
 
 FPPFLAGS := -fpp -Wp,-w $(INCLUDE)
 
-FFLAGS := -fno-alias -automatic -safe-cray-ptr -ftz -assume byterecl -i4 -r8 -nowarn $(INCLUDE)
+FFLAGS := -fno-alias -auto -safe-cray-ptr -ftz -assume byterecl -i4 -r8 -nowarn $(INCLUDE)
 FFLAGS_OPT = -O3 -debug minimal -fp-model precise -override-limits
 FFLAGS_DEBUG = -g -O0 -check -check noarg_temp_created -check nopointer -warn -warn noerrors -fpe0 -traceback -ftrapuv
 FFLAGS_REPRO = -O2 -debug minimal -fp-model precise -override-limits

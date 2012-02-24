@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 # -*- cperl -*-
-# $Id: refrepp,v 18.0.8.9 2011/08/15 17:24:58 arl Exp $
+# $Id: refrepp,v 18.0.8.12 2012/02/01 21:32:30 Amy.Langenhorst Exp $
 # ------------------------------------------------------------------------------
 # refrepp: submit FRE postprocessing jobs to fill in holes
 # ------------------------------------------------------------------------------
@@ -166,7 +166,7 @@ foreach my $c ( keys %years ) {
                $chunkstring = sprintf("%4.4d",$y). '-' . sprintf("%4.4d",$chunkend);
                $chunkstring = sprintf("%4.4d",$y) . '01-' . sprintf("%4.4d",$chunkend) . '12' if $dir =~ /\/pp\/$c\/ts\/monthly\b/;
                $chunkstring = sprintf("%4.4d",$y) . '0101-' . sprintf("%4.4d",$chunkend) . '1231' if $dir =~ /\/pp\/$c\/ts\/daily\b/;
-               $chunkstring = sprintf("%4.4d",$y) . '010100-' . sprintf("%4.4d",$chunkend) . '123123' if $dir =~ /\/pp\/$c\/ts\/3hr\b/;
+               $chunkstring = sprintf("%4.4d",$y) . '010100-' . sprintf("%4.4d",$chunkend) . '123123' if $dir =~ /\/pp\/$c\/ts\/\d+hr\b/;
                $chunkstring = sprintf("%4.4d",$y) . '-' . sprintf("%4.4d",$chunkend) . '.DJF' if $dir =~ /\/pp\/$c\/ts\/seasonal\b/;
                #ought to test the other three seasons as well: JJA, DJF, MAM, SON
             }
@@ -250,11 +250,14 @@ foreach my $c ( keys %years ) {
          $cmd = "$frepp -t $y -c $c -P $opt{platform} -T $opt{target} -d $hdir -x $xmlfile $expt 2>&1";
          $cmdout = qx/$cmd/;
 #get the jobscript name
-         $cmdout =~ /\nTO SUBMIT: msub -d \$HOME (\S+)/m;
+         $cmdout =~ /\nTO SUBMIT: msub -d \$HOME.* (\S+)/m;
          $script = $1;
          if ( $cmdout =~ /ERROR:/ ) {
             print "cmd=$cmd\n$cmdout\n";
             die "ERROR: refrepp caught an error from frepp, exiting.\n";
+         } elsif ( $cmdout =~ /NOTE: No calculations necessary/ ) {
+            print "NOTE: No frepp submissions necessary for year $y for $c\n";
+            next;
          } elsif ( ! -f $script ) {
             print "cmd=$cmd\n$cmdout\nscript=$script\n";
             die "ERROR: frepp script not found: '$script' Exiting.\n";

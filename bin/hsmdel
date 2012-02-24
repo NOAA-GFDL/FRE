@@ -1,0 +1,155 @@
+#!/usr/bin/perl
+# -*- cperl -*-
+#
+# $Id: hsmdel,v 1.1.2.2 2011/12/08 01:21:10 afy Exp $
+# ------------------------------------------------------------------------------
+# FMS/FRE Project: Program to Scrub the HSM Cache
+# ------------------------------------------------------------------------------
+# afy    Ver   1.00  Initial version                                October 11
+# afy    Ver   2.00  Use new HSM.pm module (scrub => remove)        December 11
+# afy    Ver   2.01  Rename 'hsmscrubber' => 'hsmdel'               December 11
+# ------------------------------------------------------------------------------
+# Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2000-2011
+# Designed and written by V. Balaji, Amy Langenhorst and Aleksey Yakovlev
+#
+
+use strict;
+
+use File::Spec();
+use File::Basename();
+use FindBin();
+use Getopt::Long(':config', 'no_ignore_case', 'no_auto_abbrev');
+
+use lib "$FindBin::Bin/../lib";
+
+use HSM();
+
+# //////////////////////////////////////////////////////////////////////////////
+# ////////////////////////////////////////////////////////// Global constants //
+# //////////////////////////////////////////////////////////////////////////////
+
+{
+
+  package hsmdel;
+
+  use constant VERSION => '$Id: hsmdel,v 1.1.2.2 2011/12/08 01:21:10 afy Exp $';
+
+  use constant OPTLIST =>
+  (
+    'allowance|a=i',
+    'pause|p=i',
+    'help|h',
+    'version|V',
+    'verbose|v+'
+  );
+  
+  use constant ALLOWANCE_DEFAULT => 30;
+  use constant PAUSE_DEFAULT => 1;
+  
+  use constant SECONDS_PER_DAY => 24 * 60 * 60;
+  
+}
+
+# //////////////////////////////////////////////////////////////////////////////
+# ///////////////////////////////////////////////////////////////// Utilities //
+# //////////////////////////////////////////////////////////////////////////////
+
+{
+
+  package hsmdel; 
+
+  my $self = File::Basename::basename($0);
+  
+  sub Usage()
+  # ------ arguments: none
+  {
+    my $aln = hsmdel::ALLOWANCE_DEFAULT;
+    my $pas = hsmdel::PAUSE_DEFAULT;
+    my $beg = "\e[0;4m";
+    my $end = "\e[m";
+    return
+    (
+      "\n",
+      "  Usage: $self [option] ... path\n\n",
+      "  Options:\n\n",
+      "   -a NUM     --allowance=NUM         an ${beg}a${end}llowance (in days, default is '$aln')\n",
+      "   -p NUM     --pause=NUM             a ${beg}p${end}ause between HSM cache elements removals (in seconds, default is '$pas')\n",
+      "   -h,        --help                  print ${beg}h${end}elp message and exit\n",
+      "   -v,        --verbose               get ${beg}v${end}erbose messages (repeat the option to increase verbosity level)\n", 
+      "   -V,        --version               print the tool ${beg}v${end}ersion and exit\n\n"
+    );
+  }
+  
+  sub Help()
+  # ------ arguments: none
+  {
+    my @usage = hsmdel::Usage();
+    return
+    (
+      "\n",
+      "   Synopsis: $self scans the argument directory, removing all HSM cache elements with access time <= current time minus allowance\n",
+      "@usage"
+    );
+  }
+  
+}
+
+# //////////////////////////////////////////////////////////////////////////////
+# ////////////////////////////////////////////////////////////////////// Main //
+# //////////////////////////////////////////////////////////////////////////////
+
+{
+
+  my %opt =
+  (
+    'allowance'	=> hsmdel::ALLOWANCE_DEFAULT,
+    'pause'	=> hsmdel::PAUSE_DEFAULT
+  );
+
+  Getopt::Long::GetOptions(\%opt, hsmdel::OPTLIST) or (print hsmdel::Usage() and exit 1);
+  if ($opt{version}) {print hsmdel::VERSION,"\n" and exit 0;}
+  if ($opt{help}) {print hsmdel::Help() and exit 0;}
+
+  my $path = '';
+
+  if (scalar(@ARGV) == 1)
+  {
+    $path = File::Spec->rel2abs($ARGV[0]);
+  }
+  else
+  {
+    print hsmdel::Usage();
+    exit 1;
+  }
+  
+  if ($opt{allowance})
+  {
+    if (substr($opt{allowance}, 0, 1) eq '-')
+    {
+      print STDERR "The --allowance option must have a non-empty non-negative value\n";
+      exit 1;
+    }
+  }
+  
+  if ($opt{pause})
+  {
+    if (substr($opt{pause}, 0, 1) eq '-')
+    {
+      print STDERR "The --pause option must have a non-empty non-negative value\n";
+      exit 1;
+    }
+  }
+  
+  if (-d $path)
+  {
+    my $currentTimeInDays = int(time() / hsmdel::SECONDS_PER_DAY);
+    my $res = HSM::remove($path, ($currentTimeInDays - $opt{allowance}) * hsmdel::SECONDS_PER_DAY, $opt{pause}, $opt{verbose});
+    exit !$res;
+  }
+  else
+  {
+    print STDERR "The directory '$path' doesn't exist\n";
+    exit 1;
+  }
+  
+}

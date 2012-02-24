@@ -1,5 +1,5 @@
 # -*- Makefile -*-
-# $Id: hsmget.mk,v 1.1.2.13 2011/09/13 16:58:01 vb Exp $
+# $Id: hsmget.mk,v 1.1.2.15.6.1 2013/03/27 23:47:03 afy Exp $
 # HSM.mk: data transfer using three-level storage model
 
 #use csh, with no user .cshrc
@@ -44,7 +44,7 @@ GCPOPTS := --disable-checksum
 ifeq ($(verbose),)
 REMOTECP ?= $(GCP) $(GCPOPTS) --quiet
 else
-REMOTECP ?= $(GCP) $(GCPOPTS) --debug
+REMOTECP ?= $(GCP) $(GCPOPTS) --verbose
 endif
 commands += $(firstword $(REMOTECP))
 ifneq ($(time),)
@@ -160,6 +160,7 @@ endif
 	@rm -f $@.LOCK
 $(PTMPROOT)/%.ok: $(ARCHROOT)/%.tar
 	@touch $@.LOCK
+	rm -rf $(PTMPROOT)/$*
 	@$(MKDIR) $(PTMPROOT)/$* $(PTMPROOT)/tmp/$(uuid)
 	cd $(PTMPROOT)/tmp/$(uuid) && $(TAR) $< && mv -f $(PTMPROOT)/tmp/$(uuid)/* $(PTMPROOT)/$* && rm -rf $(PTMPROOT)/tmp/$(uuid)
 ifneq ($(check),)
@@ -171,6 +172,7 @@ endif
 	@rm -f $@.LOCK
 $(PTMPROOT)/%.ok: $(ARCHROOT)/%.nc.tar
 	@touch $@.LOCK
+	rm -rf $(PTMPROOT)/$*
 	@$(MKDIR) $(PTMPROOT)/$* $(PTMPROOT)/tmp/$(uuid)
 	cd $(PTMPROOT)/tmp/$(uuid) && $(TAR) $< && mv -f $(PTMPROOT)/tmp/$(uuid)/* $(PTMPROOT)/$* && rm -rf $(PTMPROOT)/tmp/$(uuid)
 ifneq ($(check),)
@@ -182,6 +184,7 @@ endif
 	@rm -f $@.LOCK
 $(PTMPROOT)/%.ok: $(ARCHROOT)/%.cpio
 	@touch $@.LOCK
+	rm -rf $(PTMPROOT)/$*
 	@$(MKDIR) $(PTMPROOT)/$* $(PTMPROOT)/tmp/$(uuid)
 	cd $(PTMPROOT)/tmp/$(uuid) && $(CPIO) $< && mv -f $(PTMPROOT)/tmp/$(uuid)/* $(PTMPROOT)/$* && rm -rf $(PTMPROOT)/tmp/$(uuid)
 # 	test -d $@ && cd $@ && $(CPIO) $< || \
@@ -195,6 +198,7 @@ endif
 	@rm -f $@.LOCK
 $(PTMPROOT)/%.ok: $(ARCHROOT)/%.nc.cpio
 	@touch $@.LOCK
+	rm -rf $(PTMPROOT)/$*
 	@$(MKDIR) $(PTMPROOT)/$* $(PTMPROOT)/tmp/$(uuid)
 	cd $(PTMPROOT)/tmp/$(uuid) && $(CPIO) $< && mv -f $(PTMPROOT)/tmp/$(uuid)/* $(PTMPROOT)/$* && rm -rf $(PTMPROOT)/tmp/$(uuid)
 # 	test -d $@ && cd $@ && $(CPIO) $< || \
@@ -216,6 +220,7 @@ ifeq ($(verbose),)
 else
 	ln -f $< $@ || $(LOCALCP) $< $@
 endif
+	chmod a-w $<
 	@echo Created $@ from $<
 
 #the dot variables

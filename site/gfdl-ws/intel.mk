@@ -1,4 +1,4 @@
-# $Id: intel.mk,v 1.1.2.1 2011/01/25 01:10:50 afy Exp $
+# $Id: intel.mk,v 1.1.2.1.2.1 2011/04/22 14:51:14 sdu Exp $
 # template for the Intel fortran compiler
 # typical use with mkmf
 # mkmf -t template.ifc -c"-Duse_libMPI -Duse_netCDF" path_names /usr/local/include
@@ -16,7 +16,7 @@ REPRO =
 VERBOSE =
 OPENMP =
 
-MAKEFLAGS += --jobs=8
+MAKEFLAGS += --jobs=$(shell grep '^processor' /proc/cpuinfo | wc -l)
 
 FPPFLAGS := -fpp -Wp,-w
 
@@ -68,7 +68,7 @@ ifeq ($(NETCDF),3)
   endif
 endif
 
-LIBS := $(shell nc-config --flibs)
+LIBS := $(shell nc-config --flibs) $(shell pkg-config --libs mpich2-f90)
 LDFLAGS += $(LIBS)
 
 #---------------------------------------------------------------------------

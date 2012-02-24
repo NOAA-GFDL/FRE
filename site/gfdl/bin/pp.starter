@@ -1,0 +1,283 @@
+#!/bin/csh -f
+# 
+# $Id: pp.starter,v 1.1.2.10 2011/09/23 21:33:27 afy Exp $
+# ------------------------------------------------------------------------------
+# FMS/FRE Project: Post-Processor Starter - GFDL Version 
+# ------------------------------------------------------------------------------
+# afy    Ver   1.00  Initial version                                May 11
+# afy    Ver   2.00  Remove temporary XML file in batch mode        May 11
+# afy    Ver   2.01  Standardize PBS environment determination      May 11
+# afy    Ver   2.02  Add 'getopt'-based calling interface           May 11
+# afy    Ver   2.03  Remove arguments target/project                May 11
+# afy    Ver   2.04  Replace modulePath/modulesToLoad => ppEnv (!)  May 11
+# afy    Ver   3.00  Simplify calling interface                     May 11
+# afy    Ver   4.00  Fix the XML file removal                       May 11
+# afy    Ver   5.00  Remove dummy file instead of the XML file      May 11
+# afy    Ver   6.00  Use eval to expand the XML filepath            May 11
+# afy    Ver   7.00  Don't use eval to expand the XML filepath      May 11
+# afy    Ver   8.00  Add argument 'target'                          May 11
+# afy    Ver   9.00  Modify refineDiagList (translate '&' => ',')   June 11
+# afy    Ver  10.00  Remove dummy files in the script beginning     September 11
+# afy    Ver  10.01  No batch mode with arguments                   September 11
+# afy    Ver  10.02  Modify refineDiagList (translate '+' => ',')   September 11
+# ------------------------------------------------------------------------------
+# Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2000-2011
+# Designed and written by V. Balaji, Amy Langenhorst and Aleksey Yakovlev
+#
+
+  set -r echoOn = $?echo
+  set -r runtimeBeg = `date "+%s"`
+
+  if ( $echoOn ) unset echo
+  echo "<NOTE> : ====== FRE POST-PROCESSOR STARTER ======"
+  echo "<NOTE> : Starting at $HOST on `date`"
+  if ( $echoOn ) set echo
+
+  unalias *
+
+  # ---------------- define constants depending on the run type
+
+  if ( $?PBS_ENVIRONMENT ) then
+    if ( $PBS_ENVIRONMENT == 'PBS_BATCH' ) then
+      set -r batch
+    endif
+  endif
+
+################################################################################
+#----------------------------- dummy files removal -----------------------------
+################################################################################
+
+  if ( $?batch ) then
+    rm -f dummy.txt.*
+  endif
+
+################################################################################
+#------------------------ arguments initial assignment -------------------------
+################################################################################
+
+  if ( $?batch && $# == 0 ) then
+  
+    if ( $?expName ) then
+      if ( $echoOn ) unset echo
+      echo "<NOTE> : expName = '$expName'"
+      if ( $echoOn ) set echo
+      set -r expName = $expName
+    else
+      if ( $echoOn ) unset echo
+      echo "*ERROR*: The argument 'expName' is not defined"
+      if ( $echoOn ) set echo
+      exit 1
+    endif
+
+    if ( $?xmlFile ) then
+      if ( $echoOn ) unset echo
+      echo "<NOTE> : xmlFile = '$xmlFile'"
+      if ( $echoOn ) set echo
+      set -r xmlFile = $xmlFile
+    else
+      if ( $echoOn ) unset echo
+      echo "*ERROR*: The argument 'xmlFile' is not defined"
+      if ( $echoOn ) set echo
+      exit 1
+    endif
+
+    if ( $?platform ) then
+      if ( $echoOn ) unset echo
+      echo "<NOTE> : platform = '$platform'"
+      if ( $echoOn ) set echo
+      set -r platform = $platform
+    else
+      if ( $echoOn ) unset echo
+      echo "*ERROR*: The argument 'platform' is not defined"
+      if ( $echoOn ) set echo
+      exit 1
+    endif
+
+    if ( $?target ) then
+      if ( $echoOn ) unset echo
+      echo "<NOTE> : target = '$target'"
+      if ( $echoOn ) set echo
+      set -r target = $target
+    else
+      if ( $echoOn ) unset echo
+      echo "*ERROR*: The argument 'target' is not defined"
+      if ( $echoOn ) set echo
+      exit 1
+    endif
+
+    if ( $?dir ) then
+      if ( $echoOn ) unset echo
+      echo "<NOTE> : dir = '$dir'"
+      if ( $echoOn ) set echo
+      set -r dir = $dir 
+    else
+      if ( $echoOn ) unset echo
+      echo "*ERROR*: The argument 'dir' is not defined"
+      if ( $echoOn ) set echo
+      exit 1
+    endif
+
+    if ( $?firstDate ) then
+      if ( $echoOn ) unset echo
+      echo "<NOTE> : firstDate = '$firstDate'"
+      if ( $echoOn ) set echo
+      set -r firstDate = $firstDate
+    else
+      if ( $echoOn ) unset echo
+      echo "*ERROR*: The argument 'firstDate' is not defined"
+      if ( $echoOn ) set echo
+      exit 1
+    endif
+
+    if ( $?refineDiagList ) then
+      if ( $echoOn ) unset echo
+      echo "<NOTE> : refineDiagList = '$refineDiagList'"
+      if ( $echoOn ) set echo
+      set -r refineDiagList = `echo $refineDiagList | tr '+' ','`
+    endif
+
+    if ( $?ppEnv ) then
+      if ( $echoOn ) unset echo
+      echo "<NOTE> : ppEnv = '$ppEnv'"
+      if ( $echoOn ) set echo
+      set -r ppEnv = $ppEnv
+    endif
+
+  else if ( $# > 0 ) then
+
+    alias getopt `which getopt` --shell=tcsh --unquote
+
+    set argv = ( `getopt 'x:P:T:d:t:D:E:' $*` )
+    set argvStatus = $status
+
+    set expName = ""
+    set xmlFile = ""
+    set platform = ""
+    set target = ""
+    set dir = ""
+    set firstDate = ""
+    set refineDiagList = ""
+    set ppEnv = ""
+
+    while ( 1 )
+      switch ( $argv[1] )
+	case --:
+	  shift argv; break;
+	case -x:
+	  set xmlFile = $argv[2]; shift argv; breaksw;
+	case -P:
+	  set platform = $argv[2]; shift argv; breaksw; 
+	case -T:
+	  set target = $argv[2]; shift argv; breaksw; 
+	case -d:
+	  set dir = $argv[2]; shift argv; breaksw;
+	case -t:
+	  set firstDate = $argv[2]; shift argv; breaksw;
+	case -D:
+	  set refineDiagList = $argv[2]; shift argv; breaksw;
+	case -E:
+	  set ppEnv = $argv[2]; shift argv; breaksw;
+	default:
+          if ( $echoOn ) unset echo
+	  echo "*ERROR*: System error"
+          if ( $echoOn ) set echo
+          exit 1
+      endsw
+      shift argv
+    end
+
+    if ( $argvStatus || $#argv != 1 ) then
+      if ( $echoOn ) unset echo
+      echo "*ERROR*: Invalid options or not a single experiment name on a command line..."
+      if ( $echoOn ) set echo
+      set -r commandLineError
+    else
+      set -r expName = $argv[1]
+      set -r xmlFile = $xmlFile
+      set -r platform = $platform
+      set -r target = $target
+      set -r dir = $dir
+      set -r firstDate = $firstDate
+      set -r refineDiagList = $refineDiagList
+      set -r ppEnv = $ppEnv
+    endif
+
+    unset argvStatus
+    unset argv
+
+  else
+
+    set -r commandLineError
+
+  endif
+
+  if ( $?commandLineError ) then
+
+    if ( $echoOn ) unset echo
+    echo "Usage: $0:t [options] experiment"
+    echo "  -x STRING - XML file absolute pathname STRING"
+    echo "  -P STRING - platform STRING" 
+    echo "  -T STRING - target STRING" 
+    echo "  -d STRING - a directory STRING with history files"
+    echo "  -t STRING - first date STRING"
+    echo "  -D STRING - a comma-separated list STRING of refine diagnostics scripts"
+    echo "  -E STRING - a colon-separated list STRING of environment setting commands with spaces, replaced by '+'"
+    if ( $echoOn ) set echo
+
+    exit 1
+
+  endif
+
+################################################################################
+#----------------------------- environment setup -------------------------------
+################################################################################
+
+  if ( $echoOn ) unset echo
+
+  foreach ppEnvElement ( `echo $ppEnv | tr ':' '\n'` )
+    eval `echo $ppEnvElement | tr '+' ' '`
+  end 
+
+  if ( $echoOn ) set echo
+
+################################################################################
+#------------------------ global constants and aliases -------------------------
+################################################################################
+
+  alias pp `which frepp` -v -c split -s 
+
+################################################################################
+#--------------------------- the post-processor call ---------------------------
+################################################################################
+
+  if ( ! $echoOn ) set echo
+
+  pp -x $xmlFile -P $platform -T $target -d $dir -t $firstDate -D "$refineDiagList" $expName
+
+  if ( $status == 0 ) then
+    if ( $echoOn ) unset echo
+    echo "<NOTE> : The post-processor has been started successfully"
+    if ( $echoOn ) set echo
+  else
+    if ( $echoOn ) unset echo
+    echo "*ERROR*: Can't start the post-processor"
+    if ( $echoOn ) set echo
+    exit 1
+  endif
+
+  if ( ! $echoOn ) unset echo
+
+################################################################################
+#----------------------------- normal end of script ----------------------------
+################################################################################
+
+  set -r runtimeEnd = `date "+%s"`
+  set -r runtime = `echo "$runtimeEnd - $runtimeBeg" | bc -l`
+
+  if ( $echoOn ) unset echo
+  echo "<NOTE> : Finishing on `date`"
+  echo "<NOTE> : Runtime = '$runtime' (seconds)"
+  echo "<NOTE> : Natural end of the post-processing starter script for '$expName'"
+  if ( $echoOn ) set echo
+
+  exit 0

@@ -1,4 +1,4 @@
-# $Id: hsmput.mk,v 1.1.2.14 2011/07/14 22:38:28 vb Exp $
+# $Id: hsmput.mk,v 1.1.2.14.6.1 2013/03/27 23:47:03 afy Exp $
 # hsmget.mk: data transfer using three-level storage model
 
 #use csh, with no user .cshrc
@@ -33,7 +33,7 @@ GCPOPTS := -cd --disable-checksum
 ifeq ($(verbose),)
 REMOTECP := $(GCP) $(GCPOPTS) --quiet
 else
-REMOTECP := $(GCP) $(GCPOPTS) --debug
+REMOTECP := $(GCP) $(GCPOPTS) --verbose
 endif
 commands += $(firstword $(REMOTECP))
 ifneq ($(time),)

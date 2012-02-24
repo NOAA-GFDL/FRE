@@ -35,7 +35,7 @@ INCLUDE = -I$(NETCDF_ROOT)/include
 FPPFLAGS = $(INCLUDE)
 FFLAGS = -i4 -r8 -byteswapio -fno-second-underscore
 FFLAGS_OPT = -O3 -OPT:fast_math=on:Olimit=0:IEEE_arith=2 -TENV:X=1
-FFLAGS_DEBUG = -g -trapuv -TENV:simd_zmask=OFF:simd_umask=OFF:simd_omask=OFF:simd_dmask=OFF 
+FFLAGS_DEBUG = -g -trapuv -TENV:simd_zmask=OFF:simd_umask=OFF
 FFLAGS_REPRO = -O2 -OPT:fast_math=off:Olimit=0 -TENV:X=1
 FFLAGS_OPENMP = -mp
 FFLAGS_VERBOSE = -v

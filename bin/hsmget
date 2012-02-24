@@ -1,14 +1,22 @@
 #!/usr/bin/perl
-# $Id: hsmget,v 18.0.10.12 2011/08/10 13:07:40 vb Exp $
+# $Id: hsmget,v 18.0.2.7 2011/12/08 01:20:44 afy Exp $
 # script for calling hsmget.mk
+
 require 5;
 use strict;
+
 use Carp;                       # error messages in modules
+use Cwd;
 use Getopt::Long;
 use File::Spec;
 use File::Basename;
 use File::Path qw( mkpath );
-use Cwd;
+use FindBin();
+
+use lib "$FindBin::Bin/../lib";
+
+use HSM();
+
 #option processing
 my %opt;
 my @optlist = ( 'archroot=s',
@@ -29,7 +37,8 @@ my @optlist = ( 'archroot=s',
 		'verbose',
                 'help'
 	      );
-my $usage = "Usage: $0 [options] file [file...] 
+my $appName = basename($0);	      
+my $usage = "Usage: $appName [options] file [file...] 
   Options: 
       -a|--archroot <dir> anchor point on remote storage 
       -p|--ptmproot <dir> anchor point on long-term scratch 
@@ -57,15 +66,10 @@ croak "\n$usage" unless GetOptions( \%opt, @optlist );
 
 #help: print usage and exit
 if( $opt{help} ) {
-   print "$0 retrieves files from remote storage.\n\n";
+   print "$appName retrieves files from remote storage.\n\n";
    print "$usage\n";
    exit 0;
 }
-
-undef my $result;
-undef my $okfile;
-undef my $lock;
-undef my $sleep;
 
 $SIG{INT} = \&cleanup;          # remove temp files if hsmget is interruped by ^C
 my $verbose = $opt{verbose};
@@ -88,8 +92,7 @@ my $ptmproot = $opt{ptmproot} || $ENV{PTMPROOT};
 my $workroot = $opt{workroot} || $ENV{WORKROOT};
 my $workorig = $workroot;
 $workroot .= '/.hsm' if $opt{extra};
-print "Using archroot=$archroot ptmproot=$ptmproot workroot=$workroot\n" 
-  if $verbose;
+print "Using archroot=$archroot ptmproot=$ptmproot workroot=$workroot\n" if $verbose;
 # my $cmd = 'make';
 # $cmd .= " ARCHROOT=$opt{archroot}" if $opt{archroot};
 # $cmd .= " PTMPROOT=$opt{ptmproot}" if $opt{ptmproot};
@@ -106,6 +109,10 @@ $cmd .= ' -n' if $opt{nocopy};
 $cmd .= ' -B' if $opt{force};
 $cmd .= ' -s' if $opt{quiet};
 $cmd .= " -r -f $makefile";
+
+undef my $target;
+undef my $result;
+undef my $okfile;
 
 foreach ( @ARGV ) {
    croak "$0 target $_ cannot be an absolute pathname!\n\n$usage" 
@@ -130,10 +137,10 @@ foreach ( @ARGV ) {
             croak "ERROR: Unable to make $lpath\n$result\n" if $?;
             print $result;
             my $foo = $opt{remotepath};
-            print "foo before=$foo\n" if $verbose;
+            # print "foo before=$foo\n" if $verbose;
             $foo =~ /.*\/(.*)\./;
             $foo = $1;
-            print "foo after=$foo\n";
+            # print "foo after=$foo\n" if $verbose;
             my $bar = "$archroot/$file";
             $bar =~ /(.*)\/$foo/;
             $dir = $1;
@@ -152,28 +159,21 @@ foreach ( @ARGV ) {
 #   $result = qx/mkdir -p $dir/ or croak "ERROR: Unable to mkdir -p $dir\n";
 #if source on archroot isn't a file, assume it's an an archive and make
 #its ok file
-      $okfile = "$dir.ok";   # default assumes source is an archive
-      $okfile = "$ptmproot/$file.ok" if ( -f "$archroot/$file" );
+      # default assumes source is an archive
+      $target = ( -f "$archroot/$file" ) ? "$ptmproot/$file" : $dir;
+      HSM::lock($target,30) or exit 1;
+      HSM::clean($target);
+      $okfile = "$target.ok";
       print STDERR "+CMD: $cmd $okfile\n" if $verbose;
-      my $lock = $okfile . '.LOCK';
-      my $sleep = 30;
-      while ( -f $lock ) {
-         print STDERR "Another hsmget has locked $okfile, 
-          rm $lock if this is an error. 
-          Trying again in $sleep seconds ...\n";
-         sleep $sleep;
-      }
-# why was opt{quiet} added below?
-#    my $result = qx/$cmd $okfile/ or $opt{quiet} or croak "Unable to make $okfile\n";
-      print STDERR "CMD: $cmd $okfile\n" if $verbose;
       $result = qx/$cmd $okfile/;
       if ( $? ) {
          unlink $okfile if -f $okfile;
-         unlink $lock if -f $lock;
+         HSM::unlock($target);
          croak "ERROR: Unable to make $okfile\n$result\n";
       }
       print $result unless $result =~ / is up to date./;
-      qx/touch -a $okfile/;     # record last access time of ptmp cache
+      HSM::alignAccessTime($target);
+      HSM::unlock($target);
    } else {
       carp "WARNING: invalid archive location $dir; \
          hsmget will only do ptmp->work processing\n";
@@ -199,7 +199,7 @@ foreach ( @ARGV ) {
 }
 
 sub cleanup () {
-   print "Caught ^C, removing temp files $okfile and $lock ...\n";
+   print "Caught ^C, removing temporary file '$okfile' ...\n";
    unlink $okfile if -f $okfile;
-   unlink $lock if -f $lock;
+   HSM::unlock($target);
 }

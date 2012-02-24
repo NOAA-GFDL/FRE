@@ -1,5 +1,5 @@
 #
-# $Id: FREProperties.pm,v 18.0.2.7 2011/01/28 19:39:16 afy Exp $
+# $Id: FREProperties.pm,v 18.0.2.18 2012/01/07 17:59:18 afy Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: Properties Management Module
 # ------------------------------------------------------------------------------
@@ -24,8 +24,45 @@
 # afy    Ver   7.01  Pass verbose flag via the object               January 11
 # afy    Ver   7.02  Pass platformSiteIsLocal flag via the object   January 11
 # afy    Ver   7.03  Modify placeholdersExpand (the flag above)     January 11
+# afy    Ver   8.00  Use the FREExternalProperties as base module   March 11
+# afy    Ver   8.01  Use new FREPlatforms module                    March 11
+# afy    Ver   8.02  Remove propertyNameCheck utility               March 11
+# afy    Ver   8.03  Remove propertyNamesExtract utility            March 11
+# afy    Ver   8.04  Remove propertyInsert utility                  March 11
+# afy    Ver   8.05  Remove externalPropertiesExtract utility       March 11
+# afy    Ver   8.06  Modify new subroutine (call constructor)       March 11
+# afy    Ver   8.07  Remove property subroutine                     March 11
+# afy    Ver   8.08  Remove propertiesList subroutine               March 11
+# afy    Ver   8.09  Modify placeholdersExpand (optimization)       March 11
+# afy    Ver   9.00  Modify new subroutine (platformSiteIsLocal)    April 11
+# afy    Ver   9.01  Revive property subroutine                     April 11
+# afy    Ver  10.00  Remove platformSiteIsLocal subroutine          May 11
+# afy    Ver  10.01  Add environmentVariablesExpand subroutine      May 11
+# afy    Ver  10.02  Modify placeholdersExpand (call ^)             May 11
+# afy    Ver  10.03  Modify new (no platform locality)              May 11
+# afy    Ver  11.00  Modify new (correction in suite)               May 11
+# afy    Ver  12.00  Revive platformSiteIsLocal utility/flag        October 11
+# afy    Ver  12.01  Modify environmentVariablesExpand (locality)   October 11
+# afy    Ver  12.02  Modify new subroutine (remoteUser)             October 11
+# afy    Ver  13.00  Modify environmentVariablesExpand subroutine   November 11
+# afy    Ver  13.01  Modify new subroutine (xmlfileOwner)           November 11
+# afy    Ver  14.00  Modify new (FREPlatforms::equals*SiteHead)     December 11
+# afy    Ver  14.01  Remove platformSiteIsLocal utility             December 11
+# afy    Ver  15.00  Modify treeProcess* (return result, verbosity) December 11
+# afy    Ver  15.01  Use new propertyExists subroutine              December 11
+# afy    Ver  15.02  Make all the warnings fatal                    December 11
+# afy    Ver  15.03  Modify new (verbosity via argument)            December 11
+# afy    Ver  16.00  Modify treeProcessPlatform (platform dupes)    January 12
+# afy    Ver  16.01  Add treeProcessSetup (missing platform)        January 12
+# afy    Ver  16.02  Modify treeProcess (call ^)                    January 12
+# afy    Ver  17.00  Use propertyExists (for platformDefined)       January 12
+# afy    Ver  17.01  Rename *SiteIsLocal => *SiteHasLocalStorage    January 12
+# afy    Ver  17.02  Modify treeProcessPlatform (checks, parsing)   January 12
+# afy    Ver  17.03  Modify treeProcessDataSource (checks, parsing) January 12
+# afy    Ver  17.04  Modify new (less one argument, site parts)     January 12
+# afy    Ver  18.00  Modify treeProcessDataSource (bug fix)         January 12
 # ------------------------------------------------------------------------------
-# Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2009-2011
+# Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2009-2012
 # Designed and written by V. Balaji, Amy Langenhorst and Aleksey Yakovlev
 #
 
@@ -36,9 +73,17 @@ use strict;
 use File::Basename();
 
 use FREDefaults();
+use FREExternalProperties();
 use FREMsg();
+use FREPlatforms();
 use FRETargets();
 use FREUtil();
+
+# //////////////////////////////////////////////////////////////////////////////
+# /////////////////////////////////////////////////////////////// Inheritance //
+# //////////////////////////////////////////////////////////////////////////////
+
+our @ISA = ('FREExternalProperties');
 
 # //////////////////////////////////////////////////////////////////////////////
 # ////////////////////////////////////////////////////////// Global Constants //
@@ -47,53 +92,30 @@ use FREUtil();
 use constant DIRECTORIES => FREDefaults::ExperimentDirs();
 use constant RESERVED_PROPERTY_NAMES => FREDefaults::ReservedPropertyNames();
 use constant DEFERRED_PROPERTY_NAMES => FREDefaults::DeferredPropertyNames(); 
-use constant PROPERTY_NAME_PATTERN => qr/[a-zA-Z]+(?:\w|\.)*/o;
 use constant PROPERTIES_FILENAME => 'fre.properties';
 
 # //////////////////////////////////////////////////////////////////////////////
 # ///////////////////////////////////////////////////////////////// Utilities //
 # //////////////////////////////////////////////////////////////////////////////
 
-my $siteIsLocal = sub($)
-{
-  my ($p, $s) = (shift, FREDefaults::Site());
-  return ($p eq $s) ? 1 : ((split /-/, $p)[0] eq (split /-/, $s)[0]);
-};
-
-my $propertyNameCheck = sub($)
-# ------ arguments: $string
-# ------ return 1 if the given $string matches the property name pattern 
-{
-  my ($s, $n) = (shift, PROPERTY_NAME_PATTERN);
-  return ($s =~ m/^$n$/) ? 1 : 0;
-};
-
-my $propertyNamesExtract = sub($)
-# ------ arguments: $string
-# ------ return a list of substrings of the $string, matching a reference to the property name pattern 
-{
-  my ($s, $n, @r) = (shift, PROPERTY_NAME_PATTERN, ());
-  while ($s =~ m/\$\(($n)\)/g) {push @r, $1;}
-  return @r;
-};
-
-my $propertiesExpand = sub($$)
+my $environmentVariablesExpand = sub($$)
 # ------ arguments: $object $string
-# ------ expand all the property placeholders in the given $string
+# ------ expand environment variables in the given $string
 {
   my ($r, $s) = @_;
-  foreach my $k (keys(%{$r}))
+  foreach my $k ('ARCHIVE', 'HOME', 'USER')
   {
-    last unless index($s, '$') >= 0;
-    my $v = $r->{$k};
-    if ($k eq 'root')
+    last if $s !~ m/\$/;
+    my $v = '';
+    if ($r->{platformSiteHasLocalStorage})
     {
-      $s =~ s/\$(?:\(root\)|root)/$v/g;
+      $v = ($k eq 'USER') ? $r->{xmlfileOwner} : ($r->{"FRE.expand.$k"} || $ENV{$k});
     }
     else
     {
-      $s =~ s/\$\($k\)/$v/g;
+      $v = ($k eq 'USER') ? $r->{remoteUser} : $r->{"FRE.expand.$k"};
     }
+    $s =~ s/\$(?:$k|\{$k\})/$v/g if $v;
   }
   return $s;
 };
@@ -103,8 +125,23 @@ my $placeholdersExpand = sub($$)
 # ------ expand placeholders in the given $string
 {
   my ($r, $s) = @_;
-  $s = FREUtil::environmentVariablesExpand($s) if $r->{platformSiteIsLocal} and index($s, '$') >= 0;
-  $s = $propertiesExpand->($r, $s) if index($s, '$') >= 0;
+  if (index($s, '$') >= 0)
+  {
+    $s = $environmentVariablesExpand->($r, $s);
+    foreach my $k (keys(%{$r}))
+    {
+      last unless index($s, '$') >= 0;
+      my $v = $r->{$k};
+      if ($k eq 'root')
+      {
+	$s =~ s/\$(?:\(root\)|root)/$v/g;
+      }
+      else
+      {
+	$s =~ s/\$\($k\)/$v/g;
+      }
+    }
+  }
   return $s;
 };
 
@@ -118,7 +155,7 @@ my $placeholdersExpandAndCheck = sub($$)
     $s = $placeholdersExpand->($r, $s);
     if (index($s, '$') >= 0)
     {
-      my @names = $propertyNamesExtract->($s);
+      my @names = FREExternalProperties::propertyNamesExtract($s);
       if (scalar(@names) > 0)
       {
         my @nonDeferredNames = grep {my $name = $_; scalar(grep($_ eq $name, DEFERRED_PROPERTY_NAMES)) == 0;} @names;
@@ -140,151 +177,15 @@ my $placeholdersExpandAndCheck = sub($$)
   }
 };
 
-my $placeholdersOut = sub($$@)
-# ------ arguments: $object $node @names
+my $placeholdersOut = sub($$$@)
+# ------ arguments: $object $node $verbose @names
 {
-  my ($r, $n, @names) = @_;
+  my ($r, $n, $v, @names) = @_;
   my $line = $n->line_number();
   foreach my $name (@names)
   {
-    FREMsg::out($r->{verbose}, FREMsg::WARNING, "XML file line $line: the property '$name' is not found");
+    FREMsg::out($v, FREMsg::FATAL, "XML file line $line: the property '$name' is not found");
   }
-};
-
-my $propertyInsert = sub($$$)
-# ------ arguments: $object $key $value
-# ------ insert the property into the $object
-# ------ doesn't overwrite a property with the same name
-# ------ doesn't do any placeholder expansion
-{
-  my ($r, $k, $v) = @_;
-  unless (exists($r->{$k}))
-  {
-    $r->{$k} = $v;
-  }
-  elsif ($r->{verbose})
-  {
-    FREMsg::out($r->{verbose}, FREMsg::WARNING, "Property '$k' is already defined - the property is ignored");
-  }
-};
-
-my $externalPropertiesExtract = sub($$)
-# ------ arguments: $object $fileName
-# ------ extract properties from the $fileName and save them in the $object
-# ------ implement conditional parsing based on the hostname
-{
-
-  my ($r, $f) = @_;
-  my $res = open(FILE, $f);
-
-  my $conditionCheck = sub($) {my $p = shift; return $ENV{HOST} =~ m/$p/;};
-
-  if ($res)
-  {
-
-    my $ok = 1;
-    my $conditionFlag = 1;
-    my $conditionFlagGlobal = 0;
-    my $command = '';
-
-    while (<FILE>)
-    {
-      chomp(my $line = $_);
-      if ($line =~ m/^\s*#if\s*\((.*)\)\s*$/)
-      {
-	if ($command eq '')
-	{ 
-	  $conditionFlag = $conditionCheck->($1);
-	  $conditionFlagGlobal = 1 if $conditionFlag;
-	  $command = 'if';
-	}
-	else
-	{
-	  FREMsg::out($r->{verbose}, FREMsg::FATAL, "External properties @ line $. - nested '#if' isn't allowed");
-	  $ok = 0;
-	  last;
-	}
-      }
-      elsif ($line =~ m/^\s*#elsif\s*\((.*)\)\s*$/)
-      {
-	if ($command eq 'if' or $command eq 'elsif')
-	{
-          $conditionFlag = ($conditionFlagGlobal) ? 0 : $conditionCheck->($1);
-	  $conditionFlagGlobal = 1 if $conditionFlag;
-	  $command = 'elsif';
-	}
-	else
-	{
-	  FREMsg::out($r->{verbose}, FREMsg::FATAL, "External properties @ line $. - '#elsif' must follow '#if' or '#elsif'");
-	  $ok = 0;
-	  last;
-	}
-      }
-      elsif ($line =~ m/^\s*#else\s*$/)
-      {
-	if ($command eq 'if' or $command eq 'elsif')
-	{
-	  $conditionFlag = !$conditionFlagGlobal;
-	  $conditionFlagGlobal = 1 if $conditionFlag;
-	  $command = 'else';
-	}
-	else
-	{
-	  FREMsg::out($r->{verbose}, FREMsg::FATAL, "External properties @ line $. - '#else' must follow '#if' or '#elsif'");
-	  $ok = 0;
-	  last;
-	}
-      }
-      elsif ($line =~ m/^\s*#endif\s*$/)
-      {
-	if ($command eq 'if' or $command eq 'elsif' or $command eq 'else')
-	{
-	  $conditionFlag = 1;
-	  $conditionFlagGlobal = 0;
-	  $command = '';
-	}
-	else
-	{
-	  FREMsg::out($r->{verbose}, FREMsg::FATAL, "External properties @ line $. - '#endif' must follow '#if' or '#elsif' or '#else'");
-	  $ok = 0;
-	  last;
-	}
-      }	
-      elsif ($line =~ m/^\s*$/ or $line =~ m/^\s*#/ or !$conditionFlag)
-      {
-	next;
-      }
-      elsif ($line =~ m/^\s*((?:\w|\.)+)\s*=\s*(.*)\s*$/)
-      {
-        my ($key, $value) = ($1, $2);
-	if ($propertyNameCheck->($key))
-	{
-	  $propertyInsert->($r, $key, $placeholdersExpand->($r, $value));
-	}
-	else
-	{
-          FREMsg::out($r->{verbose}, FREMsg::FATAL, "External property name '$key' is not an identifier");
-	  $ok = 0;
-	}
-      }
-      else
-      {
-        FREMsg::out($r->{verbose}, FREMsg::FATAL, "External property wrong syntax: $line");
-	$ok = 0;
-      }
-    }
-
-    close(FILE);
-    
-    return ($ok) ? $r : '';
-
-  }
-  else
-  {
-    FREMsg::out($r->{verbose}, FREMsg::FATAL, "File $f is not found");
-    return '';
-  }
-  
 };
 
 # //////////////////////////////////////////////////////////////////////////////
@@ -293,303 +194,497 @@ my $externalPropertiesExtract = sub($$)
 
 my $treeProcess; # <------ forward declaration
 
-my $treeProcessAllChildren = sub($$)
-# ------ arguments: $object $node
+my $treeProcessAllChildren = sub($$$)
+# ------ arguments: $object $node $verbose
 {
-  my ($r, $n) = @_;
+  my ($r, $n, $v) = @_;
   foreach my $child ($n->findnodes('*'))
   {
-    $treeProcess->($r, $child);
+    $r = $treeProcess->($r, $child, $v);
+    last unless $r;
+  }
+  return $r;
+};
+
+my $treeProcessAttribute = sub($$$)
+# ------ arguments: $object $attrNode $verbose
+{
+  my ($r, $n, $v) = @_;
+  my ($status, $value, @names) = $placeholdersExpandAndCheck->($r, $n->getValue());
+  if (scalar(@names) == 0)
+  {
+    $n->setValue($value) if $status;
+    return $r;
+  }
+  else
+  {
+    $placeholdersOut->($r, $n, $v, @names);
+    return undef;
   }
 };
 
-my $treeProcessAttribute = sub($$)
-# ------ arguments: $object $attrNode
+my $treeProcessAllAttributes = sub($$$)
+# ------ arguments: $object $node $verbose
 {
-  my ($r, $n) = @_;
-  my ($status, $value, @names) = $placeholdersExpandAndCheck->($r, $n->getValue());
-  $placeholdersOut->($r, $n, @names) if scalar(@names) > 0;
-  $n->setValue($value) if $status;
-};
-
-my $treeProcessAllAttributes = sub($$)
-# ------ arguments: $object $node
-{
-  my ($r, $n) = @_;
+  my ($r, $n, $v) = @_;
   foreach my $attrNode ($n->attributes())
   {
-    $treeProcessAttribute->($r, $attrNode);
+    $r = $treeProcessAttribute->($r, $attrNode, $v);
+    last unless $r;
+  }
+  return $r;
+};
+
+my $treeProcessText = sub($$$)
+# ------ arguments: $object $textNode $verbose
+{
+  my ($r, $n, $v) = @_;
+  my ($status, $value, @names) = $placeholdersExpandAndCheck->($r, $n->data());
+  if (scalar(@names) == 0)
+  {
+    $n->setData($value) if $status;
+    return $r;
+  }
+  else
+  {
+    $placeholdersOut->($r, $n, $v, @names);
+    return undef;
   }
 };
 
-my $treeProcessText = sub($$)
-# ------ arguments: $object $textNode
+my $treeProcessAllTexts = sub($$$)
+# ------ arguments: $object $node $verbose
 {
-  my ($r, $n) = @_;
-  my ($status, $value, @names) = $placeholdersExpandAndCheck->($r, $n->data());
-  $placeholdersOut->($r, $n, @names) if scalar(@names) > 0;
-  $n->setData($value) if $status;
-};
-
-my $treeProcessAllTexts = sub($$)
-# ------ arguments: $object $node
-{
-  my ($r, $n) = @_;
+  my ($r, $n, $v) = @_;
   foreach my $textNode ($n->findnodes('text()'))
   {
-    $treeProcessText->($r, $textNode);
+    $r = $treeProcessText->($r, $textNode, $v);
+    last unless $r;
   }
+  return $r;
 };
 
-my $treeProcessProperty = sub($$)
-# ------ arguments: $object $node
+my $treeProcessProperty = sub($$$)
+# ------ arguments: $object $node $verbose
 # ------ special processing for the <property> node
 {
-  my ($r, $n) = @_;
+  my ($r, $n, $v) = @_;
   my $parentNodeName = $n->parentNode()->nodeName();
   if ($parentNodeName eq 'experimentSuite' || $parentNodeName eq 'platform')
   {
-    $treeProcessAllAttributes->($r, $n);
-    $treeProcessAllTexts->($r, $n);
-    my $name = $n->getAttribute('name');
-    if ($propertyNameCheck->($name))
+    if ($treeProcessAllAttributes->($r, $n, $v) && $treeProcessAllTexts->($r, $n, $v))
     {
-      if (scalar(grep($_ eq $name, FREProperties::RESERVED_PROPERTY_NAMES)) == 0)
+      my $name = $n->getAttribute('name');
+      if (FREExternalProperties::propertyNameCheck($name))
       {
-	my ($valueAttr, $valueText) = ($n->getAttribute('value'), $n->findvalue('text()'));
-	if ($valueAttr && !$valueText)
+	if (scalar(grep($_ eq $name, FREProperties::RESERVED_PROPERTY_NAMES)) == 0)
 	{
-	  $propertyInsert->($r, $name, $valueAttr);
-	}
-	elsif (!$valueAttr && $valueText)
-	{
-	  $propertyInsert->($r, $name, $valueText);
-	}
-	elsif (!$valueAttr && !$valueText)
-	{
-	  $propertyInsert->($r, $name, '');
+          unless ($r->propertyExists($name))
+	  {
+	    my ($valueAttr, $valueText) = ($n->getAttribute('value'), $n->findvalue('text()'));
+	    if ($valueAttr && !$valueText)
+	    {
+	      $r->propertyInsert($name, $valueAttr);
+              return $r;
+	    }
+	    elsif (!$valueAttr && $valueText)
+	    {
+	      $r->propertyInsert($name, $valueText);
+              return $r;
+	    }
+	    elsif (!$valueAttr && !$valueText)
+	    {
+	      $r->propertyInsert($name, '');
+              return $r;
+	    }
+	    else
+	    {
+	      my $line = $n->line_number();
+	      FREMsg::out($v, FREMsg::FATAL, "XML file line $line: the property '$name' is defined both as an attribute and as a text");
+              return undef;
+	    }
+          }
+	  else
+	  {
+	    my $line = $n->line_number();
+	    FREMsg::out($v, FREMsg::FATAL, "XML file line $line: the property '$name' is already defined");
+	    return undef;
+	  }
 	}
 	else
 	{
-	  my $line = $n->line_number();
-	  FREMsg::out($r->{verbose}, FREMsg::WARNING, "XML file line $line: the property '$name' is defined both as an attribute and as a text - the property is ignored");
+          my $line = $n->line_number();
+          FREMsg::out($v, FREMsg::FATAL, "XML file line $line: the property name '$name' is reserved");
+          return undef;
 	}
       }
       else
       {
-        my $line = $n->line_number();
-        FREMsg::out($r->{verbose}, FREMsg::WARNING, "XML file line $line: the property name '$name' is reserved - the property is ignored");
+	my $line = $n->line_number();
+	FREMsg::out($v, FREMsg::FATAL, "XML file line $line: the property name '$name' is not an identifier");
+	return undef;
       }
     }
     else
     {
+      my $s = $n->toString();
       my $line = $n->line_number();
-      FREMsg::out($r->{verbose}, FREMsg::WARNING, "XML file line $line: the property name '$name' is not an identifier - the property is ignored");
+      FREMsg::out($v, FREMsg::FATAL, "XML file line $line: the property $s can't be parsed");
+      return undef;
     }
   }
   else
   {
     my $s = $n->toString();
     my $line = $n->line_number();
-    FREMsg::out($r->{verbose}, FREMsg::WARNING, "XML file line $line: the property $s can't descend from a '$parentNodeName' node - the property is ignored");
+    FREMsg::out($v, FREMsg::FATAL, "XML file line $line: the property $s can't descend from a '$parentNodeName' node");
+    return undef;
   }
 };
 
-my $treeProcessPlatform = sub($$)
-# ------ arguments: $object $node
+my $treeProcessPlatform = sub($$$)
+# ------ arguments: $object $node $verbose
 # ------ special processing for the <platform> node
 {
-  my ($r, $n) = @_;
+  my ($r, $n, $v) = @_;
   if ($n->hasAttribute('name'))
   {
     my $nameNode = $n->getAttributeNode('name');
-    $treeProcessAttribute->($r, $nameNode);
-    my $name = $nameNode->getValue();
-    if ($name)
+    if ($treeProcessAttribute->($r, $nameNode, $v))
     {
-      my $nameStandardized = FREDefaults::PlatformStandardized($name);
-      if ($nameStandardized eq $r->{platform})
+      my $platform = $nameNode->getValue();
+      if ($platform)
       {
-	$nameNode->setValue($nameStandardized) if $nameStandardized ne $name;
-	my @stemNodes = $n->findnodes('directory/@stem');
-	if (scalar(@stemNodes) <= 1)
+	my ($platformSite, $plaformTail)  = FREPlatforms::parse($platform);
+	if ($platformSite)
 	{
-	  my $value = (scalar(@stemNodes) == 1) ? $stemNodes[0]->findvalue('.') : $r->{'FRE.directory.stem.default'};
-	  $propertyInsert->($r, 'stem', $placeholdersExpand->($r, $value)); 
+	  if (scalar(grep($_ eq $platformSite, FREDefaults::Sites())) > 0)
+	  {
+	    my $platformStandardized = "$platformSite.$plaformTail";
+	    if ($platformStandardized eq $r->{platform})
+	    {
+              unless ($r->propertyExists('platformDefined'))
+	      {
+		$nameNode->setValue($platformStandardized) if $platformStandardized ne $platform;
+		my @stemNodes = $n->findnodes('directory/@stem');
+		if (scalar(@stemNodes) <= 1)
+		{
+		  my $value = (scalar(@stemNodes) == 1) ? $stemNodes[0]->findvalue('.') : $r->{'FRE.directory.stem.default'};
+		  unless ($r->propertyExists('stem'))
+		  {
+		    $r->propertyInsert('stem', $placeholdersExpand->($r, $value));
+		  }
+		  else
+		  {
+		    my $line = $n->line_number();
+		    FREMsg::out($v, FREMsg::FATAL, "XML file line $line: the directory stem is already defined");
+		    return undef;
+		  } 
+		}
+		else
+		{
+		  my $line = $n->line_number();
+		  FREMsg::out($v, FREMsg::FATAL, "XML file line $line: the 'stem' attribute is defined more than once");
+		  return undef;
+		}
+		foreach my $t (FREProperties::DIRECTORIES)
+		{
+		  my $value =
+		  (     
+		    $n->findvalue('directory[@type="' . $t . '"]')
+		    ||
+		    $n->findvalue('directory/' . $t)
+		    ||
+		    $r->{'FRE.directory.' . $t . '.default'}
+		  );
+		  $value =~ s/\s*//g;
+		  my $dir = $t . 'Dir';
+		  unless ($r->propertyExists($dir))
+		  {
+		    $r->propertyInsert($dir, $placeholdersExpand->($r, $value));
+		    $r->propertyInsert('root', $r->{rootDir}) if $t eq 'root';
+		  }
+		  else
+		  {
+		    my $line = $n->line_number();
+		    FREMsg::out($v, FREMsg::FATAL, "XML file line $line: the directory '$dir' is already defined");
+		    return undef;
+		  }
+		}
+        	if ($treeProcessAllChildren->($r, $n, $v))
+		{
+		  $r->propertyInsert('platformDefined', 1);
+		  return $r;
+		}
+		else
+		{
+		  my $line = $n->line_number();
+		  FREMsg::out($v, FREMsg::FATAL, "XML file line $line: the platform '$platform' is defined incorrectly");
+		  return undef;
+		}
+	      }
+	      else
+	      {
+		my $line = $n->line_number();
+		FREMsg::out($v, FREMsg::FATAL, "XML file line $line: the platform '$platform' is already defined");
+		return undef;
+	      }
+	    }
+	    else
+	    {
+	      $n->unbindNode();
+	      return $r;
+	    }
+	  }
+	  else
+	  {
+	    my $line = $n->line_number();
+	    my $sites = join("', '", FREDefaults::Sites());
+	    FREMsg::out($v, FREMsg::WARNING, "XML file line $line: the site '$platformSite' is unknown", "Known sites are '$sites'");
+	    $n->unbindNode();
+	    return $r;
+	  }
 	}
 	else
 	{
 	  my $line = $n->line_number();
-	  FREMsg::out($r->{verbose}, FREMsg::WARNING, "XML file line $line: the 'stem' attribute is defined more than once - it is ignored");
+	  FREMsg::out($v, FREMsg::FATAL, "XML file line $line: the 'name' attribute value '$platform' is invalid");
+	  return undef;
 	}
-	foreach my $t (FREProperties::DIRECTORIES)
-	{
-	  my $value =
-	  (     
-	    $n->findvalue('directory[@type="' . $t . '"]')
-	    ||
-	    $n->findvalue('directory/' . $t)
-	    ||
-	    $r->{'FRE.directory.' . $t . '.default'}
-	  );
-	  $value =~ s/\s*//g;
-	  $propertyInsert->($r, $t . 'Dir', $placeholdersExpand->($r, $value));
-	  $propertyInsert->($r, 'root', $r->{rootDir}) if $t eq 'root';
-	}
-        $treeProcessAllChildren->($r, $n);
-      }
-      elsif (!$nameStandardized)
-      {
-	my $line = $n->line_number();
-	FREMsg::out($r->{verbose}, FREMsg::WARNING, "XML file line $line: the 'name' attribute value '$name' is invalid - the platform is ignored");
-	$n->unbindNode();
       }
       else
       {
-	$n->unbindNode();
+        my $line = $n->line_number();
+        FREMsg::out($v, FREMsg::FATAL, "XML file line $line: the 'name' attribute has empty value");
+        return undef;
       }
     }
     else
     {
       my $line = $n->line_number();
-      FREMsg::out($r->{verbose}, FREMsg::WARNING, "XML file line $line: the 'name' attribute has no value - the platform is ignored");
-      $n->unbindNode();
+      FREMsg::out($v, FREMsg::FATAL, "XML file line $line: the 'name' attribute can't be parsed");
+      return undef;
     }
   }
   else
   {
     my $line = $n->line_number();
-    FREMsg::out($r->{verbose}, FREMsg::WARNING, "XML file line $line: the 'name' attribute is missed - the platform is ignored");
-    $n->unbindNode();
+    FREMsg::out($v, FREMsg::FATAL, "XML file line $line: the 'name' attribute is missed");
+    return undef;
   }
 };
 
-my $treeProcessDataSource = sub($$)
-# ------ arguments: $object $node
+my $treeProcessDataSource = sub($$$)
+# ------ arguments: $object $node $verbose
 # ------ special processing for the <dataSource> node
 {
-  my ($r, $n) = @_;
+  my ($r, $n, $v) = @_;
   if ($n->hasAttribute('site'))
   {
     my $siteNode = $n->getAttributeNode('site');
-    $treeProcessAttribute->($r, $siteNode);
-    my $site = $siteNode->getValue();
-    if ($site)
+    if ($treeProcessAttribute->($r, $siteNode, $v))
     {
-      if ($site eq $r->{platformSite})
+      my $site = $siteNode->getValue();
+      if ($site)
       {
-	$treeProcessAllTexts->($r, $n);
+        if (scalar(grep($_ eq $site, FREDefaults::Sites())) > 0)
+	{
+	  if ($site eq $r->{platformSite} || $site eq $r->{platformSiteRoot})
+	  {
+	    return $treeProcessAllTexts->($r, $n, $v);
+	  }
+	  else
+	  {
+	    $n->unbindNode();
+	    return $r;
+	  }
+	}
+	else
+	{
+	  my $line = $n->line_number();
+	  my $sites = join("', '", FREDefaults::Sites());
+	  FREMsg::out($v, FREMsg::WARNING, "XML file line $line: the site '$site' is unknown", "Known sites are '$sites'");
+	  $n->unbindNode();
+	  return $r;
+	}
       }
       else
       {
-	$n->unbindNode();
+	my $line = $n->line_number();
+	FREMsg::out($v, FREMsg::FATAL, "XML file line $line: the 'site' attribute has empty value");
+	return undef;
       }
     }
     else
     {
       my $line = $n->line_number();
-      FREMsg::out($r->{verbose}, FREMsg::WARNING, "XML file line $line: the 'site' attribute has no value - the data source is ignored");
-      $n->unbindNode();
+      FREMsg::out($v, FREMsg::FATAL, "XML file line $line: the 'site' attribute can't be parsed");
+      return undef;
     }
   }
   elsif ($n->hasAttribute('platform'))
   {
     my $platformNode = $n->getAttributeNode('platform');
-    $treeProcessAttribute->($r, $platformNode);
-    my $platform = $platformNode->getValue();
-    if ($platform)
+    if ($treeProcessAttribute->($r, $platformNode, $v))
     {
-      my $platformStandardized = FREDefaults::PlatformStandardized($platform);
-      if ($platformStandardized eq $r->{platform})
+      my $platform = $platformNode->getValue();
+      if ($platform)
       {
-	$platformNode->setValue($platformStandardized) if $platformStandardized ne $platform;
-	$treeProcessAllTexts->($r, $n);
-      }
-      elsif (!$platformStandardized)
-      {
-	my $line = $n->line_number();
-	FREMsg::out($r->{verbose}, FREMsg::WARNING, "XML file line $line: the 'platform' attribute value '$platform' is invalid - the data source is ignored");
-	$n->unbindNode();
+        my ($platformSite, $platformTail) = FREPlatforms::parse($platform);
+	if ($platformSite)
+	{
+	  if (scalar(grep($_ eq $platformSite, FREDefaults::Sites())) > 0)
+	  {
+	    if (($platformSite eq $r->{platformSite} || $platformSite eq $r->{platformSiteRoot}) && $platformTail eq $r->{platformTail})
+	    {
+	      my $platformStandardized = "$platformSite.$platformTail";
+	      $platformNode->setValue($platformStandardized) if $platformStandardized ne $platform;
+	      return $treeProcessAllTexts->($r, $n, $v);
+	    }
+	    else
+	    {
+	      $n->unbindNode();
+	      return $r;
+	    }
+	  }
+	  else
+	  {
+	    my $line = $n->line_number();
+	    my $sites = join("', '", FREDefaults::Sites());
+	    FREMsg::out($v, FREMsg::WARNING, "XML file line $line: the site '$platformSite' is unknown", "Known sites are '$sites'");
+	    $n->unbindNode();
+	    return $r;
+	  }
+	}
+	else
+	{
+	  my $line = $n->line_number();
+	  FREMsg::out($v, FREMsg::FATAL, "XML file line $line: the 'platform' attribute value '$platform' is invalid");
+	  return undef;
+	}
       }
       else
       {
-	$n->unbindNode();
+	my $line = $n->line_number();
+	FREMsg::out($v, FREMsg::FATAL, "XML file line $line: the 'platform' attribute has empty value");
+	return undef;
       }
     }
     else
     {
       my $line = $n->line_number();
-      FREMsg::out($r->{verbose}, FREMsg::WARNING, "XML file line $line: the 'platform' attribute has no value - the data source is ignored");
-      $n->unbindNode();
+      FREMsg::out($v, FREMsg::FATAL, "XML file line $line: the 'platform' attribute can't be parsed");
+      return undef;
     }
   }
   else
   {
     my $line = $n->line_number();
-    FREMsg::out($r->{verbose}, FREMsg::WARNING, "XML file line $line: both 'site' and 'platform' attributes are missed - the data source is ignored");
-    $n->unbindNode();
+    FREMsg::out($v, FREMsg::FATAL, "XML file line $line: both 'site' and 'platform' attributes are missed");
+    return undef;
   }
 };
 
-my $treeProcessCompile = sub($$)
-# ------ arguments: $object $node
+my $treeProcessCompile = sub($$$)
+# ------ arguments: $object $node $verbose
 # ------ special processing for the <compile> node
 {
-  my ($r, $n) = @_;
+  my ($r, $n, $v) = @_;
   if ($n->hasAttribute('target'))
   {
     my $targetNode = $n->getAttributeNode('target');
-    $treeProcessAttribute->($r, $targetNode);
-    my $target = $targetNode->getValue();
-    if (!$target or FRETargets::contains($r->{target}, $target))
+    if ($treeProcessAttribute->($r, $targetNode, $v))
     {
-      $treeProcessAllChildren->($r, $n);
+      my $target = $targetNode->getValue();
+      if (!$target or FRETargets::contains($r->{target}, $target))
+      {
+	return $treeProcessAllChildren->($r, $n, $v);
+      }
+      else
+      {
+	$n->unbindNode();
+	return $r;
+      }
     }
     else
     {
-      $n->unbindNode();
+      my $line = $n->line_number();
+      FREMsg::out($v, FREMsg::FATAL, "XML file line $line: the 'target' attribute can't be parsed");
+      return undef;
     }
   }
   else
   {
-    $treeProcessAllChildren->($r, $n);
+    return $treeProcessAllChildren->($r, $n, $v);
   }
 };
 
-my $treeProcessDefault = sub($$)
-# ------ arguments: $object $node
+my $treeProcessSetup = sub($$$)
+# ------ arguments: $object $node $verbose
 {
-  my ($r, $n) = @_;
-  $treeProcessAllAttributes->($r, $n);
-  $treeProcessAllTexts->($r, $n);
-  $treeProcessAllChildren->($r, $n);
-};
-
-$treeProcess = sub($$)
-# ------ arguments: $object $node
-# ------ traverse the tree with properties expansion and special processing for some nodes
-{
-  my ($r, $n) = @_;
-  my $nodeName = $n->nodeName();
-  if ($nodeName eq 'property')
+  my ($r, $n, $v) = @_;
+  if ($treeProcessAllChildren->($r, $n, $v))
   {
-    $treeProcessProperty->($r, $n);
-  }
-  elsif ($nodeName eq 'platform')
-  {
-    $treeProcessPlatform->($r, $n);
-  }
-  elsif ($nodeName eq 'dataSource')
-  {
-    $treeProcessDataSource->($r, $n);
-  }
-  elsif ($nodeName eq 'compile')
-  {
-    $treeProcessCompile->($r, $n);
+    if ($r->propertyExists('platformDefined'))
+    {
+      return $r;
+    }
+    else
+    {
+      my $line = $n->line_number();
+      FREMsg::out($v, FREMsg::FATAL, "XML file line $line: the platform '$r->{platform}' is missed");
+      return undef;
+    }
   }
   else
   {
-    $treeProcessDefault->($r, $n);
+    return undef;
+  }
+};
+
+my $treeProcessDefault = sub($$$)
+# ------ arguments: $object $node $verbose
+{
+  my ($r, $n, $v) = @_;
+  return
+  (
+    $treeProcessAllAttributes->($r, $n, $v)
+    &&
+    $treeProcessAllTexts->($r, $n, $v)
+    &&
+    $treeProcessAllChildren->($r, $n, $v)
+  );
+};
+
+$treeProcess = sub($$$)
+# ------ arguments: $object $node $verbose
+# ------ traverse the tree with properties expansion and special processing for some nodes
+{
+  my ($r, $n, $v) = @_;
+  my $nodeName = $n->nodeName();
+  if ($nodeName eq 'property')
+  {
+    return $treeProcessProperty->($r, $n, $v);
+  }
+  elsif ($nodeName eq 'setup')
+  {
+    return $treeProcessSetup->($r, $n, $v);
+  }
+  elsif ($nodeName eq 'platform')
+  {
+    return $treeProcessPlatform->($r, $n, $v);
+  }
+  elsif ($nodeName eq 'dataSource')
+  {
+    return $treeProcessDataSource->($r, $n, $v);
+  }
+  elsif ($nodeName eq 'compile')
+  {
+    return $treeProcessCompile->($r, $n, $v);
+  }
+  else
+  {
+    return $treeProcessDefault->($r, $n, $v);
   }
 };
 
@@ -597,27 +692,34 @@ $treeProcess = sub($$)
 # ////////////////////////////////////////// Class initialization/termination //
 # //////////////////////////////////////////////////////////////////////////////
 
-sub new($$$$%)
-# ------ arguments: $className $rootNode $platformSite $siteDir %options
+sub new($$$%)
+# ------ arguments: $className $rootNode $siteDir %options
 # ------ called as class method
 # ------ create an object and populate it 
 {
-  my ($c, $n, $s, $d, %o) = @_;
-  my $r = {};
-  bless $r, $c;
-  $r->{site} = FREDefaults::Site();
-  $r->{platformSite} = $s;
-  $r->{siteDir} = $d;
-  $r->{suite} = File::Basename::fileparse($o{xmlfile}, '.xml');
-  $r->{platform} = $o{platform};
-  $r->{target} = $o{target};
-  $r->{verbose} = $o{verbose};
-  $r->{platformSiteIsLocal} = $siteIsLocal->($s); 
-  $r = $externalPropertiesExtract->($r, $d . '/' . FREProperties::PROPERTIES_FILENAME);
-  $treeProcess->($r, $n) if $r;
-  delete $r->{platformSiteIsLocal};
-  delete $r->{verbose};
-  return $r;
+  my ($c, $n, $d, %o) = @_;
+  if (my $r = FREExternalProperties->new($d . '/' . FREProperties::PROPERTIES_FILENAME, $o{verbose}))
+  {
+    bless $r, $c;
+    my ($site, $siteRoot, $siteHead, $tail) = FREPlatforms::parseAll($o{platform});
+    $r->{site} = FREDefaults::Site();
+    $r->{platformSite} = $site;
+    $r->{platformSiteRoot} = $siteRoot;
+    $r->{platformSiteHead} = $siteHead;
+    $r->{platformTail} = $tail;
+    $r->{platformSiteHasLocalStorage} = FREPlatforms::siteHasLocalStorage($site);
+    $r->{xmlfileOwner} = FREUtil::fileOwner($o{xmlfile});
+    $r->{remoteUser} = $o{'remote-user'};
+    $r->{siteDir} = $d;
+    $r->{suite} = File::Basename::fileparse($o{xmlfile}, qr/\.xml(?:\.\S+)?/);
+    $r->{platform} = $o{platform};
+    $r->{target} = $o{target};
+    return $treeProcess->($r, $n, $o{verbose});
+  }
+  else
+  {
+    return undef;
+  }
 }
 
 sub DESTROY
@@ -638,21 +740,7 @@ sub property($$)
 # ------ return the property value
 {
   my ($r, $k) = @_;
-  return $r->{$k};
-}
-
-sub propertiesList($$)
-# ------ arguments: $object $verbose
-# ------ called as object method
-# ------ list all the properties 
-{
-  my ($r, $w) = @_;
-  foreach my $k (sort(keys(%{$r})))
-  {
-    my $level = FREMsg::INFO;
-    $level++ if index($k, 'FRE') == 0;
-    FREMsg::out($w, $level, "Property: name = '$k' value = '$r->{$k}'");
-  }
+  return $placeholdersExpand->($r, $r->SUPER::property($k));
 }
 
 # //////////////////////////////////////////////////////////////////////////////

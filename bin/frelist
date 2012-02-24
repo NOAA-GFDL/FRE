@@ -1,7 +1,7 @@
 #!/usr/bin/perl
 # -*- cperl -*-
 #
-# $Id: frelist,v 18.0.2.2.6.1 2011/09/01 21:41:18 fms Exp $
+# $Id: frelist,v 18.0.2.12 2011/12/30 23:12:21 afy Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: Program to List Experiments from the XML File
 # ------------------------------------------------------------------------------
@@ -11,8 +11,32 @@
 # afy    Ver   1.01  Add alias "d" for the --description option     March 10
 # afy    Ver   1.02  Modify Help subroutine (list targets)          March 10
 # afy    Ver   2.00  Add option --validate                          March 10
+# afy    Ver   3.00  Use new FREDefaults module to return status    March 11
+# afy    Ver   3.01  Use new FREMsg module (symbolic levels)        March 11
+# afy    Ver   3.02  Reconfigure Getopt::Long (no 'auto_abbrev')    March 11
+# afy    Ver   3.03  Rename option --quiet => --inherit             March 11
+# afy    Ver   4.00  Add check for the option --directory value     April 11
+# afy    Ver   4.01  Don't print non-necessary warnings             April 11
+# afy    Ver   5.00  Polish the option --directory processing       April 11
+# afy    Ver   5.01  Clarifications in Usage/Help messages          April 11
+# afy    Ver   6.00  Use new FREExperiment module (dir)             May 11
+# afy    Ver   7.00  Use new FREExperiment module (simplification)  May 11
+# afy    Ver   8.00  Revive option --quiet (for compatibility)      June 11
+# afy    Ver   9.00  Revive 'use lib'                               July 11
+# afy    Ver   9.01  Use new module FREUtil (optionValuesListParse) July 11
+# afy    Ver   9.02  Add more option values checks                  July 11
+# afy    Ver  10.00  Add option --platform-csh                      October 11
+# afy    Ver  10.01  Add option --remote-user                       October 11
+# afy    Ver  10.02  Implement option --validate                    October 11
+# afy    Ver  11.00  Use FindBin module to locate libraries         November 11
+# afy    Ver  11.01  Use 'FREUtil::listUnique' to remove dupes      November 11
+# afy    Ver  11.02  Use new module FREExperiment (executable)      November 11
+# afy    Ver  11.03  Add option --executable                        November 11
+# afy    Ver  12.00  Correct exit code (after FREExperiment->new)   December 11
+# afy    Ver  12.01  Return error if no executable is found         December 11
+# afy    Ver  12.02  Improve help messages                          December 11
 # ------------------------------------------------------------------------------
-# Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2000-2010
+# Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2000-2011
 # Designed and written by V. Balaji, Amy Langenhorst and Aleksey Yakovlev
 #
 
@@ -20,13 +44,18 @@ use strict;
 
 use Cwd();
 use File::Basename();
-use Getopt::Long(':config', 'no_ignore_case');
+use File::Spec();
+use FindBin();
+use Getopt::Long(':config', 'no_ignore_case', 'no_auto_abbrev');
+
+use lib "$FindBin::Bin/../lib";
 
 use FRE();
 use FREDefaults();
 use FREExperiment();
 use FREMsg();
 use FRETargets();
+use FREUtil();
 
 # //////////////////////////////////////////////////////////////////////////////
 # ////////////////////////////////////////////////////////// Global constants //
@@ -36,25 +65,30 @@ use FRETargets();
 
   package frelist;
 
-  use constant VERSION => '$Id: frelist,v 18.0.2.2.6.1 2011/09/01 21:41:18 fms Exp $';
+  use constant VERSION => '$Id: frelist,v 18.0.2.12 2011/12/30 23:12:21 afy Exp $';
 
   use constant OPTLIST =>
   (
-    'description|d',
-    'directory:s',
-    'evaluate=s',
-    'platform=s',
-    'target=s',
-    'quiet',
-    'Xml',
-    'xmlfile=s',
-    'help',
-    'Version',
-    'validate',
-    'verbose|v+'
+    'description|D',
+    'directory|d=s',
+    'evaluate|e=s',
+    'executable|E',
+    'inherit|i!',
+    'platform-csh|S',
+    'remote-user|R=s',
+    'quiet|q',
+    'validate|C',
+    'Xml|X',
+    'help|h',
+    'platform|p=s',
+    'target|t=s',
+    'version|V',
+    'verbose|v+',
+    'xmlfile|x=s'
   );
   
   use constant DIRECTORIES => FREDefaults::ExperimentDirs();
+  use constant INHERIT_DEFAULT => 1;
   
 }
 
@@ -75,24 +109,28 @@ use FRETargets();
     my $xml = FREDefaults::XMLFile();
     my $pfm = FREDefaults::Platform();
     my $tgt = FREDefaults::Target();
+    my $beg = "\e[0;4m";
+    my $end = "\e[m";
     return
     (
       "\n",
-      "  Usage: $self [options] [experiment ...]\n\n",
+      "  Usage: $self [option|experiment] ...\n\n",
       "  Options:\n\n",
-      "      --description          include experiment descriptions\n",
-      "      --directory=STRING     list experiment directories, defined in the STRING\n",
-      "      --evaluate=STRING      evaluate STRING expression (in XPath syntax) to retrieve experiment information, following inherits\n",
-      "      --platform=STRING      hardware and software platform STRING (default is '$pfm')\n", 
-      "      --target=STRING        use compilation directives, targeted by STRING (default is '$tgt')\n", 
-      "      --quiet                include less information (don't print inheritance information)\n",
-      "      --Xml                  print the experiment suite configuration FILE with entities expanded and exit\n",
-      "      --xmlfile=FILE         experiment suite configuration FILE (default is '$cwd/$xml')\n\n", 
-      "      --help                 print help message and exit\n",
-      "      --Version              print the tool version and exit\n",
-      "      --validate             validate the FILE before processing\n",
-      "      --verbose              verbose messages\n\n",
-      "  All the option names may be abbreviated, a single leading dash is also acceptable.\n",
+      "   -D,        --description           include experiment ${beg}d${end}escriptions\n",
+      "   -d STRING, --directory=STRING      list experiment ${beg}d${end}irectories with types, defined by the STRING\n",
+      "   -e STRING, --evaluate=STRING       ${beg}e${end}valuate STRING expression (in XPath syntax) to retrieve experiment information\n",
+      "   -E,        --executable            retrieve an ${beg}e${end}xecutable pathname and the experiment, where this executable is defined\n",
+      "   -i,        --inherit               include ${beg}i${end}nheritance information (negatable, default is on)\n",
+      "   -S,        --platform-csh          print the platform c${beg}s${end}h setup (defined in the <csh> element) and exit\n",
+      "   -R STRING, --remote-user=STRING    use the ${beg}r${end}emote user STRING for inter-site directory listings\n",
+      "   -C,        --validate              validate (i.e. ${beg}c${end}heck) the FILE against the XML schema and exit\n",
+      "   -X,        --Xml                   print the experiment suite ${beg}X${end}ML configuration FILE with all expansions and exit\n\n",
+      "   -h,        --help                  print ${beg}h${end}elp message and exit\n",
+      "   -p STRING, --platform=STRING       hardware and software ${beg}p${end}latform STRING (default is '$pfm')\n", 
+      "   -t STRING, --target=STRING         use compilation directives, ${beg}t${end}argeted by STRING (default is '$tgt')\n", 
+      "   -v,        --verbose               get ${beg}v${end}erbose messages (repeat the option to increase verbosity level)\n", 
+      "   -V,        --version               print the tool ${beg}v${end}ersion and exit\n",
+      "   -x FILE,   --xmlfile=FILE          experiment suite ${beg}X${end}ML configuration FILE (default is '$cwd/$xml')\n\n", 
       "  If no experiments defined on the command line, then all the experiments in the FILE will be processed.\n",
       "  Experiments are listed in their natural order (as in the FILE).\n\n"
     );
@@ -102,82 +140,72 @@ use FRETargets();
   # ------ arguments: none
   {
     my @usage = frelist::Usage();
-    my $dirs = join(', ', frelist::DIRECTORIES);
-    my $tgts = join(', ', FRETargets::all());
+    my $dirs = join("', '", frelist::DIRECTORIES);
+    my $tgts = join("', '", FRETargets::all());
     return
     (
       "\n",
       "   Synopsis: $self lists experiments and other information from your XML file.\n",
       "@usage",
-      "   Use --directory to request a listing of experiment directories, separated by comma.\n",
-      "      Possible directories are: $dirs.\n",
-      "      Any number of directories from this list can be requested, the empty string (or symbol '*') request all of them.\n",
+      "   Use --description to add the <description> element content to the list of experiments.\n",
+      "      All the description texts are printed without any formatting.\n",
+      "   Use --directory to request a listing of experiment directories.\n",
+      "      This option value can be a single directory type or a list of them, separated by comma.\n",
+      "      Possible directory types are: '$dirs'.\n",
+      "      Any number of directories from this list can be requested. The keyword 'all' requests all of them.\n",
+      "   Use --evaluate to retrieve various experiment information using an XPath expression, following inherits.\n",
+      "      The XPath expression syntax isn't verified by the frelist, the expression is just evaluated.\n",
+      "      An example: --evaluate input/dataFile[\@label=\"gridSpec\"]\n",
+      "   Use --executable to request an executable pathname to be used for the given experiment.\n",
+      "      This option also outputs the experiment, where this executable is predefined or should be built by default.\n",
+      "      The frelist will return abnormally, if the executable pathname can't be found following inheritance.\n",
+      "   Use --noinherit to request a list of experiments without inheritance information.\n",
+      "      Only the experiment names will be printed (one at a line).\n",
+      "   Use --platform-csh to request a platform <csh>, corresponding to the --platform option.\n",
+      "      All the global and platform-level properties will be expanded.\n",
+      "      This option ignores all the experiment names on the command line.\n",
+      "   Use --remote-user to define a user id, which should be used in directories, listed by the --directory option.\n",
+      "      This option makes sense if you run the frelist with the --platform option pointing to a remote site, where your user id might differ.\n",
+      "   Use --Xml to request the complete XML file with all the expansions to be sent to the standard output.\n",
+      "      This output will contain a single platform though - the one, which you have chosen using the --platform option.\n",
+      "      This option ignores all the experiment names on the command line.\n",
       "   Use --platform to pick a platform for experiment(s).\n", 
       "      The <platform> node in the experiment suite configuration file is used\n", 
       "      to set platform-specific data and instructions.\n",
       "   Use --target to define compilation and linkage directives for experiment(s).\n",
       "      Predefined targets refer to groups of directives, existing in the 'mkmf' template file.\n",
-      "      Possible predefined targets are: $tgts.\n",
+      "      Possible predefined targets are: '$tgts'.\n",
       "      Any number of targets from this list can be used here, and you can also add your own target (but not more than one).\n",
       "      Your own target should refer to a <compile> node with the corresponding value of its 'target' attribute.\n", 
-      "      Multiple targets are separated by comma or dash. All the directives, referred by multiple targets, are merged.\n", 
-      "   Use --evaluate to retrieve various experiment information, following inherits.\n",
-      "      An example: --evaluate input/dataFile[\@label=\"gridSpec\"]\n\n"
+      "      Multiple targets are separated by comma or dash. All the directives, referred by multiple targets, are merged.\n\n" 
     );
   }
   
-  sub Dir($$)
-  # ------ arguments: $exp $dirType
+  sub execName($)
+  # ------ arguments: $exp
   {
-    my ($z, $t) = @_;
-    if ($t eq 'root')
+    my $z = shift;
+    my ($execName, $exp) = $z->extractExecutable();
+    if ($execName)
     {
-      return $z->rootDir();
+      return ($execName, $exp->name());
     }
-    elsif ($t eq 'src')
+    elsif ($exp)
     {
-      return $z->srcDir();
-    }
-    elsif ($t eq 'exec')
-    {
-      return $z->execDir();
-    }
-    elsif ($t eq 'scripts')
-    {
-      return $z->scriptsDir();
-    }
-    elsif ($t eq 'stdout')
-    {
-      return $z->stdoutDir();
-    }
-    elsif ($t eq 'state')
-    {
-      return $z->stateDir();
-    }
-    elsif ($t eq 'work')
-    {
-      return $z->workDir();
-    }
-    elsif ($t eq 'ptmp')
-    {
-      return $z->ptmpDir();
-    }
-    elsif ($t eq 'archive')
-    {
-      return $z->archiveDir();
-    }
-    elsif ($t eq 'postProcess')
-    {
-      return $z->postProcessDir();
-    }
-    elsif ($t eq 'analysis')
-    {
-      return $z->analysisDir();
+      return ($exp->executable(), $exp->name());
     }
     else
     {
-      return '';
+      return (undef, undef);
     }
+  }
+  
+  sub skipExp($)
+  # ------ arguments: $exp 
+  {
+    my $z = shift;
+    my ($expName, $fre) = ($z->name(), $z->fre());
+    $fre->out(FREMsg::FATAL, "Skipping the experiment '$expName'...");
   }
 
 }
@@ -190,118 +218,200 @@ use FRETargets();
 
   my %opt =
   (
-    'platform'	=> FREDefaults::Platform(),
-    'target'	=> FREDefaults::Target(),
-    'xmlfile'	=> FREDefaults::XMLFile()
+    'inherit'		=> frelist::INHERIT_DEFAULT,
+    'platform'		=> FREDefaults::Platform(),
+    'target'		=> FREDefaults::Target(),
+    'xmlfile'		=> FREDefaults::XMLFile()
   );
 
-  Getopt::Long::GetOptions(\%opt, frelist::OPTLIST) or (print frelist::Usage() and exit(1));
-
-  if ($opt{Xml} and ($opt{'description'} or $opt{directory} or $opt{evaluate} or $opt{quiet}))
-  {
-    FREMsg::out($opt{verbose}, 2, "The --Xml option makes other options ignored: --description, --directory, --evaluate, --quiet");
-  }
+  Getopt::Long::GetOptions(\%opt, frelist::OPTLIST) or (print frelist::Usage() and exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM);
+  if ($opt{version}) {print frelist::VERSION,"\n" and exit FREDefaults::STATUS_OK;}
+  if ($opt{help}) {print frelist::Help() and exit FREDefaults::STATUS_OK;}
   
-  if ($opt{directory} and ($opt{'description'} or $opt{evaluate} or $opt{quiet}))
+  if ($opt{directory})
   {
-    FREMsg::out($opt{verbose}, 2, "The --directory option makes other options ignored: --description, --evaluate, --quiet");
-  }
-  
-  if ($opt{evaluate} and ($opt{'description'} or $opt{quiet}))
-  {
-    FREMsg::out($opt{verbose}, 2, "The --evaluate option makes other options ignored: --description, --quiet");
-  }
-  
-  if ($opt{Version}) {print frelist::VERSION,"\n" and exit(0);}
-  if ($opt{help}) {print frelist::Help() and exit(0);}
-
-  my $fre = FRE->new('frelist', %opt) or exit(1);
-  
-  if ($opt{Xml}) {print ($fre->xmlAsString(), "\n") and exit(0);}
-
-  my @dirList = ();
-  my @dirListDefault = frelist::DIRECTORIES;
-  if (exists($opt{directory}) and (!$opt{directory} or $opt{directory} eq '*'))
-  {
-    @dirList = @dirListDefault;
-  }
-  elsif ($opt{directory})
-  {
-    foreach my $dir (split(',', $opt{directory}))
+    ($opt{directory}, my @messages) = FREUtil::optionValuesListParse('directory', $opt{directory}, frelist::DIRECTORIES);
+    if (scalar(@messages) > 0)
     {
-      if (scalar(grep($_ eq $dir, @dirListDefault)) > 0)
-      {
-        push @dirList, $dir if scalar(grep($_ eq $dir, @dirList)) == 0;
-      }
-      else
-      {
-        $fre->out(0, "The --directory option contains unknown '$dir' directory");
-	exit (1);
-      }
+      FREMsg::out($opt{verbose}, FREMsg::FATAL, @messages);
+      exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
     }
+  }
+  
+  if ($opt{evaluate})
+  {
+    if (substr($opt{evaluate}, 0, 1) eq '-')
+    {
+      FREMsg::out($opt{verbose}, FREMsg::FATAL, "The --evaluate option must have a nonempty value");
+      exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
+    }
+  }
+  
+  if ($opt{'remote-user'})
+  {
+    if (substr($opt{'remote-user'}, 0, 1) eq '-')
+    {
+      FREMsg::out($opt{verbose}, FREMsg::FATAL, "The --remote-user option must have a nonempty value");
+      exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
+    }
+  }
+  
+  if ($opt{platform})
+  {
+    if (substr($opt{platform}, 0, 1) eq '-')
+    {
+      FREMsg::out($opt{verbose}, FREMsg::FATAL, "The --platform option must have a nonempty value");
+      exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
+    }
+  }
+  
+  if ($opt{target})
+  {
+    if (substr($opt{target}, 0, 1) eq '-')
+    {
+      FREMsg::out($opt{verbose}, FREMsg::FATAL, "The --target option must have a nonempty value");
+      exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
+    }
+  }
+  
+  if ($opt{xmlfile})
+  {
+    if (substr($opt{xmlfile}, 0, 1) eq '-')
+    {
+      FREMsg::out($opt{verbose}, FREMsg::FATAL, "The --xmlfile option must have a nonempty value");
+      exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
+    }
+  }
+  
+  if ($opt{quiet})
+  {
+    FREMsg::out($opt{verbose}, FREMsg::WARNING, "The --quiet option is deprecated, consider the --noinherit option instead");
+    delete $opt{inherit};
+    delete $opt{quiet};
+  }
+  
+  {
+
+    my $optionInheritIsNotDefault = (exists($opt{inherit}) and ($opt{inherit} != frelist::INHERIT_DEFAULT));
+
+    if ($opt{validate} and ($opt{description} or $opt{directory} or $opt{evaluate} or $opt{executable} or $optionInheritIsNotDefault or $opt{'platform-csh'} or $opt{'remote-user'} or $opt{Xml}))
+    {
+      FREMsg::out($opt{verbose}, FREMsg::WARNING, "The --validate option makes all other options ignored: --description, --directory, --evaluate, --executable, --inherit, --platform-csh, --remote-user, --Xml");
+    }
+
+    if ($opt{'platform-csh'} and ($opt{description} or $opt{directory} or $opt{evaluate} or $opt{executable} or $optionInheritIsNotDefault or $opt{Xml}))
+    {
+      FREMsg::out($opt{verbose}, FREMsg::WARNING, "The --platform-csh option makes other options ignored: --description, --directory, --evaluate, --executable, --inherit, --Xml");
+    }
+
+    if ($opt{Xml} and ($opt{description} or $opt{directory} or $opt{evaluate} or $opt{executable} or $optionInheritIsNotDefault))
+    {
+      FREMsg::out($opt{verbose}, FREMsg::WARNING, "The --Xml option makes other options ignored: --description, --directory, --evaluate, --executable, --inherit");
+    }
+
+    if (exists($opt{directory}) and ($opt{description} or $opt{evaluate} or $opt{executable} or $optionInheritIsNotDefault))
+    {
+      FREMsg::out($opt{verbose}, FREMsg::WARNING, "The --directory option makes other options ignored: --description, --evaluate, --executable, --inherit");
+    }
+
+    if ($opt{evaluate} and ($opt{executable} or $opt{description} or $optionInheritIsNotDefault))
+    {
+      FREMsg::out($opt{verbose}, FREMsg::WARNING, "The --evaluate option makes other options ignored: --executable, --description, --inherit");
+    }
+    
+    if ($opt{executable} and ($opt{description} or $optionInheritIsNotDefault))
+    {
+      FREMsg::out($opt{verbose}, FREMsg::WARNING, "The --executable option makes other options ignored: --description, --inherit");
+    }
+    
+  }
+  
+  if ($opt{validate})
+  {
+    if (FRE::validate($opt{xmlfile}, $opt{verbose}))
+    {
+      FREMsg::out($opt{verbose}, FREMsg::NOTE, "The XML file '$opt{xmlfile}' has been validated successfully");
+      exit FREDefaults::STATUS_OK;
+    }
+    else
+    {
+      FREMsg::out($opt{verbose}, FREMsg::FATAL, "The XML file '$opt{xmlfile}' is not valid");
+      exit FREDefaults::STATUS_XML_NOT_VALID;
+    }
+  }
+  
+  my $fre = FRE->new('frelist', %opt) or exit FREDefaults::STATUS_FRE_GENERIC_PROBLEM;
+  
+  if ($opt{'platform-csh'})
+  {
+    print ($fre->baseCsh(), "\n") and exit FREDefaults::STATUS_OK;
+  }
+  
+  if ($opt{Xml})
+  {
+    print ($fre->xmlAsString(), "\n") and exit FREDefaults::STATUS_OK;
   }
 
   my @expNamesAll = $fre->experimentNames();
-  my @expNames = (scalar(@ARGV) > 0) ? @ARGV : @expNamesAll;
+  my @expNames = (scalar(@ARGV) > 0) ? FREUtil::listUnique(@ARGV) : @expNamesAll;
 
   my @exps = ();
   foreach my $expName (@expNames)
   {
-    my $exp = FREExperiment->new($fre, $expName) or exit(1);
+    my $exp = FREExperiment->new($fre, $expName) or exit FREDefaults::STATUS_FRE_GENERIC_PROBLEM;
     push @exps, $exp;
   }
 
+  my $status = FREDefaults::STATUS_OK;
+  
   foreach my $exp (@exps)
   {
 
     my ($expName, $expParent) = ($exp->name(), $exp->parent());
+    my $expNamePrefix = (scalar(@expNames) > 1) ? "$expName " : '';
+    
     $fre->setCurrentExperimentName($expName);
 
-    if (scalar(@dirList) > 0)
+    if ($opt{directory})
     {
-
-      my $expNamePrefix = (scalar(@expNames) > 1) ? "$expName " : '';
-      
+      my @dirList = split(',', $opt{directory});
       if (scalar(@dirList) > 1)
       {
-        foreach my $dir (@dirList) {print $expNamePrefix, $dir, ': ', frelist::Dir($exp, $dir), "\n";}
+        foreach my $dir (@dirList) {print $expNamePrefix, $dir, ': ', $exp->dir($dir), "\n";}
       }
       else
       {
-        print $expNamePrefix, frelist::Dir($exp, $dirList[0]), "\n";
+        print $expNamePrefix, $exp->dir($dirList[0]), "\n";
       }
-
     }
     elsif ($opt{evaluate})
     {
-
-      my $xpathData = $exp->extractValue($opt{evaluate});
-      
-      if (scalar(@expNames) > 1)
+      print $expNamePrefix, $exp->extractValue($opt{evaluate}), "\n";
+    }
+    elsif ($opt{executable})
+    {
+      my ($execName, $expWithExecName) = frelist::execName($exp);
+      if ($execName)
       {
-        print "$expName '$xpathData'\n";
+	print $expNamePrefix, $execName, ' ', $expWithExecName, "\n";
       }
       else
       {
-        print "$xpathData\n";
+        $fre->out(FREMsg::FATAL, "Unable to retrieve an executable pathname for the experiment '$expName'");
+        frelist::skipExp($exp) if scalar(@exps) > 1;
+        $status = FREDefaults::STATUS_FRE_GENERIC_PROBLEM;
       }
-
     }
     else
     {
-
-      my $expParent = $exp->parent();
-
-      if ($expParent and !$opt{quiet})
+      if ($expParent and $opt{inherit})
       {
-        my $expParentName = $expParent->name();
-        print "$expName INHERITS FROM $expParentName\n";
+        print $expName, ' INHERITS FROM ', $expParent->name(), "\n";
       }
       else
       {
-        print "$expName\n";
+        print $expName, "\n";
       }
-
       if ($opt{description})
       {
 	my $desc = $exp->description();
@@ -309,18 +419,19 @@ use FRETargets();
 	if ($1)
 	{
 	  print "---------------------------------------------------------------------\n";
-	  print "$desc\n\n";
+	  print $desc, "\n\n";
 	}
 	else
 	{
 	  print "\n";
 	}
       }
-
     }
 
     $fre->unsetCurrentExperimentName();
 
   }
+
+ exit $status;
 
 }

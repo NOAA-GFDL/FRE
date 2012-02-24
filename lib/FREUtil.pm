@@ -1,5 +1,5 @@
 #
-# $Id: FREUtil.pm,v 18.0.2.4 2011/02/09 20:08:08 afy Exp $
+# $Id: FREUtil.pm,v 18.0.2.10 2012/01/19 01:17:20 afy Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: Utilities Module
 # ------------------------------------------------------------------------------
@@ -22,8 +22,17 @@
 # afy    Ver   4.05  Remove dirCommonLevelsNumber subroutine        February 11
 # afy    Ver   4.06  Modify createDir subroutine (no printing)      February 11
 # afy    Ver   4.07  Add pathIsMountable subroutine                 February 11
+# afy    Ver   5.00  Add home subroutine                            March 11
+# afy    Ver   6.00  Add optionValuesListParse subroutine           July 11
+# afy    Ver   7.00  Add optionIntegersListParse subroutine         October 11
+# afy    Ver   7.01  Modify optionValuesListParse (fix order)       October 11
+# afy    Ver   8.00  Add 'listUnique' subroutine                    October 11
+# afy    Ver   8.01  Remove 'pathIsMountable' subroutine            October 11
+# afy    Ver   9.00  Revive 'fileOwner' subroutine                  November 11
+# afy    Ver  10.00  Modify 'optionIntegersListParse' (messages)    January 12
+# afy    Ver  10.01  Modify 'optionValuesListParse' (messages)      January 12
 # ------------------------------------------------------------------------------
-# Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2000-2011
+# Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2000-2012
 # Designed and written by V. Balaji, Amy Langenhorst and Aleksey Yakovlev
 #
 
@@ -470,34 +479,21 @@ sub strFindByInterval($$)
   }
 }
 
-sub pathIsMountable($)
-# ------ arguments: $pathname
-# ------ returns 1 if the $pathname is mountable
+sub listUnique(@)
+# ------ arguments: @list
+# ------ return the argument @list with all the duplicates removed
 {
-  my $p = shift;
-  $p = qx(readlink --canonicalize-missing --no-newline $p);
-  if ($p ne '/')
-  {
-    qx(ls $p >& /dev/null);
-    chomp(my @mounts = qx(cut --delimiter=' ' --fields=2 /proc/mounts | grep '/.' | sort --unique));
-    my ($maximal, @maximals) = (pop @mounts, ());
-    while (defined $maximal)
-    {
-      my $current = undef;
-      do {$current = pop @mounts} while defined $current and $maximal =~ m/^$current\//;
-      push @maximals, $maximal;
-      $maximal = $current;
-    }
-    foreach $maximal (@maximals)
-    {
-      return 1 if $p eq $maximal or $p =~ m/^$maximal\//;
-    }
-    return 0;
-  }
-  else
-  {
-    return 1;
-  }
+  my @result = ();
+  foreach my $e (@_) {push @result, $e unless grep($_ eq $e, @result)}
+  return @result;
+}
+
+sub fileOwner($)
+# ------ arguments: $filename
+# ------ returns owner of the $filename
+{
+  my $stat = stat(shift);
+  return getpwuid($stat->File::stat::uid);
 }
 
 sub fileIsArchive($)
@@ -609,6 +605,79 @@ sub jobID()
   }
 }
 
+sub home()
+# ------ arguments: none
+{
+  return $ENV{FRE_COMMANDS_HOME};
+}
+
+sub optionIntegersListParse($$)
+# ------ arguments: $name $value
+{
+  my ($n, $v) = @_;
+  if (substr($v, 0, 1) ne '-')
+  {
+    my ($valuesAll, %valuesHash) = (0, ());
+    foreach my $value (split(',', $v))
+    {
+      if ($value eq 'all')
+      {
+        $valuesAll = 1;
+      }
+      elsif ($value =~ m/^0*(\d+)$/)
+      {
+	$valuesHash{$1} = 1;
+      }
+      elsif ($value =~ m/^0*(\d+)-0*(\d+)$/)
+      {
+	foreach my $i ($1 .. $2) {$valuesHash{$i} = 1;}
+      }
+      else
+      {
+	return ('', "The --$n option values list contains an invalid value '$value'", "Allowed list values are non-negative integers or pairs of non-negative integers, separated by dash, and 'all'");
+      }
+    }
+    my @values = ($valuesAll) ? 'all' : sort {$a <=> $b} keys(%valuesHash);
+    return join(',', @values);
+  }
+  else
+  {
+    return ('', "The --$n option value is missed");
+  }
+}
+
+sub optionValuesListParse($$@)
+# ------ arguments: $name $value @allowedValuesList  
+{
+  my ($n, $v, @a) = @_;
+  if (substr($v, 0, 1) ne '-')
+  {
+    my ($valuesAll, %valuesHash) = (0, ());
+    foreach my $value (split(',', $v))
+    {
+      if ($value eq 'all')
+      {
+        $valuesAll = 1;
+      }
+      elsif (scalar(grep($_ eq $value, @a)) > 0)
+      {
+        $valuesHash{$value} = 1;
+      }
+      else
+      {
+        my $allowed = join("', '", @a);
+        return ('', "The --$n option values list contains the unknown '$value' value", "Allowed values are '$allowed' and 'all'");
+      }
+    }    
+    my @values = ($valuesAll) ? @a : grep($valuesHash{$_}, @a);
+    return join(',', @values);
+  }
+  else
+  {
+    return ('', "The --$n option value is missed");
+  }
+}
+  
 # //////////////////////////////////////////////////////////////////////////////
 # //////////////////////////////////////////////////////////// Initialization //
 # //////////////////////////////////////////////////////////////////////////////
