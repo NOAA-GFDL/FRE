@@ -28,14 +28,14 @@ endif
 # site-dependent definitions, set by environment                #
 #################################################################
 
-NETCDF_ROOT = $(NETCDF_DIR)
+NETCDF_ROOT = $(CRAY_NETCDF_DIR)/netcdf-pathscale
 MPI_ROOT    = $(MPICH_DIR)
 INCLUDE = -I$(NETCDF_ROOT)/include
 
 FPPFLAGS = $(INCLUDE)
 FFLAGS = -i4 -r8 -byteswapio -fno-second-underscore
 FFLAGS_OPT = -O3 -OPT:fast_math=on:Olimit=0:IEEE_arith=2 -TENV:X=1
-FFLAGS_DEBUG = -g -trapuv -TENV:simd_zmask=OFF:simd_umask=OFF:simd_omask=OFF:simd_dmask=OFF 
+FFLAGS_DEBUG = -g -trapuv -TENV:simd_zmask=OFF:simd_umask=OFF
 FFLAGS_REPRO = -O2 -OPT:fast_math=off:Olimit=0 -TENV:X=1
 FFLAGS_OPENMP = -mp
 FFLAGS_VERBOSE = -v
@@ -46,12 +46,17 @@ CFLAGS_DEBUG = -g
 CFLAGS_OPENMP = -mp
 CFLAGS_VERBOSE = -v
 
+# Optional Testing compile flags.  Mutually exclusive from DEBUG, REPRO, and OPT
+# *_TEST will match the production if no new option(s) is(are) to be tested.
+FFLAGS_TEST = -O3 -OPT:fast_math=on:Olimit=0:IEEE_arith=2 -TENV:X=1
+CFLAGS_TEST = -O2
+
 # pathscale wants main program outside libraries, do
 # setenv MAIN_PROGRAM coupler_main.o or something before make
 LDFLAGS := -byteswapio
 LDFLAGS_VERBOSE := -v
 
-MAKEFLAGS +=--jobs=8
+MAKEFLAGS +=--jobs=2
 
 ifneq ($(REPRO),)
 CFLAGS += $(CFLAGS_REPRO)
@@ -59,6 +64,9 @@ FFLAGS += $(FFLAGS_REPRO)
 else ifneq ($(DEBUG),)
 CFLAGS += $(CFLAGS_DEBUG)
 FFLAGS += $(FFLAGS_DEBUG)
+else ifneq ($(TEST),)
+CFLAGS += $(CFLAGS_TEST)
+FFLAGS += $(FFLAGS_TEST)
 else
 FFLAGS += $(FFLAGS_OPT)
 CFLAGS += $(CFLAGS_OPT)

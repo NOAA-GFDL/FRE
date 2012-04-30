@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 # -*- cperl -*-
-# $Id: frepp,v 18.0.2.52.2.1.2.89.4.2 2013/09/04 15:45:38 fms Exp $
+# $Id: frepp,v 18.0.2.52.2.1.2.92.2.2 2013/09/04 15:49:29 fms Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: History/diagnostics post-processing
 # ------------------------------------------------------------------------------
@@ -41,7 +41,7 @@ use vars qw( $checktransfer $statefile $state $writestate $didsomething );
 
   package frepp;
 
-  use constant VERSION => '$Id: frepp,v 18.0.2.52.2.1.2.89.4.2 2013/09/04 15:45:38 fms Exp $';
+  use constant VERSION => '$Id: frepp,v 18.0.2.52.2.1.2.92.2.2 2013/09/04 15:49:29 fms Exp $';
 
 #Usage:    $relfrepp [ -AB:C:O:RY:Z:c:d:f:hlmMp:oqr:S:st:u:vx:z ] experiment [ experiment2 ... ]                 
   use constant OPTLIST =>
@@ -239,7 +239,7 @@ unless ( $opt_c ) {
    $opt_c = 'split';
 }
 
-$versionId = ' $Id: frepp,v 18.0.2.52.2.1.2.89.4.2 2013/09/04 15:45:38 fms Exp $';
+$versionId = ' $Id: frepp,v 18.0.2.52.2.1.2.92.2.2 2013/09/04 15:49:29 fms Exp $';
 
 $perlerrors = "";
 $component = "";
@@ -723,7 +723,15 @@ EOF
 
    $writestate = '';
    unless ( $opt_A ) {
-      $cshscripttmpl =~ s/#write_to_statefile/echo \$JOB_ID > \$statefile/;
+      my $writeIDorINTER = <<EOF;
+if ( "\$JOB_ID" != '' ) then
+ echo \$JOB_ID > \$statefile
+else 
+ echo INTERACTIVE > \$statefile
+endif
+EOF
+      $cshscripttmpl =~ s/#write_to_statefile/$writeIDorINTER/;
+
       $writestate = <<EOF;
   if ( "\$prevjobstate" == "ERROR" ) then
      echo FATAL > \$statefile
@@ -1015,6 +1023,8 @@ EOF
                   print "This year ($opt_t) got an error in multiple attempts, exiting.  To retry, delete the state file $statefile\n";
                   #what if this is the -c split job? continue to other components
                   exit 1;
+               } elsif ("$state" eq "INTERACTIVE") {
+                  print "This year ($opt_t) was partially run interactively but not completed, resubmitting $component...\n";
                } elsif ("$state" eq "ERROR") {
                   print "This year ($opt_t) got an error in the last frepp attempt, resubmitting $component...\n";
                } elsif ( "$state" eq '' ) {
@@ -1296,7 +1306,7 @@ foreach h ( @hf )
   end
  end
 
- set availhf = ( `ls -1 \$historyyear????.nc.tar | wc -l` )
+ set availhf = ( `ls -1 \$historyyear????.nc.cpio \$historyyear????.nc.tar | wc -l` )
  if ( "\$availhf" != "$histPerYear" ) then
    Mail -s "\$name year \$historyyear cannot be postprocessed" \$USER <<END
 Your FRE post-processing job ( \$JOB_ID ) has exited because there is incomplete
@@ -1510,6 +1520,14 @@ EOF
                print "Required year $depyear got an error in multiple attempts, exiting.  To retry, delete the state file $depfile\n";
                #what if this is the -c split job? continue to other components
                exit 1;
+            } elsif ("$depstate" eq "INTERACTIVE") {
+               if ( $opt_s ) {
+                  print "Required year $depyear has been partially run interactively but not completed, resubmitting $component...\n";
+                  $redo = 1;
+                  $redothisyear = 1;
+               } else {
+                  print "WARNING: Required year $depyear has been run interactively but not completed, and should be rerun.\n";
+               }
             } elsif ("$depstate" eq "ERROR") {
                if ( $opt_s ) {
                   print "Required year $depyear got an error in the last frepp attempt, resubmitting $component...\n";
@@ -1631,7 +1649,7 @@ foreach h ( @hf )
   end
  end
 
- set availhf = ( `ls -1 \$historyyear????.nc.tar | wc -l` )
+ set availhf = ( `ls -1 \$historyyear????.nc.cpio \$historyyear????.nc.tar | wc -l` )
  if ( "\$availhf" != "$histPerYear" ) then
    Mail -s "\$name year \$historyyear cannot be postprocessed" \$USER <<END
 Your FRE post-processing job ( \$JOB_ID ) has exited because there is incomplete
@@ -6353,6 +6371,7 @@ EOF
 #PBS -j oe
 #PBS -o
 #PBS -r y
+#PBS -S /bin/csh
 #$ -soft -l fre_info=
 EOF
       $cshscripttmpl .= <<EOF;
@@ -6393,6 +6412,7 @@ EOF
 
 #write_to_statefile
 
+  limit stacksize unlimited
   setenv FMS_FRE_FREPP
   set NCVARS = list_ncvars.csh
   set TIMAVG = "timavg.csh -mb"

@@ -1,7 +1,7 @@
 #!/usr/bin/perl
 # -*- cperl -*-
 #
-# $Id: fremake,v 18.0.2.22.6.1 2012/12/28 17:53:23 afy Exp $
+# $Id: fremake,v 18.0.2.24.2.1 2012/12/28 17:41:33 afy Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: Program to Create a Script to Compile a Model
 # ------------------------------------------------------------------------------
@@ -64,7 +64,11 @@
 # afy    Ver  20.01  Remove option --queue                          December 11
 # afy    Ver  21.00  Add option --link (for Niki testing script)    December 11
 # afy    Ver  22.00  Modify process*CleanDir (new FRETemplate)      January 12
-# afy -------------- Branch 18.0.2.22.6 --------------------------- December 12
+# afy    Ver  23.00  Modify Usage (remove ASCII escapes)            March 12
+# afy    Ver  23.01  Modify processCheckoutClean (no tmpDir)        March 12
+# afy    Ver  23.02  Modify processCompileClean (no tmpDir)         March 12
+# afy    Ver  24.00  Cosmetics in messages                          April 12
+# afy -------------- Branch 18.0.2.24.2 --------------------------- December 12
 # afy    Ver   1.00  Use new module FRETemplate (account, dualFlag) December 12
 # ------------------------------------------------------------------------------
 # Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2000-2012
@@ -95,7 +99,7 @@ use FREXML();
 
   package fremake;
 
-  use constant VERSION => '$Id: fremake,v 18.0.2.22.6.1 2012/12/28 17:53:23 afy Exp $';
+  use constant VERSION => '$Id: fremake,v 18.0.2.24.2.1 2012/12/28 17:41:33 afy Exp $';
 
   use constant OPTLIST =>
   (
@@ -143,28 +147,26 @@ use FREXML();
     my $tgt = FREDefaults::Target();
     my $ncs = fremake::NCORES_DEFAULT;
     my $wtm = fremake::WALLTIME_DEFAULT;
-    my $beg = "\e[0;4m";
-    my $end = "\e[m";
     return
     (
       "\n",
       "  Usage: $self [option|experiment] ...\n\n",
       "  Options:\n\n",
-      "   -f,          --force-checkout     ${beg}f${end}orce checkout in case the source directory exists\n", 
-      "   -F,          --force-compile      ${beg}f${end}orce compile in case the executable directory exists\n", 
-      "   -K,          --keep-compiled      ${beg}k${end}eep compiled files in the executable directory\n",
-      "   -L,          --link               ${beg}l${end}ink the executable (negatable, default is on)\n",
-      "   -j NUM,      --make-jobs=NUM      a number of concurrent make ${beg}j${end}obs to use for compilation\n\n",
-      "   -E,          --execute            ${beg}e${end}xecute all the created scripts in the current session\n", 
-      "   -h,          --help               print ${beg}h${end}elp message and exit\n",
-      "   -n NUM,      --ncores=NUM         ${beg}n${end}umber of processor cores to use (default is $ncs)\n",
-      "   -p STRING,   --platform=STRING    hardware and software ${beg}p${end}latform STRING (default is '$pfm')\n", 
-      "   -s,          --submit             ${beg}s${end}ubmit all the created scripts as batch jobs\n",
-      "   -t STRING,   --target=STRING      use compilation directives, ${beg}t${end}argeted by STRING (default is '$tgt')\n", 
-      "   -V,          --version            print the tool ${beg}v${end}ersion and exit\n",
-      "   -v,          --verbose            get ${beg}v${end}erbose messages (repeat the option to increase verbosity level)\n", 
-      "   -w NUM,      --walltime=NUM       maximum ${beg}w${end}all time (in minutes) to use (default is $wtm)\n", 
-      "   -x FILE,     --xmlfile=FILE       experiment suite ${beg}X${end}ML configuration FILE (default is '$cwd/$xml')\n\n", 
+      "   -f,        --force-checkout            force checkout in case the source directory exists\n", 
+      "   -F,        --force-compile             force compile in case the executable directory exists\n", 
+      "   -K,        --keep-compiled             keep compiled files in the executable directory\n",
+      "   -L,        --link                      link the executable (negatable, default is on)\n",
+      "   -j NUM,    --make-jobs=NUM             number NUM of concurrent make jobs to use for compilation\n\n",
+      "   -E,        --execute                   execute all the created scripts in the current session\n", 
+      "   -h,        --help                      print help message and exit\n",
+      "   -n NUM,    --ncores=NUM                number NUM of processor cores to use (default is $ncs)\n",
+      "   -p STRING, --platform=STRING           hardware and software patform STRING (default is '$pfm')\n", 
+      "   -s,        --submit                    submit all the created scripts as batch jobs\n",
+      "   -t STRING, --target=STRING             use compilation directives, targeted by STRING (default is '$tgt')\n", 
+      "   -V,        --version                   print the tool version and exit\n",
+      "   -v,        --verbose                   get verbose messages (repeat the option to increase verbosity level)\n", 
+      "   -w NUM,    --walltime=NUM              maximum wall time NUM (in minutes) to use (default is $wtm)\n", 
+      "   -x FILE,   --xmlfile=FILE              experiment suite XML configuration FILE (default is '$cwd/$xml')\n\n", 
       "  All the option names may be abbreviated, a single leading dash is also acceptable.\n",
       "  At least one experiment from the FILE must be listed as an argument.\n\n"
     );
@@ -325,34 +327,23 @@ use FREXML();
   # ------ arguments: $exp
   {
     my $z = shift;
-    my ($tmpDir, $fre) = ($z->tmpDir(), $z->fre());
-    if (FREUtil::createDir($tmpDir))
+    my ($fre, $srcDir, $timeStr) = ($z->fre(), $z->srcDir(), FREUtil::timeString());
+    my $saveDir = $srcDir . '.' . $timeStr;
+    if (File::Copy::move($srcDir, $saveDir))
     {
-      my $srcDir = $z->srcDir();
-      my $timeStr = FREUtil::timeString();
-      my $saveDir = "$tmpDir/src.$timeStr";
-      if (File::Copy::move($srcDir, $saveDir))
-      {
-        $fre->out(FREMsg::NOTE, "Current source directory is '$srcDir'...");
-	$fre->out
-	(
-	  FREMsg::WARNING,
-	  "Since you've specified --force-checkout (-f), the source directory content has been moved into the directory '$saveDir'.", 
-	  "A new source directory will be created and populated by sources from the CVS...",
-	  "You can remove the saved directory later by typing:", 
-	  "rm -rf $saveDir"
-	);
-	return 1;
-      }
-      else
-      {
-	$fre->out(FREMsg::FATAL, "Unable to move '$srcDir' to '$saveDir'! ($!)");
-	return 0;
-      }
+      $fre->out
+      (
+	FREMsg::WARNING,
+	"Since you've specified --force-checkout (-f), the existing source directory has been renamed using timestamp '$timeStr'", 
+	"A new source directory will be created and populated by sources from the CVS...",
+	"You can remove the old source directory later by typing:", 
+	"rm -rf $saveDir"
+      );
+      return 1;
     }
     else
     {
-      $fre->out(FREMsg::FATAL, "Unable to create the directory '$tmpDir'!");
+      $fre->out(FREMsg::FATAL, "Unable to rename '$srcDir' to '$saveDir' ($!)");
       return 0;
     }
   }
@@ -539,13 +530,13 @@ use FREXML();
     if (-f "$execDir/Makefile" && -r "$execDir/Makefile")
     {
       qx(tcsh -c "cd $execDir; make clean" >/dev/null 2>&1);
-      if ($? == 0)
+      if (!$?)
       {
         $fre->out(FREMsg::WARNING, "The executable directory '$execDir' has been cleaned by the 'make clean'");
       }
       else
       {
-        $fre->out(FREMsg::WARNING, "Unable to clean the executable directory '$execDir' by the 'make clean'");
+        $fre->out(FREMsg::WARNING, "Unable to clean the executable directory '$execDir' by the 'make clean' ($?)");
       }
     }
     else
@@ -567,30 +558,26 @@ use FREXML();
     my @scripts = <$execDir/*.{csh,cshrc}>;
     if (scalar(@scripts) > 0)
     {
-      my $tmpDir = $z->tmpDir();
-      if (FREUtil::createDir($tmpDir))
+      my $timeStr = FREUtil::timeString();
+      foreach my $script (@scripts)
       {
-	my $timeStr = FREUtil::timeString();
-	foreach my $script (@scripts)
+	my $scriptSaved = $script . '.' . $timeStr;
+	unless (File::Copy::move($script, $scriptSaved))
 	{
-	  my $scriptSaved = $tmpDir . '/' . File::Basename::basename($script) . '.' . $timeStr;
-	  my $res = File::Copy::move($script, $scriptSaved);
-	  unless ($res)
-	  {
-	    $fre->out(FREMsg::FATAL, "Unable to move '$script' to '$scriptSaved'! ($!)");
-	    return 0;
-	  }
-        }
-	$fre->out(FREMsg::NOTE, "Current executable directory is '$execDir'...");
-	$fre->out(FREMsg::WARNING, "Since you've specified --force-compile (-F), the existing compile script has been moved into the directory '$tmpDir'");
-        processCompileCleanExecDir($z) unless $o{'keep-compiled'};
-	return 1;
+	  $fre->out(FREMsg::FATAL, "Unable to rename '$script' to '$scriptSaved' ($!)");
+	  return 0;
+	}
       }
-      else
-      {
-	$fre->out(FREMsg::FATAL, "Unable to create the directory '$tmpDir'!");
-	return 0;
-      }
+      $fre->out
+      (
+        FREMsg::WARNING, 
+	"Since you've specified --force-compile (-F), existing compile and environment scripts have been renamed using timestamp '$timeStr'",
+	"New compile and environment scripts will be created...",
+	"You can remove old scripts later by typing:", 
+	map("rm -f $_.$timeStr", @scripts)
+      );
+      processCompileCleanExecDir($z) unless $o{'keep-compiled'};
+      return 1;
     }
     else
     {
@@ -1072,7 +1059,7 @@ use FREXML();
   {
     unless ($opt{platform} && substr($opt{platform}, 0, 1) ne '-')
     {
-      FREMsg::out($opt{verbose}, FREMsg::FATAL, "The --platform option must have a nonempty value");
+      FREMsg::out($opt{verbose}, FREMsg::FATAL, "The --platform option's value is missing");
       exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
     }
   }
@@ -1081,7 +1068,7 @@ use FREXML();
   {
     unless ($opt{target} && substr($opt{target}, 0, 1) ne '-')
     {
-      FREMsg::out($opt{verbose}, FREMsg::FATAL, "The --target option must have a nonempty value");
+      FREMsg::out($opt{verbose}, FREMsg::FATAL, "The --target option's value is missing");
       exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
     }
   }
@@ -1090,7 +1077,7 @@ use FREXML();
   {
     unless ($opt{xmlfile} && substr($opt{xmlfile}, 0, 1) ne '-')
     {
-      FREMsg::out($opt{verbose}, FREMsg::FATAL, "The --xmlfile option must have a nonempty value");
+      FREMsg::out($opt{verbose}, FREMsg::FATAL, "The --xmlfile option's value is missing");
       exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
     }
   }

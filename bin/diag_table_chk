@@ -1,11 +1,28 @@
 #! /usr/bin/perl
 
-# $Author: sdu $
-# $Revision: 17.0.2.8 $
-# $Date: 2011/02/03 21:42:13 $
+=pod
 
-# Perl script to parse the diag_table.  Count the number of files to
-# be used, and the max number of fields per file used.
+=head1 NAME
+
+diag_table_chk - Parse a diag_table, and report the number of files, max fields, and parse errors
+
+=head1 SYNOPSIS
+
+diag_table_chk [-h|--help]
+
+diag_table_chk [-v|--verbose] I<< <diag_table> >>
+
+diag_table_chk [-v|--verbose] -s I<< <run_script> >>
+
+diag_table_chk [-v|--verbose] [-p|--platform] I<< <fre_platform> >> -x I<< <xml_file> >> I<< <experiment> >>
+
+=head1 DESCRIPTION
+
+B<diag_table_chk> will parse a diag_table and report on the number of
+files in the diag_table, the max fields used per file, and will give
+warnings on any parse errors found in the format of 'WARNING(<line_number>)'.
+
+=cut
 
 use strict;
 use Switch;
@@ -18,18 +35,68 @@ use Text::ParseWords;
 use FRE;
 use FREExperiment;
 
-my $help = 0;
+my $Version = '1.1';
+my $Date = '01 Mar 2012';
+
 my $verbose = 0;
 my $xmlFile = '';
 my $scriptFile = '';
 my $platform =  FREDefaults::Platform();
-GetOptions ("help|h" => \$help,
+
+=pod
+
+=head1 OPTIONS
+
+=over 8
+
+=item B<-h>, B<--help>
+
+Display usage information
+
+=item B<-v>, B<--verbose>
+
+Display the files and fields that were found.
+
+=item B<-s>, B<--script> I<< <run_script> >>
+
+Read the I<diag_table> file from a FRE created runscript.
+
+=item B<-x>, B<--xmlfile> I<< <xml_file> >> I<< <experiment> >>
+
+Read the diagnostic table file from I<< <experiment> >> from the I<< <xml_file> >>.
+
+=item B<-p>, B<--platform>
+
+Read the diagnostic table file using the I<< <fre_platform> >> to configure the directory locations.
+
+=item I<< <diag_table> >>
+
+The file name of the diagnostic table to check
+
+=item I<< <xml_file> >>
+
+A FRE XML formatted file.
+
+=item I<< <run_script> >>
+
+A runscript created using the I<frerun> FRE command.
+
+=item I<< <fre_platform> >>
+
+The FRE run platform.
+
+=back
+
+=cut
+
+GetOptions ("help|h" => sub{pod2usage(1)},
 	    "verbose|v" => \$verbose,
-	    "xml|x=s" => \$xmlFile,
+	    "version|V" => sub{displayVersion($Version, $Date); exit(0);},
+	    "xmlfile|x=s" => \$xmlFile,
 	    "script|s=s" => \$scriptFile,
 	    "platform|p=s" => \$platform,
 	   ) or pod2usage(2);
-pod2usage(1) if $help;
+
 
 # diag_table_chk can be called one of three ways:  
 # 1) The diag_table file is given on the command line
@@ -377,17 +444,36 @@ while ( <DIAG_TABLE> ) {
 			   message => "Packing is out of the valid range.  Must be in the range [1,8]."
 			  } );
       }
+      # Set the field hash object
+      my $field = {
+		   file_name => sanitizeString($line_data[3]),
+		   module_name => sanitizeString($line_data[0]),
+		   field_name => sanitizeString($line_data[1]),
+		   output_name => sanitizeString($line_data[2]),
+		   time_sampling => sanitizeString($line_data[4]),
+		   time_method => sanitizeString($line_data[5]),
+		   spatial_ops => sanitizeString($line_data[6]),
+		   packing => sanitizeString($line_data[7]),
+		  };
+      if ( &checkDuplicateField($field, @fields) ) {
+	$num_warnings++;
+	push @warnings, ( {
+			   line_number => $.,
+			   message => "Field ".$$field{module_name}."::".$$field{field_name}." is duplicated in file ".$$field{file_name}."."
+			  } );
+      }
       if ( $num_warnings == 0 ) {
-	push @fields, ( {
-			 file_name => sanitizeString($line_data[3]),
-			 module_name => sanitizeString($line_data[0]),
-			 field_name => sanitizeString($line_data[1]),
-			 output_name => sanitizeString($line_data[2]),
-			 time_sampling => sanitizeString($line_data[4]),
-			 time_method => sanitizeString($line_data[5]),
-			 spatial_ops => sanitizeString($line_data[6]),
-			 packing => sanitizeString($line_data[7]),
-			} );
+	# push @fields, ( {
+	# 		 file_name => sanitizeString($line_data[3]),
+	# 		 module_name => sanitizeString($line_data[0]),
+	# 		 field_name => sanitizeString($line_data[1]),
+	# 		 output_name => sanitizeString($line_data[2]),
+	# 		 time_sampling => sanitizeString($line_data[4]),
+	# 		 time_method => sanitizeString($line_data[5]),
+	# 		 spatial_ops => sanitizeString($line_data[6]),
+	# 		 packing => sanitizeString($line_data[7]),
+	# 		} );
+	push @fields, $field;
       }
     }
   }
@@ -477,6 +563,24 @@ if ( $#warnings ) {
   for ( my $warning=1; $warning <= $#warnings; $warning++ ) {
     print STDERR "WARNING($warnings[$warning]{line_number}): $warnings[$warning]{message}\n";
   }
+}
+
+sub checkDuplicateField {
+  my $field = shift @_;
+  my @fields = @_;
+
+  my $return = 0;
+  foreach my $f ( @fields ) {
+    if ( $$f{module_name} eq $$field{module_name} and
+	 $$f{field_name}  eq $$field{field_name}  and
+	 $$f{output_name} eq $$field{output_name} and
+	 $$f{file_name}   eq $$field{file_name} ) {
+      $return = 1;
+      last
+    }
+  }
+
+  return $return;
 }
 
 sub getDiagTableFromScript {
@@ -654,69 +758,13 @@ sub find_maxOutPerInField {
   return max(%fields);
 }
 
+sub displayVersion {
+  my ($version, $date) = @_;
+
+  print "calcPErequest $version ($date)\n";
+}
+
 __END__
-
-=head1 NAME
-
-diag_table_chk - Parse a diag_table, and report the number of files, max fields, and parse errors
-
-=head1 SYNOPSIS
-
-diag_table_chk [-h|--help]
-
-diag_table_chk [-v|--verbose] I<<diag_table>>
-
-diag_table_chk [-v|--verbose] -s I<<run_script>>
-
-diag_table_chk [-v|--verbose] [-p|--platform I<<fre_platform>> -x I<<xml_file>> I<<experiment>>
-
-=head1 DESCRIPTION
-
-B<diag_table_chk> will parse a diag_table and report on the number of
-files in the diag_table, the max fields used per file, and will give
-warnings on any parse errors found in the format of 'WARNING(<line_number>)'.
-
-=head1 OPTIONS
-
-=over 8
-
-=item B<-h>, B<--help>
-
-Display usage information
-
-=item B<-v>, B<--verbose>
-
-Display the files and fields that were found.
-
-=item B<-s>, B<--script> <run_script>
-
-Read the I<diag_table> file from a FRE created runscript.
-
-=item B<-x>, B<--xml> <xml_file> <experiment>
-
-Read the diagnostic table file from I<<experiment>> from the I<<xml_file>>.
-
-=item B<-p>, B<--platform>
-
-Read the diagnostic table file using the I<<fre_platform>> to configure the directory locations.
-
-=item I<<diag_table>>
-
-The file name of the diagnostic table to check
-
-=item I<<xml_file>>
-
-A FRE XML formatted file.
-
-=item I<<run_script>>
-
-A runscript created using the I<frerun> FRE command.
-
-=item I<<fre_platform>>
-
-The FRE run platform..
-
-=back
 
 =head1 EXAMPLES
 
@@ -753,13 +801,60 @@ WARNING(206): Time sampling method must be one of (.true., mean, average, avg, .
 
 =end man
 
-=head1 AUTHOR
-
-Seth Underwood <sunderwood@hpti.com>
-
 =head1 BUGS
 
-No known bugs at this time.
-Report any bugs to the L<author|/"AUTHOR">.
+=begin man
+
+Report any bugs to GFDL's Helpdesk <oar.gfdl.help@noaa.gov>
+
+=end man
+
+=begin html
+
+<p>Report any bugs to
+<script type="text/javascript">
+   <!--
+   var contact = "GFDL's Helpdesk";
+   var email = "oar.gfdl.help";
+   var emailHost = "noaa.gov";
+   document.write("<a href=" + "mail" + "to:" + email + "@" + emailHost + ">" + contact + "</a>" + ".");
+   //-->
+</script>
+</p>
+
+=end html
+
+=begin latex
+
+Report any bugs to GFDL's Helpdesk <\texttt{oar.gfdl.help@noaa.gov}>.
+
+=end latex
+
+=begin mediawiki
+
+Report any bugs to GFDL's Helpdesk <oar.gfdl.heml@noaa.gov>
+
+=end mediawiki
+
+=head1 AUTHOR
+
+Designed and written by Seth Underwood.
+
+=head1 COPYRIGHT
+
+Copyright 2000-2012 Geophysical Fluid Dynamics Laboratory
+
+The Flexible Modeling System (FMS) is free software; you can
+redistribute it and/or modify it and are expected to follow the terms
+of the GNU General Public License as published by the Free Software
+Foundation; either version 2 of the License, or (at your option) any
+later version.
+
+FMS is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY; without even the implied warranty of MERCHANTABILITY or
+FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License
+for more details.
+
+=cut
 
 =cut

@@ -1,5 +1,5 @@
 #
-# $Id: HSM.pm,v 1.1.2.5 2012/01/26 20:42:30 afy Exp $
+# $Id: HSM.pm,v 1.1.2.6 2012/03/28 23:00:37 afy Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: HSM Main Library Module
 # ------------------------------------------------------------------------------
@@ -17,6 +17,7 @@
 # afy    Ver   4.00  Add 'setAccessTime' utility                    December 11
 # afy    Ver   4.01  Modify 'alignAccessTime' subroutine            December 11
 # afy    Ver   5.00  Modify 'setAccessTime' utility (add check)     January 12
+# afy    Ver   6.00  Modify 'unlock' (add flock(..., LOCK_UN))      March 12
 # ------------------------------------------------------------------------------
 # Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2000-2012
 # Designed and written by V. Balaji, Amy Langenhorst and Aleksey Yakovlev
@@ -50,6 +51,14 @@ my $lockHandle = sub($)
   my $locked = flock($fh, &Fcntl::LOCK_EX | &Fcntl::LOCK_NB);
   close $fh unless $locked;
   return ($locked) ? $fh : 0;
+};
+
+my $unlockHandle = sub($)
+# ------ arguments: $filehandle
+{
+  my $fh = shift;
+  my $unlocked = flock($fh, &Fcntl::LOCK_UN);
+  close $fh if $unlocked;
 };
 
 my $elements = sub($)
@@ -254,7 +263,7 @@ sub tryLock($)
 	}
 	else
 	{
-	  print STDERR "HSM::tryLock - the lockfile '$lockfile' can't be opened ($!)\n";
+	  print STDERR "HSM::tryLock - the file '$lockfile' can't be opened ($!)\n";
 	  return undef;
 	}
       }
@@ -270,7 +279,7 @@ sub tryLock($)
 	}
 	else
 	{
-	  print STDERR "HSM::tryLock - the lockfile '$lockfile' can't be created ($!)\n";
+	  print STDERR "HSM::tryLock - the file '$lockfile' can't be created ($!)\n";
 	  return undef;
 	}
       }
@@ -330,7 +339,15 @@ sub unlock($)
     {
       if (-w $lockfile)
       {
-        unlink $lockfile;
+	if (sysopen(my $fh, $lockfile, &Fcntl::O_RDONLY))
+	{
+	  $unlockHandle->($fh);
+          unlink $lockfile;
+	}
+	else
+	{
+	  print STDERR "HSM::unlock - the file '$lockfile' can't be opened ($!)\n";
+	}
       }
       else
       {

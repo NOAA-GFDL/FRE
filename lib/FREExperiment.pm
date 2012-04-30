@@ -1,5 +1,5 @@
 #
-# $Id: FREExperiment.pm,v 18.1.2.12 2012/02/21 19:14:15 afy Exp $
+# $Id: FREExperiment.pm,v 18.1.2.13 2012/03/08 19:32:35 afy Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: Experiment Management Module
 # ------------------------------------------------------------------------------
@@ -39,6 +39,7 @@
 # afy    Ver  10.04  Modify extractExecutable subroutine            November 11
 # afy    Ver  11.00  Add extractRegressionLabels subroutine         January 12
 # afy    Ver  12.00  Add sdtoutTmpDir subroutine                    February 12
+# afy    Ver  13.00  Remove tmpDir subroutine                       March 12
 # ------------------------------------------------------------------------------
 # Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2009-2012
 # Designed and written by V. Balaji, Amy Langenhorst and Aleksey Yakovlev
@@ -467,14 +468,6 @@ sub analysisDir($)
 {
   my $r = shift;
   return $r->dir('analysis');
-}
-
-sub tmpDir($)
-# ------ arguments: $object
-# ------ called as object method
-{
-  my $r = shift;
-  return $r->rootDir() . '/' . $r->name() . '/tmp';
 }
 
 sub placeholdersExpand($$)

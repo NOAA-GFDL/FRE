@@ -125,7 +125,21 @@ test $?FRE_SYSTEM_TMP -eq 1 && setenv ARDIFFTMP $FRE_SYSTEM_TMP
 test $?ARDIFFTMP -eq 0 && test $?TMPDIR -eq 1 && setenv ARDIFFTMP $TMPDIR
 test $?ARDIFFTMP -eq 0 && setenv ARDIFFTMP /tmp
 
-set TMP = `mktemp -d --tmpdir=$ARDIFFTMP ardiff.$HOST.$$.XXXXXXXXXX`
+set mktempv = `mktemp -V | head -1 | awk '{print $NF}'`
+set TMP = ''
+echo mktempv $mktempv
+if ( `echo "$mktempv < 2.0" | bc`) then
+   set TMP = `mktemp -d -p $ARDIFFTMP ardiff.$HOST.$$.XXXXXXXXXX`
+   set thisstatus = $status
+else
+   set TMP = `mktemp -d --tmpdir=$ARDIFFTMP ardiff.$HOST.$$.XXXXXXXXXX`
+   set thisstatus = $status
+endif
+
+if ( $thisstatus ) then
+   echo "ERROR: Could not create temporary directory, exiting"
+   exit 1
+endif
 
 cd $TMP
 mkdir first second firstf secondf

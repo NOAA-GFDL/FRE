@@ -228,7 +228,7 @@ foreach xml ( $xml_list )
 	   grep -q "NO RUNS TO COMPARE:.*$k.*"   $frecheckout
 	   if( ! $status ) set NO_RUNS_TO_COMPARE = 1
 
-	   grep DIFFER $frecheckout | egrep -q -v "iceberg|blobs.res|GOLD_IC|ocean_geometry|timestats|Vertical_coordinate"
+	   grep DIFFER $frecheckout | egrep -q -v "iceberg|blobs.res|GOLD_IC|ocean_geometry|timestats|Vertical_coordinate|WARNING"
 	   if( $status ) then #only icebergs DIFFER, flip the failures if any
 		if( $CROSSOVER_FAILED )     then 
 		    set CROSSOVER_FAILED = 0

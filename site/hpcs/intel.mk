@@ -32,6 +32,11 @@ CFLAGS_OPT = -O2
 CFLAGS_OPENMP = -openmp
 CFLAGS_DEBUG = -O0 -g -ftrapuv -traceback
 
+# Optional Testing compile flags.  Mutually exclusive from DEBUG, REPRO, and OPT
+# *_TEST will match the production if no new option(s) is(are) to be tested.
+FFLAGS_TEST = -O3 -debug minimal -fp-model precise -override-limits
+CFLAGS_TEST = -O2
+
 LDFLAGS :=
 LDFLAGS_OPENMP := -openmp
 LDFLAGS_VERBOSE := -Wl,-V,--verbose,-cref,-M
@@ -43,6 +48,9 @@ endif
 ifneq ($(DEBUG),)
 CFLAGS += $(CFLAGS_DEBUG)
 FFLAGS += $(FFLAGS_DEBUG)
+else ifneq ($(TEST),)
+CFLAGS += $(CFLAGS_TEST)
+FFLAGS += $(FFLAGS_TEST)
 else
 CFLAGS += $(CFLAGS_OPT)
 FFLAGS += $(FFLAGS_OPT)

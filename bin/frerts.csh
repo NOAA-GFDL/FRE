@@ -90,7 +90,7 @@ Name:      frerts.csh
 
 Synopsis:  Creates and runs frerts scripts for one set of given  xml, platform, target, experiments list
 
-Usage:     frerts_batch.csh  
+Usage:     frerts.csh  
            -x path_to_xml 
            -p platform
            -t target 
@@ -259,6 +259,15 @@ while( $#TODOLIST );
           	set somebasicswaiting = 1
 	    else
                 echo "DO_basic : $EXP executable $EXEC is ready"
+
+		#Stage the executable
+		echo "Pre-stage the executable $EXEC"
+		set exec_dir = `dirname $EXEC`
+		mkdir -p $CSCRATCH/$USER/ptmp/$exec_dir
+		chmod +w $CSCRATCH/$USER/ptmp/$exec_dir/*
+		cp $EXEC $CSCRATCH/$USER/ptmp/$exec_dir/
+
+
 		set stageswitch = "-S" # "--submit-staged" or "-S"
                 if( $NOSTAGE ) set stageswitch = "-s"
 		set regressswitch = "-r $b_regression"

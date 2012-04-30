@@ -1,5 +1,5 @@
 # -*- Makefile -*-
-# $Id: hsmget.mk,v 1.1.2.15.6.1 2013/03/27 23:47:03 afy Exp $
+# $Id: hsmget.mk,v 1.1.2.15.4.1 2013/03/27 23:46:06 afy Exp $
 # HSM.mk: data transfer using three-level storage model
 
 #use csh, with no user .cshrc

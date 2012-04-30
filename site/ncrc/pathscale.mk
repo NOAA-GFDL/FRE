@@ -41,10 +41,16 @@ FFLAGS_OPENMP = -mp
 FFLAGS_VERBOSE = -v
 
 CPPFLAGS = $(INCLUDE)
+CFLAGS =
 CFLAGS_OPT = -O2
 CFLAGS_DEBUG = -g
 CFLAGS_OPENMP = -mp
 CFLAGS_VERBOSE = -v
+
+# Optional Testing compile flags.  Mutually exclusive from DEBUG, REPRO, and OPT
+# *_TEST will match the production if no new option(s) is(are) to be tested.
+FFLAGS_TEST = -O3 -OPT:fast_math=on:Olimit=0:IEEE_arith=2 -TENV:X=1
+CFLAGS_TEST = -O2
 
 # pathscale wants main program outside libraries, do
 # setenv MAIN_PROGRAM coupler_main.o or something before make
@@ -59,6 +65,9 @@ FFLAGS += $(FFLAGS_REPRO)
 else ifneq ($(DEBUG),)
 CFLAGS += $(CFLAGS_DEBUG)
 FFLAGS += $(FFLAGS_DEBUG)
+else ifneq ($(TEST),)
+CFLAGS += $(CFLAGS_TEST)
+FFLAGS += $(FFLAGS_TEST)
 else
 FFLAGS += $(FFLAGS_OPT)
 CFLAGS += $(CFLAGS_OPT)

@@ -1,5 +1,5 @@
 #
-# $Id: FRE.pm,v 18.0.2.18 2012/01/10 23:01:06 afy Exp $
+# $Id: FRE.pm,v 18.0.2.19 2012/04/24 23:56:21 afy Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: Main Library Module
 # ------------------------------------------------------------------------------
@@ -40,6 +40,7 @@
 # afy    Ver  16.00  Modify 'new' (more explanatory message)        January 12
 # afy    Ver  17.00  Modify 'new' (FREPlatforms/FREProperties)      January 12
 # afy    Ver  18.00  Modify 'new' (process option --project)        January 12
+# afy    Ver  19.00  Modify 'propertyParameterized' subroutine      April 12
 # ------------------------------------------------------------------------------
 # Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2000-2012
 # Designed and written by V. Balaji, Amy Langenhorst and Aleksey Yakovlev
@@ -708,27 +709,31 @@ sub property($$)
   return $fre->placeholdersExpand($fre->{properties}->property($k));
 }
 
-sub propertyParameterized($$;$)
-# ------ arguments: $fre $propertyName $value
+sub propertyParameterized($$;@)
+# ------ arguments: $fre $propertyName @values
 # ------ called as object method
-# ------ return the external property value, where the first '$' is replaced by $value
+# ------ return the external property value, where all the '$' are replaced by @values
 {
-  my ($fre, $k, $v) = @_;
-  my $s = $fre->placeholdersExpand($fre->{properties}->property($k));
-  my $index = index($s, '$');
-  if ($index < 0)
+  my ($fre, $k, @v) = @_;
+  my ($s, $i) = ($fre->placeholdersExpand($fre->{properties}->property($k)), 0);
+  while (1)
   {
-    return $s;
+    my $index = index($s, '$');
+    if ($index < 0)
+    {
+      last;
+    }
+    elsif (my $value = $v[$i])
+    {
+      substr($s, $index, 1) = $value;
+      $i++;
+    }
+    else
+    {
+      $s = '';
+    }
   }
-  elsif ($v)
-  {
-    substr($s, $index, 1) = $v;
-    return $s;
-  }
-  else
-  {
-    return '';
-  }
+  return $s;
 }
 
 sub nodeValue($$$)

@@ -14,6 +14,25 @@ DEBUG =
 REPRO =
 VERBOSE =
 
+##############################################
+# Need to use at least GNU Make version 3.81 #
+##############################################
+need := 3.81
+ok := $(filter $(need),$(firstword $(sort $(MAKE_VERSION) $(need))))
+ifneq ($(need),$(ok))
+$(error Need at least make version $(need).  Load module gmake/3.81)
+endif 
+
+#################################################
+# Check version of PGI for use of -nofma option #
+#################################################
+has_nofma := $(shell $(FC) -dryrun -nofma foo.f90 > /dev/null 2>&1; echo $$?)
+ifneq ($(has_nofma),0)
+NOFMA :=
+else
+NOFMA := -nofma
+endif
+
 #################################################################
 # site-dependent definitions, set by environment                #
 #################################################################
@@ -23,18 +42,24 @@ MPI_ROOT    = $(MPICH_DIR)
 INCLUDE = -I$(NETCDF_ROOT)/include
 
 FPPFLAGS = $(INCLUDE)
-FFLAGS = -i4 -r8 -byteswapio -Mcray=pointer
-FFLAGS_OPT = -O3 -Mflushz -Mvect=nosse -Mnoscalarsse -Mallocatable=03 -D_F2000
+FFLAGS = -i4 -r8 -byteswapio -Mcray=pointer -Mcray=pointer -Mflushz -Mdaz -D_F2000
+FFLAGS_OPT = -O3 -Mvect=nosse -Mnoscalarsse -Mallocatable=03 
 FFLAGS_DEBUG = -O0 -g -traceback -Ktrap=fp
-FFLAGS_REPRO = -O2 -Mflushz
+FFLAGS_REPRO = -O2 $(NOFMA)
 FFLAGS_OPENMP = -mp
 FFLAGS_VERBOSE = -v
 
 CPPFLAGS = $(INCLUDE)
+CFLAGS = 
 CFLAGS_OPT = -O2
 CFLAGS_DEBUG = -O0 -g -traceback -Ktrap=fp
 CFLAGS_OPENMP = -mp
 CFLAGS_VERBOSE = -v
+
+# Optional Testing compile flags.  Mutually exclusive from DEBUG, REPRO, and OPT
+# *_TEST will match the production if no new option(s) is(are) to be tested.
+FFLAGS_TEST = -O3 -Mvect=simd:128 -Mallocatable=03
+CFLAGS_TEST = -O2
 
 LDFLAGS := -byteswapio
 LDFLAGS_VERBOSE := -v
@@ -47,6 +72,9 @@ FFLAGS += $(FFLAGS_REPRO)
 else ifneq ($(DEBUG),)
 CFLAGS += $(CFLAGS_DEBUG)
 FFLAGS += $(FFLAGS_DEBUG)
+else ifneq ($(TEST),)
+CFLAGS += $(CFLAGS_TEST)
+FFLAGS += $(FFLAGS_TEST)
 else
 CFLAGS += $(CFLAGS_OPT)
 FFLAGS += $(FFLAGS_OPT)

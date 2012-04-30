@@ -22,10 +22,11 @@ set myfreversion = ""
 set mydebuglevel = ""
 set mom_rts_tag = ""
 set mom_cvs_tag = ""
+set preprocess_xml = ""
 set GO_OPS = ""
 set AUTOLOG = 1 
 
-set argv = (`getopt -u -o hrd:x:p:t: -l frerts_ops: -l release:  -l fre_stem: -l fre_version: -l debuglevel: -l mom_rts_tag: -l mom_cvs_tag: -l xinclude --  $*`)
+set argv = (`getopt -u -o hrd:x:p:t: -l frerts_ops: -l release:  -l fre_stem: -l fre_version: -l debuglevel: -l mom_rts_tag: -l mom_cvs_tag: -l preprocess_xml: -l xinclude --  $*`)
 
 
 while ("$argv[1]" != "--")
@@ -60,6 +61,8 @@ while ("$argv[1]" != "--")
             set mom_rts_tag = $argv[2]; shift argv; breaksw
         case --mom_cvs_tag:
             set mom_cvs_tag = $argv[2]; shift argv; breaksw
+        case --preprocess_xml:
+            set preprocess_xml = $argv[2]; shift argv; breaksw
         case --frerts_ops:
             set GO_OPS = $argv[2]; shift argv; breaksw
 	case --xinclude:
@@ -94,35 +97,36 @@ Usage:     frerts_batch.csh
 
 Examples:
 
-/ncrc/home2/Niki.Zadeh/bin/frerts_batch_11.csh -d /ncrc/home2/Niki.Zadeh/xmls/siena_prerelease/xml/ -x "fv_am2.xml" -p "ncrc.default,ncrc.pgi" -t "prod-openmp,repro-openmp" --frerts_ops "--compile" m45_am2p14_1990 m45_am2p14
+To run regressions for all test cases in an xml (that do not have _no_RTS in their name):
 
-The above will compile 4 variations "ncrc.default,ncrc.pgi" X "prod-openmp,repro-openmp" then submit two experiments m45_am2p14_1990 m45_am2p14
+frerts_batch.csh -x /ncrc/home2/Niki.Zadeh/xmls/siena_201202_bronx_nnz/mom4p1_cpld.xml -p ncrc2.intel -t prod-openmp --frerts_ops "--all,--compile"  --release siena --fre_stem siena --fre_version 'fre\\\/bronx'
+
+To run regressions for selected test cases in an xml:
+
+frerts_batch.csh -x /ncrc/home2/Niki.Zadeh/xmls/siena_201202_bronx_nnz/mom4p1_cpld.xml -p ncrc2.intel -t prod-openmp --frerts_ops "--compile"  --release siena --fre_stem siena --fre_version 'fre\\\/bronx' om3_core1 MOM_SIS_TOPAZ MOM4_SIS_cm2.1
+
+To run regressions for more than one platform and/or more than one target for selected test cases in an xml:
+
+frerts_batch.csh -x /ncrc/home2/Niki.Zadeh/xmls/siena_201202_bronx_nnz/mom4p1_cpld.xml -p "ncrc1.intel,ncrc2.intel" -t "prod-openmp,repro-openmp" --frerts_ops "--compile"  --release siena --fre_stem siena --fre_version 'fre\\\/bronx' om3_core1 MOM_SIS_TOPAZ MOM4_SIS_cm2.1
 
 
-/ncrc/home2/Niki.Zadeh/bin/frerts_batch_11.csh -d /ncrc/home2/Niki.Zadeh/xmls/siena_prerelease/xml/ -x "fv_am2.xml" -p "ncrc.default,ncrc.pgi" -t "prod-openmp,repro-openmp" --frerts_ops "--compile,--all"
-
-The above will compile 4 variations "ncrc.default,ncrc.pgi" X "prod-openmp,repro-openmp" then submits ALL experiments  in the xml except experiments with names that contain keys "_noRTS" and "_compile" (this way you can avoid running unwanted exps in your xml by appending _noRTS to their name). 
-
-/ncrc/home2/Niki.Zadeh/bin/frerts_batch_11.csh -x /ncrc/home2/Niki.Zadeh/xmls/siena_prerelease/xml_presiena_nnz/libraries.xml -p "ncrc.intel_t1,ncrc.pgi_t1" -t "prod-openmp" --frerts_ops "--use_libs,--build_only,-l,FMS_libs_compile" --release testing --fre_stem testing_20111115 --fre_version 'fre\\\/test' MOM_SIS_LAD_FV_compile_libs GOLD_SIS_LAD_FV_compile_libs MOM_SIS_LAD2_FV_compile_libs GOLD_SIS_LAD2_FV_compile_libs MOM_SIS_LAD2_CS_compile_libs
-
-The above will make all the FMS components libraries and compiles executables for 5 models using those libs. This happens for both intel and pgi in production mode, so 10 executables.
-
-/ncrc/home2/Niki.Zadeh/bin/frerts_batch_11.csh -x /ncrc/home2/Niki.Zadeh/xmls/siena_prerelease/xml_presiena_nnz/ESM2_Control.xml -p "ncrc.intel_t1,ncrc.pgi_t1" -t "prod-openmp" --frerts_ops "--all,--use_libs,--fre_ops,-o;-P=t1" --release testing --fre_stem testing_20111115 --fre_version 'fre\\\/test'
-
-The above will run all RTS experiments in the xml using the executables made by the previous command. The jobs will be submitted to t1 partition.
+To run regressions for a cvs branch code of MOM4p1 and a given release:
  
-/ncrc/home2/Niki.Zadeh/bin/frerts_batch_12.csh -x /ncrc/home2/Niki.Zadeh/xmls/siena_prerelease/siena_prebronx/xml/mom4p1_cpld.xml -p ncrc.intel -t prod-openmp --frerts_ops "--all,--compile,--no_stage" --release siena --mom_cvs_tag mom4p1_siena_07jan2012_smg --fre_stem siena_mom4p1_siena_07jan2012_smg --debuglevel _do_bitwise_exact_sum --fre_version 'fre\\\/test'
+frerts_batch.csh -x /ncrc/home2/Niki.Zadeh/xmls/siena_201202_bronx_nnz/mom4p1_cpld.xml  -p ncrc1.intel -t prod-openmp --frerts_ops "--all,--compile" --release siena --mom_cvs_tag mom4p1_siena_07jan2012_smg --fre_stem siena_mom4p1_siena_07jan2012_smg 
 
+To run regressions if all the reequired data is already staged:
 
-/ncrc/home2/Niki.Zadeh/bin/frerts_batch_12.csh -x /ncrc/home2/Niki.Zadeh/xmls/siena_prerelease/siena_prebronx/xml/ESM2_Control.xml -p ncrc.intel -t prod-openmp --frerts_ops "--compile,-l,ESM_libs_compile,--no_stage" --release siena --mom_cvs_tag mom4p1_siena_07jan2012_smg --fre_stem siena_mom4p1_siena_07jan2012_smg --debuglevel _do_bitwise_exact_sum --fre_version 'fre\\\/test' ESM2M_Control-1860_dec29IC ESM2M_Control-1860_dec29IC_production
+frerts_batch.csh -x /ncrc/home2/Niki.Zadeh/xmls/siena_201202_bronx_nnz/mom4p1_cpld.xml -p ncrc2.intel -t prod-openmp --frerts_ops "--compile,--no_stage"  --release siena --fre_stem siena 
 
-/ncrc/home2/Niki.Zadeh/bin/frerts_batch_12.csh -x /ncrc/home2/Niki.Zadeh/xmls/siena_prerelease/siena_prebronx/xml/mom4p1_solo.xml -p ncrc.intel -t "prod-openmp,repro-openmp" --frerts_ops "--compile,--no_stage,--all" --release siena --mom_cvs_tag mom4p1_siena_27jan2012_smg --fre_stem siena_mom4p1_siena_27jan2012_smg --debuglevel _1 --fre_version 'fre\\\/test'
+To run regressions if the compilation needs a recompiled library (ESM_libs_compile in this example):
 
+frerts_batch.csh -x /ncrc/home2/Niki.Zadeh/xmls/siena_201202_bronx_nnz/ESM2_Control.xml -p ncrc2.intel -t prod-openmp --frerts_ops "--compile,-l,ESM_libs_compile,--no_stage" --release siena --mom_cvs_tag mom4p1_siena_07jan2012_smg --fre_stem siena_mom4p1_siena_07jan2012_smg --debuglevel _do_bitwise_exact_sum --fre_version 'fre\\\/test' ESM2M_Control-1860_dec29IC ESM2M_Control-1860_dec29IC_production
 
-/ncrc/home2/Niki.Zadeh/bin/frerts_batch_12.csh -x /ncrc/home2/Niki.Zadeh/xmls/siena_prerelease/siena_prebronx/xml/mom4p1_cpld.xml -p ncrc.intel -t "prod-openmp,repro-openmp" --frerts_ops "--compile,--no_stage,--all" --release siena --mom_cvs_tag mom4p1_siena_27jan2012_smg --fre_stem siena_mom4p1_siena_27jan2012_smg --debuglevel _1 --fre_version 'fre\\\/test'
+To run regressions and compare the answers against a reference tag at the end:
 
-/ncrc/home2/Niki.Zadeh/bin/frerts_batch_12.csh -x /ncrc/home2/Niki.Zadeh/xmls/siena_prerelease/siena_prebronx/xml/libraries.xml -p "ncrc.intel" -t "prod-openmp" --frerts_ops "--build_only,-l,FMS_libs_compile" --release siena --fre_stem siena_libs --fre_version 'fre\\\/test' MOM_SIS_LAD_FV_compile_libs 
+frerts_batch.csh -x /ncrc/home2/Niki.Zadeh/xmls/siena_201202_bronx_1_nnz/mom4p1_cpld.xml -p ncrc2.intel -t prod-openmp --frerts_ops "--compile,--no_stage,--no_rts,--do_frecheck,--reference_tag,siena_201202_FEB22_FEB22" --release siena_201202 --mom_cvs_tag mom4p1_riga_201104_18oct2011_smg --fre_stem siena_201202_mom4p1_riga_201104_18oct2011_smg --debuglevel _FEB27 --fre_version 'fre\\/test' om3_core1 MOM_SIS_TOPAZ MOM4_SIS_cm2.1
 
+In the above example --no_rts cause only the "basic" regression to run.
 
 EOF
 
@@ -227,15 +231,11 @@ endif
 if( $mom_cvs_tag != "" ) then
     sed 's/<property name.*MOM_CVS_TAG.*value.*\/>/  <property name=\"MOM_CVS_TAG\"  value=\"somethingnoonewouldthinkofever\"\/>/g' -i $xmlfile
     sed  "s/somethingnoonewouldthinkofever/$mom_cvs_tag/g" -i $xmlfile
-
-sed 's/"ocean_barotropic_nml">/"ocean_barotropic_nml"> \n do_bitwise_exact_sum=.true./g' -i $xmlfile
-sed 's/"ocean_grids_nml">/"ocean_grids_nml"> \n do_bitwise_exact_sum=.true./g'           -i $xmlfile
-sed 's/"ocean_rivermix_nml">/"ocean_rivermix_nml"> \n do_bitwise_exact_sum=.true./g'     -i $xmlfile
-sed 's/"ocean_submesoscale_nml">/"ocean_submesoscale_nml"> \n use_psi_legacy=.true./g'   -i $xmlfile
-
 endif
 
-
+if( $preprocess_xml != "" ) then
+$preprocess_xml $xmlfile
+endif
 
 set static = ""
 foreach EXP ( $EXPLIST )

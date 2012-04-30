@@ -1,5 +1,5 @@
 #
-# $Id: FRETemplate.pm,v 18.0.2.18.2.2 2013/01/05 00:27:34 afy Exp $
+# $Id: FRETemplate.pm,v 18.0.2.20.2.3 2013/01/04 21:49:34 afy Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: Template Management Module
 # ------------------------------------------------------------------------------
@@ -46,11 +46,19 @@
 # afy    Ver  17.05  Remove setSchedulerDualRuns subroutine         January 12
 # afy    Ver  18.00  Modify schedulerResources (add shell)          February 12
 # afy    Ver  18.01  Modify schedulerNames (add priority)           February 12
-# afy -------------- Branch 18.0.2.18.2 --------------------------- December 12
+# afy    Ver  19.00  Add 'schedulerSize' utility                    April 12
+# afy    Ver  19.01  Modify 'schedulerResources' utility            April 12
+# afy    Ver  19.02  Add 'setSchedulerSize' subroutine              April 12
+# afy    Ver  19.03  Add 'schedulerSizeAsString' utility            April 12
+# afy    Ver  19.03  Add 'schedulerSizeAsString' subroutine         April 12
+# afy    Ver  20.00  Modify 'schedulerNames' (dual settings)        April 12
+# afy    Ver  20.01  Modify 'schedulerSize' (better placement)      April 12
+# afy -------------- Branch 18.0.2.20.2 --------------------------- December 12
 # afy    Ver   1.00  Add '*Account*' subs                           December 12
 # afy    Ver   1.01  Modify '*Resources*' subs (add dualFlag)       December 12
 # afy    Ver   1.02  Modify '*Names' subs (remove dualFlag)         December 12
-# afy    Ver   2.00  Modify 'schedulerResources' (job.size)         January 13
+# afy    Ver   2.00  Fix 'setSchedulerAccount' (reorder params)     December 12
+# afy    Ver   3.00  Fix 'setSchedulerResources' (add $)            January 13
 # ------------------------------------------------------------------------------
 # Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2009-2013
 # Designed and written by V. Balaji, Amy Langenhorst and Aleksey Yakovlev
@@ -80,6 +88,79 @@ use constant PRAGMA_VERSION_INFO => 'version-info';
 # //////////////////////////////////////////////////////////////////////////////
 # ///////////////////////////////////////////////////////////////// Utilities //
 # //////////////////////////////////////////////////////////////////////////////
+
+my $schedulerSize = sub($$$$$$$)
+# ------ arguments: $expt $jobType $total_np $atmos_np $atmos_nt $ocean_np $ocean_nt
+{
+
+  my ($z, $j, $tp, $ap, $at, $op, $ot) = @_;
+  my $fre = $z->fre();
+  my $coresPerJobInc = $fre->property("FRE.scheduler.$j.coresPerJob.inc") || 1;
+  my $coresPerJobMax = $fre->property("FRE.scheduler.$j.coresPerJob.max") || &POSIX::INT_MAX;
+  
+  my $coresAggregated = sub($)
+  # ------ arguments: $ncores
+  {
+    my $x = shift;
+    $x = $coresPerJobMax if $x > $coresPerJobMax;
+    return POSIX::ceil($x / $coresPerJobInc) * $coresPerJobInc;
+  };
+
+  my $coresDistributed = sub($$)
+  # ------ arguments: $np $nt
+  {
+    my ($np, $nt) = @_;
+    my $product = $np * $nt;
+    $product = $coresPerJobMax if $product > $coresPerJobMax;
+    my ($nodesM, $procsM) = (POSIX::floor($product / $coresPerJobInc), POSIX::floor($coresPerJobInc / $nt));
+    $fre->out(FREMsg::WARNING, "It's not optimal to place '$nt' OpenMP threads on a node with '$coresPerJobInc' cores") if $coresPerJobInc % $nt;
+    if ($np > $nodesM * $procsM)
+    {
+      return ($nodesM, $procsM, 1, $np - $nodesM * $procsM);
+    }
+    else
+    {
+      return ($nodesM, $procsM);
+    }
+  };
+
+  if ($fre->property('FRE.scheduler.enabled'))
+  {
+    my %option = ();
+    if ($ap == 0 && $op == 0)
+    {
+      $option{size} = $fre->propertyParameterized("FRE.scheduler.option.$j.size", $coresAggregated->($tp));
+    }
+    elsif ($fre->property("FRE.scheduler.option.$j.size.aggregated"))
+    {
+      $option{size} = $fre->propertyParameterized("FRE.scheduler.option.$j.size", $coresAggregated->($ap * $at) + $coresAggregated->($op * $ot));
+    }
+    elsif ($ap > 0 && $op == 0)
+    {
+      my @nodeSpec = $coresDistributed->($ap, $at);
+      my $nodeSpecSize = scalar(@nodeSpec);
+      $option{size} = $fre->propertyParameterized("FRE.scheduler.option.$j.$nodeSpecSize.size", @nodeSpec);
+    }
+    elsif ($ap == 0 && $op > 0)
+    {
+      my @nodeSpec = $coresDistributed->($op, $ot);
+      my $nodeSpecSize = scalar(@nodeSpec);
+      $option{size} = $fre->propertyParameterized("FRE.scheduler.option.$j.$nodeSpecSize.size", @nodeSpec);
+    }
+    else
+    {
+      my @nodeSpec = ($coresDistributed->($ap, $at), $coresDistributed->($op, $ot));
+      my $nodeSpecSize = scalar(@nodeSpec);
+      $option{size} = $fre->propertyParameterized("FRE.scheduler.option.$j.$nodeSpecSize.size", @nodeSpec);
+    }
+    return \%option;
+  }
+  else
+  {
+    return undef;
+  }
+
+};
 
 my $schedulerAccount = sub($$)
 # ------ arguments: $expt $windfallFlag
@@ -143,7 +224,7 @@ my $schedulerResources = sub($$$$$$$)
       envVars     => $fre->propertyParameterized('FRE.scheduler.option.envVars'),
       shell       => $fre->propertyParameterized('FRE.scheduler.option.shell')
     );
-
+    
     if ($n)
     {
       my $coresPerJobInc = $fre->property("FRE.scheduler.$j.coresPerJob.inc") || 1;
@@ -249,6 +330,44 @@ sub setList($$@)
   }
 }
 
+sub setSchedulerSize($$$$$$$$)
+# ------ arguments: $refToScript $expt $jobType $total_np $atmos_np $atmos_nt $ocean_np $ocean_nt
+{
+
+  my ($r, $z, $j, $tp, $ap, $at, $op, $ot) = @_;
+
+  my $prefix = FRETemplate::PRAGMA_PREFIX;
+  my $schedulerOptions = FRETemplate::PRAGMA_SCHEDULER_OPTIONS;
+  my $placeholder = qr/^[ \t]*$prefix[ \t]+$schedulerOptions[ \t]*$/mo;
+
+  my $schedulerPrefix = $z->fre()->property('FRE.scheduler.prefix');
+  my $h = $schedulerSize->($z, $j, $tp, $ap, $at, $op, $ot);
+
+  foreach my $key (sort keys %{$h})
+  {
+    my $value = $h->{$key}; 
+    ${$r} =~ s/($placeholder)/$1\n$schedulerPrefix $value/ if $value; 
+  }
+
+}
+
+sub schedulerSizeAsString($$$$$$$)
+# ------ arguments: $expt $jobType $total_np $atmos_np $atmos_nt $ocean_np $ocean_nt
+{
+
+  my ($z, $j, $tp, $ap, $at, $op, $ot) = @_;
+  my ($h, @result) = ($schedulerSize->($z, $j, $tp, $ap, $at, $op, $ot), ());
+
+  foreach my $key (sort keys %{$h})
+  {
+    my $value = $h->{$key}; 
+    push @result, $value if $value; 
+  }
+
+  return join ' ', @result; 
+
+}
+
 sub setSchedulerAccount($$$)
 # ------ arguments: $refToScript $expt $windfallFlag
 {
@@ -300,13 +419,13 @@ sub setSchedulerResources($$$$$$$$)
 
   my $schedulerPrefix = $z->fre()->property('FRE.scheduler.prefix');
   my $h = $schedulerResources->($z, $j, $n, $t, $p, $q, $f);
-  
+
   foreach my $key (sort keys %{$h})
   {
     my $value = $h->{$key}; 
     ${$r} =~ s/($placeholder)/$1\n$schedulerPrefix $value/ if $value; 
   }
-  
+
 }
 
 sub schedulerResourcesAsString($$$$$$$)
@@ -324,7 +443,7 @@ sub schedulerResourcesAsString($$$$$$$)
   }
 
   return join ' ', @result; 
-  
+
 }
 
 sub setSchedulerNames($$$$)
@@ -339,13 +458,13 @@ sub setSchedulerNames($$$$)
 
   my $schedulerPrefix = $z->fre()->property('FRE.scheduler.prefix');
   my $h = $schedulerNames->($z, $n, $d);
-  
+
   foreach my $key (sort keys %{$h})
   {
     my $value = $h->{$key}; 
     ${$r} =~ s/($placeholder)/$1\n$schedulerPrefix $value/ if $value; 
   }
-  
+
 }
 
 sub schedulerNamesAsString($$$)
@@ -355,7 +474,7 @@ sub schedulerNamesAsString($$$)
   my ($z, $n, $d) = @_;
 
   my ($h, @result) = ($schedulerNames->($z, $n, $d), ());
-  
+
   foreach my $key (sort keys %{$h})
   {
     my $value = $h->{$key}; 
@@ -380,7 +499,7 @@ sub setSchedulerMakeVerbose($$)
   my $variableEnv = $fre->property('FRE.scheduler.variable.environment');
   my $variableEnvValueBatch = $fre->property('FRE.scheduler.variable.environment.value.batch');
   my $makeVerbose = '';
-  
+
   $makeVerbose .= 'if ( $?' . $variableEnv . ' ) then' . "\n";
   $makeVerbose .= '  if ( $' . $variableEnv . ' == "' . $variableEnvValueBatch . '" ) then' . "\n";
   $makeVerbose .= '    set aliasMake = `alias make`' . "\n";
@@ -408,10 +527,10 @@ sub setVersionInfo($$$%)
   my $placeholder = qr/^[ \t]*$prefix[ \t]+$versionInfo[ \t]*$/mo;
 
   my $configFileAbsPathName = $z->fre()->configFileAbsPathName();
-  
+
   $/ = "";
   chomp(my $createDate = qx(date +%Y-%m-%dT%H:%M:%S));
-  
+
   my $info = "# The script created at $createDate via:\n# $c";
   foreach my $key (sort keys %o)
   {
