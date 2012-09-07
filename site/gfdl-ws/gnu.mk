@@ -1,13 +1,14 @@
-# $Id: gnu.mk,v 1.1.2.1.2.1 2012/03/07 15:08:54 sdu Exp $
-# template for the Intel fortran compiler
+# $Id: gnu.mk,v 1.1.2.1.4.1.2.1 2012/09/25 13:07:12 Seth.Underwood Exp $
+# template for the GNU fortran compiler
 # typical use with mkmf
-# mkmf -t template.ifc -c"-Duse_libMPI -Duse_netCDF" path_names /usr/local/include
+# mkmf -t gnu.mk -c"-Duse_libMPI -Duse_netCDF" path_names /usr/local/include
 ############
 # commands #
 ############
-FC = gfortran44
-CC = gcc44
-LD = gfortran44 $(MAIN_PROGRAM)
+FC = gfortran
+CC = gcc
+LD = gfortran $(MAIN_PROGRAM)
+
 #########
 # flags #
 #########
@@ -20,17 +21,17 @@ MAKEFLAGS += --jobs=$(shell grep '^processor' /proc/cpuinfo | wc -l)
 
 FPPFLAGS := 
 
-FFLAGS := -fcray-pointer -fdefault-real-8 -Waliasing -ffree-line-length-none -fno-range-check
-FFLAGS += $(shell nc-config --fflags)
+FFLAGS := -fcray-pointer -fdefault-double-8 -fdefault-real-8 -Waliasing -ffree-line-length-none -fno-range-check
+FFLAGS += -I$(shell nc-config --includedir)
 FFLAGS += $(shell pkg-config --cflags-only-I mpich2-c)
-FFLAGS_OPT = -O2
-FFLAGS_REPRO = 
-FFLAGS_DEBUG = -O0 -g -W -fbounds-check 
+FFLAGS_OPT = -O3 
+FFLAGS_REPRO = -O2 -fbounds-check
+FFLAGS_DEBUG = -O0 -g -W -fbounds-check -fbacktrace
 FFLAGS_OPENMP = -fopenmp
 FFLAGS_VERBOSE = 
 
 CFLAGS := -D__IFC 
-CFLAGS += $(shell nc-config --cflags)
+CFLAGS += -I$(shell nc-config --includedir)
 CFLAGS += $(shell pkg-config --cflags-only-I mpich2-c)
 CFLAGS_OPT = -O2
 CFLAGS_OPENMP = -fopenmp
@@ -48,8 +49,7 @@ LDFLAGS_VERBOSE :=
 ifneq ($(REPRO),)
 CFLAGS += $(CFLAGS_REPRO)
 FFLAGS += $(FFLAGS_REPRO)
-endif
-ifneq ($(DEBUG),)
+else ifneq ($(DEBUG),)
 CFLAGS += $(CFLAGS_DEBUG)
 FFLAGS += $(FFLAGS_DEBUG)
 else ifneq ($(TEST),)

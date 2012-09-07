@@ -1,4 +1,4 @@
-# $Id: hsmput.mk,v 1.1.2.14.4.1 2013/03/27 23:46:06 afy Exp $
+# $Id: hsmput.mk,v 1.1.2.14.2.1 2013/03/27 23:43:58 afy Exp $
 # hsmget.mk: data transfer using three-level storage model
 
 #use csh, with no user .cshrc

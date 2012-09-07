@@ -1,5 +1,5 @@
 #
-# $Id: FREUtil.pm,v 18.0.2.10 2012/01/19 01:17:20 afy Exp $
+# $Id: FREUtil.pm,v 18.0.2.11.2.1 2012/07/30 20:00:41 arl Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: Utilities Module
 # ------------------------------------------------------------------------------
@@ -31,6 +31,7 @@
 # afy    Ver   9.00  Revive 'fileOwner' subroutine                  November 11
 # afy    Ver  10.00  Modify 'optionIntegersListParse' (messages)    January 12
 # afy    Ver  10.01  Modify 'optionValuesListParse' (messages)      January 12
+# afy    Ver  11.00  Add 'listDuplicates' subroutine                June 12
 # ------------------------------------------------------------------------------
 # Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2000-2012
 # Designed and written by V. Balaji, Amy Langenhorst and Aleksey Yakovlev
@@ -308,56 +309,6 @@ sub getppNode {
    }  
 }  
 
-#find the appropriate diag file corresponding the the component
-sub diagfile { 
-   my $ppcNode = $_[0];
-   my $freq = $_[1];
-   my $src = $_[2];
-   my $diag_source = ""; 
-#STATIC  
-#TIMESERIES - ANNUAL or SEASONAL
-   if ($src eq "annual" or $src eq "seasonal") {
-   my @monthnodes = $ppcNode->findnodes('timeSeries[@freq="monthly"]');
-   if ( scalar @monthnodes ) {
-     my $monthnode = $ppcNode->findnodes('timeSeries[@freq="monthly"]')->get_node(1);
-     $diag_source = $monthnode->getAttribute('@source');
-   }  
-   if ( "$diag_source" eq "" ) { $diag_source = $_[0]->findvalue('../@source'); }
-   if( "$diag_source" eq "") { $diag_source = $::component."_month"; }
-   }
-   
-#TIMESERIES - from smaller timeSeries
-   if ($src ne "seasonal"  and $src ne "annual" ) {
-   my @nodes = $ppcNode->findnodes("timeSeries[\@freq='$freq']");
-   if ( scalar @nodes ) {                                                                              
-      my $node = $ppcNode->findnodes("timeSeries[\@freq='$freq']")->get_node(1);
-      $diag_source = $node->getAttribute('@source');                                                    
-   }
-   if ( "$diag_source" eq "" ) { $diag_source = $_[0]->findvalue('../@source'); }
-   if( "$diag_source" eq "") { $diag_source = $::component."_month"; }
-   }  
-   return $diag_source;
-}
-
-sub execute($$)
-# ------ arguments: $host $command
-{
-  my ($h, $c) = @_;
-  $/ = "";
-  chomp(my $platform = qx(/home/gfdl/bin/gfdl_platform));
-  if ($platform eq 'desktop')
-  {
-    # ----------------------------- gfdl workstation
-    my $qloginHome = '/home/gfdl/qlogin'; 
-    return system("$qloginHome/bin/hpcs_ssh_init; $qloginHome/bin/hpcs_ssh '$h' '$c'");
-  }
-  else
-  {
-    # ----------------------------- other hosts
-    return system("$c");
-  }   
-}
-
 sub cleanstr
 # ------ clean up a string that should be space delimited tokens
 {
@@ -486,6 +437,15 @@ sub listUnique(@)
   my @result = ();
   foreach my $e (@_) {push @result, $e unless grep($_ eq $e, @result)}
   return @result;
+}
+
+sub listDuplicates(@)
+# ------ arguments: @list
+# ------ return the all the duplicates found in the argument @list
+{
+  my @result = ();
+  foreach my $e (@_) {push @result, $e if grep($_ eq $e, @_) > 1}
+  return FREUtil::listUnique(@result);
 }
 
 sub fileOwner($)

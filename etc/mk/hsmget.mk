@@ -1,9 +1,14 @@
 # -*- Makefile -*-
-# $Id: hsmget.mk,v 1.1.2.1 2012/04/04 17:32:13 afy Exp $
+# $Id: hsmget.mk,v 1.1.2.2 2012/09/27 15:36:46 afy Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: Common Makefile for the HSM Data-Pulling Tool (hsmget)
 # ------------------------------------------------------------------------------
 # afy    Ver   1.00  Initial version (copied from NCRC and split)   April 12
+# afy    Ver   2.00  Replace variable uuid => ptmptmp               September 12
+# afy    Ver   2.01  Add variables FINALCOPY/{TAR,CPO}COPY_DIRECT   September 12
+# afy    Ver   2.02  Add variables SUM_TARGET_DIR/TOUCH_MTIME       September 12
+# afy    Ver   2.03  Add variables MSG_PTMP/MSG                     September 12
+# afy    Ver   2.05  Modify all the recipes using above variables   September 12
 # ------------------------------------------------------------------------------
 # Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2000-2012
 # Designed and written by V. Balaji, Amy Langenhorst and Aleksey Yakovlev
@@ -23,8 +28,8 @@ check =
 # commands: these are all the external dependencies
 commands :=
 
-# random string for names, different for each invocation of hsmget.mk
-uuid := $(shell uuidgen)
+# temporary directory, different for each invocation of hsmget.mk
+ptmptmp := $(PTMPROOT)/tmp/$(shell uuidgen)
 
 include $(FRE_COMMANDS_HOME)/site/$(FRE_SYSTEM_SITE)/hsmget.inc
 
@@ -39,6 +44,14 @@ what:
 # list commands
 which:
 	@echo Command paths: $(shell which $(commands))
+
+FINALCOPY = $(MKDIR) $(PTMPROOT)/$* && (set nonomatch; $(RM) $(PTMPROOT)/$*/*) && $(MV) $(ptmptmp)/* $(PTMPROOT)/$*
+TARCOPY_DIRECT = $(MKDIR) $(ptmptmp) && (cd $(ptmptmp); $(UNTAR) $<) && $(FINALCOPY) && $(RM) $(ptmptmp)
+CPOCOPY_DIRECT = $(MKDIR) $(ptmptmp) && (cd $(ptmptmp); $(UNCPO) $<) && $(FINALCOPY) && $(RM) $(ptmptmp)
+SUM_TARGET_DIR = cd $(PTMPROOT)/$* && $(SUM) `$(FIND) . $(FINDFLAGS)` > $@
+TOUCH_MTIME = touch -m -r $< $@
+MSG_PTMP = echo Created $(PTMPROOT)/$* from $<
+MSG = echo Created $@ from $<
 
 # get remote file
 ifneq ($(force),)
@@ -67,54 +80,41 @@ $(PTMPROOT)/%.ok: $(ARCHROOT)/%
 ifneq ($(check),)
 	-test -f $< && cd $(@D) && $(SUM) $(*F) > $@ && cd $(<D) && $(CHECK) $@ || \
 	 test -d $< && cd $(PTMPROOT)/$* && $(SUM) `$(FIND) . $(FINDFLAGS)` > $@ && cd $< && $(CHECK) $@
-else
-	touch $@
 endif
-	@echo Created $(PTMPROOT)/$* from $<
+	$(TOUCH_MTIME)
+	@$(MSG_PTMP)
 
 $(PTMPROOT)/%.ok: $(ARCHROOT)/%.tar
-	rm -rf $(PTMPROOT)/$*
-	@$(MKDIR) $(PTMPROOT)/$* $(PTMPROOT)/tmp/$(uuid)
-	cd $(PTMPROOT)/tmp/$(uuid) && $(TAR) $< && mv -f $(PTMPROOT)/tmp/$(uuid)/* $(PTMPROOT)/$* && rm -rf $(PTMPROOT)/tmp/$(uuid)
+	$(TARCOPY_DIRECT)
 ifneq ($(check),)
-	cd $(PTMPROOT)/$* && $(SUM) `$(FIND) . -type f` > $@
-else
-	touch $@
+	$(SUM_TARGET_DIR)
 endif
-	@echo Created $(PTMPROOT)/$* from $<
+	$(TOUCH_MTIME)
+	@$(MSG_PTMP)
 
 $(PTMPROOT)/%.ok: $(ARCHROOT)/%.nc.tar
-	rm -rf $(PTMPROOT)/$*
-	@$(MKDIR) $(PTMPROOT)/$* $(PTMPROOT)/tmp/$(uuid)
-	cd $(PTMPROOT)/tmp/$(uuid) && $(TAR) $< && mv -f $(PTMPROOT)/tmp/$(uuid)/* $(PTMPROOT)/$* && rm -rf $(PTMPROOT)/tmp/$(uuid)
+	$(TARCOPY_DIRECT)
 ifneq ($(check),)
-	cd $(PTMPROOT)/$* && $(SUM) `$(FIND) . -type f` > $@
-else
-	touch $@
+	$(SUM_TARGET_DIR)
 endif
-	@echo Created $(PTMPROOT)/$* from $<
+	$(TOUCH_MTIME)
+	@$(MSG_PTMP)
 
 $(PTMPROOT)/%.ok: $(ARCHROOT)/%.cpio
-	rm -rf $(PTMPROOT)/$*
-	@$(MKDIR) $(PTMPROOT)/$* $(PTMPROOT)/tmp/$(uuid)
-	cd $(PTMPROOT)/tmp/$(uuid) && $(CPIO) $< && mv -f $(PTMPROOT)/tmp/$(uuid)/* $(PTMPROOT)/$* && rm -rf $(PTMPROOT)/tmp/$(uuid)
+	$(CPOCOPY_DIRECT)
 ifneq ($(check),)
-	cd $(PTMPROOT)/$* && $(SUM) `$(FIND) . -type f` > $@
-else
-	touch $@
+	$(SUM_TARGET_DIR)
 endif
-	@echo Created $(PTMPROOT)/$* from $<
+	$(TOUCH_MTIME)
+	@$(MSG_PTMP)
 
 $(PTMPROOT)/%.ok: $(ARCHROOT)/%.nc.cpio
-	rm -rf $(PTMPROOT)/$*
-	@$(MKDIR) $(PTMPROOT)/$* $(PTMPROOT)/tmp/$(uuid)
-	cd $(PTMPROOT)/tmp/$(uuid) && $(CPIO) $< && mv -f $(PTMPROOT)/tmp/$(uuid)/* $(PTMPROOT)/$* && rm -rf $(PTMPROOT)/tmp/$(uuid)
+	$(CPOCOPY_DIRECT)
 ifneq ($(check),)
-	cd $(PTMPROOT)/$* && $(SUM) `$(FIND) . -type f` > $@
-else
-	touch $@
+	$(SUM_TARGET_DIR)
 endif
-	@echo Created $(PTMPROOT)/$* from $<
+	$(TOUCH_MTIME)
+	@$(MSG_PTMP)
 
 # moving from PTMP to WORK
 $(WORKROOT)/%: $(PTMPROOT)/%
@@ -125,7 +125,7 @@ else
 	ln -f $< $@ || $(LOCALCP) $< $@
 endif
 	chmod a-w $<
-	@echo Created $@ from $<
+	@$(MSG)
 
 # the dot variables
 .LOW_RESOLUTION_TIME: $(WORKROOT)/% $(PTMPROOT)/%

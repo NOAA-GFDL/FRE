@@ -1,5 +1,5 @@
 #
-# $Id: FRE.pm,v 18.0.2.19 2012/04/24 23:56:21 afy Exp $
+# $Id: FRE.pm,v 18.0.2.20 2012/07/27 16:44:16 afy Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: Main Library Module
 # ------------------------------------------------------------------------------
@@ -41,6 +41,8 @@
 # afy    Ver  17.00  Modify 'new' (FREPlatforms/FREProperties)      January 12
 # afy    Ver  18.00  Modify 'new' (process option --project)        January 12
 # afy    Ver  19.00  Modify 'propertyParameterized' subroutine      April 12
+# afy    Ver  20.00  Modify 'new' (simplify uniqueness test)        July 12
+# afy    Ver  20.01  Modify 'new' (don't use the FRETrace module)   July 12
 # ------------------------------------------------------------------------------
 # Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2000-2012
 # Designed and written by V. Balaji, Amy Langenhorst and Aleksey Yakovlev
@@ -59,7 +61,6 @@ use FREMsg();
 use FREPlatforms();
 use FREProperties();
 use FRETargets();
-use FRETrace();
 use FREUtil();
 
 # //////////////////////////////////////////////////////////////////////////////
@@ -346,23 +347,18 @@ sub new($$%)
 		      # -------------------------------------------------------------------------- read setup-based info (for compatibility only)
 		      $fre->{getFmsData} = $infoGet->($fre, 'setup/getFmsData', $o{verbose});
 		      $fre->{fmsRelease} = $infoGet->($fre, 'setup/fmsRelease', $o{verbose});
-		      # -------------------------------------------------------------------- read experiment nodes, save their names and nodes
-		      my (%counter, %expNode, $expNames);
-		      foreach my $node ($rootNode->findnodes('experiment'))
-		      {
-			my $name = $fre->nodeValue($node, '@name') || $fre->nodeValue($node, '@label');
-			$counter{$name}++;
-			$expNode{$name} = $node;
-			$expNames .= ' ' if $expNames;
-			$expNames .= $name;
-		      }
-		      # ----------------------------------------------------------------------- check experiment names uniqueness
-		      my @expNamesDuplicated = grep($counter{$_} > 1, keys(%counter));
+		      # -------------------------------------------------------------------------------- read experiment nodes and names
+		      my @expNodes = $rootNode->findnodes('experiment');
+		      my @expNames = map($fre->nodeValue($_, '@name') || $fre->nodeValue($_, '@label'), @expNodes);
+		      # ------------------------------------------------------------------------- check experiment names uniqueness
+		      my @expNamesDuplicated = FREUtil::listDuplicates(@expNames);
 		      if (scalar(@expNamesDuplicated) == 0)
 		      {
-			# ------------------------------------------------ save experiment names and nodes in the object
+			# ----------------------------------------------------- save experiment names and nodes in the object
+			my %expNode = ();
+			for (my $i = 0; $i < scalar(@expNames); $i++) {$expNode{$expNames[$i]} = $expNodes[$i]}
 			$fre->{expNodes} = \%expNode;
-			$fre->{expNames} = $expNames;
+			$fre->{expNames} = join ' ', @expNames;
 			# -------------------------------------------------------------------- print what we got
 			$fre->out
 			(
@@ -373,18 +369,13 @@ sub new($$%)
 			  "project        = $fre->{project}", 
 			  "mkmfTemplate   = $fre->{mkmfTemplate}"
 			);
-			# ----------------------------------------------------------- call tracing
-			if ($fre->property('FRE.call.trace'))
-			{
-			  FRETrace::insert($siteDir, $caller, $xmlfileAbsPath, \%o);
-			}
 			# ------------------------------------------------- normal return
 			return $fre;
 		      }
 		      else
 		      {
-			my $expNamesDuplicated = join ' ', @expNamesDuplicated;
-			FREMsg::out($o{verbose}, FREMsg::FATAL, "Experiment names aren't unique: $expNamesDuplicated");
+			my $expNamesDuplicated = join ', ', @expNamesDuplicated;
+			FREMsg::out($o{verbose}, FREMsg::FATAL, "Experiment names aren't unique: '$expNamesDuplicated'");
 			return '';
 		      }
 		    }

@@ -95,11 +95,8 @@ EOF
    echo "WARNING: X509_USER_PROXY file $X509_USER_PROXY does not exist... \
            certificate-based transfers may not work."
 
-  test $?GLOBUS_LOCATION -eq 0 && setenv GLOBUS_LOCATION /sw/xt6/globus/default
-  source $GLOBUS_LOCATION/etc/globus-user-env.csh 
-
 #make sure FRE is loaded
-  test $?MODULESHOME -eq 0 && setenv MODULESHOME /opt/modules/3.2.6.5
+  test $?MODULESHOME -eq 0 && setenv MODULESHOME /opt/modules/3.2.6.6
   source $MODULESHOME/init/csh
   if ( ! $?FRE_COMMANDS_HOME ) then
      module rm fre
@@ -110,6 +107,15 @@ EOF
         module load fre
      endif
   endif 
+
+#make sure globus is loaded
+  set globusavail = `$MODULESHOME/bin/modulecmd tcsh avail globus |& grep -c 'globus/'`
+  if ( $globusavail ) then
+    module load globus
+  else
+    test $?GLOBUS_LOCATION -eq 0 && setenv GLOBUS_LOCATION /sw/xt6/globus/default
+    source $GLOBUS_LOCATION/etc/globus-user-env.csh 
+  endif
 
 #parse paths
   set firstchar = `echo $file | cut -c1`

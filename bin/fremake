@@ -1,7 +1,7 @@
 #!/usr/bin/perl
 # -*- cperl -*-
 #
-# $Id: fremake,v 18.0.2.24.2.1 2012/12/28 17:41:33 afy Exp $
+# $Id: fremake,v 18.0.2.27.4.1 2012/12/28 17:35:28 afy Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: Program to Create a Script to Compile a Model
 # ------------------------------------------------------------------------------
@@ -68,7 +68,11 @@
 # afy    Ver  23.01  Modify processCheckoutClean (no tmpDir)        March 12
 # afy    Ver  23.02  Modify processCompileClean (no tmpDir)         March 12
 # afy    Ver  24.00  Cosmetics in messages                          April 12
-# afy -------------- Branch 18.0.2.24.2 --------------------------- December 12
+# afy    Ver  25.00  Use new module FRETemplate ('fre' argument)    July 12
+# afy    Ver  26.00  Modify processCheckout (sources w/o checkout)  July 12
+# afy    Ver  26.01  Modify processCompileExecuteOrSubmit (msg)     July 12
+# afy    Ver  27.00  Modify processCompileCleanExecDir (no tcsh)    August 12
+# afy -------------- Branch 18.0.2.27.4 --------------------------- December 12
 # afy    Ver   1.00  Use new module FRETemplate (account, dualFlag) December 12
 # ------------------------------------------------------------------------------
 # Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2000-2012
@@ -99,7 +103,7 @@ use FREXML();
 
   package fremake;
 
-  use constant VERSION => '$Id: fremake,v 18.0.2.24.2.1 2012/12/28 17:41:33 afy Exp $';
+  use constant VERSION => '$Id: fremake,v 18.0.2.27.4.1 2012/12/28 17:35:28 afy Exp $';
 
   use constant OPTLIST =>
   (
@@ -322,7 +326,7 @@ use FREXML();
     push @msg, "Please consider running the fremake on the parent experiment '" . $expParent->name() . "'." if $expParent;
     $fre->out(FREMsg::FATAL, @msg);
   }
-
+  
   sub processCheckoutClean($)
   # ------ arguments: $exp
   {
@@ -395,10 +399,10 @@ use FREXML();
   {
     my ($z, $r, %o) = @_;
     my $scoScript = fremake::processCheckoutScriptCreate($z, $r);
-    my ($fre, $scoScriptName) = ($z->fre(), fremake::checkoutScriptName($z)); 
+    my ($fre, $expName, $scoScriptName) = ($z->fre(), $z->name(), fremake::checkoutScriptName($z)); 
     if ($scoScript)
     {
-      FRETemplate::setVersionInfo(\$scoScript, $z, $0, %o);
+      FRETemplate::setVersionInfo($fre, \$scoScript, $0, $expName, %o);
       if (open my $scoScriptHandle, '>', $scoScriptName)
       {
 	print {$scoScriptHandle} $scoScript;
@@ -473,41 +477,72 @@ use FREXML();
       if (scalar(keys %{$ref}) > 0)
       {
 	my $srcDir = $z->srcDir();
-	if (-d $srcDir)
+	if ($fre->property('FRE.versioncontrol.enabled'))
 	{
-          if ($o{'force-checkout'})
+	  if (-d $srcDir)
 	  {
-	    if (fremake::processCheckoutClean($z))
+	    if (-r $srcDir)
 	    {
-	      if (FREUtil::createDir($srcDir))
+              if ($o{'force-checkout'})
 	      {
-		return fremake::processCheckoutExistingCleanDir($z, $ref, %o);
+		if (fremake::processCheckoutClean($z))
+		{
+		  if (FREUtil::createDir($srcDir))
+		  {
+		    return fremake::processCheckoutExistingCleanDir($z, $ref, %o);
+		  }
+		  else
+		  {
+		    $fre->out(FREMsg::FATAL, "Unable to create the source directory '$srcDir'!");
+		    return (0, FREDefaults::STATUS_FS_GENERIC_PROBLEM);
+		  }
+		}
+		else
+		{
+		  return (0, FREDefaults::STATUS_FS_GENERIC_PROBLEM);
+		}
 	      }
 	      else
 	      {
-		$fre->out(FREMsg::FATAL, "Unable to create the source directory '$srcDir'!");
-		return (0, FREDefaults::STATUS_FS_GENERIC_PROBLEM);
+		return fremake::processCheckoutExistingDir($z, $ref, %o); 
 	      }
+            }
+	    else
+	    {
+	      $fre->out(FREMsg::FATAL, "The source directory '$srcDir' is not readable!");
+	      return (0, FREDefaults::STATUS_FS_GENERIC_PROBLEM);
+	    }
+	  }
+	  elsif (FREUtil::createDir($srcDir))
+	  {
+            return fremake::processCheckoutExistingCleanDir($z, $ref, %o);
+	  }
+	  else
+	  {
+	    $fre->out(FREMsg::FATAL, "Unable to create the source directory '$srcDir'!");
+	    return (0, FREDefaults::STATUS_FS_GENERIC_PROBLEM);
+	  }
+	}
+	else
+	{
+	  if (-d $srcDir)
+	  {
+	    if (-r $srcDir)
+	    {
+	      return (1, FREDefaults::STATUS_OK);
 	    }
 	    else
 	    {
+	      $fre->out(FREMsg::FATAL, "The source directory '$srcDir' is not readable!");
 	      return (0, FREDefaults::STATUS_FS_GENERIC_PROBLEM);
 	    }
 	  }
 	  else
 	  {
-	    return fremake::processCheckoutExistingDir($z, $ref, %o); 
+	    $fre->out(FREMsg::FATAL, "The source directory '$srcDir' doesn't exist!");
+	    return (0, FREDefaults::STATUS_FRE_SOURCE_GENERIC_PROBLEM);
 	  }
-	}
-	elsif (FREUtil::createDir($srcDir))
-	{
-          return fremake::processCheckoutExistingCleanDir($z, $ref, %o);
-	}
-	else
-	{
-	  $fre->out(FREMsg::FATAL, "Unable to create the source directory '$srcDir'!");
-	  return (0, FREDefaults::STATUS_FS_GENERIC_PROBLEM);
-	}
+        }
       }
       else
       {
@@ -517,7 +552,7 @@ use FREXML();
     }
     else
     {
-      $fre->out(FREMsg::FATAL, "Unable to extract checkout instructions from the XML file!");
+      $fre->out(FREMsg::FATAL, "Unable to extract information about sources from the XML file!");
       return (0, FREDefaults::STATUS_FRE_SOURCE_GENERIC_PROBLEM);
     }
   }
@@ -529,7 +564,7 @@ use FREXML();
     my ($execDir, $fre) = ($z->execDir(), $z->fre());
     if (-f "$execDir/Makefile" && -r "$execDir/Makefile")
     {
-      qx(tcsh -c "cd $execDir; make clean" >/dev/null 2>&1);
+      qx(cd $execDir; make clean);
       if (!$?)
       {
         $fre->out(FREMsg::WARNING, "The executable directory '$execDir' has been cleaned by the 'make clean'");
@@ -836,8 +871,7 @@ use FREXML();
       }
       else
       {
-        $fre->out(FREMsg::FATAL, "The compile script '$cmpScriptName' failed! ($res)");
-	$fre->out(FREMsg::FATAL, "Please see the logfile '$cmpScriptNameOut'...");
+        $fre->out(FREMsg::FATAL, "The compile script '$cmpScriptName' failed! ($res)", "Please see the logfile '$cmpScriptNameOut'...");
 	return (0, FREDefaults::STATUS_FRE_COMPILE_PROBLEM);
       }
     }
@@ -846,15 +880,15 @@ use FREXML();
       FREXML::save($cmpVerifyName, $r);
       if ($fre->property('FRE.scheduler.enabled'))
       {
-        my $submit = $fre->property('FRE.scheduler.submit.command');
-        $fre->out(FREMsg::NOTE, "Executing '$submit $cmpScriptName'...");
-        print qx($submit $cmpScriptName);
+        my $submitCommand = $fre->property('FRE.scheduler.submit.command') . ' ' . $cmpScriptName;
+        $fre->out(FREMsg::NOTE, "Executing '$submitCommand'...");
+        print qx($submitCommand);
         return (1, FREDefaults::STATUS_OK);
       }
       else
       {
         $fre->out(FREMsg::WARNING, "The compile script '$cmpScriptName' can't be submitted as a batch job on this site");
-        $fre->out(FREMsg::NOTE, "The compile script '$cmpScriptName' is ready");
+        print "The compile script '$cmpScriptName' is ready\n";
         return (1, FREDefaults::STATUS_OK);
       }
     }
@@ -863,13 +897,13 @@ use FREXML();
       FREXML::save($cmpVerifyName, $r);
       if ($fre->property('FRE.scheduler.enabled'))
       {
-        my $submit = $fre->property('FRE.scheduler.submit.command');
-        print "TO SUBMIT => $submit $cmpScriptName\n";
+        my $submitCommand = $fre->property('FRE.scheduler.submit.command') . ' ' . $cmpScriptName;
+        print "TO SUBMIT => $submitCommand\n";
         return (1, FREDefaults::STATUS_OK);
       }
       else
       {
-        $fre->out(FREMsg::NOTE, "The compile script '$cmpScriptName' is ready");
+        print "The compile script '$cmpScriptName' is ready\n";
         return (1, FREDefaults::STATUS_OK);
       }
     }
@@ -881,18 +915,18 @@ use FREXML();
   {
     my ($z, $r, %o) = @_;
     my ($cmpScript, $envScript) = fremake::processCompileScriptCreate($z, $r, %o);
-    my ($fre, $envScriptName, $cmpScriptName) = ($z->fre(), fremake::envScriptName($z), fremake::compileScriptName($z));
+    my ($fre, $expName, $envScriptName, $cmpScriptName) = ($z->fre(), $z->name(), fremake::envScriptName($z), fremake::compileScriptName($z));
     if ($cmpScript)
     {
 
-      FRETemplate::setVersionInfo(\$envScript, $z, $0, %o);
-      FRETemplate::setSchedulerMakeVerbose(\$envScript, $z);
+      FRETemplate::setVersionInfo($fre, \$envScript, $0, $expName, %o);
+      FRETemplate::setSchedulerMakeVerbose($fre, \$envScript);
 
-      FRETemplate::setSchedulerAccount(\$cmpScript, $z, undef);
-      FRETemplate::setSchedulerResources(\$cmpScript, $z, 'make', $o{ncores}, $o{walltime} * 60, undef, undef, undef);
-      FRETemplate::setSchedulerNames(\$cmpScript, $z, File::Basename::basename($cmpScriptName), $z->execDir());
-      FRETemplate::setVersionInfo(\$cmpScript, $z, $0, %o);
-      FRETemplate::setSchedulerMakeVerbose(\$cmpScript, $z);
+      FRETemplate::setSchedulerAccount($fre, \$cmpScript, undef);
+      FRETemplate::setSchedulerResources($fre, \$cmpScript, 'make', $o{ncores}, $o{walltime} * 60, undef, undef, undef);
+      FRETemplate::setSchedulerNames($fre, \$cmpScript, File::Basename::basename($cmpScriptName), $z->execDir());
+      FRETemplate::setVersionInfo($fre, \$cmpScript, $0, $expName, %o);
+      FRETemplate::setSchedulerMakeVerbose($fre, \$cmpScript);
 
       if (open my $envScriptHandle, '>', $envScriptName and open my $cmpScriptHandle, '>', $cmpScriptName)
       {
@@ -1089,6 +1123,14 @@ use FREXML();
     my $platformSite = $fre->platformSite();
     $fre->out(FREMsg::FATAL, "You are not supposed to call this tool on the '$platformSite' site");
     exit FREDefaults::STATUS_FRE_GENERIC_PROBLEM;
+  }
+  
+  unless ($fre->property('FRE.versioncontrol.enabled'))
+  {
+    if ($opt{'force-checkout'})
+    {
+      $fre->out(FREMsg::WARNING, "The --force-checkout option isn't supported on this site");
+    }
   }
   
   my @exps = ();

@@ -1,13 +1,15 @@
 #!/usr/bin/perl
 # -*- cperl -*-
 #
-# $Id: expand_variables,v 1.1.2.1 2011/06/24 22:51:28 afy Exp $
+# $Id: expand_variables,v 1.1.2.3 2012/08/07 23:48:26 afy Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: Program to Expand Variables in a Text File
 # ------------------------------------------------------------------------------
 # afy    Ver   1.00  Initial version                                June 11
+# afy    Ver   2.00  Don't fail on incorrect lines - ignore them    August 12
+# afy    Ver   3.00  Ignore lines with length <= 1 only             August 12
 # ------------------------------------------------------------------------------
-# Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2000-2011
+# Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2000-2012
 # Designed and written by V. Balaji, Amy Langenhorst and Aleksey Yakovlev
 #
 
@@ -25,7 +27,7 @@ use Getopt::Long(':config', 'no_ignore_case', 'no_auto_abbrev');
 
   package expand_variables;
 
-  use constant VERSION => '$Id: expand_variables,v 1.1.2.1 2011/06/24 22:51:28 afy Exp $';
+  use constant VERSION => '$Id: expand_variables,v 1.1.2.3 2012/08/07 23:48:26 afy Exp $';
 
   use constant OPTLIST =>
   (
@@ -79,7 +81,7 @@ use Getopt::Long(':config', 'no_ignore_case', 'no_auto_abbrev');
     my ($f, $r, $v) = @_;
     while (chomp(my $line = <$f>))
     {
-      if ($line)
+      if (length($line) > 1)
       {
 	if ($line =~ m/^(\w+)(?:\t|=)(.*)$/)
 	{
@@ -89,7 +91,7 @@ use Getopt::Long(':config', 'no_ignore_case', 'no_auto_abbrev');
 	else
 	{
 	  print STDERR "Error in line $. ($line)\n";
-          return 0;	
+	  return 0;
 	}
       }
     }

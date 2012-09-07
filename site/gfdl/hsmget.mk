@@ -1,45 +1,34 @@
 # -*- Makefile -*-
-# $Id: hsmget.mk,v 1.1.4.15.2.1 2013/03/27 23:23:08 afy Exp $
-# HSM.mk: data transfer using three-level storage model
+# $Id: hsmget.mk,v 1.1.2.5.2.1 2013/03/27 23:26:50 afy Exp $
+# data transfer using three-level storage model
 
-#use csh, with no user .cshrc
+# use csh, with no user .cshrc
 SHELL = /bin/csh -f
 
-#verbose flag: set to -v to get verbose commans
+# verbose flag: set to -v to get verbose commans
 verbose =
-#timer off by default
+# timer off by default
 time =
-#flag to force remote retrieval, non-empty string means ON
+# flag to force remote retrieval, non-empty string means ON
 force =
-#flag to turn on checksums
+# flag to turn on checksums
 check =
 
-#random string for names, different for each invocation of hsmget.mk
+# random string for names, different for each invocation of hsmget.mk
 uuid := $(shell uuidgen)
 ptmptmp := $(PTMPROOT)/tmp/$(uuid)
 
-#filesystem where arch and ptmp reside, assume /arch and /ptmp|/work
-archfs := $(shell echo $(ARCHROOT) | cut -c2-5)
-ptmpfs := $(shell echo $(PTMPROOT) | cut -c2-5)
-ifeq ($(archfs),arch)
-ifeq ($(ptmpfs),ptmp)
-#GFDL host for data transfer optimization
-dtn := cdtn.lb.princeton.rdhpcs.noaa.gov
-dtn := $(shell host $(dtn) | head -n 1 | cut -f4 -d\  )
-# delay is used at GFDL to get over the NFS file-cache problem
-DELAY := && sleep 70
-else ifeq ($(ptmpfs),work)
-#GFDL host for data transfer optimization
-dtn := cdtn.lb.princeton.rdhpcs.noaa.gov
-dtn := $(shell host $(dtn) | head -n 1 | cut -f4 -d\  )
-# delay is used at GFDL to get over the NFS file-cache problem
-DELAY := && sleep 70
-endif
-endif
+# if the ptmp filesystem = NFS, then copy/move/remove ptmp data on a DTN
+ptmpfstype := $(shell df -PT /$(shell echo $(PTMPROOT) | cut -d/ -f2) | tail -n 1 | cut -d' ' -f2)
 
-ifdef dtn
-checkdtn := $(shell ssh $(dtn) pwd\; hostname)
-# dtn is defined at this point if writing from /archive to /ptmp or /work
+ifeq ($(ptmpfstype),nfs)
+  # GFDL host for data transfer optimization
+  balancer := cdtn.lb.princeton.rdhpcs.noaa.gov
+  dtn := $(shell host $(balancer) | head -n 1 | cut -d' ' -f4)
+  # delay is used at GFDL to get over the NFS file-cache problem
+  DELAY := sleep 70
+else
+  DELAY := sleep 0
 endif
 
 # commands: these are all the external dependencies
@@ -47,10 +36,10 @@ endif
 # should come from FRE *site* configuration
 commands :=
 ifneq ($(time),)
-#timer
-TIMECMD := /usr/bin/time
-commands += $(firstword $(TIMECMD))
+  TIMECMD := /usr/bin/time
+  commands += $(firstword $(TIMECMD))
 endif
+
 # remote copy
 # TODO: rename as REMOTEGET or something...
 # in hpcs/hsmget.mk, REMOTECP is arch->ptmp, LOCALCP is ptmp->work
@@ -62,93 +51,89 @@ LOCALID = # cmrs:
 GCP ?= gcp
 GCPOPTS := # --disable-checksum
 ifeq ($(verbose),)
-REMOTECP ?= $(GCP) $(GCPOPTS) --quiet
+  REMOTECP ?= $(GCP) $(GCPOPTS) --quiet
 else
-REMOTECP ?= $(GCP) $(GCPOPTS) --verbose
+  REMOTECP ?= $(GCP) $(GCPOPTS) --verbose
 endif
 commands += $(firstword $(REMOTECP))
 ifneq ($(time),)
-#timer
-REMOTECP := $(TIMECMD) -f "$(firstword $(REMOTECP)) took %e secs." $(REMOTECP)
+  REMOTECP := $(TIMECMD) -f "$(firstword $(REMOTECP)) took %e secs." $(REMOTECP)
 endif
-# use localcp between LTFS and FS
+
+# local copy
 ifeq ($(verbose),)
-LOCALCP ?= $(GCP) $(GCPOPTS) --quiet
+  LOCALCP ?= $(GCP) $(GCPOPTS) --quiet
 else
-LOCALCP ?= $(GCP) $(GCPOPTS) --verbose
+  LOCALCP ?= $(GCP) $(GCPOPTS) --verbose
 endif
 commands += $(firstword $(LOCALCP))
 ifneq ($(time),)
-#timer
-LOCALCP := $(TIMECMD) -f "$(firstword $(LOCALCP)) took %e secs." $(LOCALCP)
+  LOCALCP := $(TIMECMD) -f "$(firstword $(LOCALCP)) took %e secs." $(LOCALCP)
 endif
+
 # get from tape
 DEEPGET := dmget
 commands += $(firstword $(DEEPGET))
 ifneq ($(time),)
-#timer
-DEEPGET := $(TIMECMD) -f "$(firstword $(DEEPGET)) took %e secs." $(DEEPGET)
+  DEEPGET := $(TIMECMD) -f "$(firstword $(DEEPGET)) took %e secs." $(DEEPGET)
 endif
+
 # resolve symbolic links
 RESOLVE = readlink -f
 commands += $(firstword $(RESOLVE))
 ifneq ($(time),)
-#timer
-RESOLVE := $(TIMECMD) -f "$(firstword $(RESOLVE)) took %e secs." $(RESOLVE)
+  RESOLVE := $(TIMECMD) -f "$(firstword $(RESOLVE)) took %e secs." $(RESOLVE)
 endif
-#checksum, written to ok file
+
+# checksum, written to ok file
 SUM := md5sum -b
 commands += $(firstword $(SUM))
-ifdef dtn
-SUM := ssh $(dtn) cd `pwd`\; $(SUM)
-endif
 ifneq ($(time),)
-#timer
-SUM := $(TIMECMD) -f "md5sum took %e secs." $(SUM)
+  SUM := $(TIMECMD) -f "md5sum took %e secs." $(SUM)
 endif
-#checksum, read from ok file
+
+# checksum, read from ok file
 CHECK := md5sum -c
 commands += $(firstword $(CHECK))
 ifneq ($(time),)
-#timer
-CHECK := $(TIMECMD) -f "$(firstword $(CHECK)) took %e secs." $(CHECK)
+  CHECK := $(TIMECMD) -f "$(firstword $(CHECK)) took %e secs." $(CHECK)
 endif
-#cpio
+
+# cpio
 #Balaji 2008-08-13, removed -mu, problem if extracted file is older than source
-CPIO := cpio -C 524288 $(verbose) -i -I
-commands += $(firstword $(CPIO))
-ifdef dtn
-CPIO := ssh $(dtn) cd `pwd`\; $(CPIO)
-endif
+CPO := cpio -C 524288 $(verbose) -i -I
+commands += $(firstword $(CPO))
 ifneq ($(time),)
-#timer
-CPIO := $(TIMECMD) -f "cpio took %e secs." $(CPIO)
+  CPO := $(TIMECMD) -f "cpio took %e secs." $(CPO)
 endif
-#tar
+
+# tar
 TAR := tar $(verbose) -b 1024 -xf
 commands += $(firstword $(TAR))
-ifdef dtn
-TAR := ssh $(dtn) cd `pwd`\; $(TAR)
-endif
 ifneq ($(time),)
-#timer
-TAR := $(TIMECMD) -f "tar took %e secs." $(TAR)
+  TAR := $(TIMECMD) -f "tar took %e secs." $(TAR)
 endif
-#mkdir
+
+# mkdir
 MKDIR = mkdir -p
 commands += $(firstword $(MKDIR))
-#find: one level only
+
+# find: one level only
 FIND = find -L
 FINDFLAGS = -maxdepth 1 -type f
 commands += $(firstword $(FIND))
-# rm and mv
-RM := rm
-MV := mv
-ifdef dtn
-RM := ssh $(dtn) $(RM)
-MV := ssh $(dtn) $(MV)
-endif
 
+# rm
+RM := rm -rf
+commands += $(firstword $(RM))
+
+# mv
+MV := mv -f
+commands += $(firstword $(MV))
+
+# ssh
+SSH := gsissh -oForwardX11=no
+commands += $(firstword $(SSH))
 
 # Directory trees in home, archive, ptmp, home follow identical
 # tree below the root directory, typically something like
@@ -158,18 +143,19 @@ endif
 # you can set these as environment variables or pass them to make:
 # e.g make ARCHROOT=/archive/foo -f hsmget.mk
 
-#first target
+# first target
 what:
 	@echo Using Makefile $(firstword $(MAKEFILE_LIST)) ...
-#	module list #can't run module from make! paths must be explicit
-	@echo ARCHROOT = $(ARCHROOT)
-	@echo PTMPROOT = $(PTMPROOT)
-	@echo WORKROOT = $(WORKROOT)
-	@echo ptmptmp = $(ptmptmp)
-	@echo dtn = $(dtn) archfs = $(archfs) ptmpfs = $(ptmpfs)
-	@echo $(checkdtn)
+	@echo "ARCHROOT   = $(ARCHROOT)"
+	@echo "PTMPROOT   = $(PTMPROOT)"
+	@echo "WORKROOT   = $(WORKROOT)"
+	@echo "ptmptmp    = $(ptmptmp)"
+	@echo "ptmpfstype = $(ptmpfstype)"
+	@echo "dtn        = $(dtn)"
+
 which:
 	@echo Command paths: $(shell which $(commands))
+
 # data movement: this is HSMget/put
 # for remote get you may need to preface target with $(REMOTEID)
 # the extra / after $(REMOTEID) is because hsmget starts from a relpath
@@ -187,118 +173,103 @@ endif
 # if not found look for .tar
 # if not found look for .nc.cpio
 # if not found look for .nc.tar
-#TODO: need to include .tar.gz?
+# TODO: need to include .tar.gz?
 
-#20090508: tar/cpio unpacking is now followed by touching an ok file
-#to ensure that the unpacking actually finished, the direct approach
-#had problems if you ^C'd in the middle of an untar...
+# 20090508: tar/cpio unpacking is now followed by touching an ok file
+# to ensure that the unpacking actually finished, the direct approach
+# had problems if you ^C'd in the middle of an untar...
+
+FINALCOPY = $(MKDIR) $(PTMPROOT)/$* && (set nonomatch; $(RM) $(PTMPROOT)/$*/*) && $(MV) $(ptmptmp)/* $(PTMPROOT)/$*
+
+TARCOPY_DIRECT = $(MKDIR) $(ptmptmp) && (cd $(ptmptmp); $(TAR) $<) && $(FINALCOPY) && $(RM) $(ptmptmp)
+TARCOPY_STAGED = $(MKDIR) $(ptmptmp) && $(LOCALCP) $< $(ptmptmp) && (cd $(ptmptmp); $(TAR) $(<F)) && $(RM) $(ptmptmp)/$(<F) && $(FINALCOPY) && $(RM) $(ptmptmp)
+
+CPOCOPY_DIRECT = $(MKDIR) $(ptmptmp) && (cd $(ptmptmp); $(CPO) $<) && $(FINALCOPY) && $(RM) $(ptmptmp)
+CPOCOPY_STAGED = $(MKDIR) $(ptmptmp) && $(LOCALCP) $< $(ptmptmp) && (cd $(ptmptmp); $(CPO) $(<F)) && $(RM) $(ptmptmp)/$(<F) && $(FINALCOPY) && $(RM) $(ptmptmp)
+
+CHKSUM = cd $(PTMPROOT)/$* && $(SUM) `$(FIND) . $(FINDFLAGS)`
+
 $(PTMPROOT)/%.ok: $(ARCHROOT)/%
-	@touch $@.LOCK
 	$(DEEPGET) $<
 	-test -f $< && $(MKDIR) $(@D) && $(LOCALCP) `$(RESOLVE) $<` $(@D) || \
-	 test -d $< && $(MKDIR) $(PTMPROOT)/$* && $(LOCALCP) `$(FIND) $< $(FINDFLAGS)` $(PTMPROOT)/$* $(DELAY)
-ifneq ($(check),)
+	 test -d $< && $(MKDIR) $(PTMPROOT)/$* && $(LOCALCP) `$(FIND) $< $(FINDFLAGS)` $(PTMPROOT)/$*
+	$(DELAY)
+  ifneq ($(check),)
 	-test -f $< && cd $(@D) && $(SUM) $(*F) > $@ && cd $(<D) && $(CHECK) $@ || \
-	test -d $< && cd $(PTMPROOT)/$* && $(SUM) `$(FIND) . $(FINDFLAGS)` > $@ && cd $< && $(CHECK) $@
-else
+	 test -d $< && cd $(PTMPROOT)/$* && $(SUM) `$(FIND) . $(FINDFLAGS)` > $@ && cd $< && $(CHECK) $@
+  else
 	touch $@
-endif
+  endif
 	echo Created $(PTMPROOT)/$* from $<
-	@$(RM) -f $@.LOCK
-$(PTMPROOT)/%.ok: $(ARCHROOT)/%.tar
-	@touch $@.LOCK
-	$(DEEPGET) $<
-	$(RM) -rf $(PTMPROOT)/$*
-	@$(MKDIR) $(PTMPROOT)/$* $(ptmptmp)
-# if dtn defined do everything on dtn servers
-ifdef dtn
-	cd $(ptmptmp) && $(TAR) $< && $(MV) -f $(ptmptmp)/* $(PTMPROOT)/$* && $(RM) -rf $(ptmptmp) $(DELAY)
-else
-	$(LOCALCP) $< $(ptmptmp)
-	cd $(ptmptmp) && $(TAR) $(<F) && $(RM) -f $(ptmptmp)/$(<F) && $(MV) -f $(ptmptmp)/* $(PTMPROOT)/$* && $(RM) -rf $(ptmptmp) $(DELAY)
-endif
-ifneq ($(check),)
-	cd $(PTMPROOT)/$* && $(SUM) `$(FIND) . -type f` > $@
-else
-	touch $@
-endif
-	@echo Created $(PTMPROOT)/$* from $<
-	@$(RM) -f $@.LOCK
-$(PTMPROOT)/%.ok: $(ARCHROOT)/%.nc.tar
-	@touch $@.LOCK
-	$(DEEPGET) $<
-	$(RM) -rf $(PTMPROOT)/$*
-	@$(MKDIR) $(PTMPROOT)/$* $(ptmptmp)
-# if dtn defined do everything on dtn servers
-ifdef dtn
-	cd $(ptmptmp) && $(TAR) $< && $(MV) -f $(ptmptmp)/* $(PTMPROOT)/$* && $(RM) -rf $(ptmptmp) $(DELAY)
-else
-	$(LOCALCP) $< $(ptmptmp)
-	cd $(ptmptmp) && $(TAR) $(<F) && $(RM) -f $(ptmptmp)/$(<F) && $(MV) -f $(ptmptmp)/* $(PTMPROOT)/$* && $(RM) -rf $(ptmptmp) $(DELAY)
-endif
-ifneq ($(check),)
-	cd $(PTMPROOT)/$* && $(SUM) `$(FIND) . -type f` > $@
-else
-	touch $@
-endif
-	@echo Created $(PTMPROOT)/$* from $<
-	@$(RM) -f $@.LOCK
-$(PTMPROOT)/%.ok: $(ARCHROOT)/%.cpio
-	@touch $@.LOCK
-	$(DEEPGET) $<
-	$(RM) -rf $(PTMPROOT)/$*
-	@$(MKDIR) $(PTMPROOT)/$* $(ptmptmp)
-# if dtn defined do everything on dtn servers
-ifdef dtn
-	cd $(ptmptmp) && $(CPIO) $< && $(MV) -f $(ptmptmp)/* $(PTMPROOT)/$* && $(RM) -rf $(ptmptmp) $(DELAY)
-else
-	$(LOCALCP) $< $(ptmptmp)
-	cd $(ptmptmp) && $(CPIO) $(<F) && $(RM) -f $(ptmptmp)/$(<F) && $(MV) -f $(ptmptmp)/* $(PTMPROOT)/$* && $(RM) -rf $(ptmptmp) $(DELAY)
-endif
-# 	test -d $@ && cd $@ && $(CPIO) $< || \
-# 	test -f $@ || $(MKDIR) $@ && cd $@ && $(CPIO) $<
-ifneq ($(check),)
-	cd $(PTMPROOT)/$* && $(SUM) `$(FIND) . -type f` > $@
-else
-	touch $@
-endif
-	@echo Created $(PTMPROOT)/$* from $<
-	@$(RM) -f $@.LOCK
-$(PTMPROOT)/%.ok: $(ARCHROOT)/%.nc.cpio
-	@touch $@.LOCK
-	$(DEEPGET) $<
-	$(RM) -rf $(PTMPROOT)/$*
-	@$(MKDIR) $(PTMPROOT)/$* $(ptmptmp)
-# if dtn defined do everything on dtn servers
-ifdef dtn
-	cd $(ptmptmp) && $(CPIO) $< && $(MV) -f $(ptmptmp)/* $(PTMPROOT)/$* && $(RM) -rf $(ptmptmp) $(DELAY)
-else
-	$(LOCALCP) $< $(ptmptmp)
-	cd $(ptmptmp) && $(CPIO) $(<F) && $(RM) -f $(ptmptmp)/$(<F) && $(MV) -f $(ptmptmp)/* $(PTMPROOT)/$* && $(RM) -rf $(ptmptmp) $(DELAY)
-endif
-# 	test -d $@ && cd $@ && $(CPIO) $< || \
-# 	test -f $@ || $(MKDIR) $@ && cd $@ && $(CPIO) $<
-ifneq ($(check),)
-	cd $(PTMPROOT)/$* && $(SUM) `$(FIND) . -type f` > $@
-else
-	touch $@
-endif
-	@echo Created $(PTMPROOT)/$* from $<
-	@$(RM) -f $@.LOCK
 
-#moving from PTMP to WORK
+$(PTMPROOT)/%.ok: $(ARCHROOT)/%.tar
+	$(DEEPGET) $<
+  ifdef dtn
+	$(SSH) $(dtn) '$(TARCOPY_DIRECT)'
+  else
+	$(TARCOPY_STAGED)
+  endif
+	$(DELAY)
+  ifneq ($(check),)
+	$(CHKSUM) > $@
+  else
+	touch $@
+  endif
+	@echo Created $(PTMPROOT)/$* from $<
+
+$(PTMPROOT)/%.ok: $(ARCHROOT)/%.nc.tar
+	$(DEEPGET) $<
+  ifdef dtn
+	$(SSH) $(dtn) '$(TARCOPY_DIRECT)'
+  else
+	$(TARCOPY_STAGED)
+  endif
+	$(DELAY)
+  ifneq ($(check),)
+	$(CHKSUM) > $@
+  else
+	touch $@
+  endif
+	@echo Created $(PTMPROOT)/$* from $<
+
+$(PTMPROOT)/%.ok: $(ARCHROOT)/%.cpio
+	$(DEEPGET) $<
+  ifdef dtn
+	$(SSH) $(dtn) '$(CPOCOPY_DIRECT)'
+  else
+	$(CPOCOPY_STAGED)
+  endif
+	$(DELAY)
+  ifneq ($(check),)
+	$(CHKSUM) > $@
+  else
+	touch $@
+  endif
+	@echo Created $(PTMPROOT)/$* from $<
+
+$(PTMPROOT)/%.ok: $(ARCHROOT)/%.nc.cpio
+	$(DEEPGET) $<
+  ifdef dtn
+	$(SSH) $(dtn) '$(CPOCOPY_DIRECT)'
+  else
+	$(CPOCOPY_STAGED)
+  endif
+	$(DELAY)
+  ifneq ($(check),)
+	$(CHKSUM) > $@
+  else
+	touch $@
+  endif
+	@echo Created $(PTMPROOT)/$* from $<
+
+# moving from PTMP to WORK
 $(WORKROOT)/%: $(PTMPROOT)/%
-	@$(MKDIR) $(@D)
-# unless verbose, don't report an error from this ln
-ifeq ($(verbose),)
+	$(MKDIR) $(@D)
 	ln -f $< $@ >& /dev/null || $(LOCALCP) $< $@
-else
-	ln -f $< $@ || $(LOCALCP) $< $@
-endif
 	chmod a-w $<
 	@echo Created $@ from $<
 
-#the dot variables
+# the dot variables
 .LOW_RESOLUTION_TIME: $(WORKROOT)/% $(PTMPROOT)/%
 .PRECIOUS: $(PTMPROOT)/%
 .SUFFIXES:

@@ -1,4 +1,4 @@
-# $Id: intel.mk,v 1.1.2.1 2012/04/04 22:33:22 afy Exp $
+# $Id: intel.mk,v 1.1.2.1.2.1 2012/06/14 16:01:53 Seth.Underwood Exp $
 # template for Intel compilers
 # typical use with mkmf:
 # mkmf -t intel.mk -c "-Duse_libMPI -Duse_netCDF" path_names /usr/local/include
@@ -25,7 +25,7 @@ MAKEFLAGS += --jobs=8
 FPPFLAGS := -fpp -Wp,-w
 
 FFLAGS := -fno-alias -auto -safe-cray-ptr -ftz -assume byterecl -i4 -r8 -nowarn
-FFLAGS_OPT = -O3 -debug minimal -fp-model strict -override-limits
+FFLAGS_OPT = -O3 -debug minimal -fp-model precise -override-limits
 FFLAGS_DEBUG = -g -O0 -check -check noarg_temp_created -check nopointer -warn -warn noerrors -fpe0 -traceback -ftrapuv
 FFLAGS_REPRO = -O2 -debug minimal -fp-model precise -override-limits
 FFLAGS_OPENMP = -openmp
