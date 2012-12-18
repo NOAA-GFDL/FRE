@@ -1,5 +1,5 @@
 #
-# $Id: FREPlatforms.pm,v 1.1.2.6 2012/01/07 00:06:44 afy Exp $
+# $Id: FREPlatforms.pm,v 1.1.2.7 2012/10/19 23:32:17 afy Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: Platforms Management Module
 # ------------------------------------------------------------------------------
@@ -38,6 +38,7 @@
 # afy    Ver   6.07  Modify 'parse' (return site and tail only)     January 12
 # afy    Ver   6.08  Modify 'siteDir' (argument is site now)        January 12
 # afy    Ver   6.09  Add 'parseAll' subroutine                      January 12
+# afy    Ver   7.00  Modify 'siteReplace' (no 'ncrc' special case)  October 12
 # ------------------------------------------------------------------------------
 # Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2000-2012
 # Designed and written by V. Balaji, Amy Langenhorst and Aleksey Yakovlev
@@ -137,7 +138,7 @@ sub siteReplace($$)
   my ($site, $siteRoot, $siteHead, $tail, $newSite, $newSiteRoot, $newSiteHead) = ($platformParse->(shift), $siteParse->(shift));
   if (defined($site) && defined($newSite))
   {
-    return ($site eq 'ncrc') ? "$newSite.$tail" : "$newSite.$site-$tail";
+    return "$newSite.$site-$tail";
   }
   else
   {

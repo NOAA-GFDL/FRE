@@ -1,7 +1,7 @@
 #!/usr/bin/perl
 # -*- cperl -*-
 #
-# $Id: fremake,v 18.0.2.27.4.1 2012/12/28 17:35:28 afy Exp $
+# $Id: fremake,v 18.0.2.29 2012/12/27 22:18:00 afy Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: Program to Create a Script to Compile a Model
 # ------------------------------------------------------------------------------
@@ -72,8 +72,8 @@
 # afy    Ver  26.00  Modify processCheckout (sources w/o checkout)  July 12
 # afy    Ver  26.01  Modify processCompileExecuteOrSubmit (msg)     July 12
 # afy    Ver  27.00  Modify processCompileCleanExecDir (no tcsh)    August 12
-# afy -------------- Branch 18.0.2.27.4 --------------------------- December 12
-# afy    Ver   1.00  Use new module FRETemplate (account, dualFlag) December 12
+# afy    Ver  28.00  Copied from 18.0.2.27.2.1                      December 12
+# afy    Ver  29.00  Use new module FRETemplate (account, dualFlag) December 12
 # ------------------------------------------------------------------------------
 # Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2000-2012
 # Designed and written by V. Balaji, Amy Langenhorst and Aleksey Yakovlev
@@ -103,7 +103,7 @@ use FREXML();
 
   package fremake;
 
-  use constant VERSION => '$Id: fremake,v 18.0.2.27.4.1 2012/12/28 17:35:28 afy Exp $';
+  use constant VERSION => '$Id: fremake,v 18.0.2.29 2012/12/27 22:18:00 afy Exp $';
 
   use constant OPTLIST =>
   (
@@ -372,18 +372,42 @@ use FREXML();
     $scoScript .= "# ------------------------------------------------------------------------------\n";
     $scoScript .= "#FRE version-info\n";
     $scoScript .= "# ------------------------------------------------------------------------------\n\n";
+    $scoScript .= "source \$MODULESHOME/init/csh\n";
+    $scoScript .= "module load git\n";
     $scoScript .= "unalias *\n\n";
     $scoScript .= "echo Using source directory = $srcDir...\n";
     $scoScript .= "cd $srcDir\n\n";
 
-    foreach my $name (@names)
-    {
-      my $ref = $r->{$name};
-      $scoScript .= "# ---------------- component '$name'\n";
-      $scoScript .= "setenv CVSROOT $ref->{vcRoot}\n";
-      $scoScript .= "cvs co -r $ref->{codeTag} $ref->{codeBase}\n";
-      $scoScript .= "$ref->{sourceCsh}\n\n";
-    }
+     foreach my $name (@names)
+     {
+       my $ref = $r->{$name};
+       my $versionControl = $ref->{vcBrand};
+       my $root = $ref->{vcRoot};
+       my $version = $ref->{codeTag};
+       my $codeBase = $ref->{codeBase};
+       my $csh = $ref->{sourceCsh};
+       $scoScript .= "# ---------------- component '$name'\n";
+       if ($versionControl eq "cvs")
+       {
+	 $scoScript .= "setenv CVSROOT $root\n";
+	 $scoScript .= "cvs co -r $version $codeBase\n";
+	 $scoScript .= "$csh\n\n";
+       } 
+       elsif ($versionControl eq "git")
+       {
+	 my @repo_names = split(' ', $codeBase);
+	 foreach my $repo_name (@repo_names)
+	 {
+	   my $repo_path = $root . "/" . $repo_name;
+	   $scoScript .= "git clone --recursive -b $version $repo_path\n";
+	 }
+	 $scoScript .= "$csh\n\n";
+       }
+       else
+       {
+	 $scoScript .= "# Unknown version control system provided: $versionControl\n";
+       }
+     }
 
     $scoScript .= "exit 0\n";
 

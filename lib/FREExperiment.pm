@@ -1,5 +1,5 @@
 #
-# $Id: FREExperiment.pm,v 18.1.2.17 2012/08/20 18:44:58 afy Exp $
+# $Id: FREExperiment.pm,v 18.1.2.17.2.1 2012/10/17 14:43:05 Kyle.Olivo Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: Experiment Management Module
 # ------------------------------------------------------------------------------
@@ -1367,7 +1367,7 @@ sub extractCheckoutInfo($)
 	      if ($vcBrand)
 	      {
 		my $vcRoot = $strRemoveWS->($r->extractSourceValue('@root', $name)) || $r->property('FRE.versioncontrol.cvs.root');
-		if ($vcRoot =~ m/^:ext:/ or (-d $vcRoot and -r $vcRoot))
+		if ($vcRoot =~ /:/ or (-d $vcRoot and -r $vcRoot))
 		{
 		  # ------------------------------------------------------------------------------------------ save component data into the hash
         	  my %component = ();

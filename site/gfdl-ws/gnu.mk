@@ -1,4 +1,4 @@
-# $Id: gnu.mk,v 1.1.2.1.4.1.2.1 2012/09/25 13:07:12 Seth.Underwood Exp $
+# $Id: gnu.mk,v 1.1.2.1.4.1.2.1.2.1 2012/11/30 16:53:18 Seth.Underwood Exp $
 # template for the GNU fortran compiler
 # typical use with mkmf
 # mkmf -t gnu.mk -c"-Duse_libMPI -Duse_netCDF" path_names /usr/local/include
@@ -7,6 +7,7 @@
 ############
 FC = gfortran
 CC = gcc
+CXX = g++
 LD = gfortran $(MAIN_PROGRAM)
 
 #########

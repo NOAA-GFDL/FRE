@@ -1,0 +1,393 @@
+#!/bin/csh -f
+# 
+# $Id: output.retry,v 1.1.2.3 2013/01/30 20:17:21 afy Exp $
+# ------------------------------------------------------------------------------
+# FMS/FRE Project: Script to Retry Output Staging Jobs (NESCC Version)
+# ------------------------------------------------------------------------------
+# afy    Ver   1.00  Initial version                                December 12
+# afy    Ver   2.00  Fix the unlocking                              December 12
+# afy    Ver   3.00  Include calling job into retrying process      January 13
+# afy    Ver   3.01  Add title                                      January 13
+# ------------------------------------------------------------------------------
+# Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2000-2013
+# Designed and written by V. Balaji, Amy Langenhorst and Aleksey Yakovlev
+#
+
+set -r echoOn = $?echo
+
+if ( $echoOn ) unset echo
+echo '<NOTE> : ====== FRE OUTPUT RETRYER $Id: output.retry,v 1.1.2.3 2013/01/30 20:17:21 afy Exp $ ======'
+echo "<NOTE> : Starting at $HOST on `date`"
+if ( $echoOn ) set echo
+
+if ( $?PBS_ENVIRONMENT ) then
+  if ( $PBS_ENVIRONMENT == 'PBS_BATCH' ) then
+    set -r callerJobName = $PBS_JOBNAME
+  else
+    set -r callerJobName = ""
+  endif
+else
+  set -r callerJobName = ""
+endif
+
+if ( 1 <= $# && $# <= 2 ) then
+  if ( $1 =~ /* ) then
+    set -r dir = $1
+  else
+    set -r dir = `pwd`/$1
+  endif
+  if ( $2 != "" ) then
+    set -r job = $2
+  else
+    set -r job = '*'
+  endif
+else
+  if ( $echoOn ) unset echo
+  echo "Usage: $0:t directoryPath [FRE_JOBID]"
+  echo "  The 'directoryPath' is a directory, where FRE stores its argument files."
+  echo "  This directory is a subdirectory of a state directory, which can be found by the frelist."
+  echo "  The state directory used to contain a production 'run' subdirectory and a number"
+  echo "  of regression and unique directories, named by regression prefixes and integer numbers."
+  echo "  These unique and regression directories also normally contain 'run' subdirectory."
+  echo "  Any of these 'run' directories can serve as an argument for this tool."
+  echo "  The optional 'FRE_JOBID' argument consists of experiment name and PBS job number" 
+  if ( $echoOn ) set echo
+  exit 1
+endif
+
+alias lock `which lockfile` -r 0 -l 86400
+
+if ( $status == 0 ) then
+  set -r lockingIsPresent
+else
+  if ( $echoOn ) unset echo
+  echo "WARNING: File locking utility 'lockfile' is missed on this host"
+  if ( $echoOn ) set echo
+endif
+
+alias list `which batch.scheduler.list`
+set listStatus = $status
+
+alias submit `which qsub`
+set submitStatus = $status
+
+alias outputStager `which output.stager`
+set outputStagerStatus = $status
+
+if ( $listStatus == 0 && $submitStatus == 0 && $outputStagerStatus == 0 ) then
+
+  if ( -e $dir ) then
+
+    if ( -d $dir ) then
+
+      if ( -r $dir && -w $dir && -x $dir ) then
+
+        set -r outputStager = `alias outputStager`
+        set -r argFiles = ( `find $dir -maxdepth 1 -type f -name "$job.output.stager.[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9].[ARH].args"` )
+
+        if ( $#argFiles > 0 ) then
+
+          foreach argFile ( $argFiles )
+
+	    if ( $echoOn ) unset echo
+	    echo "<NOTE> : <<< $argFile:t >>> Beginning"
+	    if ( $echoOn ) set echo
+
+	    if ( $?lockingIsPresent ) then
+              set argFileLock = $argFile.lock
+              lock $argFileLock
+	      if ( $status == 0 ) then
+        	source $argFile
+	      else
+		if ( $echoOn ) unset echo
+		echo "*ERROR*: The argument file is locked by another process - skipping ..."
+		if ( $echoOn ) set echo
+		continue
+	      endif
+            else
+              source $argFile
+            endif
+
+            if ( $status == 0 ) then
+
+              set jobName = $argFile:t:r
+
+              if ( $stagingType == 'Staged' || $stagingType == 'Chained' ) then
+
+                if ( ${jobName}S != $callerJobName ) then
+                  set saveJobInfo = ( `list --user=$USER --name=${jobName}S | sed 's/,,/,NA,/g' | tr ',' ' '` )
+                else
+                  set saveJobInfo = ( )
+                endif
+
+                if ( $status == 0 ) then
+
+                  if ( $#saveJobInfo > 0 ) then
+
+                    set saveJobId = `echo $saveJobInfo[2] | cut --delimiter=. --field=1`
+		    if ( $echoOn ) unset echo
+		    echo "WARNING: Save job '$saveJobId' in the '$saveJobInfo[4]' state is found - skipping ..."
+		    if ( $echoOn ) set echo
+                    unset saveJobId
+
+                  else
+
+		    @ actionCombineDone = ( $actionCombineOn * $?actionCombineOk || ! $actionCombineOn )
+		    @ actionCheckDone   = ( $actionCheckOn   * $?actionCheckOk   || ! $actionCheckOn   )
+		    @ actionSaveDone    = ( $actionSaveOn    * $?actionSaveOk    || ! $actionSaveOn    )
+
+                    if ( $actionCombineDone && $actionCheckDone && $actionSaveDone ) then
+
+                      if ( ${jobName}T != $callerJobName ) then
+                        set xferJobInfo = ( `list --user=$USER --name=${jobName}T | sed 's/,,/,NA,/g' | tr ',' ' '` )
+                      else
+                        set xferJobInfo = ( )
+                      endif
+
+                      if ( $status == 0 ) then
+
+                        if ( $#xferJobInfo > 0 ) then
+
+                          set xferJobId = `echo $xferJobInfo[2] | cut --delimiter=. --field=1`
+			  if ( $echoOn ) unset echo
+			  echo "WARNING: Xfer job '$xferJobId' in the '$xferJobInfo[4]' state is found - skipping ..."
+			  if ( $echoOn ) set echo
+                          unset xferJobId
+
+                        else
+
+			  @ actionXferDone    = ( $actionXferOn    * $?actionXferOk    || ! $actionXferOn    )
+			  @ actionPPStartDone = ( $actionPPStartOn * $?actionPPStartOk || ! $actionPPStartOn )
+
+                          if ( $actionXferDone && $actionPPStartDone ) then
+
+			    if ( $echoOn ) unset echo
+			    echo "<NOTE> : The argument file shows that the output staging has completed successfully - removing it ..."
+			    if ( $echoOn ) set echo
+
+                            rm -f $argFile
+
+                          else if ( $xferRetry >= 0 ) then
+
+                            if ( $xferRetry <= $xferRetries ) then
+
+                              set xferResult = `submit $xferOptions -v argFile=$argFile $outputStager`
+
+                              if ( $status == 0 ) then
+				if ( $echoOn ) unset echo
+				echo "<NOTE> : Xfer job '$xferResult' to process the argument file has been submitted successfully"
+				if ( $echoOn ) set echo
+                              else
+				if ( $echoOn ) unset echo
+				echo "WARNING: Can't submit xfer output stager job - skipping ..."
+				if ( $echoOn ) set echo
+                              endif
+
+                              unset xferResult
+
+                            else
+
+			      if ( $echoOn ) unset echo
+			      echo "WARNING: No more xfer output stager retries - skipping ..."
+			      if ( $echoOn ) set echo
+
+                            endif
+
+                          else
+
+			    if ( $echoOn ) unset echo
+			    echo "WARNING: This error condition can't be resolved by resubmission - skipping ..."
+			    echo "WARNING: Manual user intervention is needed"
+			    if ( $echoOn ) set echo
+
+                          endif
+
+			  unset actionPPStartDone
+                          unset actionXferDone
+
+                        endif
+
+                      else
+
+			if ( $echoOn ) unset echo
+			echo "WARNING: Can't get a job list from the batch scheduler - skipping ..."
+			if ( $echoOn ) set echo
+
+                      endif
+
+                      unset xferJobInfo
+
+                    else if ( $saveRetry >= 0 ) then
+
+                      if ( $saveRetry <= $saveRetries ) then
+
+                        set saveResult = `submit $saveOptions -v argFile=$argFile $outputStager`
+
+                        if ( $status == 0 ) then
+
+			  if ( $echoOn ) unset echo
+			  echo "<NOTE> : Save job '$saveResult' to process the argument file has been submitted successfully"
+			  if ( $echoOn ) set echo
+
+                          if ( $stagingType == 'Staged' ) then
+
+                            set xferJobInfo = ( `list --user=$USER --name=${jobName}T | sed 's/,,/,NA,/g' | tr ',' ' '` )
+
+                            if ( $status == 0 ) then
+
+                              set inx = 2
+
+                              while ( $inx <= $#xferJobInfo )
+                                set xferJobId = `echo $xferJobInfo[$inx] | cut --delimiter=. --field=1`
+				if ( $echoOn ) unset echo
+				echo "<NOTE> : Xfer job '$xferJobId', depending on a failed save job, has been found - cancelling it ..."
+				if ( $echoOn ) set echo
+                        	qdel $xferJobId >& /dev/null
+                                unset xferJobId
+                                @ inx += 6
+                              end
+
+                              set xferResult = `submit $xferOptions -v argFile=$argFile -W depend=afterok:$saveResult $outputStager`
+
+                              if ( $status == 0 ) then
+				if ( $echoOn ) unset echo
+				echo "<NOTE> : Xfer job '$xferResult' to process the argument file has been submitted successfully"
+				if ( $echoOn ) set echo
+                              else
+				if ( $echoOn ) unset echo
+				echo "WARNING: Can't submit xfer output stager job - skipping ..."
+				if ( $echoOn ) set echo
+                              endif
+
+                              unset xferResult
+                              unset inx
+
+                            else
+
+			      if ( $echoOn ) unset echo
+			      echo "WARNING: Can't get a job list from the batch scheduler - skipping ..."
+			      if ( $echoOn ) set echo
+
+                            endif
+
+                            unset xferJobInfo
+
+                          endif
+
+                        else
+
+			  if ( $echoOn ) unset echo
+			  echo "WARNING: Can't submit save output stager job - skipping ..."
+			  if ( $echoOn ) set echo
+
+                        endif
+
+                        unset saveResult
+
+                      else
+
+			if ( $echoOn ) unset echo
+			echo "WARNING: No more save output stager retries - skipping ..."
+			if ( $echoOn ) set echo
+
+                      endif
+
+                    else
+
+		      if ( $echoOn ) unset echo
+		      echo "WARNING: The error condition can't be resolved by resubmission - skipping ..."
+		      echo "WARNING: Manual user intervention is needed"
+		      if ( $echoOn ) set echo
+
+                    endif
+
+                    unset actionSaveDone
+                    unset actionCheckDone
+                    unset actionCombineDone
+
+                  endif
+
+                else
+
+		  if ( $echoOn ) unset echo
+		  echo "WARNING: Can't get a job list from the batch scheduler - skipping ..."
+		  if ( $echoOn ) set echo
+
+                endif
+
+                unset saveJobInfo
+
+              else
+
+		if ( $echoOn ) unset echo
+		echo "WARNING: Staging type '$stagingType' is not supported - skipping ..."
+		if ( $echoOn ) set echo
+
+              endif
+
+              unset jobName
+
+            else
+
+	      if ( $echoOn ) unset echo
+	      echo "WARNING: Can't load the argument file - skipping ..."
+	      if ( $echoOn ) set echo
+
+            endif
+
+            if ( $?lockingIsPresent ) then
+              rm -f $argFileLock
+              unset argFileLock
+            endif
+
+	    if ( $echoOn ) unset echo
+	    echo "<NOTE> : <<< $argFile:t >>> End"
+	    if ( $echoOn ) set echo
+
+          end
+
+        else
+
+	  if ( $echoOn ) unset echo
+	  echo "<NOTE> : The directory '$dir' doesn't contain any argument files"
+	  if ( $echoOn ) set echo
+
+        endif
+
+        exit 0
+
+      else
+
+	if ( $echoOn ) unset echo
+	echo "*ERROR*: The directory '$dir' must be readable, writable and searchable"
+	if ( $echoOn ) set echo
+	exit 1
+
+      endif
+
+    else
+
+      if ( $echoOn ) unset echo
+      echo "*ERROR*: The pathname '$dir' exists, but it's not a directory"
+      if ( $echoOn ) set echo
+      exit 1
+
+    endif
+
+  else
+
+    if ( $echoOn ) unset echo
+    echo "*ERROR*: The pathname '$dir' doesn't exist"
+    if ( $echoOn ) set echo
+    exit 1
+
+  endif
+
+else
+
+  if ( $echoOn ) unset echo
+  echo "*ERROR*: The FRE isn't loaded"
+  if ( $echoOn ) set echo
+  exit 1
+
+endif

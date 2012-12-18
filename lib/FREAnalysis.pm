@@ -640,6 +640,7 @@ sub filltemplate {
     $tmpsch =~ s/set freanalysismodule\s*$/set freanalysismodule = $freanalysismodule/m;
     $tmpsch =~ s/set stdoutdir\s*$/set stdoutdir = $stdoutdir/m;
     $tmpsch =~ s/setenv FREROOT.*/setenv FREROOT $ENV{FREROOT}/m;
+    $tmpsch =~ s/set analysis_options\s*$/set analysis_options = $arrayofExptsH_ref->[0]->{options}/m;
     
     # for addtional experiments
     if ($iExpt >= 1) {
@@ -730,7 +731,9 @@ sub queueAnaAttr {
 
      my $script = $anaNode->findvalue('@script');
 
-     return ('switch' => $switch, mode => $mode, cumulative => $cumulative, momGrid => $momGrid,figureDir => $figureDir,specify1year => $specify1year,astartYear => $astartYear,aendYear => $aendYear,chunk => $chunk,afreq => $afreq,exptname => $name,xmlfile => $xml,platform => $platform,target => $target,script => $script);
+     my $options = $anaNode->findvalue('@options');
+
+     return ('switch' => $switch, mode => $mode, cumulative => $cumulative, momGrid => $momGrid,figureDir => $figureDir,specify1year => $specify1year,astartYear => $astartYear,aendYear => $aendYear,chunk => $chunk,afreq => $afreq,exptname => $name,xmlfile => $xml,platform => $platform,target => $target,script => $script,options => $options);
 }
 
 sub seasonAV {

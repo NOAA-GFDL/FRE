@@ -6,6 +6,7 @@
 ############
 FC = ftn
 CC = cc
+CXX = CC
 LD = ftn
 #########
 # flags #
@@ -32,14 +33,14 @@ INCLUDE = -I$(NETCDF_ROOT)/include
 
 FPPFLAGS := -fpp -Wp,-w $(INCLUDE)
 
-FFLAGS := -fno-alias -auto -safe-cray-ptr -ftz -assume byterecl -i4 -r8 -nowarn $(INCLUDE)
+FFLAGS := -fno-alias -auto -safe-cray-ptr -ftz -assume byterecl -i4 -r8 -nowarn -sox $(INCLUDE)
 FFLAGS_OPT = -O3 -debug minimal -fp-model precise -override-limits
 FFLAGS_DEBUG = -g -O0 -check -check noarg_temp_created -check nopointer -warn -warn noerrors -fpe0 -traceback -ftrapuv
 FFLAGS_REPRO = -O2 -debug minimal -fp-model precise -override-limits
 FFLAGS_OPENMP = -openmp
 FFLAGS_VERBOSE = -v -V -what
 
-CFLAGS := -D__IFC 
+CFLAGS := -D__IFC -sox
 CFLAGS_OPT = -O2 -debug minimal
 CFLAGS_OPENMP = -openmp
 CFLAGS_DEBUG = -O0 -g -ftrapuv -traceback

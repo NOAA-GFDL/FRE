@@ -1,13 +1,6 @@
 #!/bin/csh -fx
-#PBS -j oe
-#PBS -l walltime=4:00:00
-#PBS -m a
-#PBS -N output.stager
-#PBS -q bigmem
-#PBS -r y
-#PBS -W umask=026
-# 
-# $Id: output.stager,v 1.1.2.11.2.1.2.1 2013/03/13 23:56:57 afy Exp $
+#
+# $Id: output.stager,v 1.1.2.19 2013/03/13 22:27:07 afy Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: Output Stager - NESCC Version
 # ------------------------------------------------------------------------------
@@ -46,13 +39,37 @@
 # afy    Ver  10.00  Unload 'fre-commands' before its loading       July 12
 # afy    Ver  10.01  Add 'freNCToolsModuleName' argument            July 12
 # afy    Ver  11.00  Modify 'patternSedRegression'                  July 12
-# afy -------------- Branch 1.1.2.11.2 ---------------------------- November 12
-# afy    Ver   1.00  Don't setenv 'GLOBUS_LOCATION'                 November 12
-# afy    Ver   1.01  Don't call 'globus-user-env.csh' script        November 12
-# afy -------------- Branch 1.1.2.11.2.1.2 ------------------------ March 13
-# afy    Ver   1.00  Remove argument 'combineMemory'                March 13
-# afy    Ver   1.01  Dynamically estimate memory to combine         March 13
-# afy    Ver   1.02  Increase combining concurrency                 March 13
+# afy    Ver  12.00  Don't setenv 'GLOBUS_LOCATION'                 November 12
+# afy    Ver  12.01  Don't call 'globus-user-env.csh' script        November 12
+# afy    Ver  13.00  Add 'paramOverrideOn' argument                 November 12
+# afy    Ver  13.01  Add 'hsmModuleFilesDir/hsmVersion' arguments   November 12
+# afy    Ver  13.02  Conditionally load 'hsm' module                November 12
+# afy    Ver  13.03  Add 'paramVerbosityOn' argument                November 12
+# afy    Ver  14.00  Add arguments '(save|xfer)Retr(ies|y)'         December 12
+# afy    Ver  14.01  Add argument file locking (by 'lockfile')      December 12
+# afy    Ver  14.02  Add aliases 'inc(Save|Xfer)Retry'              December 12
+# afy    Ver  14.03  Add alias 'noRetries'                          December 12
+# afy    Ver  14.04  Modify messages for 'inc*Retry' exits          December 12
+# afy    Ver  14.05  Replace GridFTP by 'gcp'                       December 12
+# afy    Ver  14.06  Restrict processing by host type               December 12
+# afy    Ver  14.07  Modify mppnccombine call (no -r)               December 12
+# afy    Ver  14.08  Directly create remote stdout directory        December 12
+# afy    Ver  15.00  Add 'exitStatus' variable                      December 12
+# afy    Ver  15.01  Add 'actionRetryOn' argument                   December 12
+# afy    Ver  15.02  Don't exit in the middle of the script         December 12
+# afy    Ver  15.03  Call the 'output.retry' script                 December 12
+# afy    Ver  15.04  Retry output in xfer jobs                      December 12
+# afy    Ver  16.00  Modify checking patterns (uncombined history)  January 13
+# afy    Ver  17.00  Modify umask (026 => 022)                      January 13
+# afy    Ver  18.00  Combine files with 4+ digits extension         February 13
+# afy    Ver  18.01  Remove all the PBS options                     February 13
+# afy    Ver  19.00  Combine compressed history files               March 13
+# afy    Ver  19.01  Remove argument 'combineMemory'                March 13
+# afy    Ver  19.02  Dynamically estimate memory to combine         March 13
+# afy    Ver  19.03  Increase combining concurrency                 March 13
+# afy    Ver  19.04  Allow combining on login nodes                 March 13
+# afy    Ver  19.05  Call 'mppnccombine' without options -n/-e      March 13
+# afy    Ver  19.06  Remove 'paramOverrideOn' argument              March 13
 # ------------------------------------------------------------------------------
 # Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2000-2013
 # Designed and written by V. Balaji, Amy Langenhorst and Aleksey Yakovlev
@@ -63,7 +80,7 @@
   set -r runtimeBeg = `date "+%s"`
 
   if ( $echoOn ) unset echo
-  echo '<NOTE> : ====== FRE OUTPUT STAGER $Id: output.stager,v 1.1.2.11.2.1.2.1 2013/03/13 23:56:57 afy Exp $ ======'
+  echo '<NOTE> : ====== FRE OUTPUT STAGER $Id: output.stager,v 1.1.2.19 2013/03/13 22:27:07 afy Exp $ ======'
   echo "<NOTE> : Starting at $HOST on `date`"
   if ( $echoOn ) set echo
 
@@ -80,8 +97,10 @@
   endif
 
 ################################################################################
-#------------------------- arguments initialization ----------------------------
+#---------------- exit status and arguments initialization ---------------------
 ################################################################################
+
+  set exitStatus = 0
 
   set expName = ""
   set type = ""
@@ -92,6 +111,7 @@
   set actionSaveOn = 0
   set actionXferOn = 0
   set actionPPStartOn = 0
+  set actionRetryOn = 0
 
   set actionCombineOk = 0
   set actionCheckOk = 0
@@ -106,6 +126,12 @@
   set paramPtmpOn = 0
   set paramCheckSumOn = 0
   set paramCompressOn = 0
+  set paramVerbosityOn = 0
+
+  set saveRetries = 0
+  set xferRetries = 0
+  set saveRetry = 0
+  set xferRetry = 0
 
   set workDir = ""
   set ptmpDir = ""
@@ -128,6 +154,12 @@
   set freNCToolsModuleFilesDir = ""
   set freNCToolsModuleName = 'fre-nctools'
   set freNCToolsVersion = ""
+
+  set hsmModuleFilesDir = ""
+  set hsmVersion = ""
+
+  set xferToolModuleFilesDir = ""
+  set xferToolVersion = ""
 
   set modulesHomeDir = ""
 
@@ -171,14 +203,53 @@
     exit 1
   endif
 
-  if ( -f "$argFile" && -r "$argFile" ) then
-    if ( $echoOn ) unset echo
-    echo "<NOTE> : Using the argFile '$argFile'..."
-    if ( $echoOn ) set echo
-    source $argFile
+  alias lock `which lockfile` -60 -r 10 -l 86400
+
+  if ( $status == 0 ) then
+    set -r lockingIsPresent
+    set -r argFileLock = $argFile.lock
+    alias unlock rm -f $argFileLock
   else
     if ( $echoOn ) unset echo
-    echo "*ERROR*: The argFile '$argFile' doesn't exist or not readable"
+    echo "WARNING: File locking utility 'lockfile' is missed on this host"
+    if ( $echoOn ) set echo
+    alias unlock ""
+  endif
+
+  if ( -e "$argFile" ) then
+    if ( -f "$argFile" ) then
+      if ( -r "$argFile" && -w "$argFile" ) then
+	if ( $echoOn ) unset echo
+	echo "<NOTE> : Using the argFile '$argFile'..."
+	if ( $echoOn ) set echo
+	if ( $?lockingIsPresent ) then
+	  lock $argFileLock
+	  if ( $status == 0 ) then
+            source $argFile
+	  else
+	    if ( $echoOn ) unset echo
+	    echo "*ERROR*: The argFile '$argFile' is locked by another process"
+	    if ( $echoOn ) set echo
+	    exit 1
+	  endif
+	else
+	  source $argFile
+	endif
+      else
+	if ( $echoOn ) unset echo
+	echo "*ERROR*: The argFile '$argFile' must be readable and writable"
+	if ( $echoOn ) set echo
+	exit 1
+      endif
+    else
+      if ( $echoOn ) unset echo
+      echo "*ERROR*: The pathname '$argFile' exists, but it's not a file"
+      if ( $echoOn ) set echo
+      exit 1
+    endif
+  else
+    if ( $echoOn ) unset echo
+    echo "*ERROR*: The pathname '$argFile' doesn't exist"
     if ( $echoOn ) set echo
     exit 1
   endif
@@ -207,7 +278,8 @@
     if ( $echoOn ) unset echo
     echo "*ERROR*: The argument 'type' value must be one of 'ascii', 'history' or 'restart'"
     if ( $echoOn ) set echo
-    exit 1
+    set exitStatus = 2
+    goto END
   endif
 
   if ( $stagingType == 'Online' || $stagingType == 'Staged' || $stagingType == 'Chained' ) then
@@ -219,7 +291,8 @@
     if ( $echoOn ) unset echo
     echo "*ERROR*: The argument 'stagingType' value must be one of 'Online', 'Staged' or 'Chained'"
     if ( $echoOn ) set echo
-    exit 1
+    set exitStatus = 2
+    goto END
   endif
 
   if ( $actionCombineOn == 0 || $actionCombineOn == 1 ) then
@@ -231,7 +304,8 @@
     if ( $echoOn ) unset echo
     echo "*ERROR*: The argument 'actionCombineOn' value must be '0' or '1'"
     if ( $echoOn ) set echo
-    exit 1
+    set exitStatus = 2
+    goto END
   endif
 
   if ( $actionCheckOn == 0 || $actionCheckOn == 1 ) then
@@ -243,7 +317,8 @@
     if ( $echoOn ) unset echo
     echo "*ERROR*: The argument 'actionCheckOn' value must be '0' or '1'"
     if ( $echoOn ) set echo
-    exit 1
+    set exitStatus = 2
+    goto END
   endif
 
   if ( $actionSaveOn == 0 || $actionSaveOn == 1 ) then
@@ -255,7 +330,8 @@
     if ( $echoOn ) unset echo
     echo "*ERROR*: The argument 'actionSaveOn' value must be '0' or '1'"
     if ( $echoOn ) set echo
-    exit 1
+    set exitStatus = 2
+    goto END
   endif
 
   if ( $actionXferOn == 0 || $actionXferOn == 1 ) then
@@ -267,7 +343,8 @@
     if ( $echoOn ) unset echo
     echo "*ERROR*: The argument 'actionXferOn' value must be '0' or '1'"
     if ( $echoOn ) set echo
-    exit 1
+    set exitStatus = 2
+    goto END
   endif
 
   if ( $actionPPStartOn == 0 || $actionPPStartOn == 1 ) then
@@ -279,7 +356,21 @@
     if ( $echoOn ) unset echo
     echo "*ERROR*: The argument 'actionPPStartOn' value must be '0' or '1'"
     if ( $echoOn ) set echo
-    exit 1
+    set exitStatus = 2
+    goto END
+  endif
+
+  if ( $actionRetryOn == 0 || $actionRetryOn == 1 ) then
+    set -r actionRetryOn = $actionRetryOn
+    if ( $echoOn ) unset echo
+    echo "<NOTE> : actionRetryOn = '$actionRetryOn'"
+    if ( $echoOn ) set echo
+  else
+    if ( $echoOn ) unset echo
+    echo "*ERROR*: The argument 'actionRetryOn' value must be '0' or '1'"
+    if ( $echoOn ) set echo
+    set exitStatus = 2
+    goto END
   endif
 
   if ( $paramArchiveOn == 0 || $paramArchiveOn == 1 ) then
@@ -291,7 +382,8 @@
     if ( $echoOn ) unset echo
     echo "*ERROR*: The argument 'paramArchiveOn' value must be '0' or '1'"
     if ( $echoOn ) set echo
-    exit 1
+    set exitStatus = 2
+    goto END
   endif
 
   if ( $paramPtmpOn == 0 || $paramPtmpOn == 1 ) then
@@ -303,7 +395,8 @@
     if ( $echoOn ) unset echo
     echo "*ERROR*: The argument 'paramPtmpOn' value must be '0' or '1'"
     if ( $echoOn ) set echo
-    exit 1
+    set exitStatus = 2
+    goto END
   endif
 
   if ( $paramCheckSumOn == 0 || $paramCheckSumOn == 1 ) then
@@ -315,7 +408,8 @@
     if ( $echoOn ) unset echo
     echo "*ERROR*: The argument 'paramCheckSumOn' value must be '0' or '1'"
     if ( $echoOn ) set echo
-    exit 1
+    set exitStatus = 2
+    goto END
   endif
 
   if ( $paramCompressOn == 0 || $paramCompressOn == 1 ) then
@@ -327,28 +421,89 @@
     if ( $echoOn ) unset echo
     echo "*ERROR*: The argument 'paramCompressOn' value must be '0' or '1'"
     if ( $echoOn ) set echo
-    exit 1
+    set exitStatus = 2
+    goto END
+  endif
+
+  if ( $paramVerbosityOn == 0 || $paramVerbosityOn == 1 ) then
+    set -r paramVerbosityOn = $paramVerbosityOn
+    if ( $echoOn ) unset echo
+    echo "<NOTE> : paramVerbosityOn = '$paramVerbosityOn'"
+    if ( $echoOn ) set echo
+  else
+    if ( $echoOn ) unset echo
+    echo "*ERROR*: The argument 'paramVerbosityOn' value must be '0' or '1'"
+    if ( $echoOn ) set echo
+    set exitStatus = 2
+    goto END
+  endif
+
+  if ( "$saveRetries" != "0" ) then
+    set -r saveRetries = $saveRetries
+    if ( $echoOn ) unset echo
+    echo "<NOTE> : saveRetries = '$saveRetries'"
+    if ( $echoOn ) set echo
+  else
+    if ( $echoOn ) unset echo
+    echo "WARNING: Not using the 'saveRetries' argument"
+    if ( $echoOn ) set echo
+  endif
+
+  if ( "$xferRetries" != "0" ) then
+    set -r xferRetries = $xferRetries
+    if ( $echoOn ) unset echo
+    echo "<NOTE> : xferRetries = '$xferRetries'"
+    if ( $echoOn ) set echo
+  else
+    if ( $echoOn ) unset echo
+    echo "WARNING: Not using the 'xferRetries' argument"
+    if ( $echoOn ) set echo
+  endif
+
+  if ( "$saveRetry" != "0" ) then
+    set -r saveRetry = $saveRetry
+    if ( $echoOn ) unset echo
+    echo "<NOTE> : saveRetry = '$saveRetry'"
+    if ( $echoOn ) set echo
+  else
+    if ( $echoOn ) unset echo
+    echo "WARNING: Not using the 'saveRetry' argument"
+    if ( $echoOn ) set echo
+  endif
+
+  if ( "$xferRetry" != "0" ) then
+    set -r xferRetry = $xferRetry
+    if ( $echoOn ) unset echo
+    echo "<NOTE> : xferRetry = '$xferRetry'"
+    if ( $echoOn ) set echo
+  else
+    if ( $echoOn ) unset echo
+    echo "WARNING: Not using the 'xferRetry' argument"
+    if ( $echoOn ) set echo
   endif
 
 ################################################################################
 #------------------------------- derived flags ---------------------------------
 ################################################################################
 
-  @ actionCombineToDo       = ( $actionCombineOn * ! $actionCombineOk )
-  @ actionCheckToDo         = ( $actionCheckOn * ! $actionCheckOk )
-  @ actionSaveToDo          = ( $actionSaveOn * ( $paramArchiveOn || $paramPtmpOn ) * ! $actionSaveOk )
+  @ actionCombineToDo		= ( $actionCombineOn * ! $actionCombineOk )
+  @ actionCheckToDo		= ( $actionCheckOn * ! $actionCheckOk )
+  @ actionSaveToDo		= ( $actionSaveOn * ( $paramArchiveOn || $paramPtmpOn ) * ! $actionSaveOk )
 
-  @ actionXferToConsider    = ( $actionXferOn * ! $actionXferOk )
-  @ actionXferToPerform     = ( $stagingType == 'Online' || $actionXferForce )
-  @ actionXferToDo          = ( $actionXferToConsider * $actionXferToPerform )
+  @ actionXferToConsider	= ( $actionXferOn * ! $actionXferOk )
+  @ actionXferToPerform		= ( $stagingType == 'Online' || $actionXferForce )
+  @ actionXferToDo		= ( $actionXferToConsider * $actionXferToPerform )
 
-  @ actionPPStartToConsider = ( $actionPPStartOn * ! $actionPPStartOk )
-  @ actionPPStartToPerform  = ( $stagingType == 'Online' || $actionPPStartForce )
-  @ actionPPStartToDo       = ( $actionPPStartToConsider * $actionPPStartToPerform )
+  @ actionPPStartToConsider	= ( $actionPPStartOn * ! $actionPPStartOk )
+  @ actionPPStartToPerform	= ( $stagingType == 'Online' || $actionPPStartForce )
+  @ actionPPStartToDo		= ( $actionPPStartToConsider * $actionPPStartToPerform )
 
-  @ freCommandsToLoad       = ( $actionCheckToDo || $actionSaveToDo || $actionXferToConsider || $actionPPStartToConsider )
-  @ freNCToolsToLoad        = ( $actionCombineToDo )
-  @ xferToolToLoad          = ( $actionXferToDo || $actionPPStartToDo )
+  @ actionRetryToDo		= ( $actionRetryOn * $actionXferForce )
+
+  @ freCommandsToLoad		= ( $actionCheckToDo || $actionSaveToDo || $actionRetryToDo || $actionXferToConsider || $actionPPStartToConsider )
+  @ freNCToolsToLoad		= ( $actionCombineToDo )
+  @ hsmToLoad			= ( $actionSaveToDo )
+  @ xferToolToLoad		= ( $actionXferToDo || $actionPPStartToDo )
 
 ################################################################################
 #---------------------- arguments checkup (second part) ------------------------
@@ -396,7 +551,8 @@
     if ( $echoOn ) unset echo
     echo "*ERROR*: The 'outputDirRemote' argument is not defined"
     if ( $echoOn ) set echo
-    exit 1
+    set exitStatus = 2
+    goto END
   else
     if ( $echoOn ) unset echo
     echo "WARNING: Not Using the 'outputDirRemote' argument"
@@ -434,7 +590,8 @@
     if ( $echoOn ) unset echo
     echo "*ERROR*: The 'xmlFiles' argument is not defined"
     if ( $echoOn ) set echo
-    exit 1
+    set exitStatus = 2
+    goto END
   else
     if ( $echoOn ) unset echo
     echo "WARNING: Not using the 'xmlFiles' argument"
@@ -450,7 +607,8 @@
     if ( $echoOn ) unset echo
     echo "*ERROR*: The 'xmlFilesRemote' argument is not defined"
     if ( $echoOn ) set echo
-    exit 1
+    set exitStatus = 2
+    goto END
   else
     if ( $echoOn ) unset echo
     echo "WARNING: Not using the 'xmlFilesRemote' argument"
@@ -466,7 +624,8 @@
     if ( $echoOn ) unset echo
     echo "*ERROR*: The 'ppStarterOptions' argument is not defined"
     if ( $echoOn ) set echo
-    exit 1
+    set exitStatus = 2
+    goto END
   else
     if ( $echoOn ) unset echo
     echo "WARNING: Not using the 'ppStarterOptions' argument"
@@ -482,7 +641,8 @@
     if ( $echoOn ) unset echo
     echo "*ERROR*: The 'stdoutDirRemote' argument is not defined"
     if ( $echoOn ) set echo
-    exit 1
+    set exitStatus = 2
+    goto END
   else
     if ( $echoOn ) unset echo
     echo "WARNING: Not Using the 'stdoutDirRemote' argument"
@@ -498,7 +658,8 @@
     if ( $echoOn ) unset echo
     echo "*ERROR*: The 'freCommandsModuleFilesDir' argument is not defined"
     if ( $echoOn ) set echo
-    exit 1
+    set exitStatus = 2
+    goto END
   else
     if ( $echoOn ) unset echo
     echo "WARNING: Not using the 'freCommandsModuleFilesDir' argument"
@@ -514,7 +675,8 @@
     if ( $echoOn ) unset echo
     echo "*ERROR*: The 'freCommandsVersion' argument is not defined"
     if ( $echoOn ) set echo
-    exit 1
+    set exitStatus = 2
+    goto END
   else
     if ( $echoOn ) unset echo
     echo "WARNING: Not using the 'freCommandsVersion' argument"
@@ -530,7 +692,8 @@
     if ( $echoOn ) unset echo
     echo "*ERROR*: The 'freCommandsModuleFilesDirRemote' argument is not defined"
     if ( $echoOn ) set echo
-    exit 1
+    set exitStatus = 2
+    goto END
   else
     if ( $echoOn ) unset echo
     echo "WARNING: Not using the 'freCommandsModuleFilesDirRemote' argument"
@@ -546,7 +709,8 @@
     if ( $echoOn ) unset echo
     echo "*ERROR*: The 'freCommandsVersionRemote' argument is not defined"
     if ( $echoOn ) set echo
-    exit 1
+    set exitStatus = 2
+    goto END
   else
     if ( $echoOn ) unset echo
     echo "WARNING: Not using the 'freCommandsVersionRemote' argument"
@@ -562,7 +726,8 @@
     if ( $echoOn ) unset echo
     echo "*ERROR*: The 'freNCToolsModuleFilesDir' argument is not defined"
     if ( $echoOn ) set echo
-    exit 1
+    set exitStatus = 2
+    goto END
   else
     if ( $echoOn ) unset echo
     echo "WARNING: Not using the 'freNCToolsModuleFilesDir' argument"
@@ -578,7 +743,8 @@
     if ( $echoOn ) unset echo
     echo "*ERROR*: The 'freNCToolsModuleName' argument is not defined"
     if ( $echoOn ) set echo
-    exit 1
+    set exitStatus = 2
+    goto END
   else
     if ( $echoOn ) unset echo
     echo "WARNING: Not using the 'freNCToolsModuleName' argument"
@@ -594,10 +760,79 @@
     if ( $echoOn ) unset echo
     echo "*ERROR*: The 'freNCToolsVersion' argument is not defined"
     if ( $echoOn ) set echo
-    exit 1
+    set exitStatus = 2
+    goto END
   else
     if ( $echoOn ) unset echo
     echo "WARNING: Not using the 'freNCToolsVersion' argument"
+    if ( $echoOn ) set echo
+  endif
+
+  if ( "$hsmModuleFilesDir" != "" ) then
+    set -r hsmModuleFilesDir = $hsmModuleFilesDir
+    if ( $echoOn ) unset echo
+    echo "<NOTE> : hsmModuleFilesDir = '$hsmModuleFilesDir'"
+    if ( $echoOn ) set echo
+  else if ( $hsmToLoad ) then
+    if ( $echoOn ) unset echo
+    echo "*ERROR*: The 'hsmModuleFilesDir' argument is not defined"
+    if ( $echoOn ) set echo
+    set exitStatus = 2
+    goto END
+  else
+    if ( $echoOn ) unset echo
+    echo "WARNING: Not using the 'hsmModuleFilesDir' argument"
+    if ( $echoOn ) set echo
+  endif
+
+  if ( "$hsmVersion" != "" ) then
+    set -r hsmVersion = $hsmVersion
+    if ( $echoOn ) unset echo
+    echo "<NOTE> : hsmVersion = '$hsmVersion'"
+    if ( $echoOn ) set echo
+  else if ( $hsmToLoad ) then
+    if ( $echoOn ) unset echo
+    echo "*ERROR*: The 'hsmVersion' argument is not defined"
+    if ( $echoOn ) set echo
+    set exitStatus = 2
+    goto END
+  else
+    if ( $echoOn ) unset echo
+    echo "WARNING: Not using the 'hsmVersion' argument"
+    if ( $echoOn ) set echo
+  endif
+
+  if ( "$xferToolModuleFilesDir" != "" ) then
+    set -r xferToolModuleFilesDir  = $xferToolModuleFilesDir
+    if ( $echoOn ) unset echo
+    echo "<NOTE> : xferToolModuleFilesDir = '$xferToolModuleFilesDir'"
+    if ( $echoOn ) set echo
+  else if ( $xferToolToLoad ) then
+    if ( $echoOn ) unset echo
+    echo "*ERROR*: The 'xferToolModuleFilesDir' argument is not defined"
+    if ( $echoOn ) set echo
+    set exitStatus = 2
+    goto END
+  else
+    if ( $echoOn ) unset echo
+    echo "WARNING: Not using the 'xferToolModuleFilesDir' argument"
+    if ( $echoOn ) set echo
+  endif
+
+  if ( "$xferToolVersion" != "" ) then
+    set -r xferToolVersion = $xferToolVersion
+    if ( $echoOn ) unset echo
+    echo "<NOTE> : xferToolVersion = '$xferToolVersion'"
+    if ( $echoOn ) set echo
+  else if ( $xferToolToLoad ) then
+    if ( $echoOn ) unset echo
+    echo "*ERROR*: The 'xferToolVersion' argument is not defined"
+    if ( $echoOn ) set echo
+    set exitStatus = 2
+    goto END
+  else
+    if ( $echoOn ) unset echo
+    echo "WARNING: Not using the 'xferToolVersion' argument"
     if ( $echoOn ) set echo
   endif
 
@@ -629,13 +864,15 @@
       if ( $echoOn ) unset echo
       echo "*ERROR*: The 'MODULESHOME' variable isn't defined => can't initialize environment modules"
       if ( $echoOn ) set echo
-      exit 1
+      set exitStatus = 2
+      goto END
     endif
   else
     if ( $echoOn ) unset echo
     echo "*ERROR*: Can't initialize environment modules"
     if ( $echoOn ) set echo
-    exit 1
+    set exitStatus = 2
+    goto END
   endif
 
   if ( $freCommandsToLoad ) then
@@ -649,14 +886,16 @@
 	if ( $echoOn ) unset echo
 	echo "*ERROR*: The 'fre-commands' modulefile '$freCommandsModuleFile' doesn't exist or not readable"
 	if ( $echoOn ) set echo
-	exit 1
+	set exitStatus = 2
+	goto END
       endif
       unset freCommandsModuleFile
     else
       if ( $echoOn ) unset echo
       echo "*ERROR*: The 'fre-commands' modulefiles directory '$freCommandsModuleFilesDir' doesn't exist or not readable"
       if ( $echoOn ) set echo
-      exit 1
+      set exitStatus = 2
+      goto END
     endif
   endif
 
@@ -671,39 +910,72 @@
 	if ( $echoOn ) unset echo
 	echo "*ERROR*: The modulefile '$freNCToolsModuleFile' doesn't exist or not readable"
 	if ( $echoOn ) set echo
-	exit 1
+	set exitStatus = 2
+	goto END
       endif
       unset freNCToolsModuleFile
     else
       if ( $echoOn ) unset echo
       echo "*ERROR*: The modulefiles directory '$freNCToolsModuleFilesDir' doesn't exist or not readable"
       if ( $echoOn ) set echo
-      exit 1
+      set exitStatus = 2
+      goto END
+    endif
+  endif
+
+  if ( $hsmToLoad ) then
+    if ( -d $hsmModuleFilesDir && -r $hsmModuleFilesDir ) then
+      set hsmModuleFile = $hsmModuleFilesDir/hsm/$hsmVersion
+      if ( -f $hsmModuleFile && -r $hsmModuleFile ) then
+	module use $hsmModuleFilesDir
+	module unload hsm
+	module load hsm/$hsmVersion
+      else
+	if ( $echoOn ) unset echo
+	echo "*ERROR*: The 'hsm' modulefile '$hsmModuleFile' doesn't exist or not readable"
+	if ( $echoOn ) set echo
+	set exitStatus = 2
+	goto END
+      endif
+      unset hsmModuleFile
+    else
+      if ( $echoOn ) unset echo
+      echo "*ERROR*: The 'hsm' modulefiles directory '$hsmModuleFilesDir' doesn't exist or not readable"
+      if ( $echoOn ) set echo
+      set exitStatus = 2
+      goto END
     endif
   endif
 
   if ( $xferToolToLoad ) then
-    grid-proxy-info
-    if ( $status == 0 ) then
-      if ( $actionXferToDo ) then
-        set gfdlDTN = 'rdtn.lb.princeton.rdhpcs.noaa.gov'
-        setenv GLOBUS_TCP_PORT_RANGE 40000,46999
-        setenv GLOBUS_TCP_SOURCE_RANGE 40000,46999
-        set -r xferSrcPrefix = 'file://'
-        set -r xferDstPrefix = "gsiftp://$gfdlDTN"
-        alias xferTool `which globus-url-copy` -block-size 8M -create-dest -fast -parallel 4 -restart -sync -tcp-buffer-size 8M -verbose-perf
-        unset gfdlDTN
+    if ( -d $xferToolModuleFilesDir && -r $xferToolModuleFilesDir ) then
+      set xferToolModuleFile = $xferToolModuleFilesDir/gcp/$xferToolVersion
+      if ( -f $xferToolModuleFile && -r $xferToolModuleFile ) then
+        module use $xferToolModuleFilesDir
+        module unload gcp
+	module load gcp/$xferToolVersion
+	set -r xferSrcPrefix = ""
+	set -r xferDstPrefix = "gfdl:"
+	alias xferTool `which gcp` --create-dirs --verbose
+	if ( $actionPPStartToDo ) then
+          set gfdlSubmit = 'moab-zeus-submit.princeton.rdhpcs.noaa.gov'
+          alias callTool `which gsissh` $gfdlSubmit
+          unset gfdlSubmit
+	endif
+      else
+	if ( $echoOn ) unset echo
+	echo "*ERROR*: The 'gcp' modulefile '$xferToolModuleFile' doesn't exist or not readable"
+	if ( $echoOn ) set echo
+	set exitStatus = 2
+	goto END
       endif
-      if ( $actionPPStartToDo ) then
-        set gfdlSubmit = 'moab-zeus-submit.princeton.rdhpcs.noaa.gov'
-        alias callTool `which gsissh` $gfdlSubmit
-        unset gfdlSubmit
-      endif
+      unset xferToolModuleFile
     else
       if ( $echoOn ) unset echo
-      echo "*ERROR*: Your Globus user environment is not set correctly - all your Globus-based actions will fail"
+      echo "*ERROR*: The 'gcp' modulefiles directory '$xferToolModuleFilesDir' doesn't exist or not readable"
       if ( $echoOn ) set echo
-      exit 1
+      set exitStatus = 2
+      goto END
     endif
   endif
 
@@ -711,9 +983,22 @@
 #------------------------ global constants and aliases -------------------------
 ################################################################################
 
+  if ( $HOST =~ fe[1-8] ) then
+    set -r hostType = 'login'
+  else if ( $HOST =~ bmem[1-6] ) then
+    set -r hostType = 'bigmem'
+  else
+    if ( $echoOn ) unset echo
+    echo "*ERROR*: Unknown host type"
+    if ( $echoOn ) set echo
+    set exitStatus = 2
+    goto END
+  endif  
+
   set -r archExt = 'tar'
 
   alias submit `which qsub`
+  alias retry `which output.retry`
 
 ################################################################################
 #----------------------------------- combining ---------------------------------
@@ -721,16 +1006,24 @@
 
   if ( $actionCombineToDo ) then
 
-    set -r patternGrepTail = '\.[0-9]{4}$'
+    set -r patternGrepTail = '\.[0-9]{4,}$'
     set -r patternGrepRestart = '\<res\>|\<nc\>'
     set -r patternGrepHistory = '\<nc\>'
 
     set -r tagFail = 'fail'
     set -r patternGrepFail = '\.'$tagFail'$'
 
-    alias mppnccombine `which mppnccombine` -r -64 -h 16384
-    alias slmnccombine `which combine-ncc`
-    alias slmnccompressed `which is-compressed`
+    if ( $hostType == 'login' || $hostType == 'bigmem' ) then
+      alias mppnccombine `which mppnccombine` -64 -h 16384
+      alias slmnccombine `which combine-ncc`
+      alias slmnccompressed `which is-compressed`
+    else
+      if ( $echoOn ) unset echo
+      echo "*ERROR*: Combining on '$hostType' hosts isn't allowed"
+      if ( $echoOn ) set echo
+      set exitStatus = 2
+      goto END
+    endif
 
     set -r memorySpec = ( `free -om | grep Mem` )
     set -r combineMemory = $memorySpec[4]
@@ -768,55 +1061,27 @@
           set inputFiles = ( `ls -1 | egrep "^$file$patternGrepTail"` )
           if ( $#inputFiles > 1 ) then
             rm --force $file
-            if ( $type == 'restart' ) then
-	      slmnccompressed $inputFiles[1]
-	      if ( $status == 0 ) then
-        	( slmnccombine $inputFiles $file && ( echo $inputFiles | xargs rm --force ) || touch $file.$tagFail ) &
-              else
-                set inxBeg = `echo $inputFiles[1] | awk --field-separator . '{print $NF}'`
-                set inxEnd = `echo $inputFiles[$#inputFiles] | awk --field-separator . '{print $NF}'`
-        	if ( $?mppnccombineWithBuffering ) then
-                  @ memoryPerOneBuffer = `mppnccombine -x -n $inxBeg -e $inxEnd $file`
-                  if ( $status == 0 ) then
-                    @ buffersNmb = ( $combineMemory / ( $combinesPerJob * $memoryPerOneBuffer ) ) + 1
-                    if ( $buffersNmb > $buffersNmbMax ) @ buffersNmb = $buffersNmbMax 
-                    ( mppnccombine -k $buffersNmb -n $inxBeg -e $inxEnd $file && ( echo $inputFiles | xargs rm --force ) || touch $file.$tagFail ) &
-                    unset buffersNmb
-                  else
-                    ( mppnccombine -n $inxBeg -e $inxEnd $file && ( echo $inputFiles | xargs rm --force ) || touch $file.$tagFail ) &
-		    if ( $echoOn ) unset echo
-		    echo "WARNING: Unable to determine a mppnccombine buffer memory"
-		    if ( $echoOn ) set echo
-                  endif
-                  unset memoryPerOneBuffer
-        	else
-                  ( mppnccombine -n $inxBeg -e $inxEnd $file && ( echo $inputFiles | xargs rm --force ) || touch $file.$tagFail ) &
-        	endif
-                unset inxEnd
-                unset inxBeg
-              endif
+	    slmnccompressed $inputFiles[1]
+	    if ( $status == 0 ) then
+              ( slmnccombine $inputFiles $file && ( echo $inputFiles | xargs rm --force ) || touch $file.$tagFail ) &
             else
-              set inxBeg = `echo $inputFiles[1] | awk --field-separator . '{print $NF}'`
-              set inxEnd = `echo $inputFiles[$#inputFiles] | awk --field-separator . '{print $NF}'`
               if ( $?mppnccombineWithBuffering ) then
-                @ memoryPerOneBuffer = `mppnccombine -x -n $inxBeg -e $inxEnd $file`
+                @ memoryPerOneBuffer = `mppnccombine -x $file $inputFiles`
                 if ( $status == 0 ) then
                   @ buffersNmb = ( $combineMemory / ( $combinesPerJob * $memoryPerOneBuffer ) ) + 1
                   if ( $buffersNmb > $buffersNmbMax ) @ buffersNmb = $buffersNmbMax 
-                  ( mppnccombine -k $buffersNmb -n $inxBeg -e $inxEnd $file && ( echo $inputFiles | xargs rm --force ) || touch $file.$tagFail ) &
+                  ( mppnccombine -k $buffersNmb $file $inputFiles && ( echo $inputFiles | xargs rm --force ) || touch $file.$tagFail ) &
                   unset buffersNmb
                 else
-                  ( mppnccombine -n $inxBeg -e $inxEnd $file && ( echo $inputFiles | xargs rm --force ) || touch $file.$tagFail ) &
+                  ( mppnccombine $file $inputFiles && ( echo $inputFiles | xargs rm --force ) || touch $file.$tagFail ) &
 		  if ( $echoOn ) unset echo
 		  echo "WARNING: Unable to determine a mppnccombine buffer memory"
 		  if ( $echoOn ) set echo
                 endif
                 unset memoryPerOneBuffer
               else
-                ( mppnccombine -n $inxBeg -e $inxEnd $file && ( echo $inputFiles | xargs rm --force ) || touch $file.$tagFail ) &
+                ( mppnccombine $file $inputFiles && ( echo $inputFiles | xargs rm --force ) || touch $file.$tagFail ) &
               endif
-              unset inxEnd
-              unset inxBeg
             endif
             if ( $counter < $combinesPerJob ) then
               @ counter++
@@ -838,14 +1103,17 @@
       set filesNotOK = ( `ls -1 | egrep "$patternGrepFail"` )
 
       if ( $#filesNotOK > 0 ) then
-	if ( $echoOn ) unset echo
 	foreach file ( $filesNotOK )
+	  if ( $echoOn ) unset echo
 	  echo "*ERROR*: A problem during combining the $type file '$file:r'"
+	  if ( $echoOn ) set echo
           rm -f $file
 	end
-	echo "*ERROR*: Failed to combine $type files"
+	if ( $echoOn ) unset echo
+	echo "-ERROR-: Failed to combine $type files"
 	if ( $echoOn ) set echo
-	exit 1
+	set exitStatus = 3
+	goto END
       else if ( $?combineTimeBeg ) then
 	set -r combineTimeEnd = `date "+%s"`
 	set -r combineTime = `echo "$combineTimeEnd - $combineTimeBeg" | bc -l`
@@ -868,7 +1136,8 @@
       if ( $echoOn ) unset echo
       echo "*ERROR*: The directory '$srcDir' doesn't exist or not readable/writable"
       if ( $echoOn ) set echo
-      exit 1
+      set exitStatus = 2
+      goto END
 
     endif
 
@@ -889,8 +1158,8 @@
     set -r checkRetriesNmb = 60
     set -r checkRetryDelay = 30
 
-    set -r patternSedProduction = 's/\/[0-9]+(\/(restart|history)\/[0-9]+(\.nc)*$)/\1/'
-    set -r patternSedRegression = 's/(pe|a|o)[0-9]+(\/(restart|history)\/[0-9]+(\.nc)*$)/\1\2/'
+    set -r patternSedProduction = 's/\/[0-9]+(\/'$type'\/[0-9]+((\.raw)?\.nc)*$)/\1/'
+    set -r patternSedRegression = 's/(pe|a|o)[0-9]+(\/'$type'\/[0-9]+((\.raw)?\.nc)*$)/\1\2/'
 
     alias ardiff `which ardiff` -c cp
 
@@ -911,7 +1180,7 @@
 
         @ retry = 0
 
-        while ( 1 )
+	while ( 1 )
 
 	  if ( -d "$ptmpDir$archDirMain" ) then
             if ( -r "$ptmpDir$archDirMain" ) then
@@ -946,12 +1215,12 @@
           if ( ! $?dstDirOrArchive ) then
 	    if ( -f $archDirMain.$archExt ) then
               if ( -r $archDirMain.$archExt ) then
-        	set dstDirOrArchive = $archDirMain.$archExt
+		set dstDirOrArchive = $archDirMain.$archExt
               else
 		if ( $echoOn ) unset echo
 		echo "WARNING: The $type archive '$archDirMain.$archExt' exists, but is not readable - skipping the dual checking"
 		if ( $echoOn ) set echo
-                break
+		break
               endif
 	    endif
           endif
@@ -1079,9 +1348,10 @@
       else
 
 	if ( $echoOn ) unset echo
-	echo "*ERROR*: The $type directory '$archDir' isn't a dual one"
+	echo "*ERROR*: The string '$archDir' doesn't conform to the unique $type directory pattern"
 	if ( $echoOn ) set echo
-	exit 1
+	set exitStatus = 2
+	goto END
 
       endif
 
@@ -1093,7 +1363,8 @@
       if ( $echoOn ) unset echo
       echo "*ERROR*: The directory '$srcDir' doesn't exist or not readable/writable"
       if ( $echoOn ) set echo
-      exit 1
+      set exitStatus = 2
+      goto END
 
     endif
 
@@ -1111,7 +1382,7 @@
 
   if ( $actionSaveToDo ) then
 
-    alias hsmput `which hsmput` --quiet --time --workroot=$workDir --archroot=//
+    alias hsmput `which hsmput` --time --workroot=$workDir --archroot=//
     
     if ( $paramCheckSumOn ) alias hsmput `alias hsmput` --checksum
     if ( $paramCompressOn ) alias hsmput `alias hsmput` --zip
@@ -1122,6 +1393,12 @@
       alias hsmput `alias hsmput` --ptmproot=$workDir --store=$archExt
     else if ( $paramPtmpOn ) then
       alias hsmput `alias hsmput` --ptmproot=$ptmpDir
+    endif
+
+    if ( $paramVerbosityOn ) then
+      alias hsmput `alias hsmput` --verbose
+    else
+      alias hsmput `alias hsmput` --quiet
     endif
 
     hsmput $archDir:s+/++
@@ -1136,7 +1413,8 @@
           if ( $echoOn ) unset echo
           echo "*ERROR*: System error during saving $type archive '$archDir.$archExt'"
           if ( $echoOn ) set echo
-          exit 1
+	  set exitStatus = 2
+	  goto END
         endif
       endif
       if ( $paramPtmpOn ) then
@@ -1148,14 +1426,16 @@
           if ( $echoOn ) unset echo
           echo "*ERROR*: System error during saving $type directory '$ptmpDir$archDir'"
           if ( $echoOn ) set echo
-          exit 1
+	  set exitStatus = 2
+	  goto END
 	endif
       endif
     else
       if ( $echoOn ) unset echo
-      echo "*ERROR*: Can't save the $type directory '$archDir'"
+      echo "-ERROR-: Can't save the $type directory '$archDir'"
       if ( $echoOn ) set echo
-      exit 1
+      set exitStatus = 3
+      goto END
     endif
 
     if ( ! $paramPtmpOn && $paramArchiveOn ) then
@@ -1176,46 +1456,65 @@
 
     if ( $actionXferToPerform ) then
 
-      if ( -f $archDir.$archExt && -r $archDir.$archExt ) then
+      if ( $hostType == 'login' ) then
 
-	xferTool $xferSrcPrefix$archDir.$archExt $xferDstPrefix$outputDirRemote:h/
+	if ( -f $archDir.$archExt && -r $archDir.$archExt ) then
 
-	if ( $status == 0 ) then
-	  if ( $echoOn ) unset echo
-	  echo "<NOTE> : The $type file '$archDir.$archExt' has been transferred to GFDL successfully"
-	  if ( $echoOn ) set echo
-        else
-	  if ( $echoOn ) unset echo
-	  echo "*ERROR*: Can't transfer the $type file '$archDir.$archExt'"
-	  if ( $echoOn ) set echo
-	  exit 1
-	endif
-
-	if ( -f $archDir.$archExt.ok && -r $archDir.$archExt.ok && -s $archDir.$archExt.ok ) then
-
-	  xferTool $xferSrcPrefix$archDir.$archExt.ok $xferDstPrefix$outputDirRemote:h/
+	  xferTool $xferSrcPrefix$archDir.$archExt $xferDstPrefix$outputDirRemote:h/
 
 	  if ( $status == 0 ) then
 	    if ( $echoOn ) unset echo
-	    echo "<NOTE> : The $type checksum file '$archDir.$archExt.ok' has been transferred to GFDL successfully"
+	    echo "<NOTE> : The $type file '$archDir.$archExt' has been transferred to GFDL successfully"
 	    if ( $echoOn ) set echo
           else
 	    if ( $echoOn ) unset echo
-	    echo "*ERROR*: Can't transfer the $type checksum file '$archDir.$archExt.ok'"
+	    echo "-ERROR-: Can't transfer the $type file '$archDir.$archExt'"
 	    if ( $echoOn ) set echo
-	    exit 1
+	    set exitStatus = 4
+	    goto END
 	  endif
+
+	  if ( -f $archDir.$archExt.ok && -r $archDir.$archExt.ok && -s $archDir.$archExt.ok ) then
+
+	    xferTool $xferSrcPrefix$archDir.$archExt.ok $xferDstPrefix$outputDirRemote:h/
+
+	    if ( $status == 0 ) then
+	      if ( $echoOn ) unset echo
+	      echo "<NOTE> : The $type checksum file '$archDir.$archExt.ok' has been transferred to GFDL successfully"
+	      if ( $echoOn ) set echo
+            else
+	      if ( $echoOn ) unset echo
+	      echo "-ERROR-: Can't transfer the $type checksum file '$archDir.$archExt.ok'"
+	      if ( $echoOn ) set echo
+	      set exitStatus = 4
+	      goto END
+	    endif
+
+	  endif
+
+	else
+
+	  if ( $echoOn ) unset echo
+	  echo "*ERROR*: The file '$archDir.$archExt' doesn't exist or not readable"
+	  if ( $echoOn ) set echo
+	  set exitStatus = 2
+	  goto END
 
 	endif
 
+	set actionXferOk = 1
+
+	echo "set actionXferOk = 1" >> $argFile
+
       else
-	echo "*ERROR*: The file '$archDir.$archExt' doesn't exist or not readable"
-	exit 1
+
+	if ( $echoOn ) unset echo
+	echo "*ERROR*: Transfer on '$hostType' hosts isn't allowed"
+	if ( $echoOn ) set echo
+	set exitStatus = 2
+	goto END
+
       endif
-
-      set actionXferOk = 1
-
-      echo "set actionXferOk = 1" >> $argFile
 
     else
 
@@ -1233,110 +1532,102 @@
 
     if ( $actionPPStartToPerform ) then
 
-      # ---------------- copy XML files to GFDL
+      if ( $hostType == 'login' ) then
 
-      if ( $#xmlFiles == $#xmlFilesRemote ) then
+	# ---------------- copy XML files to GFDL
 
-	@ inx = 1
+	if ( $#xmlFiles == $#xmlFilesRemote ) then
 
-	while ( $inx <= $#xmlFiles )
+	  @ inx = 1
 
-	  set xmlFile = $xmlFiles[$inx]
-	  set xmlFileRemote = $xmlFilesRemote[$inx]
+	  while ( $inx <= $#xmlFiles )
 
-	  if ( -f "$xmlFile" && -r "$xmlFile" ) then
-	    xferTool $xferSrcPrefix$xmlFile $xferDstPrefix$xmlFileRemote:h/
-	    if ( $status == 0 ) then
-	      if ( $echoOn ) unset echo
-	      echo "<NOTE> : The XML file '$xmlFile' has been copied to the remote XML file '$xmlFileRemote' successfully"
-	      if ( $echoOn ) set echo
+	    set xmlFile = $xmlFiles[$inx]
+	    set xmlFileRemote = $xmlFilesRemote[$inx]
+
+	    if ( -f "$xmlFile" && -r "$xmlFile" ) then
+	      xferTool $xferSrcPrefix$xmlFile $xferDstPrefix$xmlFileRemote:h/
+	      if ( $status == 0 ) then
+		if ( $echoOn ) unset echo
+		echo "<NOTE> : The XML file '$xmlFile' has been copied to the remote XML file '$xmlFileRemote' successfully"
+		if ( $echoOn ) set echo
+	      else
+		if ( $echoOn ) unset echo
+		echo "-ERROR-: Can't copy the XML file '$xmlFile' to GFDL"
+		if ( $echoOn ) set echo
+		set exitStatus = 4
+		goto END
+	      endif
 	    else
 	      if ( $echoOn ) unset echo
-	      echo "*ERROR*: Can't copy the XML file '$xmlFile' to GFDL"
+	      echo "*ERROR*: The file '$xmlFile' doesn't exist or not readable"
 	      if ( $echoOn ) set echo
-	      exit 1
+	      set exitStatus = 2
+	      goto END
 	    endif
-	  else
-	    if ( $echoOn ) unset echo
-	    echo "*ERROR*: The file '$xmlFile' doesn't exist or not readable"
-	    if ( $echoOn ) set echo
-	    exit 1
-	  endif
 
-	  unset xmlFileRemote
-	  unset xmlFile
-	  @ inx++
+	    unset xmlFileRemote
+	    unset xmlFile
+	    @ inx++
 
-	end
+	  end
 
-	unset inx
+	  unset inx
 
-      else
+	else
 
-	if ( $echoOn ) unset echo
-	echo "*ERROR*: Lists '$xmlFiles' and '$xmlFilesRemote' must have the same length"
-	if ( $echoOn ) set echo
-	exit 1
+	  if ( $echoOn ) unset echo
+	  echo "*ERROR*: Lists '$xmlFiles' and '$xmlFilesRemote' must have the same length"
+	  if ( $echoOn ) set echo
+	  set exitStatus = 2
+	  goto END
 
-      endif
+	endif
 
-      # ---------------- create the stdout directory for the pp.starter and submit the pp.starter job
+	# ---------------- create the stdout directory for the pp.starter and submit the pp.starter job
 
-      set stdoutDirRemotePP = $stdoutDirRemote/postProcess
+	set stdoutDirRemotePP = $stdoutDirRemote/postProcess
 
-      set dummyFile = /tmp/dummy.txt.$$
-      echo "dummy" >> $dummyFile
+	set ppCommand = ( set echo )
+	set ppCommand = ( $ppCommand && mkdir -p $stdoutDirRemotePP )
+	set ppCommand = ( $ppCommand && module use $freCommandsModuleFilesDirRemote )
+	set ppCommand = ( $ppCommand && module load fre-commands/$freCommandsVersionRemote )
+	set ppCommand = ( $ppCommand && msub $ppStarterOptions -d $stdoutDirRemotePP -o $stdoutDirRemotePP/ '`which pp.starter`' )
 
-      if ( $status == 0 ) then
-	xferTool $xferSrcPrefix$dummyFile $xferDstPrefix$stdoutDirRemotePP/
+	set ppStarterResult = `callTool "$ppCommand"`
+
 	if ( $status == 0 ) then
 	  if ( $echoOn ) unset echo
-	  echo "<NOTE> : The remote directory '$stdoutDirRemotePP' has been created successfully"
+	  echo "<NOTE> : The post-processor starter job '$ppStarterResult' to process the '$outputDirRemote:h' has been submitted successfully"
 	  if ( $echoOn ) set echo
-	  rm -f $dummyFile
 	else
 	  if ( $echoOn ) unset echo
-	  echo "*ERROR*: Can't create the remote directory '$stdoutDirRemotePP'"
+	  echo "-ERROR-: Can't submit the post-processor starter job to process the '$outputDirRemote:h'"
 	  if ( $echoOn ) set echo
-	  rm -f $dummyFile
-	  exit 1
+	  set exitStatus = 4
+	  goto END
 	endif
+
+	unset ppStarterResult
+	unset ppCommand
+
+	unset stdoutDirRemotePP
+
+	# ---------------- mark the success
+
+	set actionPPStartOk = 1
+
+	echo "set actionPPStartOk = 1" >> $argFile
+
       else
+
 	if ( $echoOn ) unset echo
-	echo "*ERROR*: The file '$dummyFile' can't be created"
+	echo "*ERROR*: Post-processing starting on '$hostType' hosts isn't allowed"
 	if ( $echoOn ) set echo
-	exit 1
+	set exitStatus = 2
+	goto END
+
       endif
-
-      set ppCommand = ( set echo )
-      set ppCommand = ( $ppCommand; module use $freCommandsModuleFilesDirRemote )
-      set ppCommand = ( $ppCommand; module load fre-commands/$freCommandsVersionRemote )
-      set ppCommand = ( $ppCommand; msub $ppStarterOptions -d $stdoutDirRemotePP -o $stdoutDirRemotePP/ '`which pp.starter`' )
-
-      set ppStarterResult = `callTool "$ppCommand"`
-
-      if ( $status == 0 ) then
-	if ( $echoOn ) unset echo
-	echo "<NOTE> : The post-processor starter job '$ppStarterResult' to process the '$outputDirRemote:h' has been submitted successfully"
-	if ( $echoOn ) set echo
-      else
-	if ( $echoOn ) unset echo
-	echo "*ERROR*: Can't submit the post-processor starter job to process the '$outputDirRemote:h'"
-	if ( $echoOn ) set echo
-	exit 1
-      endif
-
-      unset ppStarterResult
-      unset ppCommand
-
-      unset dummyFile
-      unset stdoutDirRemotePP
-
-      # ---------------- mark the success
-
-      set actionPPStartOk = 1
-
-      echo "set actionPPStartOk = 1" >> $argFile
 
     else
 
@@ -1363,9 +1654,10 @@
 	if ( $echoOn ) set echo
       else
 	if ( $echoOn ) unset echo
-	echo "*ERROR*: Can't submit the output stager job to transfer/ppStart the '$archDir:h'"
+	echo "-ERROR-: Can't submit the output stager job to transfer/ppStart the '$archDir:h'"
 	if ( $echoOn ) set echo
-	exit 1
+	set exitStatus = 4
+	goto END
       endif
 
       unset outputStagerResult
@@ -1390,8 +1682,25 @@
   unset action*Done
 
 ################################################################################
-#----------------------------- normal end of script ----------------------------
+#--------------------------------- end of script -------------------------------
 ################################################################################
+
+END:
+
+  if ( $exitStatus == 2 ) then
+    echo "set saveRetry = -1" >> $argFile
+    echo "set xferRetry = -1" >> $argFile
+  else if ( $exitStatus == 3 ) then
+    echo "@ saveRetry++" >> $argFile
+  else if ( $exitStatus == 4 ) then
+    echo "@ xferRetry++" >> $argFile
+  endif
+
+  unlock
+
+  if ( $actionRetryToDo ) then
+    retry $argFile:h
+  endif
 
   set -r runtimeEnd = `date "+%s"`
   set -r runtime = `echo "$runtimeEnd - $runtimeBeg" | bc -l`
@@ -1399,7 +1708,16 @@
   if ( $echoOn ) unset echo
   echo "<NOTE> : Finishing on `date`"
   echo "<NOTE> : Runtime = '$runtime' (seconds)"
-  echo "<NOTE> : Natural end of output stager script for '$expName'"
   if ( $echoOn ) set echo
 
-  exit 0
+  if ( $exitStatus == 0 ) then
+    if ( $echoOn ) unset echo
+    echo "<NOTE> : Natural end of output stager script for '$expName'"
+    if ( $echoOn ) set echo
+  else
+    if ( $echoOn ) unset echo
+    echo "<NOTE> : The output stager script for '$expName' failed with exit status = '$exitStatus'"
+    if ( $echoOn ) set echo
+  endif
+
+  exit $exitStatus

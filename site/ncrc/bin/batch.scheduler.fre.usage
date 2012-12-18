@@ -1,7 +1,7 @@
 #!/usr/bin/perl
 # -*- cperl -*-
 
-# $Id: batch.scheduler.fre.usage,v 1.1.2.4 2012/08/23 15:53:07 afy Exp $
+# $Id: batch.scheduler.fre.usage,v 1.1.2.6 2012/10/24 18:14:02 afy Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: Program to Report the FRE Usage
 # ------------------------------------------------------------------------------
@@ -10,7 +10,10 @@
 # afy    Ver   2.01  Add prefix 'moab02ncrc'                        December 11
 # afy    Ver   3.00  Replace prefix 'moab02ncrc' => 'gaea2'         January 12
 # afy    Ver   3.01  Add partition 'c2'                             January 12
-# afy    Ver   5.00  Modify 'PARTITIONS'                            August 12
+# afy    Ver   4.00  Modify 'PARTITIONS'                            August 12
+# afy    Ver   5.00  Modify 'PARTITIONS' (add 'c1:c2')              October 12
+# afy    Ver   5.01  Modify 'PARTITIONS_DEFAULT' ('c1:c2')          October 12
+# afy    Ver   6.00  Cosmetics                                      October 12
 # ------------------------------------------------------------------------------
 # Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2000-2012
 # Designed and written by V. Balaji, Amy Langenhorst and Aleksey Yakovlev
@@ -26,7 +29,7 @@ use Getopt::Long(':config', 'no_ignore_case', 'no_auto_abbrev');
 
   package batch_scheduler_fre_usage;
 
-  use constant VERSION => '$Id: batch.scheduler.fre.usage,v 1.1.2.4 2012/08/23 15:53:07 afy Exp $';
+  use constant VERSION => '$Id: batch.scheduler.fre.usage,v 1.1.2.6 2012/10/24 18:14:02 afy Exp $';
 
   use constant OPTLIST =>
   (
@@ -36,8 +39,8 @@ use Getopt::Long(':config', 'no_ignore_case', 'no_auto_abbrev');
     'version|V'
   );
   
-  use constant PARTITIONS => ('c1', 'c2', 't1');
-  use constant PARTITION_DEFAULT => 'c1ms'; 
+  use constant PARTITIONS => ('c1:c2', 'c1', 'c2', 't1');
+  use constant PARTITION_DEFAULT => 'c1:c2'; 
   
   my $self = File::Basename::basename($0);
 
@@ -133,14 +136,19 @@ use Getopt::Long(':config', 'no_ignore_case', 'no_auto_abbrev');
     exit 1;
   }
   
-  my $binDir = File::Basename::dirname($0);
-  my $listCommand = "$binDir/batch.scheduler.list --partition=$opt{partition} --running";
-  $listCommand .= " --verbose" if $opt{verbose};
-  chomp(my $lines = qx($listCommand));
+  my ($binDir, $lines, $status) = (File::Basename::dirname($0), '', 0);
+  foreach my $partition (split(/:/, $opt{partition}))
+  {
+    my $listCommand = "$binDir/batch.scheduler.list --partition=$partition --running";
+    $listCommand .= " --verbose" if $opt{verbose};
+    $lines .= qx($listCommand);
+    $status += $?;
+  }
   
-  if ($? == 0)
+  if ($status == 0)
   {
     my %res = ();
+    chomp($lines);
     my @lines = split(/\n/, $lines);
     foreach my $line (@lines)
     {
