@@ -1,7 +1,7 @@
 #!/usr/bin/perl
 # -*- cperl -*-
 #
-# $Id: fremake,v 18.0.2.29 2012/12/27 22:18:00 afy Exp $
+# $Id: fremake,v 18.0.2.27.2.13 2013/05/09 18:11:00 Kyle.Olivo Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: Program to Create a Script to Compile a Model
 # ------------------------------------------------------------------------------
@@ -103,7 +103,7 @@ use FREXML();
 
   package fremake;
 
-  use constant VERSION => '$Id: fremake,v 18.0.2.29 2012/12/27 22:18:00 afy Exp $';
+  use constant VERSION => '$Id: fremake,v 18.0.2.27.2.13 2013/05/09 18:11:00 Kyle.Olivo Exp $';
 
   use constant OPTLIST =>
   (
@@ -373,10 +373,13 @@ use FREXML();
     $scoScript .= "#FRE version-info\n";
     $scoScript .= "# ------------------------------------------------------------------------------\n\n";
     $scoScript .= "source \$MODULESHOME/init/csh\n";
-    $scoScript .= "module load git\n";
-    $scoScript .= "unalias *\n\n";
     $scoScript .= "echo Using source directory = $srcDir...\n";
     $scoScript .= "cd $srcDir\n\n";
+    $scoScript .= "module avail git >& .git_avail\n";
+    $scoScript .= "if (! -z .git_avail) then\n";
+    $scoScript .= "    module load git\n";
+    $scoScript .= "endif\n\n";
+    $scoScript .= "unalias *\n\n";
 
      foreach my $name (@names)
      {
@@ -649,7 +652,7 @@ use FREXML();
   {
 
     my ($z, $r, %o) = @_;
-    my ($expName, $srcDir, $execDir, $fre) = ($z->name(), $z->srcDir(), $z->execDir(), $z->fre());
+    my ($expName, $srcDir, $execDir, $ptmpDir, $fre) = ($z->name(), $z->srcDir(), $z->execDir(), $z->ptmpDir(), $z->fre());
 
     my $baseCsh	= $fre->baseCsh();
     my $mkmfTemplate = $fre->mkmfTemplate();
@@ -752,6 +755,10 @@ use FREXML();
 
     $Makefile .= "FORCE:\n\n";
 
+    $Makefile .= "stage:\n";
+    $Makefile .= "${tab}install -d $ptmpDir$execDir\n";
+    $Makefile .= "${tab}install -m 555 fms_$expName.x $ptmpDir$execDir\n\n";
+
     $Makefile .= "clean:\n";
     foreach my $name (@names)
     {
@@ -766,6 +773,15 @@ use FREXML();
       my $ref = $r->{$name};
       $Makefile .= "${tab}make $makeOverrides $ref->{makeOverrides} --directory=$name localize\n";
     }
+    $Makefile .= "\n";
+
+    $Makefile .= "distclean:\n";
+    foreach my $name (@names)
+    {
+      my $ref = $r->{$name};
+      $Makefile .= "${tab}rm -rf $name\n";
+    }
+    $Makefile .= "${tab}rm -f Makefile\n";
 
     # ---------------------------------------------------------------------------------------- get FRE parameters
 
@@ -887,7 +903,7 @@ use FREXML();
     if ($o{execute})
     {
       my $cmpScriptNameOut = $cmpScriptName . '.o' . FREUtil::jobID();
-      my $res = system("$cmpScriptName 2>&1 | tee $cmpScriptNameOut");
+      chop (my $res = `(($cmpScriptName 2>&1 3>&-; echo \$? >&3 ) | tee $cmpScriptNameOut 1>&2 3>&- ) 3>&1`);
       if ($res == 0)
       {
 	FREXML::save($cmpVerifyName, $r);

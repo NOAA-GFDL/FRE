@@ -15,7 +15,7 @@ POD2LATEX = pod2latex
 PDFLATEX = pdflatex
 
 PODS = fremake.pod frecheck.pod frepp.pod frerun.pod freindent.pod frescrub.pod \
-       hsmdel.pod freppcheck.pod frestatus.pod frelist.pod hsmget.pod hsmput.pod \
+       freppcheck.pod frestatus.pod frelist.pod \
        fretransform.pod frepriority.pod
 POD_MAN1 = $(patsubst %.pod,%.1,$(PODS))
 

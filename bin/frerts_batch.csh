@@ -218,9 +218,7 @@ endif
 
 if( "$GO_OPS"  =~ *"use_libs"* ) then
     sed 's/<property name.*MODIFIER.*value.*\/>/  <property name=\"MODIFIER\"  value=\"_libs\"\/>/g' -i $xmlfile
-    sed 's/<property name.*GOLD_SRC.*value.*\/>/  <property name=\"GOLD_SRC\"  value=\"\$root\/FMS_libs_compile\/src\/GOLD\"\/>/g' -i $xmlfile
-#Add links to libs at the end
-    sed 's/<\/experimentSuite>/ <experiment name="MOM_SIS_compile_libs"> <component><compile><csh>#external lib component<\/csh><\/compile><\/component> <\/experiment> \n <experiment name="mom4p1_coupled_compile_libs" inherit="MOM_SIS_compile_libs"\/> \n <experiment name="GOLD_SIS_compile_libs"> <component><compile><csh>#external lib component<\/csh><\/compile><\/component> <\/experiment> \n  <experiment name="MOM_SIS_LAD_FV_compile_libs"> <component><compile><csh>#external lib component<\/csh><\/compile><\/component> <\/experiment> \n <experiment name="CM2M_compile_libs" inherit="MOM_SIS_LAD_FV_compile_libs"\/> \n   <experiment name="MOM_SIS_LAD2_FV_compile_libs"> <component><compile><csh>#external lib component<\/csh><\/compile><\/component> <\/experiment> \n <experiment name="ESM2M_compile_libs" inherit="MOM_SIS_LAD2_FV_compile_libs"\/> \n <\/experimentSuite> /g' -i $xmlfile
+    sed 's/<property name.*GOLD_SRC.*value.*\/>/  <property name=\"GOLD_SRC\"  value=\"\$root\/FMS_compile_libs\/src\/GOLD\"\/>/g' -i $xmlfile
 endif
 
 if( $mom_rts_tag != "" ) then
@@ -279,7 +277,6 @@ if ( $static != "" ) then
 else
     ln -f -s $xmlfile $AUTORTSDIR/$xmlbase.latest
 endif
-
 
 set TODAY = `date`
 set LOGS = "======================================</br>"

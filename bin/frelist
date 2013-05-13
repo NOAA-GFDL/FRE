@@ -1,7 +1,7 @@
 #!/usr/bin/perl
 # -*- cperl -*-
 #
-# $Id: frelist,v 18.0.2.15 2012/06/29 19:48:01 afy Exp $
+# $Id: frelist,v 18.0.2.16 2013/04/24 21:21:32 afy Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: Program to List Experiments from the XML File
 # ------------------------------------------------------------------------------
@@ -42,8 +42,9 @@
 # afy    Ver  15.02  Advanced options compatibility control         June 12
 # afy    Ver  15.03  Add option --postfix                           June 12
 # afy    Ver  15.04  Use new FREExperiment (run as key)             June 12
+# afy    Ver  16.00  Fix experiment names adding                    April 13
 # ------------------------------------------------------------------------------
-# Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2000-2012
+# Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2000-2013
 # Designed and written by V. Balaji, Amy Langenhorst and Aleksey Yakovlev
 #
 
@@ -72,7 +73,7 @@ use FREUtil();
 
   package frelist;
 
-  use constant VERSION => '$Id: frelist,v 18.0.2.15 2012/06/29 19:48:01 afy Exp $';
+  use constant VERSION => '$Id: frelist,v 18.0.2.16 2013/04/24 21:21:32 afy Exp $';
 
   use constant OPTLIST =>
   (
@@ -480,8 +481,8 @@ use FREUtil();
     print ($fre->xmlAsString(), "\n") and exit FREDefaults::STATUS_OK;
   }
 
-  my @expNamesAll = $fre->experimentNames();
-  my @expNames = (scalar(@ARGV) > 0) ? FREUtil::listUnique(@ARGV) : @expNamesAll;
+  my @expNamesRequested = FREUtil::listUnique(@ARGV);
+  my @expNames = (scalar(@expNamesRequested) > 0) ? @expNamesRequested : $fre->experimentNames();
 
   my @exps = ();
   foreach my $expName (@expNames)
@@ -496,7 +497,7 @@ use FREUtil();
   {
 
     my ($expName, $expParent) = ($exp->name(), $exp->parent());
-    my $expNamePrefix = (scalar(@expNames) > 1) ? "$expName " : '';
+    my $expNamePrefix = (scalar(@expNamesRequested) == 1) ? '' : "$expName ";
     
     $fre->setCurrentExperimentName($expName);
 

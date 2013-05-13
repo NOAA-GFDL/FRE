@@ -1,6 +1,6 @@
 #!/bin/csh -fx
 #
-# $Id: output.stager,v 1.1.2.19 2013/03/13 22:27:07 afy Exp $
+# $Id: output.stager,v 1.1.2.21 2013/04/01 19:03:54 afy Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: Output Stager - NESCC Version
 # ------------------------------------------------------------------------------
@@ -70,6 +70,8 @@
 # afy    Ver  19.04  Allow combining on login nodes                 March 13
 # afy    Ver  19.05  Call 'mppnccombine' without options -n/-e      March 13
 # afy    Ver  19.06  Remove 'paramOverrideOn' argument              March 13
+# afy    Ver  20.00  Call 'mppnccombine' with option -m             March 13
+# afy    Ver  21.00  Modify 'combineMemory' estimation              April 13
 # ------------------------------------------------------------------------------
 # Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2000-2013
 # Designed and written by V. Balaji, Amy Langenhorst and Aleksey Yakovlev
@@ -80,7 +82,7 @@
   set -r runtimeBeg = `date "+%s"`
 
   if ( $echoOn ) unset echo
-  echo '<NOTE> : ====== FRE OUTPUT STAGER $Id: output.stager,v 1.1.2.19 2013/03/13 22:27:07 afy Exp $ ======'
+  echo '<NOTE> : ====== FRE OUTPUT STAGER $Id: output.stager,v 1.1.2.21 2013/04/01 19:03:54 afy Exp $ ======'
   echo "<NOTE> : Starting at $HOST on `date`"
   if ( $echoOn ) set echo
 
@@ -1014,7 +1016,7 @@
     set -r patternGrepFail = '\.'$tagFail'$'
 
     if ( $hostType == 'login' || $hostType == 'bigmem' ) then
-      alias mppnccombine `which mppnccombine` -64 -h 16384
+      alias mppnccombine `which mppnccombine` -64 -h 16384 -m
       alias slmnccombine `which combine-ncc`
       alias slmnccompressed `which is-compressed`
     else
@@ -1025,8 +1027,9 @@
       goto END
     endif
 
+    set -r memoryDownscalingFactor = '0.75'
     set -r memorySpec = ( `free -om | grep Mem` )
-    set -r combineMemory = $memorySpec[4]
+    set -r combineMemory = `echo "$memorySpec[2] * $memoryDownscalingFactor" | bc -l | xargs printf "%.0f"`
     set -r combinesPerJob = 12
 
     mppnccombine -V >& /dev/null

@@ -1,5 +1,5 @@
 #
-# $Id: FRETemplate.pm,v 18.0.2.25 2012/12/27 22:47:35 afy Exp $
+# $Id: FRETemplate.pm,v 18.0.2.28 2013/04/24 17:31:35 afy Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: Template Management Module
 # ------------------------------------------------------------------------------
@@ -67,8 +67,14 @@
 # afy    Ver  25.01  Modify '*Resources*' subs (add dualFlag)       December 12
 # afy    Ver  25.02  Modify '*Names' subs (remove dualFlag)         December 12
 # afy    Ver  25.00  Fix 'schedulerResources' utility               December 12
+# afy    Ver  26.00  Modify 'schedulerSize' (generics)              February 13
+# afy    Ver  26.01  Modify 'setSchedulerSize' (generics)           February 13
+# afy    Ver  26.02  Modify 'schedulerSizeAsString' (generics)      February 13
+# afy    Ver  26.03  Add 'setRunCommandSize' subroutine             February 13
+# afy    Ver  27.00  Modify 'setRunCommandSize' (fix w/o coupler)   March 13
+# afy    Ver  28.00  Replace 'setRunCommandSize' => 'setRunCommand' April 13
 # ------------------------------------------------------------------------------
-# Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2009-2012
+# Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2009-2013
 # Designed and written by V. Balaji, Amy Langenhorst and Aleksey Yakovlev
 #
 
@@ -96,6 +102,7 @@ use constant PRAGMA_ALIAS => 'alias';
 use constant PRAGMA_SCHEDULER_OPTIONS => 'scheduler-options';
 use constant PRAGMA_SCHEDULER_MAKE_VERBOSE => 'scheduler-make-verbose';
 use constant PRAGMA_VERSION_INFO => 'version-info';
+use constant PRAGMA_RUN_COMMAND_SIZE => 'run-command-size';
 use constant PRAGMA_DATAFILES => 'dataFiles';
 use constant PRAGMA_FMSDATASETS => 'fmsDataSets';
 use constant PRAGMA_GENERIC_TABLE => 'table';
@@ -119,70 +126,85 @@ my %FRETemplatePragmaCsh =
 # ///////////////////////////////////////////////////////////////// Utilities //
 # //////////////////////////////////////////////////////////////////////////////
 
-my $schedulerSize = sub($$$$$$$$)
-# ------ arguments: $fre $jobType $totalNP $totalCC $atmosNP $atmosNT $oceanNP $oceanNT
+my $schedulerSize = sub($$$$$$)
+# ------ arguments: $fre $jobType $couplerFlag $npes $refNPes $refNTds
 {
 
-  my ($fre, $j, $tp, $tc, $ap, $at, $op, $ot) = @_;
+  my ($fre, $j, $cf, $np, $rp, $rt) = @_;
   my $coresPerJobInc = $fre->property("FRE.scheduler.$j.coresPerJob.inc") || 1;
   my $coresPerJobMax = $fre->property("FRE.scheduler.$j.coresPerJob.max") || &POSIX::INT_MAX;
   
-  my $coresAggregated = sub($)
-  # ------ arguments: $ncores
-  {
-    my $x = shift;
-    $x = $coresPerJobMax if $x > $coresPerJobMax;
-    return POSIX::ceil($x / $coresPerJobInc) * $coresPerJobInc;
-  };
-
   my $coresDistributed = sub($$)
   # ------ arguments: $np $nt
   {
     my ($np, $nt) = @_;
-    my $product = $np * $nt;
-    $product = $coresPerJobMax if $product > $coresPerJobMax;
-    my ($nodesM, $procsM) = (POSIX::floor($product / $coresPerJobInc), POSIX::floor($coresPerJobInc / $nt));
-    $fre->out(FREMsg::WARNING, "It's not optimal to place '$nt' OpenMP threads on a node with '$coresPerJobInc' cores") if $coresPerJobInc % $nt;
-    if ($np > $nodesM * $procsM)
+    if ($np > 0)
     {
-      return ($nodesM, $procsM, 1, $np - $nodesM * $procsM);
+      my $product = $np * $nt;
+      $product = $coresPerJobMax if $product > $coresPerJobMax;
+      my ($nodesM, $procsM) = (POSIX::floor($product / $coresPerJobInc), POSIX::floor($coresPerJobInc / $nt));
+      $fre->out(FREMsg::WARNING, "It's not optimal to place '$nt' OpenMP threads on a node with '$coresPerJobInc' cores") if $coresPerJobInc % $nt;
+      if ($np > $nodesM * $procsM)
+      {
+	return ($nodesM, $procsM, 1, $np - $nodesM * $procsM);
+      }
+      else
+      {
+	return ($nodesM, $procsM);
+      }
     }
     else
     {
-      return ($nodesM, $procsM);
+      return ();
     }
+  };
+
+  my $coresDistributedList = sub($$)
+  # ------ arguments: $rp $rt
+  {
+    my ($rp, $rt) = @_;
+    my @result = ();
+    for (my $inx = 0; $inx < scalar(@{$rp}); $inx++) {push @result, $coresDistributed->($rp->[$inx], $rt->[$inx])}
+    return @result;
+  };
+
+  my $coresAggregated = sub($)
+  # ------ arguments: $ncores
+  {
+    my $x = shift;
+    if ($x > 0)
+    {
+      $x = $coresPerJobMax if $x > $coresPerJobMax;
+      return POSIX::ceil($x / $coresPerJobInc) * $coresPerJobInc;
+    }
+    else
+    {
+      return 0;
+    }
+  };
+  
+  my $coresAggregatedList = sub($$)
+  # ------ arguments: $rp $rt
+  {
+    my ($rp, $rt) = @_;
+    my $size = 0;
+    for (my $inx = 0; $inx < scalar(@{$rp}); $inx++) {$size += $coresAggregated->($rp->[$inx] * $rt->[$inx])}
+    return $size;
   };
 
   if ($fre->property('FRE.scheduler.enabled'))
   {
     my %option = ();
-    if ($ap == 0 && $op == 0)
+    if ($fre->property("FRE.scheduler.option.size.$j.distributed"))
     {
-      $option{size} = $fre->propertyParameterized("FRE.scheduler.option.size.$j", $coresAggregated->($tp));
-    }
-    elsif ($fre->property("FRE.scheduler.option.size.$j.aggregated"))
-    {
-      my ($coresAtmos, $coresOcean) = ($coresAggregated->($ap * $at), $coresAggregated->($op * $ot));
-      my $size = ($tc) ? ($coresAtmos + $coresOcean) : List::Util::max($coresAtmos, $coresOcean);  
-      $option{size} = $fre->propertyParameterized("FRE.scheduler.option.size.$j", $size);
-    }
-    elsif ($ap > 0 && $op == 0)
-    {
-      my @nodeSpec = $coresDistributed->($ap, $at);
-      my $nodeSpecSize = scalar(@nodeSpec);
-      $option{size} = $fre->propertyParameterized("FRE.scheduler.option.size.$j.$nodeSpecSize", @nodeSpec);
-    }
-    elsif ($ap == 0 && $op > 0)
-    {
-      my @nodeSpec = $coresDistributed->($op, $ot);
+      my @nodeSpec = ($cf) ? $coresDistributedList->($rp, $rt) : $coresDistributed->($np, 1);
       my $nodeSpecSize = scalar(@nodeSpec);
       $option{size} = $fre->propertyParameterized("FRE.scheduler.option.size.$j.$nodeSpecSize", @nodeSpec);
     }
     else
     {
-      my @nodeSpec = ($tc) ? ($coresDistributed->($ap, $at), $coresDistributed->($op, $ot)) : $coresDistributed->(List::Util::max($ap, $op), List::Util::max($at, $ot));
-      my $nodeSpecSize = scalar(@nodeSpec);
-      $option{size} = $fre->propertyParameterized("FRE.scheduler.option.size.$j.$nodeSpecSize", @nodeSpec);
+      my $size = ($cf) ? $coresAggregatedList->($rp, $rt) : $coresAggregated->($np);
+      $option{size} = $fre->propertyParameterized("FRE.scheduler.option.size.$j", $size);
     }
     return \%option;
   }
@@ -449,18 +471,18 @@ sub setList($$$@)
   }
 }
 
-sub setSchedulerSize($$$$$$$$$)
-# ------ arguments: $fre $refToScript $jobType $totalNP $totalCC $atmosNP $atmosNT $oceanNP $oceanNT
+sub setSchedulerSize($$$$$$$)
+# ------ arguments: $fre $refToScript $jobType $couplerFlag $npes $refNPes $refNTds
 {
 
-  my ($fre, $r, $j, $tp, $tc, $ap, $at, $op, $ot) = @_;
+  my ($fre, $r, $j, $cf, $np, $rp, $rt) = @_;
 
   my $prefix = FRETemplate::PRAGMA_PREFIX;
   my $schedulerOptions = FRETemplate::PRAGMA_SCHEDULER_OPTIONS;
   my $placeholder = qr/^[ \t]*$prefix[ \t]+$schedulerOptions[ \t]*$/mo;
 
   my $schedulerPrefix = $fre->property('FRE.scheduler.prefix');
-  my $h = $schedulerSize->($fre, $j, $tp, $tc, $ap, $at, $op, $ot);
+  my $h = $schedulerSize->($fre, $j, $cf, $np, $rp, $rt);
 
   foreach my $key (sort keys %{$h})
   {
@@ -470,12 +492,12 @@ sub setSchedulerSize($$$$$$$$$)
 
 }
 
-sub schedulerSizeAsString($$$$$$$$)
-# ------ arguments: $fre $jobType $totalNP $totalCC $atmosNP $atmosNT $oceanNP $oceanNT
+sub schedulerSizeAsString($$$$$$)
+# ------ arguments: $fre $jobType $couplerFlag $npes $refNPes $refNTds
 {
 
-  my ($fre, $j, $tp, $tc, $ap, $at, $op, $ot) = @_;
-  my ($h, @result) = ($schedulerSize->($fre, $j, $tp, $tc, $ap, $at, $op, $ot), ());
+  my ($fre, $j, $cf, $np, $rp, $rt) = @_;
+  my ($h, @result) = ($schedulerSize->($fre, $j, $cf, $np, $rp, $rt), ());
 
   foreach my $key (sort keys %{$h})
   {
@@ -666,6 +688,49 @@ sub setVersionInfo($$$$%)
   $info .= ' ' . $n;
 
   ${$r} =~ s/$placeholder/$info/;
+
+}
+
+sub setRunCommand($$$$$$)
+# ------ arguments: $fre $refToScript $couplerFlag $npes $refNPes $refNTds
+{
+
+  my ($fre, $r, $cf, $np, $rp, $rt) = @_;
+  
+  my $prefix = FRETemplate::PRAGMA_PREFIX;
+  my $runCommandSize = FRETemplate::PRAGMA_RUN_COMMAND_SIZE;
+  my $placeholder = qr/^[ \t]*$prefix[ \t]+$runCommandSize[ \t]*$/mo;
+
+  my $runCommandLauncher = $fre->property('FRE.mpi.runCommand.launcher');
+  my @components = split(';', $fre->property('FRE.mpi.component.names'));
+  my ($runCommand, $runSizeInfo) = ($runCommandLauncher, "  set npes = $np\n");
+  
+  if ($cf)
+  {
+    foreach my $inx (0 .. @{$rp} - 1)
+    {
+      my $component = $components[$inx];
+      $runSizeInfo .= "  set ${component}_npes = $rp->[$inx]\n";
+      $runSizeInfo .= "  set ${component}_nthreads = $rt->[$inx]\n";
+      if ($rp->[$inx] > 0)
+      {
+	$runCommand .= ' :'  if $runCommand ne $runCommandLauncher;
+        $runCommand .= ' ' . $fre->propertyParameterized('FRE.mpi.runCommand.option.mpiprocs', '$' . ${component} . '_npes');
+        $runCommand .= ' ' . $fre->propertyParameterized('FRE.mpi.runCommand.option.nthreads', '$' . ${component} . '_nthreads');
+        $runCommand .= ' ' . $fre->property('FRE.mpi.runCommand.executable');
+      }
+    }
+  }
+  else
+  {
+    $runCommand  .= ' ' . $fre->propertyParameterized('FRE.mpi.runCommand.option.mpiprocs', '$npes');
+    $runCommand  .= ' ' . $fre->propertyParameterized('FRE.mpi.runCommand.option.nthreads', 1);
+    $runCommand  .= ' ' . $fre->property('FRE.mpi.runCommand.executable');
+  }
+  
+  $fre->out(FREMsg::NOTE, "Running executable with:", $runCommand);
+  FRETemplate::setAlias($fre, $r, 'runCommand', $runCommand);
+  ${$r} =~ s/$placeholder/$runSizeInfo/;
 
 }
 

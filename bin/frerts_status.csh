@@ -19,6 +19,10 @@ set ignore_file_list = ""
 
 set argv = (`getopt -u -o hrd:p:t:x: -l reference_tag: -l frecheck_ops: --  $*`)
 
+if ( $? != 0 ) then
+    echo "unrecognized option"
+    exit 1
+endif
 
 while ("$argv[1]" != "--")
     switch ($argv[1])
@@ -47,7 +51,10 @@ while ("$argv[1]" != "--")
 	    set xml_list =  $argv[2]; shift argv
 	    set xml_list =  `echo $xml_list | awk  '{gsub(/,/," ");print}'`
             breaksw
-    endsw
+        default:
+	    echo "Invalid argument"
+	    exit
+        endsw
     shift argv
 end
 shift argv
@@ -58,8 +65,15 @@ end
 
 echo EXPLIST: $EXPLIST
 
+if ( "$FRECHECKOPS" =~ *"ignore_file_list"* ) then
 set ignore_file_list = `echo $FRECHECKOPS | awk  '{gsub(/.*--ignore_file_list=/,"");print}'`
+
+echo $ignore_file_list
+
 set ignore_file_list = `echo $ignore_file_list | awk  '{gsub(/,/,"|");print}'`
+
+echo $ignore_file_list
+endif 
 
 
 if ( $help ) then
@@ -98,7 +112,9 @@ if(! $#xml_list ) then
     set xml_list = "mom4p1_cpld.xml.latest CM2M_Control-1900.xml.latest ESM2_Control.xml.latest ICCMp1.xml.latest GOLD_SIS.xml.latest"
 endif
 
-set FRECHECK = frerts_check
+set FRECHECK = frecheck #frerts_check
+
+which $FRECHECK
 
 foreach xml ( $xml_list )
 
@@ -154,7 +170,7 @@ foreach xml ( $xml_list )
 
         set run_status = "<td bgcolor='#FFFFFF'></td>" # White to indicate not compiled yet.
 
-        set stdout_dir = `frelist --directory stdout -p $i -target $j -x $xml_file $k`
+        set stdout_dir = `frelist --directory stdout -p $i -t $j -x $xml_file $k`
 
         set cnt=0
 
@@ -195,7 +211,7 @@ foreach xml ( $xml_list )
 	    continue
 	endif
 
-	set archivedir  = `frelist --directory archive -p $i -target $j -x $xml_file $k`
+	set archivedir  = `frelist --directory archive -p $i -t $j -x $xml_file $k`
 	set frecheckout = $archivedir/frecheck.out
 	set old_number = 0
 	if( -d $archivedir ) then 
@@ -207,13 +223,14 @@ foreach xml ( $xml_list )
 	       echo "NumberOfRuns= $cnt" >  $frecheckout 
 	       echo "<a href=$FILEPROTOCOL//$outputlist title=$outputlist >Outputlist: $cnt OK, $cnt_fail ERROR runs</a>" >>  $frecheckout 
 	       echo Restarts: >>  $frecheckout 
-	       ( $FRECHECK -l  -p $i -target $j -x $xml_file $k >> $frecheckout ) >& /dev/null
+	       ( $FRECHECK -l  -p $i -t $j -x $xml_file $k >> $frecheckout ) >& /dev/null
 	       echo >>  $frecheckout 
 
 #              set ignore_var_list = con_temp #changes between riga_201104 and siena in MOM4p1 
 #	       set ignore_var_list = "eta_nonsteric,eta_steric,eta_dynamic,eta_water,eta_source,eta_surf_temp,eta_surf_salt,eta_surf_water,eta_bott_temp,eta_nonbouss"   #Missing in post siena MOM4p1
 #	       set FRECHECKOPS = "--ignore_var_list $ignore_var_list --ignore_file_list _crash --Attribute=missing_value,_FillValue" #Needed for comparing siena to pre-siena
-	       set cmd = "$FRECHECK -p $i -target $j -x $xml_file $FRECHECKOPS $k" #Needed for comparing siena to pre-siena
+	       set cmd = "$FRECHECK -p $i -t $j -x $xml_file $FRECHECKOPS $k" #Needed for comparing siena to pre-siena
+
 	       echo $cmd >> $frecheckout 
 	       ( $cmd  > $archivedir/frecheck.stdout ) >& $archivedir/frecheck.stderr
 	       cat $archivedir/frecheck.stderr $archivedir/frecheck.stdout >> $frecheckout  
@@ -226,18 +243,18 @@ foreach xml ( $xml_list )
 	   set CRASH_DETECTED = 0
  	   set NO_RUNS_TO_COMPARE = 0
 
-	   grep -q "CROSSOVER PASSED:.*$k.*"     $frecheckout
+	   grep -q "CROSSOVER.* PASSED:.*$k.*"     $frecheckout
 	   if( ! $status ) set CROSSOVER_PASSED = 1
-	   grep -q "REFERENTIALLY PASSED:.*$k.*" $frecheckout
+	   grep -q "REFERENTIALLY.* PASSED:.*$k.*" $frecheckout
 	   if( ! $status ) set REFERENTIALLY_PASSED = 1
-	   grep -q "CROSSOVER FAILED:.*$k.*"     $frecheckout
+	   grep -q "CROSSOVER.* FAILED:.*$k.*"     $frecheckout
 	   if( ! $status ) set CROSSOVER_FAILED = 1
-	   grep -q "REFERENTIALLY FAILED:.*$k.*" $frecheckout
+	   grep -q "REFERENTIALLY.* FAILED:.*$k.*" $frecheckout
 	   if( ! $status ) set REFERENTIALLY_FAILED = 1
-	   grep -q "CRASH DETECTED:.*$k.*"       $frecheckout
-	   if( ! $status ) set CRASH_DETECTED = 1
-	   grep -q "NO RUNS TO COMPARE:.*$k.*"   $frecheckout
-	   if( ! $status ) set NO_RUNS_TO_COMPARE = 1
+#	   grep -q "CRASH DETECTED:.*$k.*"       $frecheckout
+#	   if( ! $status ) set CRASH_DETECTED = 1
+#	   grep -q ".*UNTESTED.*:.*$k.*"   $frecheckout
+#	   if( ! $status ) set NO_RUNS_TO_COMPARE = 1
 
 	   set ignorediffs = "iceberg|blobs.res|GOLD_IC|ocean_geometry|timestats|Vertical_coordinate|WARNING"
 	   if( $ignore_file_list != "") set ignorediffs = "$ignorediffs|$ignore_file_list"

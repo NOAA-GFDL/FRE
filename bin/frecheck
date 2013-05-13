@@ -1,7 +1,7 @@
 #!/usr/bin/perl
 # -*- cperl -*-
 
-# $Id: frecheck,v 18.0.4.10 2012/10/27 00:07:05 afy Exp $
+# $Id: frecheck,v 18.0.4.11 2013/04/30 20:27:53 afy Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: Program to Check Model Restart Files
 # ------------------------------------------------------------------------------
@@ -47,6 +47,15 @@
 # afy    Ver  10.05  Add option --main                              October 12
 # afy    Ver  10.06  Add option --with-references                   October 12
 # afy    Ver  10.07  Don't use files/directories globbing           October 12
+# afy    Ver  11.00  Modify endDate (months, days, hours, output)   April 13
+# afy    Ver  11.01  Modify startDate (output)                      April 13
+# afy    Ver  11.02  Modify analyzeReferences (more wide pattern)   April 13
+# afy    Ver  11.03  Modify all(Production|Regression)Timestamps    April 13
+# afy    Ver  11.04  Modify all(Production|Regression)UniqueDirs    April 13
+# afy    Ver  11.05  Modify analyze(Production|Regression)          April 13
+# afy    Ver  11.06  Add allOutputFiles (with readdir)              April 13
+# afy    Ver  11.07  Modify outputFilesListing (call ^)             April 13
+# afy    Ver  11.08  Modify compare (timestamps with (M:D:H))       April 13
 # ------------------------------------------------------------------------------
 # Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2000-2012
 # Designed and written by V. Balaji, Amy Langenhorst and Aleksey Yakovlev
@@ -72,7 +81,7 @@ use FREUtil();
 
   package frecheck;
 
-  use constant VERSION => '$Id: frecheck,v 18.0.4.10 2012/10/27 00:07:05 afy Exp $';
+  use constant VERSION => '$Id: frecheck,v 18.0.4.11 2013/04/30 20:27:53 afy Exp $';
   
   use constant OPTLIST =>
   (
@@ -98,7 +107,6 @@ use FREUtil();
     'xmlfile|x=s'
   );
   
-  use constant TIMESTAMP_PATTERN => '[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]';
   use constant RESTART_INFIX => '.';
   use constant HISTORY_INFIX => '.nc.';
 
@@ -269,17 +277,20 @@ use FREUtil();
     return $result;
   }
   
-  sub endDate($$$$)
-  # ------ arguments: $startDate $length $granularity $calendarType
+  sub endDate($$$$$$)
+  # ------ arguments: $startDate $months $days $hours $granularity $calendarType
   {
-    my ($s, $l, $g, $c) = @_;
+    my ($s, $m, $d, $h, $g, $c) = @_;
     if ($c ne 'no_calendar')
     {
-      return Date::Manip::UnixDate(FREUtil::modifydate($s, "+ $l $g"), '%Y%m%d');
+      $s = FREUtil::modifydate($s, "+ $m months") if $m > 0;
+      $s = FREUtil::modifydate($s, "+ $d days")   if $d > 0;
+      $s = FREUtil::modifydate($s, "+ $h hours")  if $h > 0;
+      return Date::Manip::UnixDate($s, ($g eq 'months' || $g eq 'days') ? '%Y%m%d' : '%Y%m%d%H');
     }
     else
     {
-      return sprintf("%05d", $l);
+      return sprintf("%05d", $d);
     }
   }
   
@@ -300,7 +311,7 @@ use FREUtil();
     if (my $datetime = FREUtil::parseFortranDate($result))
     {
       $datetime = Date::Manip::Date_SetDateField($datetime, 'd', 1) if $g eq 'months';
-      return Date::Manip::UnixDate($datetime, '%Y%m%d');
+      return Date::Manip::UnixDate($datetime, ($g eq 'months' || $g eq 'days') ? '%Y%m%d' : '%Y%m%d%H');
     }
     else
     {
@@ -313,7 +324,6 @@ use FREUtil();
   {
     my ($z, $t, $x) = @_;
     my ($fre, @compFiles) = ($z->fre(), $z->extractReferenceFiles());
-    my $tsPattern = frecheck::TIMESTAMP_PATTERN;
     my %result = ();
     foreach my $compFile (@compFiles)
     {
@@ -322,7 +332,7 @@ use FREUtil();
       {
 	if (-d $dir && -r $dir)
 	{
-	  if ($compFile =~ m/\/($tsPattern)$x$/)
+	  if ($compFile =~ m/\/(\d+)$x$/)
 	  {
 	    my $timestamp = $1;
 	    if (exists($result{$dir}))
@@ -344,38 +354,37 @@ use FREUtil();
     return \%result;
   }
   
-  sub allProductionTimestamps($$$$$)
-  # ------ arguments: $refToPrdInfo $type $startDate $effectiveDate $calendarType
+  sub allProductionTimestamps($$$$)
+  # ------ arguments: $refToPrdInfo $type $startDate $effectiveDate
   {
-    my ($r, $t, $s, $e, $c) = @_;
-    my @result = ();
+    my ($r, $t, $s, $e) = @_;
     if ($e)
     {
-      push @result, $e; 
+      return ($e); 
     }
-    elsif ($s)
+    else
     {
-      my ($timestamp, $simMonthsLeft) = ($s, $r->{simTimeMonths});
+      my @result = ();
+      my ($nmls, $simMonthsLeft) = ($r->{namelists}, $r->{simTimeMonths});
+      my ($timestamp, $calendarType) = ($s || frecheck::startDate($nmls, 'months'), frecheck::calendarType($nmls));
       while ($simMonthsLeft > 0)
       {
         my $months = ($r->{segTimeMonths} <= $simMonthsLeft) ? $r->{segTimeMonths} : $simMonthsLeft;
-	my $timestampNext = frecheck::endDate($timestamp, $months, 'months', $c);
-	push @result, ($t eq 'restart') ? $timestampNext : "$timestamp:$months";
+	my $timestampNext = frecheck::endDate($timestamp, $months, 0, 0, 'months', $calendarType);
+	push @result, ($t eq 'restart') ? $timestampNext : "$timestamp:$months:0:0";
 	$timestamp = $timestampNext;
 	$simMonthsLeft -= $months;
       }
+      return @result;
     }
-    return @result;
   }
   
   sub allProductionUniqueDirs($$)
-  # ------ arguments: $path $type
+  # ------ arguments: $dir $type
   {
     my ($d, $t) = @_;
     if (opendir my $dh, $d)
     {
-      readdir $dh;
-      readdir $dh;
       my @result = map("$d/$_/$t", grep($_ =~ m/^\d+$/, readdir $dh));
       closedir $dh;
       return @result;
@@ -393,9 +402,7 @@ use FREUtil();
     my ($fre, $archiveDir, %result) = ($z->fre(), $z->archiveDir(), ());
     if (my $prdInfo = $z->extractProductionRunInfo())
     {
-      my $nmls = $prdInfo->{namelists};
-      my ($startDate, $calendarType) = ($s || frecheck::startDate($nmls, 'months'), frecheck::calendarType($nmls));
-      if (scalar(my @timestamps = frecheck::allProductionTimestamps($prdInfo, $t, $startDate, $e, $calendarType)) > 0)
+      if (scalar(my @timestamps = frecheck::allProductionTimestamps($prdInfo, $t, $s, $e)) > 0)
       {
 	my $dir = "$archiveDir/$t";
         $result{$dir} = \@timestamps if -d $dir && -r $dir;
@@ -429,36 +436,39 @@ use FREUtil();
     }
   }
   
-  sub allRegressionTimestamps($$$$$)
-  # ------ arguments: $refToRunInfo $type $startDate $effectiveDate $calendarType
+  sub allRegressionTimestamps($$$$)
+  # ------ arguments: $refToRunInfo $type $startDate $effectiveDate
   {
-    my ($r, $t, $s, $e, $c) = @_;
-    my @result = ();
+    my ($r, $t, $s, $e) = @_;
     if ($e)
     {
-      push @result, $e; 
+      return ($e); 
     }
-    elsif ($s)
+    else
     {
-      my $timestamp = $s;
-      foreach my $days (split(/ /, $r->{days}))
+      my @result = ();
+      my @months = split(/ /, $r->{months});
+      my @days   = split(/ /, $r->{days});
+      my @hours  = split(/ /, $r->{hours});
+      my ($nmls, $granularity) = ($r->{namelists}, ($r->{hoursDefined}) ? 'hours' : 'days');
+      my ($timestamp, $calendarType) = ($s || frecheck::startDate($nmls, $granularity), frecheck::calendarType($nmls));
+      for (my $segNo = 0; $segNo < scalar(@months); $segNo++)
       {
-	my $timestampNext = frecheck::endDate($timestamp, $days, 'days', $c);
-	push @result, ($t eq 'restart') ? $timestampNext : "$timestamp:$days";
+        my ($months, $days, $hours) = ($months[$segNo], $days[$segNo], $hours[$segNo]);
+	my $timestampNext = frecheck::endDate($timestamp, $months, $days, $hours, $granularity, $calendarType);
+	push @result, ($t eq 'restart') ? $timestampNext : "$timestamp:$months:$days:$hours";
 	$timestamp = $timestampNext;
       }
+      return @result;
     }
-    return @result;
   }
   
   sub allRegressionUniqueDirs($$$)
-  # ------ arguments: $path $postfix $type
+  # ------ arguments: $dir $postfix $type
   {
     my ($d, $p, $t) = @_;
     if (opendir my $dh, $d)
     {
-      readdir $dh;
-      readdir $dh;
       my @result = map("$d/$_/$t", grep($_ =~ m/^$p\d+$/, readdir $dh));
       closedir $dh;
       return @result;
@@ -481,10 +491,9 @@ use FREUtil();
 	foreach my $runNo (sort(keys(%{$regInfo})))
 	{
 	  my $runInfo = $regInfo->{$runNo};
-	  my ($postfix, $nmls) = ($runInfo->{postfix}, $runInfo->{namelists});
-	  my ($startDate, $calendarType) = ($s || frecheck::startDate($nmls, 'days'), frecheck::calendarType($nmls));
-          if (scalar(my @timestamps = frecheck::allRegressionTimestamps($runInfo, $t, $startDate, $e, $calendarType)) > 0)
+          if (scalar(my @timestamps = frecheck::allRegressionTimestamps($runInfo, $t, $s, $e)) > 0)
           {
+	    my $postfix = $runInfo->{postfix};
             my $dir = "$archiveDir/$postfix/$t";
 	    $result{$dir} = \@timestamps if -d $dir && -r $dir;
 	    if ($u eq 'all')
@@ -519,12 +528,28 @@ use FREUtil();
     return ($ok) ? \%result : undef;
   }
   
+  sub allOutputFiles($$)
+  # ------ arguments: $dir $extension
+  {
+    my ($d, $x) = @_;
+    if (opendir my $dh, $d)
+    {
+      my @result = map("$d/$_", grep($_ =~ m/^\d+$x$/, readdir $dh));
+      closedir $dh;
+      return @result;
+    }
+    else
+    {
+      return ();
+    }
+  }
+  
   sub outputFilesListing($$$$$)
   # ------ arguments: $exp $refToHash $type $extension $lister 
   {
     my ($z, $r, $t, $x, $l) = @_;
-    my ($fre, $tsPattern) = ($z->fre(), frecheck::TIMESTAMP_PATTERN);
-    if (my $files = join(' ', map("$_/$tsPattern$x", sort(keys(%{$r})))))
+    my $fre = $z->fre();
+    if (my $files = join(' ', map(frecheck::allOutputFiles($_, $x), sort(keys(%{$r})))))
     {
       print qx($l $files);
     }
@@ -542,8 +567,8 @@ use FREUtil();
     my ($crsTested, $crsPassed, $refTested, $refPassed) = (0, 0, 0, 0);
     foreach my $crsTimestamp (sort(keys(%{$crsInfo})))
     {
-      my ($tsHead, $tsTail) = split(/:/, $crsTimestamp);
-      my $tsToPrint = ($tsTail) ? "timestamp '$tsHead' and length '$tsTail'" : "timestamp '$tsHead'";
+      my ($tsHead, $tsM, $tsD, $tsH) = split(/:/, $crsTimestamp);
+      my $tsToPrint = (defined($tsM)) ? "timestamp '$tsHead' and length ($tsM:$tsD:$tsH)" : "timestamp '$tsHead'";
       if (exists($crsInfo->{$crsTimestamp}))
       {
 	if (scalar(my @crsFiles = frecheck::files($tsHead, $x, @{$crsInfo->{$crsTimestamp}})) > 0)

@@ -1,0 +1,88 @@
+#!/bin/csh -f
+#combine history files
+#modified from output staging script
+
+    set patternGrepTail = '\.[0-9]{4,}$'
+    set patternGrepRestart = '\<res\>|\<nc\>'
+    set patternGrepHistory = '\<nc\>'
+
+    set tagFail = 'fail'
+    set patternGrepFail = '\.'$tagFail'$'
+
+    if ( ! -f `which mppnccombine` ) then
+      echo "ERROR: The utility 'mppnccombine' not found"
+      exit 1
+    endif
+
+    if ( ! -f `which combine-ncc` ) then
+      echo "ERROR: The utility 'combine-ncc' not found"
+      exit 1
+    endif
+
+    if ( ! -f `which is-compressed` ) then
+      echo "ERROR: The utility 'is-compressed' not found"
+      exit 1
+    endif
+
+    alias mppnccombine `which mppnccombine` -64 -h 16384 -m
+    alias slmnccombine `which combine-ncc`
+    alias slmnccompressed `which is-compressed`
+
+    mppnccombine -V >& /dev/null
+
+    if ( $status == 0 ) then
+      if ( `mppnccombine -V |& head -1 | cut --delimiter=' ' --fields=3 | sed 's/\.//g'` > 220 ) then
+        set -r mppnccombineWithBuffering
+        set -r buffersNmbMax = 100
+        set -r combinesPerJob = 2
+        set -r combineMemory = 16
+      else
+        set -r combinesPerJob = 8
+      endif
+    else
+      set -r combinesPerJob = 8
+      rm --force ./-V
+    endif
+
+    set filesToCombine = ( `ls -1 | egrep "($patternGrepHistory).*$patternGrepTail" | sed -r "s/$patternGrepTail//g" | sort -u` )
+
+    @ counter = 1
+    set -r combineTimeBeg = `date "+%s"`
+    foreach file ( $filesToCombine )
+      set inputFiles = ( `ls -1 | egrep "^$file$patternGrepTail"` )
+      if ( $#inputFiles > 1 ) then
+        rm --force $file
+        slmnccompressed $inputFiles[1]
+        if ( $status == 0 ) then
+          ( slmnccombine $inputFiles $file && ( echo $inputFiles | xargs rm --force ) || touch $file.$tagFail ) &
+        else
+          if ( $?mppnccombineWithBuffering ) then
+            @ memoryPerOneBuffer = `mppnccombine -x $file $inputFiles `
+            if ( $status == 0 ) then
+              @ buffersNmb = ( $combineMemory / ( $combinesPerJob * $memoryPerOneBuffer ) ) + 1
+              if ( $buffersNmb > $buffersNmbMax ) @ buffersNmb = $buffersNmbMax
+              ( mppnccombine -k $buffersNmb $file $inputFiles && ( echo $inputFiles | xargs rm --force ) || touch $file.$tagFail ) &
+              unset buffersNmb
+            else
+              ( mppnccombine $file $inputFiles && ( echo $inputFiles | xargs rm --force ) || touch $file.$tagFail ) &
+              echo "WARNING: Unable to determine a mppnccombine buffer memory"
+            endif
+            unset memoryPerOneBuffer
+          else
+            ( mppnccombine $file $inputFiles && ( echo $inputFiles | xargs rm --force ) || touch $file.$tagFail ) &
+          endif
+        endif
+        if ( $counter < $combinesPerJob ) then
+          @ counter++
+        else
+          @ counter = 1
+          wait
+        endif
+      else if ( $#inputFiles > 0 ) then
+        mv --force $inputFiles[1] $file
+      endif
+      unset inputFiles
+    end
+    wait
+    unset counter
+

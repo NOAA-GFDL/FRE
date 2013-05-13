@@ -1,5 +1,5 @@
 #
-# $Id: FREExternalProperties.pm,v 1.1.4.6 2012/09/03 16:33:27 afy Exp $
+# $Id: FREExternalProperties.pm,v 1.1.4.7 2013/03/01 19:46:51 afy Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: External Properties Management Module
 # ------------------------------------------------------------------------------
@@ -18,8 +18,11 @@
 # afy    Ver   5.05  Modify propertiesExtract (warnings => fatal)   December 11
 # afy    Ver   6.00  Modify PROPERTY_NAME_PATTERN (allow colon)     September 12
 # afy    Ver   6.01  Modify propertiesExtract (allow colon)         September 12
+# afy    Ver   7.00  Remove PROPERTY_NAME_PATTERN                   February 13
+# afy    Ver   7.01  Add FREExternalPropertiesNamePattern           February 13
+# afy    Ver   7.02  Modify all the subs, using the name pattern    February 13
 # ------------------------------------------------------------------------------
-# Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2009-2012
+# Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2009-2013
 # Designed and written by V. Balaji, Amy Langenhorst and Aleksey Yakovlev
 #
 
@@ -30,10 +33,10 @@ use strict;
 use FREMsg();
 
 # //////////////////////////////////////////////////////////////////////////////
-# ////////////////////////////////////////////////////////// Global Constants //
+# ////////////////////////////////////////////////////////// Global Variables //
 # //////////////////////////////////////////////////////////////////////////////
 
-use constant PROPERTY_NAME_PATTERN => qr/[a-zA-Z]+(?:\w|\.|:)*/o;
+my $FREExternalPropertiesNamePattern = qr/[a-zA-Z]\w*(?:(?:\.|:)\w+)*/o;
 
 # //////////////////////////////////////////////////////////////////////////////
 # ///////////////////////////////////////////////////////////////// Utilities //
@@ -133,7 +136,7 @@ my $propertiesExtract = sub($$$)
       {
 	next;
       }
-      elsif ($line =~ m/^\s*((?:\w|\.|:)+)\s*=\s*(.*)\s*$/)
+      elsif ($line =~ m/^\s*($FREExternalPropertiesNamePattern)\s*=\s*(.*)\s*$/)
       {
         my ($key, $value) = ($1, $2);
 	if (FREExternalProperties::propertyNameCheck($key))
@@ -181,17 +184,16 @@ sub propertyNameCheck($)
 # ------ arguments: $string
 # ------ return 1 if the given $string matches the property name pattern 
 {
-  my ($s, $n) = (shift, FREExternalProperties::PROPERTY_NAME_PATTERN);
-  return ($s =~ m/^$n$/) ? 1 : 0;
+  my $s = shift;
+  return ($s =~ m/^$FREExternalPropertiesNamePattern$/) ? 1 : 0;
 }
 
 sub propertyNamesExtract($)
 # ------ arguments: $string
 # ------ return a list of substrings of the $string, matching references to the property name pattern 
 {
-  my ($s, $n, @r) = (shift, FREExternalProperties::PROPERTY_NAME_PATTERN, ());
-  while ($s =~ m/\$\(($n)\)/g) {push @r, $1;}
-  return @r;
+  my $s = shift;
+  return ($s =~ m/\$\(($FREExternalPropertiesNamePattern)\)/g);
 }
 
 # //////////////////////////////////////////////////////////////////////////////
