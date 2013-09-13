@@ -27,9 +27,9 @@ $ENV{'LANG'} = 'C';
 require 5;
 use strict;
 use File::Basename;
-use Getopt::Std;
+use Getopt::Long qw(:config posix_default bundling no_ignore_case);
 use Config;			# use to put in platform-specific stuff
-use vars qw( $opt_a $opt_c $opt_d $opt_f $opt_l $opt_m $opt_o $opt_p $opt_t $opt_v $opt_x ); # declare these global to be shared with Getopt:Std
+use vars qw( $opt_a $opt_c $opt_d $opt_f $opt_I $opt_l $opt_m $opt_o $opt_p $opt_t $opt_v $opt_x ); # declare these global to be shared with Getopt:Std
 
 #subroutines
 sub ensureTrailingSlash {
@@ -37,10 +37,21 @@ sub ensureTrailingSlash {
    local $/ = '/'; chomp @_[0]; @_[0] .= '/';
 }
 
-my $version = '$Id: mkmf,v 18.0.18.4.2.1 2013/01/08 13:52:47 keo Exp $ ';
+my $version = '$Id: mkmf,v 18.0.18.4.2.1.2.3 2013/08/21 15:04:06 Seth.Underwood Exp $ ';
 
 # initialize variables: use getopts for these
-getopts( 'a:c:dfm:o:p:t:vx' ) || die "\aSyntax: $0 [-a abspath] [-c cppdefs] [-d] [-f] [-m makefile] [-o otherflags] ][-p program] [-t template] [-v] [-x] [targets]\n";
+GetOptions("abspath|a=s" => \$opt_a,
+	   "cppdefs|c=s" => \$opt_c,
+	   "debug|d" => \$opt_d,
+	   "f" => \$opt_f,
+	   "includes|I=s@" => \$opt_I,
+	   "makefile|m=s" => \$opt_m,
+	   "otherflags|o=s" => \$opt_o,
+	   "program|p=s" => \$opt_p,
+	   "template|t=s" => \$opt_t,
+	   "verbose|v=s" => \$opt_v,
+	   "execute|x" => \$opt_x,
+	  ) or die "\aSyntax: $0 [-a abspath] [-c cppdefs] [-d] [-f] [-I includes] [-m makefile] [-o otherflags] ][-p program] [-t template] [-v] [-x] [targets]\n";
 $opt_v = 1 if $opt_d;	# debug flag turns on verbose flag also
 print "$0 $version\n" if $opt_v;
 
@@ -194,8 +205,12 @@ foreach $target ( @targets ) {
       my @files = readdir DIR;
 #find all sourcefiles in directory DIR
       foreach ( @files ) {
+	 # These next two lines appear to not be important
+	 # This is due to "@includepaths=''" line below.
+         # Leaving them here for now until further testing can be done.
 	 ( $name, $path, $suffix ) = fileparse( "$target$_", @inc_suffixes );
          push @includepaths, $target if $suffix; # is this line doing anything? looks like includepaths='' later...
+
 	 ( $name, $path, $suffix ) = fileparse( "$target$_", @src_suffixes );
 	 $object = "$name.o";
 	 if( $suffix && !$actual_source_of{$object} ) {
@@ -278,6 +293,21 @@ foreach $target ( @targets ) {
       }
    }
 }
+# Now add include directories $opt_I to %scanned
+foreach $target ( @$opt_I ) {
+  print STDERR '.' unless $opt_v; # show progress on screen (STDERR is used because it is unbuffered)
+  if ( $opt_a and substr($target,0,1) ne '/' ) {
+    # if an abs_path exists, attach it to all relative paths
+    $target = $opt_a . $target;
+  }
+  print "include target=$target\n" if $opt_v;
+  # All -I paths need to be directories
+  die "mkmf -I <path> requires that <path> be a directory\n" if ( ! -d $target );
+  if ( !$scanned{$target} ) {
+    $scanned{$target} = $scanOrder++;
+  }
+}
+
 delete $actual_source_of{''};
 # sort scanned directories by scan order
 sub ascendingScanOrder { $scanned{$a} <=> $scanned{$b}; }
@@ -366,6 +396,7 @@ foreach $object ( sort @objects ) {
 #modules
    foreach $module ( split /\s+/, $modules_used_by{$object} ) {
       $target = $obj_of_module{$module};
+      $target =~ s/$opt_a/\$\(SRCROOT\)/ if $opt_a;
 #we need to check target ne '' also below, since it is not mkmf's privilege
 #to complain about modules not found. That should be left to the compiler.
       if( $target and !$is_used{$target} ) {
@@ -384,6 +415,7 @@ foreach $object ( sort @objects ) {
       print MAKEFILE "\t$compile_cmd{$suffix}";
    }
    foreach ( @includepaths ) { # include files may be anywhere in directory array
+      $_ =~ s/$opt_a/\$\(SRCROOT\)/ if $opt_a;
       print MAKEFILE " -I$_" if $_;
    }
    print MAKEFILE "\t$source_of{$object}\n";

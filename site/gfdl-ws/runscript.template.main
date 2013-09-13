@@ -1,7 +1,7 @@
 #!/bin/csh -f
 #FRE scheduler-options
 # 
-# $Id: runscript.template.main,v 1.1.2.25 2013/04/30 03:28:00 afy Exp $
+# $Id: runscript.template.main,v 1.1.2.25.2.5 2013/12/03 16:17:08 arl Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: Runscript Template - GFDL Workstations Version
 # ------------------------------------------------------------------------------
@@ -88,7 +88,7 @@
   set -r runtimeBeg = `date "+%s"`
 
   if ( $echoOn ) unset echo
-  echo '<NOTE> : ====== FRE RUNSCRIPT $Id: runscript.template.main,v 1.1.2.25 2013/04/30 03:28:00 afy Exp $ ======'
+  echo '<NOTE> : ====== FRE RUNSCRIPT $Id: runscript.template.main,v 1.1.2.25.2.5 2013/12/03 16:17:08 arl Exp $ ======'
   echo "<NOTE> : Starting at $HOST on `date`"
   if ( $echoOn ) set echo
 
@@ -431,6 +431,21 @@
 
   endif
 
+  if ( $?fyear ) then
+    #remove leading zeros, fyear as integer 
+    set fyearint = `echo $fyear | sed 's/^0*//'`
+    if ( ${fyearint} > 0 ) then
+      @ fyearm1 = ${fyearint} - 1
+      set fyearm1 = `printf "%04d" $fyearm1`
+    else
+      set fyearm1 = '0000'
+    endif
+    @ fyearp1 = ${fyearint} + 1
+    set fyearp1 = `printf "%04d" $fyearp1`
+    @ fyearp2 = ${fyearint} + 2
+    set fyearp2 = `printf "%04d" $fyearp2`
+  endif
+
   # ---------------- absolute segment number
 
   @ currentSeg = ( $ireload - 1 ) * $segmentsPerJob + $irun
@@ -690,24 +705,51 @@
       unsetenv OMP_NUM_THREADS
     endif 
 
+    echo "Time before runCommand" 
+    date
+
     runCommand |& tee fms.out
 
     if ( $status == 0 ) then
 
       if ( $echoOn ) unset echo
-      echo "<NOTE> : Normal exit from the runCommand..."
+      echo "<NOTE> : The MPI launcher (mpirun) exited normally"
       if ( $echoOn ) set echo
+
+    else if ( $status == 1 ) then
+
+      set msg =       "*ERROR*: Automatic message from the job '$FRE_JOBID'\n"
+      set msg = "${msg}*ERROR*: -----------------------------------------------------------------------\n"
+      set msg = "${msg}*ERROR*: The MPI launcher (mpirun) exited with error status\n"
+      set msg = "${msg}*ERROR*: \n"
+      set msg = "${msg}*ERROR*: Possible Reasons: incorrect mpirun options (for example more cores specified\n"
+      set msg = "${msg}*ERROR*: than available), node failure or untrapped mpirun error.\n"
+      set msg = "${msg}*ERROR*: \n"
+      set msg = "${msg}*ERROR*: Please see the job stdout, located at:\n"
+      set msg = "${msg}*ERROR*: \n"
+      set msg = "${msg}*ERROR*: \t$stdoutDir/$FRE_JOBID\n"
+      set msg = "${msg}*ERROR*: \n"
+
+      set MPI_FAIL
 
     else
 
       set msg =       "*ERROR*: Automatic message from the job '$FRE_JOBID'\n"
       set msg = "${msg}*ERROR*: -----------------------------------------------------------------------\n"
-      set msg = "${msg}*ERROR*: The MPI launcher has failed...\n"
+      set msg = "${msg}*ERROR*: The MPI launcher (mpirun) exited abnormally\n"
       set msg = "${msg}*ERROR*: \n"
-      set msg = "${msg}*ERROR*: The job stdout:\n"
+      set msg = "${msg}*ERROR*: Possible Reasons: job cancelled or job ended through MPI_Abort or segfault.\n"
+      set msg = "${msg}*ERROR*: \n"
+      set msg = "${msg}*ERROR*: Please see the job stdout, located at:\n"
       set msg = "${msg}*ERROR*: \n"
       set msg = "${msg}*ERROR*: \t$stdoutDir/$FRE_JOBID\n"
       set msg = "${msg}*ERROR*: \n"
+
+      set MPI_FAIL
+
+    endif
+
+    if ( $?MPI_FAIL ) then
 
       set coreFiles = ( `ls core*` )
 
@@ -771,9 +813,11 @@
       unset msg
 
       set outputDir = ${outputDir}_crash
-      set MPI_FAIL
 
     endif
+
+    echo "Time after runCommand" 
+    date
 
     # ---------------- generate date for file names
 

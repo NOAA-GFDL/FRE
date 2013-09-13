@@ -1,6 +1,6 @@
 #!/bin/csh -fx
 #
-# $Id: output.stager,v 1.1.2.21 2013/04/01 19:03:54 afy Exp $
+# $Id: output.stager,v 1.1.2.21.4.1 2013/11/01 20:36:07 fms Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: Output Stager - NESCC Version
 # ------------------------------------------------------------------------------
@@ -82,7 +82,7 @@
   set -r runtimeBeg = `date "+%s"`
 
   if ( $echoOn ) unset echo
-  echo '<NOTE> : ====== FRE OUTPUT STAGER $Id: output.stager,v 1.1.2.21 2013/04/01 19:03:54 afy Exp $ ======'
+  echo '<NOTE> : ====== FRE OUTPUT STAGER $Id: output.stager,v 1.1.2.21.4.1 2013/11/01 20:36:07 fms Exp $ ======'
   echo "<NOTE> : Starting at $HOST on `date`"
   if ( $echoOn ) set echo
 
@@ -987,14 +987,8 @@
 
   if ( $HOST =~ fe[1-8] ) then
     set -r hostType = 'login'
-  else if ( $HOST =~ bmem[1-6] ) then
-    set -r hostType = 'bigmem'
   else
-    if ( $echoOn ) unset echo
-    echo "*ERROR*: Unknown host type"
-    if ( $echoOn ) set echo
-    set exitStatus = 2
-    goto END
+    set -r hostType = 'other'
   endif  
 
   set -r archExt = 'tar'
@@ -1015,17 +1009,9 @@
     set -r tagFail = 'fail'
     set -r patternGrepFail = '\.'$tagFail'$'
 
-    if ( $hostType == 'login' || $hostType == 'bigmem' ) then
-      alias mppnccombine `which mppnccombine` -64 -h 16384 -m
-      alias slmnccombine `which combine-ncc`
-      alias slmnccompressed `which is-compressed`
-    else
-      if ( $echoOn ) unset echo
-      echo "*ERROR*: Combining on '$hostType' hosts isn't allowed"
-      if ( $echoOn ) set echo
-      set exitStatus = 2
-      goto END
-    endif
+    alias mppnccombine `which mppnccombine` -64 -h 16384 -m
+    alias slmnccombine `which combine-ncc`
+    alias slmnccompressed `which is-compressed`
 
     set -r memoryDownscalingFactor = '0.75'
     set -r memorySpec = ( `free -om | grep Mem` )

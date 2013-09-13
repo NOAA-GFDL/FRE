@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 # -*- cperl -*-
-# $Id: frepp,v 18.0.2.52.2.1.2.89.2.54.2.3 2013/11/06 18:36:31 Amy.Langenhorst Exp $
+# $Id: frepp,v 18.0.2.52.2.1.2.89.2.60 2013/10/25 16:03:01 Amy.Langenhorst Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: History/diagnostics post-processing
 # ------------------------------------------------------------------------------
@@ -43,7 +43,7 @@ use vars qw( $checktransfer $statefile $state $writestate $didsomething $usersta
 
   package frepp;
 
-  use constant VERSION => '$Id: frepp,v 18.0.2.52.2.1.2.89.2.54.2.3 2013/11/06 18:36:31 Amy.Langenhorst Exp $';
+  use constant VERSION => '$Id: frepp,v 18.0.2.52.2.1.2.89.2.60 2013/10/25 16:03:01 Amy.Langenhorst Exp $';
 
 #Usage:    $relfrepp [ -AB:C:O:RY:Z:c:d:f:hlmMp:oqr:S:st:u:vx:z ] experiment [ experiment2 ... ]                 
   use constant OPTLIST =>
@@ -240,7 +240,7 @@ unless ( $opt_c ) {
    $opt_c = 'split';
 }
 
-$versionId = ' $Id: frepp,v 18.0.2.52.2.1.2.89.2.54.2.3 2013/11/06 18:36:31 Amy.Langenhorst Exp $';
+$versionId = ' $Id: frepp,v 18.0.2.52.2.1.2.89.2.60 2013/10/25 16:03:01 Amy.Langenhorst Exp $';
 
 $perlerrors = "";
 $component = "";
@@ -383,7 +383,7 @@ foreach $expt ( @ARGV ) {
    if ( $opt_O ) {$outscriptdir = "$opt_O";}
    unless ( -d "$outscriptdir" or $opt_A ) { system "mkdir -p $outscriptdir"; }
    unless ( -d "$stdoutdir/postProcess" or $opt_A ) { system "mkdir -p $stdoutdir/postProcess"; }
-   if ( $opt_u ) { $statedir .= "/$opt_u"; }
+   if ( "$opt_u" ne '' ) { $statedir .= "/$opt_u"; }
    unless ( -d "$statedir" or $opt_A ) { system "mkdir -p $statedir"; }
    my $aoutscriptdir = "$scriptsdir/analysis";
    if ( $opt_O ) {$aoutscriptdir = "$opt_O";} 
@@ -423,7 +423,7 @@ foreach $expt ( @ARGV ) {
 
    my $refinedir = "$opt_d"."_refineDiag";
    $ptmpDir .= $archivedir;
-   if ( $opt_u ) { $ptmpDir .= "/$opt_u"; }
+   if ( "$opt_u" ne '' ) { $ptmpDir .= "/$opt_u"; }
 
    #set whether to aggregate time series files in archive
    my $agg = FREUtil::getxpathval('postProcess/@archiveTimeSeries');
@@ -826,7 +826,7 @@ EOF
    #assemble a command to create archive directories
    if ($opt_v) { print "Creating archive directories...\n"; }
    $ppRootDir = $postprocessdir;
-   if ( $opt_u ) { $ppRootDir .= "_$opt_u"; }
+   if ( "$opt_u" ne '' ) { $ppRootDir .= "_$opt_u"; }
    if ( $opt_A and ! -d "$ppRootDir")  { print "ERROR: directory $ppRootDir not found. Exiting.\n"; exit 1; } 
    $mkdircommand = "";
    $mkdircommand .= "mkdir -p $ppRootDir/.dec $ppRootDir/.checkpoint " unless $opt_A;
@@ -1238,7 +1238,7 @@ EOF
       if ( $simEND < $tEND and ! $opt_A) {
          if ( $simEND < $t0 ) {
             print "WARNING: The simulation time calculated from the basedate in your diag_table ($basedate) and the simulation length from the xml ($simTime $simUnits) ends before this year of postprocessing ($opt_t).\n";
-            $simEND = $tEND; #not currently used for anything else
+            $simEND = $tEND; #simEND not currently used for anything else
          } else { 
             $tEND = $simEND;
             print "      adjusting tEND to simulation end: $tEND\n";
@@ -1732,8 +1732,9 @@ sub hsmget_history_csh {
    my $hf = $_[4];
    my $hsmf = $_[5];
 
-   my @reqStartMonths = segStartMonths($segTime,$segUnits);
-   my $histPerYear = scalar(@reqStartMonths);
+   #this keeps users to 1,2,3,4,6,12 mo segments, but if <1yr, it should be allowed.
+   #my @reqStartMonths = segStartMonths($segTime,$segUnits);
+   #my $histPerYear = scalar(@reqStartMonths);
    my $beginCombineTime = `date +\%s`;
 
 #check for and combine raw history files online
@@ -2553,8 +2554,9 @@ sub segStartMonths {
    } elsif ( $segTime == 1 and "$segUnits" eq "months") {
       return qw(0101 0201 0301 0401 0501 0601 0701 0801 0901 1001 1101 1201);
    } else {
-      print STDERR "ERROR: segTime $segTime not supported.  Try 1,2,3,4,6 or 12 month segments.\n" if not $opt_f;
-      return ();
+      #print STDERR "ERROR: segTime $segTime not supported.  Try 1,2,3,4,6 or 12 month segments.\n" if not $opt_f;
+      #return ();
+      die "ERROR: segTime $segTime not supported for timeAverages.  Try 1,2,3,4,6 or 12 month segments.\n" if not $opt_f;
    }
 
 }
@@ -2784,7 +2786,7 @@ EOF
    $time_ncks ncks \$ncksopt -d \$timename,12,12 \${prevyear}0101.$diag_source.nc \${prevyear}1201.$diag_source.nc > ncks.out
 EOF
    } elsif ($segTime != 1 ) {
-      print STDERR "ERROR: $diag_source: segTime $segTime not supported.  Try 1,2,3,4,6 or 12 month segments.\n";
+      print STDERR "ERROR: $diag_source: segTime $segTime not supported for seasonal calculations.  Try 1,2,3,4,6 or 12 month segments.\n";
    }
 
    if ( "$type" eq "dec" ) { return $convertDec; }
@@ -3597,6 +3599,8 @@ sub monthlyAVfromhist {
    #taNode = $_[0] ;
    my $sim0 = $_[1];
    my $ppcNode = $_[0]->parentNode;
+   #check for appropriate segment lengths
+   my @reqStartMonths = segStartMonths($segTime,$segUnits);
 
    my $src = 'monthly';
    my $interval = $_[0]->findvalue('@interval');
@@ -3842,6 +3846,8 @@ sub annualAV1yrfromhist {
    my $sim0 = $_[1];
    my $write2arch = $_[2];
    my $yr2do = $_[3];
+   #check for appropriate segment lengths
+   my @reqStartMonths = segStartMonths($segTime,$segUnits);
 
    my $ppcNode = $_[0]->parentNode;
    my $src = 'annual';
@@ -4416,22 +4422,39 @@ sub directTS{
    my $outdirpath = "$component/ts/$freq/$chunkLength";
    my $outdir = "$ppRootDir/$outdirpath";
 
+   my $iunit = "months";
    if($chunkLength =~ /yr/) {
       $chunkLength =~ s/yr//;
-   } else {
-      print "WARNING: Chunklength must be in years\n";
+      $iunit = "years";
    }
+   $chunkLength =~ s/mo//;
 
    my $yrsSoFar=&Delta_Format( &DateCalc($sim0,$t0,\$err,1) ,0,"%yd");
    my $mod = ($yrsSoFar+1) % $chunkLength;
-   if( $mod != 0 ) { return ""; } #don't do any calculations until a chunk is ready to go.
+   if( $mod != 0 and "$iunit" eq "years") { return ""; } #don't do any calculations until a chunk is ready to go.
    $mkdircommand .= "$outdir ";
    if( $chunkLength > $maxyrs ) { $maxyrs = $chunkLength; }
 
    my $hDateyr = substr($hDate,0,4);
-   my @hDates = ( FREUtil::padzeros($hDateyr-$chunkLength+1) .. "$hDateyr" );
-   my $start = FREUtil::graindate(FREUtil::modifydate($tEND,"-$chunkLength yr +1 sec"),$freq);
-   foreach my $d (@hDates) { $historyfiles .= "$d"."0101.nc.tar "; }
+   my $hDatemo = substr($hDate,4,2);
+   my @hDates = ();
+   my $start = '';
+   if ( "$iunit" eq "years" ) {
+      @hDates = ( FREUtil::padzeros($hDateyr-$chunkLength+1) .. "$hDateyr" );
+      $start = FREUtil::graindate(FREUtil::modifydate($tEND,"-$chunkLength $iunit +1 sec"),$freq);
+   } else {
+      @hDates = ( "$hDateyr" );
+   #the following gives wrong results, bug in Date:Manip
+   #$start = FREUtil::graindate(FREUtil::modifydate($tEND,"-$chunkLength months +1 sec"),$freq);
+   #the following is a cheap trick to fix the problem
+      $start = FREUtil::modifydate($tEND, "-$chunkLength months + 5 days");
+      $start = FREUtil::graindate($start,"mon");
+      $start .= "01";
+      $start = FREUtil::graindate($start,$freq);
+   }
+#print "start $start, tENDf $tENDf, chunkLength $chunkLength, iunit $iunit\n";
+
+   foreach my $d (@hDates) { $historyfiles .= "$d$hDatemo"."01.nc.tar "; }
    #determine whether to interpolate z levels
    my $zInterp = $ppcNode->findvalue('@zInterp');
    my $do_zInterp = 0;

@@ -173,17 +173,38 @@ EOF
 
   set verbosity = ""
   if ( ! $?quiet ) then
-     set verbosity = " -d"
+     set verbosity = " -v"
      echo ' '
   endif
 
-  echo "Running '$gcp -cd$verbosity $file gfdl:/archive/$USER/$outpath'"
-  $gcp -cd$verbosity $file gfdl:/archive/$USER/$outpath
-  set tmpstatus = $status
-  if ( $tmpstatus != 0 ) then
-    unset echo
-    echo "ERROR: in gcp ($tmpstatus)"
-    exit $tmpstatus
+  if ( $file =~ {/lustre/fs/*} ) then
+    # Transfers from /lustre/fs -> /archive are not permitted.
+    # We need to perform an intermediate transfer to ltfs first.
+    echo "Running '$gcp -cd$verbosity $file /lustre/ltfs/stage/$USER/$outpath'"
+    $gcp -cd$verbosity $file /lustre/ltfs/stage/$USER/$outpath
+    set tmpstatus = $status
+    if ( $tmpstatus != 0 ) then
+	unset echo
+	echo "ERROR: in gcp ($tmpstatus)"
+	exit $tmpstatus
+    endif
+    echo "Running '$gcp -cd$verbosity /lustre/ltfs/stage/$USER/$outpath$file:t gfdl:/archive/$USER/$outpath'"
+    $gcp -cd$verbosity /lustre/ltfs/stage/$USER/$outpath$file:t gfdl:/archive/$USER/$outpath
+    set tmpstatus = $status
+    if ( $tmpstatus != 0 ) then
+	unset echo
+	echo "ERROR: in gcp ($tmpstatus)"
+	exit $tmpstatus
+    endif
+  else
+    echo "Running '$gcp -cd$verbosity $file gfdl:/archive/$USER/$outpath'"
+    $gcp -cd$verbosity $file gfdl:/archive/$USER/$outpath
+    set tmpstatus = $status
+    if ( $tmpstatus != 0 ) then
+	unset echo
+	echo "ERROR: in gcp ($tmpstatus)"
+	exit $tmpstatus
+    endif
   endif
 
 # submit remote command (frepp) if necessary
