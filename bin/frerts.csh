@@ -133,9 +133,11 @@ set FRE_VERSION = `grep FRE_VERSION $XML | grep -o 'value=".*"' | grep -o '".*"'
 echo $FRE_VERSION
 
 module load $FRE_VERSION
+
 set myfreBin = /ncrc/home2/Niki.Zadeh/myfre/fre-commands/bin/
 
 set frerts_check = `which frerts_status.csh`
+
 set fremake = "fremake"
 set frerun  = "frerun"
 set frelist = "frelist"
@@ -153,7 +155,7 @@ set FRE_OPS = `echo $FRE_OPS | awk  '{gsub(/=/," ");print}'`
 set FRE_OPS = `echo $FRE_OPS | awk  '{gsub(/;/," ");print}'`   
 
 
-set logit = "/sbin/logsave -a ~/frertslogs.txt "
+set logit = "/sbin/logsave -a ~/autorts/frertslogs.txt "
 
 set PLATAR = $PLAT-$TARGET
 
@@ -164,6 +166,10 @@ if(! $#EXPLIST ) then
 	echo No experiments are specified , neither is --all option passed.
 	exit
     endif	
+endif
+
+if( $EXPLIST[1] == 'ALL' ) then
+  set EXPLIST = `$frelist -x $XML  -p $PLAT -t $TARGET --no-inherit | egrep -i -v "_base|_compile|_norts|_static"`
 endif
 
 echo experiments to run: $EXPLIST
@@ -254,7 +260,7 @@ EOF
       endif
       sleep 5
   endif
-  if( -e $EXEC) then 
+  if( -e $EXEC && ! $NOSTAGE) then 
     #Stage the executable
     echo "Pre-stage the executable $EXEC"
     set exec_dir = `dirname $EXEC`
@@ -293,20 +299,20 @@ while( $#TODOLIST );
           	set somebasicswaiting = 1
 	    else
                 echo "DO_basic : $EXP executable $EXEC is ready"
-
+                if( ! $NOSTAGE ) then
 		#Stage the executable
 		echo "Pre-stage the executable $EXEC"
 		set exec_dir = `dirname $EXEC`
 		mkdir -p $CSCRATCH/$USER/ptmp/$exec_dir
 		chmod +w $CSCRATCH/$USER/ptmp/$exec_dir/*
 		cp $EXEC $CSCRATCH/$USER/ptmp/$exec_dir/
-
+                endif 
 
 		set stageswitch = "-S" # "--submit-staged" or "-S"
                 if( $NOSTAGE ) set stageswitch = "-s"
 		set regressswitch = "-r $b_regression"
 		if( "$FRE_OPS" =~ *"-r"* ) set regressswitch = ""
-                set freCMD = "$frerun $stageswitch $regressswitch $FRE_OPS --no-transfer --nocombine-history -x $XML -p $PLAT -t $TARGET $EXP"
+                set freCMD = "$frerun $stageswitch $regressswitch $FRE_OPS -x $XML -p $PLAT -t $TARGET $EXP"
 
 		echo $freCMD
 		echo
@@ -428,7 +434,7 @@ foreach DONE ( $EXPDONE_1 )
 	echo "Finished the runs for $DONE" 
 
 	if( $DOFRECHECK ) then
-	    `$frerts_check -r --reference_tag $REFTAG -x $XML -p $PLAT -t $TARGET $DONE`
+	    $frerts_check -r --reference_tag $REFTAG -x $XML -p $PLAT -t $TARGET --fre_version $FRE_VERSION $DONE
 	endif
 
 	set TODOLIST_1 = ( $TODOLIST )
@@ -453,7 +459,7 @@ if( $#TODOLIST == 0 ) then
 	#redo the status page
         cat $XML.html >> $XML.old.html
 	\rm $XML.html
-        `$frerts_check --reference_tag $REFTAG -x $XML -p $PLAT -t $TARGET`
+        $frerts_check --reference_tag $REFTAG -x $XML -p $PLAT -t $TARGET --fre_version $FRE_VERSION 
 	echo "Please view $XML.html"
     endif
 

@@ -136,6 +136,7 @@
         <xs:element ref="diagTable"/>
         <xs:element ref="fieldTable"/>
         <xs:element ref="namelist"/>
+	<xs:element ref="fmsDataSets"/>
       </xs:choice>
     </xs:complexType>
   </xs:element>
@@ -149,6 +150,15 @@
     </xs:complexType>
   </xs:element>
   
+  <xs:element name="fmsDataSets">
+    <xs:annotation>
+      <xs:documentation>List of fmsDataSets.</xs:documentation>
+    </xs:annotation>
+    <xs:complexType mixed="true">
+      <xs:attribute name="type" type="xs:string"/>
+    </xs:complexType>
+  </xs:element>
+
   <xs:element name="gridSpec">
     <xs:annotation>
       <xs:documentation>Directly define a gridspec file's location.</xs:documentation>
@@ -244,7 +254,7 @@
     <xs:complexType>
       <xs:attribute name="i" use="required" type="xs:integer"/>
       <xs:attribute name="p" use="required" type="xs:integer"/>
-      <xs:attribute name="r" use="required" type="xs:integer"/>
+      <xs:attribute name="r" use="required" type="ensembles"/>
     </xs:complexType>
   </xs:element>
   
@@ -349,10 +359,10 @@
     <xs:complexType mixed="true">
       <xs:attribute name="branch_time" type="xs:decimal"/>
       <xs:attribute name="communityForcing" use="required" type="xs:string"/>
-      <xs:attribute name="endTime" use="required" type="xs:integer"/>
+      <xs:attribute name="endTime" use="required" type="xs:string"/>
       <xs:attribute name="parentExperimentID" type="xs:string"/>
       <xs:attribute name="parentExperimentRIP" type="xs:string"/>
-      <xs:attribute name="startTime" use="required" type="xs:integer"/>
+      <xs:attribute name="startTime" use="required" type="xs:string"/>
     </xs:complexType>
   </xs:element>
   
@@ -640,6 +650,7 @@
     <xs:complexType>
       <xs:choice>
         <xs:element ref="srcList"/>
+	<xs:element ref="csh"/>
         <xs:sequence>
           <xs:element ref="cppDefs"/>
           <xs:choice minOccurs="0">
@@ -690,8 +701,8 @@
       <xs:attribute name="momGrid" type="xs:string"/>
       <xs:attribute name="script" type="xs:string"/>
       <xs:attribute name="specify1year" type="xs:integer"/>
-      <xs:attribute name="startYear" type="Year"/>
-      <xs:attribute name="endYear" type="Year"/>
+      <xs:attribute name="startYear" type="xs:string"/>
+      <xs:attribute name="endYear" type="xs:string"/>
       <xs:attribute name="switch" type="xs:string"/>
       <xs:attribute name="outdir" type="xs:string"/>
       <xs:attribute ref="xml:base"/>
@@ -716,6 +727,17 @@
       <xs:enumeration value="conserve_order2"/>
     </xs:restriction>
   </xs:simpleType>
+
+  <xs:simpleType name="ensembles">
+    <xs:annotation>
+      <xs:documentation>Restricts the possible values realization to a simgle ensemble member or format 1:N.</xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:string">
+      <xs:pattern value="1"/>
+      <xs:pattern value="1:[2-9]"/>
+      <xs:pattern value="1:[1-9][0-9]"/>      
+    </xs:restriction>
+  </xs:simpleType>
   
   <xs:simpleType name="PostProcessZInterp">
     <xs:annotation>
@@ -738,16 +760,6 @@
     <xs:restriction base="xs:positiveInteger">
       <xs:minInclusive value="1"/>
       <xs:maxInclusive value="4"/>
-    </xs:restriction>
-  </xs:simpleType>
-  
-  <xs:simpleType name="Year">
-    <xs:annotation>
-      <xs:documentation>Restricts the possible values for a valid year to a sane range.</xs:documentation>
-    </xs:annotation>
-    <xs:restriction base="xs:positiveInteger">
-      <xs:minInclusive value="0001"/>
-      <xs:maxInclusive value="9999"/>
     </xs:restriction>
   </xs:simpleType>
 </xs:schema>

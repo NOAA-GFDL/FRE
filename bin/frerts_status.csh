@@ -1,4 +1,4 @@
-#!/bin/csh -x
+#!/bin/csh  
 set FILEPROTOCOL = "file:"
 set FRE_VERSION = fre
 set FRECHECKOPS = ""
@@ -16,8 +16,9 @@ set list = "mom4p1_solo.xml mom4p1_cpld.xml CM2M_Control-1900.xml ESM2_Control.x
 
 set ignore_var_list = "NONE"
 set ignore_file_list = ""
+set ignorelist = ""
 
-set argv = (`getopt -u -o hrd:p:t:x: -l reference_tag: -l frecheck_ops: --  $*`)
+set argv = (`getopt -u -o hrd:p:t:x: -l reference_tag: -l frecheck_ops: -l ignore_list: -l fre_version: --  $*`)
 
 if ( $? != 0 ) then
     echo "unrecognized option"
@@ -34,6 +35,10 @@ while ("$argv[1]" != "--")
             set xml_dir   = $argv[2]; shift argv; breaksw
         case --reference_tag:
             set myreftag = $argv[2]; shift argv; breaksw
+        case --ignore_list:
+            set ignorelist = $argv[2]; shift argv
+            set ignorelist = `echo $ignorelist | awk  '{gsub(/,/,"|");print}'`
+            breaksw
         case --frecheck_ops:
             set FRECHECKOPS = $argv[2]; shift argv
 	    set FRECHECKOPS = `echo $FRECHECKOPS | awk  '{gsub(/;/," ");print}'`
@@ -51,6 +56,8 @@ while ("$argv[1]" != "--")
 	    set xml_list =  $argv[2]; shift argv
 	    set xml_list =  `echo $xml_list | awk  '{gsub(/,/," ");print}'`
             breaksw
+        case --fre_version:
+            set FRE_VERSION = $argv[2]; shift argv; breaksw
         default:
 	    echo "Invalid argument"
 	    exit
@@ -58,6 +65,7 @@ while ("$argv[1]" != "--")
     shift argv
 end
 shift argv
+
 
 foreach EXP ( $argv )    
     set EXPLIST = ($EXPLIST $EXP)
@@ -94,7 +102,11 @@ Usage:     frerts_status.csh space_separated_list_of_xmls > path_to_output_html_
 Examples:
 frerts_status.csh -r --reference_tag siena_201202 -p ncrc2.intel -t prod-openmp -x /ncrc/home2/Niki.Zadeh/autorts/siena_mom4p1_siena_22feb2012_smg/c2/_FEB23/CM2M_Control-1900.xml.20120223102951 --frecheck_ops "++ignore_var_list=eta_nonsteric,eta_steric,eta_dynamic,eta_water,eta_source,eta_surf_temp,eta_surf_salt,eta_surf_water,eta_bott_temp,eta_nonbouss;++ignore_file_list=_crash"
 
-/ncrc/home2/Niki.Zadeh/fre/testing_fre_20120214/fre-commands/bin/frerts_status.csh -r --reference_tag siena_201202 -p ncrc2.intel -t prod-openmp -x /ncrc/home2/Niki.Zadeh/autorts/siena_201202_mom4p1_siena_22feb2012_smg/c2/_FEB24/mom4p1_solo.xml.20120224115309  mk3p51 
+/ncrc/home2/Niki.Zadeh/fre/fre-commands-bronx-6/fre-commands/bin/frerts_status.csh -r --reference_tag siena_201202 -p ncrc2.intel -t prod-openmp -x /ncrc/home2/Niki.Zadeh/autorts/siena_201202_mom4p1_siena_22feb2012_smg/c2/_FEB24/mom4p1_solo.xml.20120224115309  mk3p51 
+
+frerts_status.csh -x /ncrc/home2/Niki.Zadeh/autorts/testing_20130905/c2/CM2M_Control-1900.xml.20130906094545 -p ncrc2.intel -t prod-openmp --reference_tag siena_201308 --ignore_list "icebergs,cana,glac,lake,land,snow,soil,vegn,ocean_density"
+
+frerts_status.csh -x /ncrc/home2/Niki.Zadeh/autorts/testing_20130905/c2/CM3Z.xml.20130905191816 -p ncrc2.intel -t prod-openmp --reference_tag siena_201308 --ignore_list "icebergs,cana,glac,lake,land,snow,soil,vegn,ocean_density"
 
 EOF
 exit 1
@@ -112,9 +124,7 @@ if(! $#xml_list ) then
     set xml_list = "mom4p1_cpld.xml.latest CM2M_Control-1900.xml.latest ESM2_Control.xml.latest ICCMp1.xml.latest GOLD_SIS.xml.latest"
 endif
 
-set FRECHECK = frecheck #frerts_check
-
-which $FRECHECK
+set FRECHECK = frecheck
 
 foreach xml ( $xml_list )
 
@@ -136,25 +146,19 @@ foreach xml ( $xml_list )
     endif  
 
     set RELEASE = `grep 'name="RELEASE"' $xml_file | grep -o 'value=".*"' | grep -o '".*"'`
+    set REFTAG  = `grep 'name="reference_tag"' $xml_file | grep -o 'value=".*"/>' | grep -o '".*"'`
     
     echo "<tr><td><a href="$FILEPROTOCOL//$xml_file" title="xml:$xml,release:$RELEASE">EXPERIMENT</a></td>" >> $html_file
-    
+
+#    echo "<tr><td></td>">> $html_file
     foreach i ( $platform_list )
-    echo "<td colspan=$#target_list>$i</td>">> $html_file
-    end
-    echo "</tr>">> $html_file
-    
-    
-    
-    echo "<tr><td></td>">> $html_file
-    foreach i ( $platform_list )
-    foreach j ( $target_list ) 
-    echo "<td>$j</td>">> $html_file
+    foreach j ( $target_list )
+    echo "<td>$i,$j</td>">> $html_file
     end
     end
     echo "</tr>">> $html_file
 
-
+    
     if(! $#EXPLIST ) set EXPLIST = `frelist --no-inherit -x $xml_file | egrep -v "_compile|_base|_1thread|noRTS" `
     echo "<tr>">> $html_file
     foreach k ( $EXPLIST ) 
@@ -223,18 +227,20 @@ foreach xml ( $xml_list )
 	       echo "NumberOfRuns= $cnt" >  $frecheckout 
 	       echo "<a href=$FILEPROTOCOL//$outputlist title=$outputlist >Outputlist: $cnt OK, $cnt_fail ERROR runs</a>" >>  $frecheckout 
 	       echo Restarts: >>  $frecheckout 
-	       ( $FRECHECK -l  -p $i -t $j -x $xml_file $k >> $frecheckout ) >& /dev/null
+	       ( $FRECHECK -l -r basic,rts -p $i -t $j -x $xml_file $k >> $frecheckout ) >& /dev/null
 	       echo >>  $frecheckout 
-
+               
 #              set ignore_var_list = con_temp #changes between riga_201104 and siena in MOM4p1 
 #	       set ignore_var_list = "eta_nonsteric,eta_steric,eta_dynamic,eta_water,eta_source,eta_surf_temp,eta_surf_salt,eta_surf_water,eta_bott_temp,eta_nonbouss"   #Missing in post siena MOM4p1
 #	       set FRECHECKOPS = "--ignore_var_list $ignore_var_list --ignore_file_list _crash --Attribute=missing_value,_FillValue" #Needed for comparing siena to pre-siena
-	       set cmd = "$FRECHECK -p $i -t $j -x $xml_file $FRECHECKOPS $k" #Needed for comparing siena to pre-siena
+	       set cmd = "$FRECHECK -r basic,rts -p $i -t $j -x $xml_file $FRECHECKOPS $k" #Needed for comparing siena to pre-siena
 
 	       echo $cmd >> $frecheckout 
 	       ( $cmd  > $archivedir/frecheck.stdout ) >& $archivedir/frecheck.stderr
 	       cat $archivedir/frecheck.stderr $archivedir/frecheck.stdout >> $frecheckout  
            endif
+           #Print out the result for the benefit of logs
+           cat $frecheckout
 
 	   set CROSSOVER_PASSED = 0
 	   set REFERENTIALLY_PASSED = 0
@@ -256,8 +262,10 @@ foreach xml ( $xml_list )
 #	   grep -q ".*UNTESTED.*:.*$k.*"   $frecheckout
 #	   if( ! $status ) set NO_RUNS_TO_COMPARE = 1
 
-	   set ignorediffs = "iceberg|blobs.res|GOLD_IC|ocean_geometry|timestats|Vertical_coordinate|WARNING"
+	   set ignorediffs = "iceberg|blobs.res|GOLD_IC|ocean_geometry|Vertical_coordinate|WARNING"
 	   if( $ignore_file_list != "") set ignorediffs = "$ignorediffs|$ignore_file_list"
+           if( $ignorelist != "") set ignorediffs = "$ignorediffs|$ignorelist"
+
 	   grep DIFFER $frecheckout | egrep -q -v "$ignorediffs" 
 
 	   if( $status ) then #only icebergs DIFFER, flip the failures if any
@@ -273,6 +281,9 @@ foreach xml ( $xml_list )
 
 	   set color = '#FFFFFF' 
 	   set title='NO_COMPARISONS'
+           set CR='Null'
+           set RF='Null'
+           set CRASH=''
 
 	   if( $NO_RUNS_TO_COMPARE ) then
 	       	set color='#FFFF00' 
@@ -282,13 +293,18 @@ foreach xml ( $xml_list )
 		    if( $REFERENTIALLY_PASSED ) then
 			set color='#00FF00'
 			set title='CROSSOVER_PASSED,REFERENTIALLY_PASSED '
+                        set CR='Pass'
+                        set RF='Pass'
 		    else
 		      if( $REFERENTIALLY_FAILED ) then
 			set color='#00FFFF'
 			set title='CROSSOVER_PASSED,REFERENTIALLY_FAILED'
+                        set CR='Pass'
+                        set RF='Fail'
 		      else #NO_REFERENCE_COMPARED
 			set color='#808000'
 			set title='CROSSOVER_PASSED,NO_REFERENCE_FOUND'			
+                        set CR='Pass'
                       endif                   
 		    endif
 		else
@@ -296,23 +312,30 @@ foreach xml ( $xml_list )
 		      if( $REFERENTIALLY_PASSED ) then
 			set color='#FFA500'
 			set title='CROSSOVER_FAILED,REFERENTIALLY_PASSED '
-	    	      else
+                        set CR='Fail'
+                        set RF='Pass'
+ 	    	      else
 		        if( $REFERENTIALLY_FAILED ) then
 			  set color='#800000'
 			  set title='CROSSOVER_FAILED,REFERENTIALLY_FAILED' 
+                          set CR='Fail'                    
+                          set RF='Fail'                    
 		        else #NO_REFERENCE_COMPARED
 			  set color='#800000'
-			  set title='CROSSOVER_FAILED,NO_REFERENCE_FOUND'			
+			  set title='CROSSOVER_FAILED,NO_REFERENCE_FOUND'
+                          set CR='Fail'			
                         endif
 		      endif
 		  else #No crossover
 		      if( $REFERENTIALLY_PASSED ) then
 			set color='#FFA500'
 			set title='NO_CROSSOVER,REFERENTIALLY_PASSED '
+                        set RF='Pass'
 	    	      else
 		        if( $REFERENTIALLY_FAILED ) then
 			  set color='#800000'
-			  set title='NO_CROSSOVER,REFERENTIALLY_FAILED' 
+			  set title='NO_CROSSOVER,REFERENTIALLY_FAILED'
+                          set RF='Fail' 
 		        else #NO_REFERENCE_COMPARED
 			  set color='#800000'
 			  set title='NO_CROSSOVER,NO_REFERENCE_FOUND'			
@@ -324,10 +347,11 @@ foreach xml ( $xml_list )
 		if( $CRASH_DETECTED ) then
 			set color='#FF0000' 
 			set title='CRASH_DETECTED,'$title
+                        set CRASH='CRASH'
      		endif
 	   endif
-
-	   set run_status = "<td bgcolor=$color> <a href=$FILEPROTOCOL//$frecheckout title=$title>$cnt</a> , (<a href=$FILEPROTOCOL//$outputlist title="failures">$cnt_fail</a>)</td>"
+           
+	   set run_status = "<td bgcolor=$color><a href=$FILEPROTOCOL//$frecheckout title=$title>$CR$RF$CRASH</a>, <a href=$FILEPROTOCOL//$frecheckout title="number_of_runs">$cnt</a>(<a href=$FILEPROTOCOL//$outputlist title="failures">$cnt_fail</a>)</td>"
       	 endif
 
        echo $run_status>> $html_file
@@ -348,8 +372,15 @@ end # loop over xml_list
 echo "</table>">> $html_file
 
     echo "NOTES:</br>\n" >> $html_file
-    echo "reference tag: $myreftag</br> \n" >> $html_file
+    echo "STATUS = XYC, m(n) where X=Crossover reproducibility, Y=Reference reproducibility, C=Crashed, m=total # of runs, n=# of FATAL runs</br>\n" >> $html_file
+    echo "reference tag: $REFTAG</br> \n" >> $html_file
     echo "FRECHECKOPS: $FRECHECKOPS</br> \n" >> $html_file
+    echo "ignore_list option: $ignorelist</br> \n" >> $html_file
+    echo "</br> \n" >> $html_file
+
 
 
 echo "All done! Please view $html_file"
+
+#Output for jenkins
+w3m -dump $html_file

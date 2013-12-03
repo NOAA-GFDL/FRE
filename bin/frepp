@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 # -*- cperl -*-
-# $Id: frepp,v 18.0.2.52.2.1.2.89.2.60 2013/10/25 16:03:01 Amy.Langenhorst Exp $
+# $Id: frepp,v 18.0.2.52.2.1.2.89.2.60.2.1.2.1 2014/06/06 14:42:18 sdu Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: History/diagnostics post-processing
 # ------------------------------------------------------------------------------
@@ -43,7 +43,7 @@ use vars qw( $checktransfer $statefile $state $writestate $didsomething $usersta
 
   package frepp;
 
-  use constant VERSION => '$Id: frepp,v 18.0.2.52.2.1.2.89.2.60 2013/10/25 16:03:01 Amy.Langenhorst Exp $';
+  use constant VERSION => '$Id: frepp,v 18.0.2.52.2.1.2.89.2.60.2.1.2.1 2014/06/06 14:42:18 sdu Exp $';
 
 #Usage:    $relfrepp [ -AB:C:O:RY:Z:c:d:f:hlmMp:oqr:S:st:u:vx:z ] experiment [ experiment2 ... ]                 
   use constant OPTLIST =>
@@ -240,7 +240,7 @@ unless ( $opt_c ) {
    $opt_c = 'split';
 }
 
-$versionId = ' $Id: frepp,v 18.0.2.52.2.1.2.89.2.60 2013/10/25 16:03:01 Amy.Langenhorst Exp $';
+$versionId = ' $Id: frepp,v 18.0.2.52.2.1.2.89.2.60.2.1.2.1 2014/06/06 14:42:18 sdu Exp $';
 
 $perlerrors = "";
 $component = "";
@@ -786,7 +786,7 @@ EOF
    unless ( $opt_A ) {
       my $writeIDorINTER = <<EOF;
 if ( "\$JOB_ID" != '' ) then
- echo \$JOB_ID > \$statefile
+ echo \$PBS_JOBID > \$statefile
 else 
  echo INTERACTIVE > \$statefile
 endif
@@ -1285,7 +1285,7 @@ EOF
                $cshscript .= monthlyAVfromhist( $taNode, $sim0 );
             }
          }
-         $cshscript .= analysis( $taNode, $expt, $gridspec, $staticfile,"timeAverage",$diag_source,$ppRootDir,$component," " ,$analysisdir,$aoutscriptdir,$workdir,$archivedir,$opt_t,$opt_O,$opt_Y,$opt_Z,$opt_V,$sim0,$opt_R,$opt_s,$histDir,$nlat,$nlon,$abs_xml_path,$stdoutdir,$opt_P,$standardTarget);
+         $cshscript .= analysis( $taNode, $expt, $gridspec, $staticfile,"timeAverage",$diag_source,$ppRootDir,$component," " ,$analysisdir,$aoutscriptdir,$workdir,$archivedir,$opt_t,$opt_O,$opt_Y,$opt_Z,$opt_V,$opt_u,$sim0,$opt_R,$opt_s,$histDir,$nlat,$nlon,$abs_xml_path,$stdoutdir,$opt_P,$standardTarget);
       }
       
 
@@ -1304,7 +1304,7 @@ EOF
                print STDERR "      annual av int=1yr subint=history\n" if $opt_v;
                $cshscript .= annualAV1yrfromhist( $taNode, $sim0, 1 );
             }
-            $cshscript .= analysis( $taNode, $expt, $gridspec, $staticfile,"timeAverage",$diag_source,$ppRootDir,$component,\%dtvars,$analysisdir,$aoutscriptdir,$workdir,$archivedir,$opt_t,$opt_O,$opt_Y,$opt_Z,$opt_V,$sim0,$opt_R,$opt_s,$histDir,$nlat,$nlon,$abs_xml_path,$stdoutdir,$opt_P,$standardTarget);
+            $cshscript .= analysis( $taNode, $expt, $gridspec, $staticfile,"timeAverage",$diag_source,$ppRootDir,$component,\%dtvars,$analysisdir,$aoutscriptdir,$workdir,$archivedir,$opt_t,$opt_O,$opt_Y,$opt_Z,$opt_V,$opt_u,$sim0,$opt_R,$opt_s,$histDir,$nlat,$nlon,$abs_xml_path,$stdoutdir,$opt_P,$standardTarget);
          }
       }
       foreach my $taNode ( @taNodes ) {
@@ -1342,7 +1342,7 @@ EOF
                $cshscript .= seasonalAVfromhist( $taNode, $sim0 );
             }
          }
-         $cshscript .= analysis( $taNode, $expt, $gridspec, $staticfile,"timeAverage",$diag_source,$ppRootDir,$component,\%dtvars,$analysisdir,$aoutscriptdir,$workdir,$archivedir,$opt_t,$opt_O,$opt_Y,$opt_Z,$opt_V,$sim0,$opt_R,$opt_s,$histDir,$nlat,$nlon,$abs_xml_path,$stdoutdir,$opt_P,$standardTarget);
+         $cshscript .= analysis( $taNode, $expt, $gridspec, $staticfile,"timeAverage",$diag_source,$ppRootDir,$component,\%dtvars,$analysisdir,$aoutscriptdir,$workdir,$archivedir,$opt_t,$opt_O,$opt_Y,$opt_Z,$opt_V,$opt_u,$sim0,$opt_R,$opt_s,$histDir,$nlat,$nlon,$abs_xml_path,$stdoutdir,$opt_P,$standardTarget);
       }
       
 
@@ -1368,7 +1368,7 @@ EOF
                   $cshscript .= directTS( $tsNode, $sim0, $startofrun );
                }
             }
-            $cshscript .= analysis( $tsNode, $expt, $gridspec,$staticfile,"timeSeries",$diag_source,$ppRootDir,$component,\%dtvars,$analysisdir,$aoutscriptdir,$workdir,$archivedir,$opt_t,$opt_O,$opt_Y,$opt_Z,$opt_V,$sim0,$opt_R,$opt_s,$histDir,$nlat,$nlon,$abs_xml_path,$stdoutdir,$opt_P,$standardTarget);
+            $cshscript .= analysis( $tsNode, $expt, $gridspec,$staticfile,"timeSeries",$diag_source,$ppRootDir,$component,\%dtvars,$analysisdir,$aoutscriptdir,$workdir,$archivedir,$opt_t,$opt_O,$opt_Y,$opt_Z,$opt_V,$opt_u,$sim0,$opt_R,$opt_s,$histDir,$nlat,$nlon,$abs_xml_path,$stdoutdir,$opt_P,$standardTarget);
          }
       }
 
@@ -1392,7 +1392,7 @@ EOF
                $cshscript .= directTS( $tsNode, $sim0, $startofrun );
             } 
          } 
-         $cshscript .= analysis( $tsNode, $expt, $gridspec,$staticfile,"timeSeries",$diag_source,$ppRootDir,$component,\%dtvars,$analysisdir,$aoutscriptdir,$workdir,$archivedir,$opt_t,$opt_O,$opt_Y,$opt_Z,$opt_V,$sim0,$opt_R,$opt_s,$histDir,$nlat,$nlon,$abs_xml_path,$stdoutdir,$opt_P,$standardTarget);
+         $cshscript .= analysis( $tsNode, $expt, $gridspec,$staticfile,"timeSeries",$diag_source,$ppRootDir,$component,\%dtvars,$analysisdir,$aoutscriptdir,$workdir,$archivedir,$opt_t,$opt_O,$opt_Y,$opt_Z,$opt_V,$opt_u,$sim0,$opt_R,$opt_s,$histDir,$nlat,$nlon,$abs_xml_path,$stdoutdir,$opt_P,$standardTarget);
       }
 
       #TIMESERIES - MONTHLY
@@ -1415,7 +1415,7 @@ EOF
                $cshscript .= directTS( $tsNode, $sim0, $startofrun );
             }
          }
-         $cshscript .= analysis( $tsNode, $expt, $gridspec,$staticfile,"timeSeries",$diag_source,$ppRootDir,$component,\%dtvars,$analysisdir,$aoutscriptdir,$workdir,$archivedir,$opt_t,$opt_O,$opt_Y,$opt_Z,$opt_V,$sim0,$opt_R,$opt_s,$histDir,$nlat,$nlon,$abs_xml_path,$stdoutdir,$opt_P,$standardTarget);
+         $cshscript .= analysis( $tsNode, $expt, $gridspec,$staticfile,"timeSeries",$diag_source,$ppRootDir,$component,\%dtvars,$analysisdir,$aoutscriptdir,$workdir,$archivedir,$opt_t,$opt_O,$opt_Y,$opt_Z,$opt_V,$opt_u,$sim0,$opt_R,$opt_s,$histDir,$nlat,$nlon,$abs_xml_path,$stdoutdir,$opt_P,$standardTarget);
       }
 
       #TIMESERIES - ANNUAL
@@ -1438,7 +1438,7 @@ EOF
                $cshscript .= annualTS( $tsNode, $sim0, $startofrun, join("\n",@diagtablecontent) );
             }
          }
-         $cshscript .= analysis( $tsNode, $expt, $gridspec,$staticfile,"timeSeries",$diag_source,$ppRootDir,$component,\%dtvars,$analysisdir,$aoutscriptdir,$workdir,$archivedir,$opt_t,$opt_O,$opt_Y,$opt_Z,$opt_V,$sim0,$opt_R,$opt_s,$histDir,$nlat,$nlon,$abs_xml_path,$stdoutdir,$opt_P,$standardTarget);
+         $cshscript .= analysis( $tsNode, $expt, $gridspec,$staticfile,"timeSeries",$diag_source,$ppRootDir,$component,\%dtvars,$analysisdir,$aoutscriptdir,$workdir,$archivedir,$opt_t,$opt_O,$opt_Y,$opt_Z,$opt_V,$opt_u,$sim0,$opt_R,$opt_s,$histDir,$nlat,$nlon,$abs_xml_path,$stdoutdir,$opt_P,$standardTarget);
       }
 
       #TIMESERIES - SEASONAL
@@ -1461,7 +1461,7 @@ EOF
                $cshscript .= seasonalTS( $tsNode, $sim0 );
             }
          }
-         $cshscript .= analysis( $tsNode, $expt, $gridspec,$staticfile,"timeSeries",$diag_source,$ppRootDir,$component,\%dtvars,$analysisdir,$aoutscriptdir,$workdir,$archivedir,$opt_t,$opt_O,$opt_Y,$opt_Z,$opt_V,$sim0,$opt_R,$opt_s,$histDir,$nlat,$nlon,$abs_xml_path,$stdoutdir,$opt_P,$standardTarget);
+         $cshscript .= analysis( $tsNode, $expt, $gridspec,$staticfile,"timeSeries",$diag_source,$ppRootDir,$component,\%dtvars,$analysisdir,$aoutscriptdir,$workdir,$archivedir,$opt_t,$opt_O,$opt_Y,$opt_Z,$opt_V,$opt_u,$sim0,$opt_R,$opt_s,$histDir,$nlat,$nlon,$abs_xml_path,$stdoutdir,$opt_P,$standardTarget);
       }
 
       if ( $didsomething ) {
@@ -1629,7 +1629,7 @@ EOF
             $cshscript =~ s/#check_history_files/$check_history/;
          }
          $cshscript .= call_frepp($abs_xml_path, $outscript, $component, "");
-         if ( "$platform" eq 'ia64' ) { $cshscript .= "qstat -j \$JOB_ID | grep ^usage\n"; }
+         if ( "$platform" eq 'ia64' ) { $cshscript .= "qstat -j \$PBS_JOBID | grep ^usage\n"; }
          $cshscript .= "echo END-OF-SCRIPT for postprocessing job $t0-$tEND for $expt\n";
          if ( $maxyrs < 2 ) { 
             if ( "$platform" eq 'ia64' ) {
@@ -2149,7 +2149,7 @@ sub setcheckpt {
 if ( \$errors_found == 0 ) then
    echo $checkpt > $ppRootDir/.checkpoint/\$checkptfile
 endif
-if ( -f /home/gfdl/flags/fre/checkpoint.\$HOST || -f /home/gfdl/flags/fre/checkpoint.all || -f /home/gfdl/flags/fre/jobs/checkpoint.\$JOB_ID || -f \$HOME/fre.checkpoint.\$JOB_ID ) then
+if ( -f /home/gfdl/flags/fre/checkpoint.\$HOST || -f /home/gfdl/flags/fre/checkpoint.all || -f /home/gfdl/flags/fre/jobs/checkpoint.\$JOB_ID || -f \$HOME/fre.checkpoint.\$JOB_ID || -f /home/gfdl/flags/fre/jobs/checkpoint.\$PBS_JOBID || -f \$HOME/fre.checkpoint.\$PBS_JOBID ) then
    set now = `date +\%s`
    echo "Exiting early by HPCS request at \$now, will resume with $checkpt"
    Mail -s "\$name job \$JOB_ID has been checkpointed by frepp" \$USER <<END

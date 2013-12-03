@@ -1,5 +1,5 @@
 #
-# $Id: FRE.pm,v 18.0.2.21 2013/03/01 18:44:54 afy Exp $
+# $Id: FRE.pm,v 18.0.2.21.4.2 2013/12/13 16:27:12 arl Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: Main Library Module
 # ------------------------------------------------------------------------------
@@ -532,6 +532,11 @@ sub dataFiles($$$)
           my $line = $node->line_number();
 	  $fre->out(FREMsg::WARNING, "XML file line $line: the $l file '$fileName' isn't accessible or doesn't exist");
 	}
+        if ( "$fileName" =~ /^\/lustre\/fs|^\/lustre\/ltfs/ )
+        {
+          my $line = $node->line_number();
+          $fre->out(FREMsg::WARNING, "XML file line $line: the $l file '$fileName' is on a filesystem scheduled to be unmounted soon. Please move this data.");
+        }
       }
       else
       {
@@ -569,6 +574,11 @@ sub dataFilesMerged($$$$)
       {
         my $line = $node->line_number();
 	$fre->out(FREMsg::WARNING, "XML file line $line: the $l $a '$fileName' isn't accessible or doesn't exist");
+      }
+      if ( "$fileName" =~ /^\/lustre\/fs|^\/lustre\/ltfs/ )
+      {
+        my $line = $node->line_number();
+	$fre->out(FREMsg::WARNING, "XML file line $line: the $l $a '$fileName' is on a filesystem scheduled to be unmounted soon. Please move this data.");
       }
     }
     else
