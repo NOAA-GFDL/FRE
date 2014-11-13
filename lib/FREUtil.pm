@@ -1,37 +1,7 @@
 #
-# $Id: FREUtil.pm,v 18.0.2.11.2.1 2012/07/30 20:00:41 arl Exp $
+# $Id: FREUtil.pm,v 18.0.2.11.2.1.4.3 2014/10/15 17:10:58 Amy.Langenhorst Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: Utilities Module
-# ------------------------------------------------------------------------------
-# arl    Ver  18.00  Merged revision 17.0.2.10 onto trunk           March 10
-# afy -------------- Branch 18.0.2 -------------------------------- April 10
-# afy    Ver   1.00  Add jobID subroutine                           April 10
-# afy    Ver   2.00  Remove propertyNameCheck subroutine            September 10
-# afy    Ver   3.00  Remove getdirs subroutine                      January 11
-# afy    Ver   3.01  Remove getmyval subroutine                     January 11
-# afy    Ver   3.02  Remove getexecutable subroutine                January 11
-# afy    Ver   3.03  Remove has_unique_exec subroutine              January 11
-# afy    Ver   3.04  Remove extractNamelists subroutine             January 11
-# afy    Ver   3.05  Remove extract subroutine                      January 11
-# afy    Ver   3.06  Modify environmentVariablesExpand subroutine   January 11
-# afy    Ver   4.00  Remove fillvalue subroutine                    February 11
-# afy    Ver   4.01  Remove remoteExec subroutine                   February 11
-# afy    Ver   4.02  Remove acarch subroutine                       February 11
-# afy    Ver   4.03  Remove absPath subroutine                      February 11
-# afy    Ver   4.04  Remove fileOwner subroutine                    February 11
-# afy    Ver   4.05  Remove dirCommonLevelsNumber subroutine        February 11
-# afy    Ver   4.06  Modify createDir subroutine (no printing)      February 11
-# afy    Ver   4.07  Add pathIsMountable subroutine                 February 11
-# afy    Ver   5.00  Add home subroutine                            March 11
-# afy    Ver   6.00  Add optionValuesListParse subroutine           July 11
-# afy    Ver   7.00  Add optionIntegersListParse subroutine         October 11
-# afy    Ver   7.01  Modify optionValuesListParse (fix order)       October 11
-# afy    Ver   8.00  Add 'listUnique' subroutine                    October 11
-# afy    Ver   8.01  Remove 'pathIsMountable' subroutine            October 11
-# afy    Ver   9.00  Revive 'fileOwner' subroutine                  November 11
-# afy    Ver  10.00  Modify 'optionIntegersListParse' (messages)    January 12
-# afy    Ver  10.01  Modify 'optionValuesListParse' (messages)      January 12
-# afy    Ver  11.00  Add 'listDuplicates' subroutine                June 12
 # ------------------------------------------------------------------------------
 # Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2000-2012
 # Designed and written by V. Balaji, Amy Langenhorst and Aleksey Yakovlev
@@ -164,8 +134,9 @@ sub parseFortranDate {
    $tmparray[4] = pad2digits($tmparray[4]);  #min
    $tmparray[5] = pad2digits($tmparray[5]);  #sec
    my $newdate = join('',@tmparray);
-   #print STDERR "newdate is $newdate\n";
+   #print STDERR "date is $date, newdate is '$newdate'\n";
    my $parseddate = Date::Manip::ParseDate($newdate);
+   if ("$newdate" eq '00010101000000') {$parseddate = '0001010100:00:00';}
    #print STDERR "parseddate is $parseddate\n";
    return $parseddate;
 }        
@@ -210,19 +181,87 @@ sub pad8digits {
 sub modifydate {
    my $date = $_[0];
    my $str = $_[1];
-   my $err = "";
-   if ( "$date" eq "" ) { $date = "0000"; }
+   my $err = '';
+   if ( "$date" eq '' ) { $date = '0000'; }
+   #print "modifydate date $date str $str: ";
 
-   $date = Date::Manip::DateCalc($date,'+2000 years',\$err);
-   if ( "$err" ne "" ) { print STDERR "ERROR: modifydate/DateCalc $date +2000y: $err\n"; }
+   if ( "$date" eq '0001010100:00:00' ) { 
+ 
+      my $date1 = '0002010100:00:00';
+      $err=''; $date1 = Date::Manip::DateCalc($date1,$str,\$err);
+      if ( "$err" ne "" ) { 
+         print STDERR "NOTE: Encountered Date::Manip problem with modifydate/DateCalc $date1 $str: '$err'\n";
+         last; 
+      }
 
-   $date = Date::Manip::DateCalc($date,$str,\$err);
-   if ( "$err" ne "" ) { print STDERR "ERROR: modifydate/DateCalc $date $str: $err\n"; }
+      $err=''; $date1 = Date::Manip::DateCalc($date1,'-1 years',\$err);
+      if ( "$err" ne "" ) { 
+         print STDERR "NOTE: Encountered Date::Manip problem with modifydate/DateCalc $date1 -1y: '$err'\n"; 
+         last; 
+      }
+      $date = $date1;
 
-   $date = Date::Manip::DateCalc($date,'-2000 years',\$err);
-   if ( "$err" ne "" ) { print STDERR "ERROR: modifydate/DateCalc $date -2000y: $err\n"; }
+   } else {
 
+      $date = Date::Manip::DateCalc($date,$str,\$err);
+      if ( "$err" ne "" ) { 
+         print STDERR "NOTE: Encountered Date::Manip problem with modifydate/DateCalc $date $str: '$err'\n";
+      }
+      #$date = Date::Manip::Date_SetDateField($date,"d","01",1);
+
+   }
+
+   if ( "$err" ne "" ) { 
+
+      my $date2k = $date;
+      $err=''; $date2k = Date::Manip::DateCalc($date2k,'+2000 years',\$err);
+      if ( "$err" ne "" ) { 
+         print STDERR "NOTE: Encountered Date::Manip problem with modifydate/DateCalc $date2k +2000y: '$err'\n";
+         last; 
+      }
+
+      $err=''; $date2k = Date::Manip::DateCalc($date2k,$str,\$err);
+      if ( "$err" ne "" ) { 
+         print STDERR "NOTE: Encountered Date::Manip problem with modifydate/DateCalc $date2k $str: '$err'\n";
+         last; 
+      }
+
+      $err=''; $date2k = Date::Manip::DateCalc($date2k,'-2000 years',\$err);
+      if ( "$err" ne "" ) { 
+         print STDERR "NOTE: Encountered Date::Manip problem with modifydate/DateCalc $date2k -2000y: '$err'\n"; 
+         last; 
+      }
+      $date = $date2k;
+   }
+
+   if ( "$err" ne "" ) {
+      die "ERROR: modifydate/DateCalc $date $str\n";
+   }
+
+   #print "got $date\n";
    return $date;
+}
+#wrapper for DateCalc handling low year numbers
+sub cmpdate {
+   my $date = $_[0];
+   my $date2 = $_[1];
+   my $err = '';
+   my $y1 = substr($date,0,4);
+   my $md1 = substr($date,4);
+   my $y2 = substr($date2,0,4);
+   my $md2 = substr($date2,4);
+#print "date=$date,date2=$date2\n";
+#print "y1=$y1,md1=$md1,y2=$y2,md2=$md2\n";
+
+   if ( "$md1" eq "$md2" ) { 
+      my $diff = $y2 - $y1;
+      my $delta = Date::Manip::ParseDateDelta("$diff years");
+#print "delta=$delta\n";
+      return $delta;
+   } else {
+      die "ERROR: Date calculation malfunction, date=$date,date2=$date2\n";
+   }
+ 
 }
 
 #return appropriate date granularity

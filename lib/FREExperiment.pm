@@ -1,5 +1,5 @@
 #
-# $Id: FREExperiment.pm,v 18.1.2.21 2013/04/24 17:26:30 afy Exp $
+# $Id: FREExperiment.pm,v 18.1.2.21.4.1 2014/09/18 15:16:12 sdu Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: Experiment Management Module
 # ------------------------------------------------------------------------------
@@ -1947,7 +1947,22 @@ sub extractProductionRunInfo($)
   {
     if (my $prdNode = $productionRunNode->($r))
     {
+      # get the namelist to get the proper number of npes
+      my $nmlsOverridden = $overrideProductionNamelists->($r, $nmls->copy());
+      # number of PEs as configured in runtime/production
       my $nps = $r->nodeValue($prdNode, '@npes');
+      my $mpiInfo = $MPISizeParameters->($r, $nps, $nmlsOverridden);
+      if ($mpiInfo)
+      {
+        # Use the number of PEs obtained from coupler_nml instead of runtime/production/@npes
+        # as runtime/production/@npes does not take into account OpenMP threads in the pe count
+        my $totNps = 0;
+        for ( my $i = 0; $i < scalar($mpiInfo->{npesList}); $i++ )
+        {
+          $totNps += $mpiInfo->{npesList}[$i] * $mpiInfo->{ntdsList}[$i];
+        }
+        $nps = $totNps;
+      }
       my $smt = $r->nodeValue($prdNode, '@simTime');
       my $smu = $r->nodeValue($prdNode, '@units');
       my $srt = $r->nodeValue($prdNode, '@runTime') || $fre->runTime($nps);
@@ -1973,7 +1988,7 @@ sub extractProductionRunInfo($)
 		if ($grtMinutes <= $srtMinutes)
 		{
 		  my $nmlsOverridden = $overrideProductionNamelists->($r, $nmls->copy());
-		  if (my $mpiInfo = $MPISizeParameters->($r, $nps, $nmlsOverridden))
+		  if ($mpiInfo)
 		  {
 		    my %run = ();
 		    $run{mpiInfo} = $mpiInfo;

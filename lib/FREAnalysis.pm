@@ -629,26 +629,55 @@ sub filltemplate {
     $tmpsch =~ s/#PBS -o.*/#PBS -o $printout/;
     $tmpsch =~ s/#\$ -P.*//;
     $tmpsch =~ s/set WORKDIR\s*$/set WORKDIR = $workdir/m;
+    # a1r edit ln below
+    $tmpsch =~ s/WORKDIR = ""\s*$/WORKDIR = \"$workdir\"/m;
     $tmpsch =~ s/set mode\s*$/set mode = $mode/m;
+    # a1r edit ln below
+    $tmpsch =~ s/mode = ""\s*$/mode = \"$mode\"/m;
     $tmpsch =~ s/set out_dir\s*$/set out_dir = $figureDir/m;
+    # a1r edit ln below
+    $tmpsch =~ s/out_dir = ""\s*$/out_dir = \"$figureDir\"/m;
     $tmpsch =~ s/set printout\s*$/set printout = $printout/m;
+    # a1r edit ln below 
+    $tmpsch =~ s/printout = ""\s*$/printout = \"$printout\"/m;
 
     #----
     $tmpsch =~ s/set freq\s*$/set freq = $arrayofExptsH_ref->[0]->{freq}/m;
+    #a1r edit ln below
+    $tmpsch =~ s/freq = ""\s*$/freq = \"$arrayofExptsH_ref->[0]->{freq}\"/m;
     $tmpsch =~ s/set MODEL_start_yr\s*$/set MODEL_start_yr = $arrayofExptsH_ref->[0]->{MODEL_start_yr}/m;
     $tmpsch =~ s/set mom_version\s*$/set mom_version = $arrayofExptsH_ref->[0]->{momGrid}/m;
     $tmpsch =~ s/set gridspecfile\s*$/set gridspecfile = $arrayofExptsH_ref->[0]->{gridspec}/m;
     $tmpsch =~ s/set staticfile\s*$/set staticfile = $arrayofExptsH_ref->[0]->{staticfile}/m;
     $tmpsch =~ s/set argu\s*$/set argu = (@$aargu)/m;
+    #a1r edit ln below
+    $tmpsch =~ s/argu = ""\s*$/argu = \"(@$aargu)\"/m;
     $tmpsch =~ s/set in_data_dir\s*$/set in_data_dir = $arrayofExptsH_ref->[0]->{asrcdir}/m;
+    #a1r edit ln below
+    $tmpsch =~ s/in_data_dir = ""\s*$/in_data_dir = \"$arrayofExptsH_ref->[0]->{asrcdir}\"/m;  
     #$tmpsch =~ s/set in_data_file/set in_data_file = $arrayofExptsH_ref->[0]->{asrcfile}/m;
     $tmpsch =~ s/set in_data_file\s*$/set in_data_file = $asrcfile/m;
+    #a1r edit ln below
+    $tmpsch =~ s/in_data_file = ""\s*$/in_data_file = \"$asrcfile\"/m;
+  
     $tmpsch =~ s/set descriptor\s*$/set descriptor = $arrayofExptsH_ref->[0]->{exptname}/m;
+    #a1r edit ln below
+    $tmpsch =~ s/descriptor = ""\s*$/descriptor = \"$arrayofExptsH_ref->[0]->{exptname}\"/m;
     $tmpsch =~ s/set yr1\s*$/set yr1 = $arrayofExptsH_ref->[0]->{astartYear}/m;
+    #a1r edit ln below
+    $tmpsch =~ s/yr1 = ""\s*$/yr1 = \"$arrayofExptsH_ref->[0]->{astartYear}\"/m;
     $tmpsch =~ s/set yr2\s*$/set yr2 = $arrayofExptsH_ref->[0]->{aendYear}/m;
+    #a1r edit ln below
+    $tmpsch =~ s/yr2 = ""\s*$/yr2 = \"$arrayofExptsH_ref->[0]->{aendYear}\"/m;
     $tmpsch =~ s/set databegyr\s*$/set databegyr = $arrayofExptsH_ref->[0]->{databegyr}/m;
+    #a1r edit ln below
+    $tmpsch =~ s/databegyr = ""\s*$/databegyr = \"$arrayofExptsH_ref->[0]->{databegyr}\"/m; 
     $tmpsch =~ s/set dataendyr\s*$/set dataendyr = $arrayofExptsH_ref->[0]->{dataendyr}/m;
+    #a1r edit ln below
+    $tmpsch =~ s/dataendyr = ""\s*$/dataendyr = \"$arrayofExptsH_ref->[0]->{dataendyr}\"/m;  
     $tmpsch =~ s/set datachunk\s*$/set datachunk = $arrayofExptsH_ref->[0]->{clnumber}/m;
+    #a1r edit ln below
+    $tmpsch =~ s/datachunk = ""\s*$/datachunk = \"$arrayofExptsH_ref->[0]->{clnumber}\"/m; 
     # specify_yr is a particular year, set by user, for daily data
     $tmpsch =~ s/set specify_yr\s*$/set specify_yr = $arrayofExptsH_ref->[0]->{specify1year}/m;
     $tmpsch =~ s/set hist_dir\s*$/set hist_dir = $arrayofExptsH_ref->[0]->{hist_dir}/m;
@@ -656,10 +685,14 @@ sub filltemplate {
     $tmpsch =~ s/set nlat\s*$/set nlat = $arrayofExptsH_ref->[0]->{nlat}/m;
     $tmpsch =~ s/set frexml\s*$/set frexml = $frexml/m;
     $tmpsch =~ s/set fremodule\s*$/set fremodule = $fremodule/m;
+    #a1r edit ln below
+    $tmpsch =~ s/fremodule = ""\s*$/fremodule = \"$fremodule\"/m;
     $tmpsch =~ s/set freanalysismodule\s*$/set freanalysismodule = $freanalysismodule/m;
     $tmpsch =~ s/set stdoutdir\s*$/set stdoutdir = $stdoutdir/m;
     $tmpsch =~ s/setenv FREROOT.*/setenv FREROOT $ENV{FREROOT}/m;
     $tmpsch =~ s/set analysis_options\s*$/set analysis_options = $arrayofExptsH_ref->[0]->{options}/m;
+    #a1r edit ln below
+    $tmpsch =~ s/analysis_options = ""\s*$/analysis_options = \"$arrayofExptsH_ref->[0]->{options}\"/m;
     $tmpsch =~ s/set platform\s*$/set platform = $platform/m;
     $tmpsch =~ s/set target\s*$/set target = $target/m;
     $tmpsch =~ s/set unique\s*$/set unique = $opt_u/m;

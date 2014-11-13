@@ -224,7 +224,9 @@
               <xs:element ref="timeSeries"/>
               <xs:element ref="timeAverage"/>
             </xs:choice>
-            <xs:attribute name="cubicToLatLon" type="xs:string"/>
+	    <xs:attribute name="cubicToLatLon" type="xs:string"/>
+	    <xs:attribute name="sourceGrid" type="srcGrd"/>
+	    <xs:attribute name="xyInterp" type="xyInterpMethod"/>
             <xs:attribute name="interpMethod" type="xs:string"/>
             <xs:attribute name="source" type="xs:string"/>
             <xs:attribute name="start" type="xs:string"/>
@@ -238,6 +240,32 @@
     </xs:complexType>
   </xs:element>
   
+  <xs:simpleType name="srcGrd">
+    <xs:annotation>
+      <xs:documentation>Restricts the possible inputs for the input into SourceGrid to a few allocated options.</xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="atmos-latlon"/>
+      <xs:enumeration value="atmos-cubedsphere"/>
+      <xs:enumeration value="ocean-latlon"/>
+      <xs:enumeration value="ocean-tripolar"/>
+      <xs:enumeration value="land-latlon"/>
+      <xs:enumeration value="land-cubedsphere"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="xyInterpMethod">
+    <xs:annotation>
+      <xs:documentation>Restricts the options for XY interpolation in the XML.</xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:string">
+      <xs:pattern value="[0-9][0-9],[0-9][0-9]"/>
+      <xs:pattern value="[0-9][0-9][0-9],[0-9][0-9][0-9]"/>
+      <xs:pattern value="[0-9][0-9],[0-9][0-9][0-9]"/>
+      <xs:pattern value="[0-9][0-9][0-9],[0-9][0-9]"/>
+    </xs:restriction>
+  </xs:simpleType>
+
   <xs:element name="refineDiag">
     <xs:annotation>
       <xs:documentation>The refineDiag tag points to a script that will be run on the post processed data.</xs:documentation>
@@ -316,12 +344,10 @@
   
   <xs:element name="reference">
     <xs:annotation>
-      <xs:documentation>This tag can define the platform and the path to a restart file for an optimized reference run.</xs:documentation>
+      <xs:documentation>This tag can define the path to a restart file for an optimized reference run.</xs:documentation>
     </xs:annotation>
     <xs:complexType>
-      <xs:attribute name="platform" type="xs:string"/>
       <xs:attribute name="restart" use="required" type="xs:string"/>
-      <xs:attribute name="site" type="xs:string"/>
     </xs:complexType>
   </xs:element>
   
@@ -738,7 +764,7 @@
       <xs:pattern value="1:[1-9][0-9]"/>      
     </xs:restriction>
   </xs:simpleType>
-  
+
   <xs:simpleType name="PostProcessZInterp">
     <xs:annotation>
       <xs:documentation>Restricts the possible values of the post processing z-interpolation values.</xs:documentation>

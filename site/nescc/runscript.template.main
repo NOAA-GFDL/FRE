@@ -1,7 +1,7 @@
 #!/bin/csh -fx
 #FRE scheduler-options
 # 
-# $Id: runscript.template.main,v 1.1.2.30.2.4.4.4 2013/11/01 20:30:03 fms Exp $
+# $Id: runscript.template.main,v 1.1.2.30.2.4.4.4.2.2 2014/05/09 18:32:13 sdu Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: Runscript Template - NESCC Version
 # ------------------------------------------------------------------------------
@@ -92,7 +92,7 @@
   set -r runtimeBeg = `date "+%s"`
 
   if ( $echoOn ) unset echo
-  echo '<NOTE> : ====== FRE RUNSCRIPT $Id: runscript.template.main,v 1.1.2.30.2.4.4.4 2013/11/01 20:30:03 fms Exp $ ======'
+  echo '<NOTE> : ====== FRE RUNSCRIPT $Id: runscript.template.main,v 1.1.2.30.2.4.4.4.2.2 2014/05/09 18:32:13 sdu Exp $ ======'
   echo "<NOTE> : Starting at $HOST on `date`"
   if ( $echoOn ) set echo
 
@@ -147,9 +147,8 @@
   #FRE const(ppRefineDiagScriptNames)
   #FRE const(executable)
   #FRE const(segmentsPerSimulation)
-  #FRE const(segmentsPerPPCall)
+  #FRE var(segmentsPerPPCall)
   #FRE const(segmentsPerJob)
-  #FRE const(jobsPerSimulation)
   #FRE const(monthslist)
   #FRE const(dayslist)
   #FRE const(hourslist)
@@ -503,7 +502,7 @@
   set saveJobIds = ( )
   set argFiles = ( )
 
-  @ ireload = 1
+  @ currentSeg = 1
   @ irun = 1
 
 ################################################################################
@@ -602,9 +601,14 @@
     set fyearp2 = `printf "%04d" $fyearp2`
   endif
 
-  # ---------------- absolute segment number
-
-  @ currentSeg = ( $ireload - 1 ) * $segmentsPerJob + $irun
+  # ---------------- backward compatible for segment number
+  
+  if ( $?ireload ) then
+    # Using old way to calculate currentSeg
+    # Get best guess --- may not be correct if user changed number of segments
+    # per job after job started --- frerun -e does not update state file
+    @ currentSeg = ( $ireload - 1 ) * $segmentsPerJob + $irun
+  endif
 
   # ---------------- set up working directory structure
 
@@ -977,7 +981,7 @@
         cat $coreFileFirst.out
         unset coreFileFirst
 
-        set msg = "${msg}*ERROR*: Your job has produced $#coreFiles core files (run $ireload, loop $irun)\n"
+        set msg = "${msg}*ERROR*: Your job has produced $#coreFiles core files (segment $currentSeg)\n"
         set msg = "${msg}*ERROR*: Please go to the working directory '$workDir' and issue the following command for each core file there:\n"
         set msg = "${msg}*ERROR*: \n"
 
@@ -1007,7 +1011,7 @@
       else
 
         set cdsize = `limit coredumpsize`
-        set msg = "${msg}*ERROR*: No core files produced (run $ireload, loop $irun)\n"
+        set msg = "${msg}*ERROR*: No core files produced (segment $currentSeg)\n"
         set msg = "${msg}*ERROR*: You are using the $cdsize\n"
         set msg = "${msg}*ERROR*: \n"
         unset cdsize
@@ -1852,7 +1856,7 @@
     if ( $?MPI_FAIL ) then
 
       if ( $echoOn ) unset echo
-      echo "*ERROR*: The MPI failed (run $ireload, loop $irun)"
+      echo "*ERROR*: The MPI failed (segment $currentSeg)"
       echo "*ERROR*: Any output that may have been generated is in the '$outputDir'"
       echo "*ERROR*: The '$workDir' is being kept for possible debugging"
       if ( $echoOn ) set echo
@@ -1866,7 +1870,7 @@
     if ( $#restartFiles == 0 ) then
 
       if ( $echoOn ) unset echo
-      echo "*ERROR*: no restart files exist (run $ireload, loop $irun)"
+      echo "*ERROR*: no restart files exist (segment $currentSeg)"
       if ( $echoOn ) set echo
 
       exit 1
@@ -1877,12 +1881,7 @@
 
     if ( $?flagRunTypeProduction ) then
 
-      if ( $irun < $segmentsPerJob ) then
-	@ irunNext = $irun + 1
-      else
-	@ ireload++
-	@ irunNext = 1
-      endif
+      @ nextSeg = $currentSeg + 1
 
       if ( -f $reload_file ) mv -f $reload_file ${reload_file}_prev
       touch $reload_file
@@ -1891,8 +1890,7 @@
 	if ( $echoOn ) unset echo
 	echo "<NOTE> : Writing reload information to the reload file '$reload_file' at `date +%s`"
 	if ( $echoOn ) set echo
-	echo "@ ireload       =   $ireload"			>> $reload_file
-	echo "@ irun          =   $irunNext"	 		>> $reload_file
+	echo "@ currentSeg    =   $nextSeg"                     >> $reload_file
 	echo "set initCond    =   $restartArchDir.$archExt"	>> $reload_file
 	echo "set combineList = ( $combineList )"		>> $reload_file
 	echo "set saveJobIds  = ( $saveJobIds )"		>> $reload_file
@@ -1906,7 +1904,7 @@
         exit 1
       endif
 
-      unset irunNext
+      unset nextSeg
 
     endif
 
@@ -1932,7 +1930,7 @@
 
   if ( $?flagRunTypeProduction ) then
 
-    if ( $ireload <= $jobsPerSimulation && $currentSeg <= $segmentsPerSimulation ) then
+    if ( $currentSeg <= $segmentsPerSimulation ) then
 
       if ( -f $queue_file ) then
 	if ( -r $queue_file ) then
@@ -1990,12 +1988,16 @@
           unset nextOptions
         else
 	  if ( $echoOn ) unset echo
-	  echo "WARNING: The script '$scriptName' exists, but is not readable (run $ireload, loop $irun) - it can't be resubmitted"
+	  @ lastSeg = $currentSeg - 1
+	  echo "WARNING: The script '$scriptName' exists, but is not readable (run $lastSeg) - it can't be resubmitted"
+	  unset lastSeg
           if ( $echoOn ) set echo
         endif
       else
 	if ( $echoOn ) unset echo
-	echo "WARNING: The script '$scriptName' does not exist (run $ireload, loop $irun) - it can't be resubmitted"
+	@ lastSeg = $currentSeg - 1
+	echo "WARNING: The script '$scriptName' does not exist (run $lastSeg) - it can't be resubmitted"
+	unset lastSeg
         if ( $echoOn ) set echo
       endif
 

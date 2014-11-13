@@ -33,21 +33,21 @@ INCLUDE = -I$(NETCDF_ROOT)/include
 
 FPPFLAGS := -fpp -Wp,-w $(INCLUDE)
 
-FFLAGS := -fno-alias -auto -safe-cray-ptr -ftz -assume byterecl -i4 -r8 -nowarn -sox $(INCLUDE)
-FFLAGS_OPT = -O3 -debug minimal -fp-model precise -override-limits
-FFLAGS_DEBUG = -g -O0 -check -check noarg_temp_created -check nopointer -warn -warn noerrors -fpe0 -traceback -ftrapuv
-FFLAGS_REPRO = -O2 -debug minimal -fp-model precise -override-limits
+FFLAGS := -fno-alias -auto -safe-cray-ptr -ftz -assume byterecl -i4 -r8 -nowarn -sox -traceback $(INCLUDE)
+FFLAGS_OPT = -O3 -debug minimal -fp-model source -override-limits
+FFLAGS_DEBUG = -g -O0 -check -check noarg_temp_created -check nopointer -warn -warn noerrors -fpe0 -ftrapuv
+FFLAGS_REPRO = -O2 -debug minimal -fp-model source -override-limits
 FFLAGS_OPENMP = -openmp
 FFLAGS_VERBOSE = -v -V -what
 
-CFLAGS := -D__IFC -sox
+CFLAGS := -D__IFC -sox -traceback
 CFLAGS_OPT = -O2 -debug minimal
 CFLAGS_OPENMP = -openmp
-CFLAGS_DEBUG = -O0 -g -ftrapuv -traceback
+CFLAGS_DEBUG = -O0 -g -ftrapuv 
 
 # Optional Testing compile flags.  Mutually exclusive from DEBUG, REPRO, and OPT
 # *_TEST will match the production if no new option(s) is(are) to be tested.
-FFLAGS_TEST = -O3 -debug minimal -fp-model precise -override-limits
+FFLAGS_TEST = -O3 -debug minimal -fp-model source -override-limits
 CFLAGS_TEST = -O2
 
 LDFLAGS :=
