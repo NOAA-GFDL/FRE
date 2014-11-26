@@ -5,11 +5,36 @@ our @ISA=qw(Exporter);
 our @EXPORT_OK=qw(analysis);
 
 sub analysis {
-
-   my ($ts_av_Node,$expt,$gridspec,$staticfile,$tsORav,$diagfile,$ppRootDir, 
-       $component,$dtvars_ref,$analysisdir,$aoutscriptdir,$workdir, 
-       $archivedir,$opt_t,$opt_O,$opt_Y,$opt_Z,$opt_v,$opt_u,$sim0,$opt_R,$opt_s,
-       $hist_dir,$nlat,$nlon,$frexml,$stdoutdir,$opt_P,$opt_T) = @_; 
+   my $args = shift;
+   my $ts_av_Node = $args->{node};
+   my $expt = $args->{experiment};
+   my $gridspec = $args->{gridSpec};
+   my $staticfile = $args->{staticFile};
+   my $tsORav = $args->{type};
+   my $diagfile = $args->{diagSrc};
+   my $ppRootDir = $args->{ppRootDir}; 
+   my $component = $args->{comp};
+   my $dtvars_ref = $args->{dtvarsRef};
+   my $analysisdir = $args->{analysisDir};
+   my $aoutscriptdir = $args->{scriptDir};
+   my $workdir = $args->{workDir};
+   my $archivedir = $args->{archDir};
+   my $opt_t = $args->{opt_t};
+   my $opt_O = $args->{opt_O};
+   my $opt_Y = $args->{opt_Y};
+   my $opt_Z = $args->{opt_Z};
+   my $opt_v = $args->{opt_v};
+   my $opt_u = $args->{opt_u};
+   my $sim0 = $args->{sim0};
+   my $opt_R = $args->{opt_R};
+   my $hist_dir = $args->{histDir};
+   my $nlat = $args->{nLat};
+   my $nlon = $args->{nLon};
+   my $frexml = $args->{absXmlPath};
+   my $stdoutdir = $args->{stdoutDir};
+   my $opt_P = $args->{opt_P};
+   my $opt_T = $args->{stdTarget};
+   my $opt_s = $args->{opt_s};
 
 # exit if no analysis nodes found
    my $anum = &anodenum($ts_av_Node);
