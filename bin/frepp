@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 # -*- cperl -*-
-# $Id: frepp,v 18.0.2.52.2.1.2.89.2.72 2014/12/09 17:25:09 arl Exp $
+# $Id: frepp,v 18.0.2.52.2.1.2.89.2.73 2014/12/11 22:29:36 arl Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: History/diagnostics post-processing
 # ------------------------------------------------------------------------------
@@ -44,7 +44,7 @@ use vars qw( $mosaic_type $sourceGrid $xyInterp );
 
   package frepp;
 
-  use constant VERSION => '$Id: frepp,v 18.0.2.52.2.1.2.89.2.72 2014/12/09 17:25:09 arl Exp $';
+  use constant VERSION => '$Id: frepp,v 18.0.2.52.2.1.2.89.2.73 2014/12/11 22:29:36 arl Exp $';
 
 #Usage:    $relfrepp [ -AB:C:O:RY:Z:c:d:f:hlmMp:oqr:S:st:u:vx:z ] experiment [ experiment2 ... ]                 
   use constant OPTLIST =>
@@ -239,7 +239,7 @@ unless ( $opt_c ) {
    $opt_c = 'split';
 }
 
-$versionId = ' $Id: frepp,v 18.0.2.52.2.1.2.89.2.72 2014/12/09 17:25:09 arl Exp $';
+$versionId = ' $Id: frepp,v 18.0.2.52.2.1.2.89.2.73 2014/12/11 22:29:36 arl Exp $';
 
 $perlerrors = "";
 $component = "";
@@ -982,6 +982,18 @@ endif
 
 if ( "\$fregrid_wt" != '' ) then
    set fregrid_yr = `echo \$fregrid_in_date | cut -c 1-4`
+   foreach i ( 1 2 3 4 5 6 )
+        set oldassoc = `ncdump -h \$fregrid_in.tile\$i.nc | grep ':associated_files' | cut -d'"' -f2`
+        if ("\$oldassoc" != '' ) then
+            set newassoc = `ncdump -h \$fregrid_in.tile\$i.nc | grep ':associated_files' | cut -d'"' -f2 | sed "s/: [0-9]\\{4\\}/: \$fregrid_yr/g"`
+
+            if ("\$oldassoc" != "\$newassoc") then
+               $time_ncatted ncatted -h -O -a associated_files,global,m,c,"\$newassoc" \$fregrid_in.tile\$i.nc
+               #check_ncatted
+            endif
+        endif
+   end
+
    foreach fregridwtfile ( `ls $opt_d/\${fregrid_yr}????.nc.*` )
       set fregridwtfile = \$fregridwtfile:t:r
       $time_hsmget \$hsmget -a $opt_d -p $ptmpDir/history -w $tmphistdir \$fregridwtfile/\\*land_static\\*
