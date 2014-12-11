@@ -628,8 +628,15 @@ EOF
       my $fremodule = `echo $ENV{LOADEDMODULES} | tr ':' '\n' | egrep '^fre/.+'`;
       chomp $fremodule;
       my $xmlfremodule = $platformcsh;
-      my @fremodulecsh = split ( /\n/, $xmlfremodule );
-      @fremodulecsh = grep(!/^#/, @fremodulecsh);
+      my @fremodulecsh = ();
+      # Loop through the CSH and remove all comments
+      foreach ( split (/\n/, $xmlfremodule )){
+	  if ( $_ =~ /#/ ){
+	      push @fremodulecsh, (split( /#/, $_))[0];
+	  } else {
+	      push @fremodulecsh, $_;
+	  }
+      }
       $xmlfremodule = join( /\n/, @fremodulecsh );
       $xmlfremodule =~ s/.*module load (fre\/\S+)\s*.*/$1/s;
       if ( "$fremodule" ne "$xmlfremodule" ) {
