@@ -632,7 +632,10 @@ EOF
       # Loop through the CSH and remove all comments
       foreach ( split (/\n/, $xmlfremodule )){
 	  if ( $_ =~ /#/ ){
-	      push @fremodulecsh, (split( /#/, $_))[0];
+	      my $noncomment = (split( /#/, $_))[0];
+	      if ( $noncomment =~ /\S/ ){
+		  push @fremodulecsh, $noncomment;
+	      }
 	  } else {
 	      push @fremodulecsh, $_;
 	  }
@@ -992,6 +995,16 @@ endif
 
 if ( "\$fregrid_wt" != '' ) then
    set fregrid_yr = `echo \$fregrid_in_date | cut -c 1-4`
+   foreach i ( 1 2 3 4 5 6 )
+       set oldassoc = `ncdump -h \$fregrid_in.tile\$i.nc | grep ':associated_files' | cut -d'"' -f2`
+       if ("\$oldassoc" != '' ) then
+            set newassoc = `ncdump -h \$fregrid_in.tile\$i.nc | grep ':associated_files' | cut -d'"' -f2 | sed "s/: [0-9]\\{4\\}/: \$fregrid_yr/g"`
+            if ("\$oldassoc" != "\$newassoc") then
+               $time_ncatted ncatted -h -O -a associated_files,global,m,c,"\$newassoc" \$fregrid_in.tile\$i.nc
+               #check_ncatted
+            endif
+       endif
+   end
    foreach fregridwtfile ( `ls $opt_d/\${fregrid_yr}????.nc.*` )
       set fregridwtfile = \$fregridwtfile:t:r
       $time_hsmget \$hsmget -a $opt_d -p $ptmpDir/history -w $tmphistdir \$fregridwtfile/\\*land_static\\*
@@ -5531,8 +5544,8 @@ EOF
 
         set output_files = (\$output_files \$fregrid_in.nc)
      
-     end
      endif
+     end
 EOF
       $csh .= $cubiccsh;
    } else {
