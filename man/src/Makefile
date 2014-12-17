@@ -15,7 +15,7 @@ POD2LATEX = pod2latex
 PDFLATEX = pdflatex
 
 PODS = fremake.pod frecheck.pod frepp.pod frerun.pod freindent.pod frescrub.pod \
-       freppcheck.pod frestatus.pod frelist.pod \
+       freppcheck.pod frestatus.pod frelist.pod freinfo.pod \
        fretransform.pod frepriority.pod
 POD_MAN1 = $(patsubst %.pod,%.1,$(PODS))
 
@@ -23,7 +23,7 @@ A2X = a2x
 ASCIIDOC_CFG = asciidoc.conf
 
 TXTS = ardiff.txt frerts.txt frerts_batch.txt list_paths.txt list_files_with_tag.txt \
-       versions.txt
+       versions.txt frerts_check.txt git-version-string.txt
 TXT_MAN1 = $(patsubst %.txt,%.1,$(TXTS))
 
 .SUFFIXES:
