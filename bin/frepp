@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 # -*- cperl -*-
-# $Id: frepp,v 18.0.2.52.2.1.2.89.2.73 2014/12/11 22:29:36 arl Exp $
+# $Id: frepp,v 18.0.2.52.2.1.2.89.2.71 2014/11/13 20:06:19 arl Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: History/diagnostics post-processing
 # ------------------------------------------------------------------------------
@@ -44,9 +44,9 @@ use vars qw( $mosaic_type $sourceGrid $xyInterp );
 
   package frepp;
 
-  use constant VERSION => '$Id: frepp,v 18.0.2.52.2.1.2.89.2.73 2014/12/11 22:29:36 arl Exp $';
+  use constant VERSION => '$Id: frepp,v 18.0.2.52.2.1.2.89.2.71 2014/11/13 20:06:19 arl Exp $';
 
-#Usage:    $relfrepp [ -AB:C:O:RY:Z:c:d:f:hlmMp:oqr:S:st:u:vx:z ] experiment [ experiment2 ... ]                 
+#Usage:    $relfrepp [ -AB:C:O:RY:Z:c:d:f:hlmMp:oqr:S:st:u:vx:z ] experiment [ experiment2 ... ]
   use constant OPTLIST =>
   (
       'forceCombine|f',
@@ -150,11 +150,11 @@ $relfrepp = basename($absfrepp);
 
 if ( $opt_h or "$#ARGV" eq "-1" ) {
    print <<EOF;
-                                                                                  
+
 Synopsis: $relfrepp is the FRE postprocessing utility.
-                                                                                      
-Usage:    $relfrepp [ -AB:C:O:RY:Z:c:d:f:hlmMp:oqr:S:st:u:vx:z ] experiment [ experiment2 ... ]                 
-                                                                                      
+
+Usage:    $relfrepp [ -AB:C:O:RY:Z:c:d:f:hlmMp:oqr:S:st:u:vx:z ] experiment [ experiment2 ... ]
+
           OPTIONS FOR COMBINING MULTIPROCESSOR HISTORY FILES
           -f           = force combine of all "raw" history data and then exit
 
@@ -164,11 +164,11 @@ Usage:    $relfrepp [ -AB:C:O:RY:Z:c:d:f:hlmMp:oqr:S:st:u:vx:z ] experiment [ ex
 
           OPTIONS FOR POSTPROCESSING DATA
           -t time      = beginning of model year to process.  To process 1982, use
-                           '-t 1982' or '-t 19820101'. 
+                           '-t 1982' or '-t 19820101'.
           -p num       = "plus num years": additional years to process: OPTION NO LONGER SUPPORTED
           -c component = component to process, or keyword 'split' to process all in parallel
           -l           = limit static variable processing to the diag source file in the xml
-          -d dir       = path to history data 
+          -d dir       = path to history data
           -w jobid     = place hold on current job so that it waits for jobid to complete
                          (PP/AN cannot set holds based on job names, it is not supported by moab)
           -o           = override job dependencies
@@ -176,8 +176,8 @@ Usage:    $relfrepp [ -AB:C:O:RY:Z:c:d:f:hlmMp:oqr:S:st:u:vx:z ] experiment [ ex
           OPTIONS FOR ANALYSIS FIGURES
           -A           = run analysis only
           -R           = regenerate, submit analysis scripts regardless of whether they already exist
-          -O dir       = where to put output figures. This argument is normally 
-                         used with -A (run analysis only) and must be used if the 
+          -O dir       = where to put output figures. This argument is normally
+                         used with -A (run analysis only) and must be used if the
                          xml file is not yours.
           -Y year      = specify a four digit year as your analysis's start year, ex -Y 1984
                          This year overrides the startYear specifed in the <analysis> tag.
@@ -191,8 +191,8 @@ Usage:    $relfrepp [ -AB:C:O:RY:Z:c:d:f:hlmMp:oqr:S:st:u:vx:z ] experiment [ ex
           -u label     = specify unique output dir. frepp -u 2 yields .../pp_2/...
           -Q           = don't print the error checks into the script.  For evaluating csh.
           -q           = don't print the analysis figure checks to stdout.
-          -v           = verbose flag                                                   
-          -V           = very verbose flag                                                   
+          -v           = verbose flag
+          -V           = very verbose flag
 
           GENERAL FRE OPTIONS
           -h           = show this help message, then exit
@@ -201,11 +201,11 @@ Usage:    $relfrepp [ -AB:C:O:RY:Z:c:d:f:hlmMp:oqr:S:st:u:vx:z ] experiment [ ex
           -P platform  = platform (default on PP/AN: gfdl.default)
           -T target    = target (default on PP/AN: prod)
           -x xmlfile   = specify xml file (default: ./rts.xml)
-          experiment   = experiment to create scripts for; must be found in xml file    
+          experiment   = experiment to create scripts for; must be found in xml file
 
 EOF
    exit 1;
-} 
+}
 #still there but no longer advertised / DEBUGGING
 #          OPTIONS REQUIRED WHEN FULL XML IS NOT AVAILABLE
 #          -C calendar  = specify calendar type from coupler_nml, ie julian
@@ -221,7 +221,7 @@ $opt_x = 'rts.xml' unless $opt_x; #set default filename for experiments xml file
 if ( ! -f $opt_x ) {
    mailuser("XML file does not exist: $opt_x");
    sysmailuser();
-   die "ERROR: XML file does not exist: $opt_x\n"; 
+   die "ERROR: XML file does not exist: $opt_x\n";
 }
 
 if ( !$opt_t or ("$opt_t" eq "") ) {
@@ -239,7 +239,7 @@ unless ( $opt_c ) {
    $opt_c = 'split';
 }
 
-$versionId = ' $Id: frepp,v 18.0.2.52.2.1.2.89.2.73 2014/12/11 22:29:36 arl Exp $';
+$versionId = ' $Id: frepp,v 18.0.2.52.2.1.2.89.2.71 2014/11/13 20:06:19 arl Exp $';
 
 $perlerrors = "";
 $component = "";
@@ -247,7 +247,7 @@ $maxyrs=0;
 $maxdisk=0;
 $do_static = 1;
 $historyfiles="";
-%dtvars = (); 
+%dtvars = ();
 $basenpes = 1;
 $aggregateTS = 1;
 $didsomething = 0;
@@ -385,38 +385,38 @@ foreach $expt ( @ARGV ) {
    if ( "$opt_u" ne '' ) { $statedir .= "/$opt_u"; }
    unless ( -d "$statedir" or $opt_A ) { system "mkdir -p $statedir"; }
    my $aoutscriptdir = "$scriptsdir/analysis";
-   if ( $opt_O ) {$aoutscriptdir = "$opt_O";} 
+   if ( $opt_O ) {$aoutscriptdir = "$opt_O";}
    my $shortxml = $abs_xml_path;
    $shortxml =~ s/.+\/(.+\.xml)(\.$expt\.o.+)?/$1/;
-   #if ( -e "$archivedir/$shortxml" ) { 
+   #if ( -e "$archivedir/$shortxml" ) {
    #   print "Running ln -s $abs_xml_path $archivedir/$shortxml\n" if $opt_v;
-   #   system("ln -s $abs_xml_path $archivedir/$shortxml"); 
+   #   system("ln -s $abs_xml_path $archivedir/$shortxml");
    #}
 
    my $tmphistdir = "";
-   if ( "$workdir" eq "" ) { 
+   if ( "$workdir" eq "" ) {
       die "ERROR: No workDir from xml\n";
       $tmphistdir = "\$TMPDIR/$expt"."_$opt_t";
-      $workdir = "\$TMPDIR/$expt"."_$opt_t/work"; 
-   } else { 
+      $workdir = "\$TMPDIR/$expt"."_$opt_t/work";
+   } else {
       $tmphistdir = "$workdir/$expt"."_$opt_t";
-      $workdir = "$workdir/$expt"."_$opt_t/work"; 
+      $workdir = "$workdir/$expt"."_$opt_t/work";
    }
 
    if ( !$opt_d ) {                #set appropriate history directory
-      if ( $opt_r ) { 
-         $opt_d = "$archivedir/$opt_r/history"; 
+      if ( $opt_r ) {
+         $opt_d = "$archivedir/$opt_r/history";
       } else {
-         $opt_d = "$archivedir/history"; 
+         $opt_d = "$archivedir/history";
       }
-   } 
+   }
    if ( "$opt_d" eq '$archive/$name/history' ) {
       $opt_d = "$archivedir/history";
    }
    my $histDir = $opt_d;
-   if ( ! -d "$histDir" ) { 
+   if ( ! -d "$histDir" ) {
       print STDERR "\nNOTE: Creating history dir ($histDir)\n" if $opt_v;
-      system "mkdir -p $histDir"; 
+      system "mkdir -p $histDir";
    }
    print "\nDIRECTORIES: FRE4\nworkdir $workdir\nrootdir $rootdir\narchivedir $archivedir\nanalysisdir $analysisdir\noutscriptdir $outscriptdir\naoutscriptdir $aoutscriptdir\nhistDir $histDir\nptmpDir $ptmpDir\nstatedir $statedir\n\n" if $opt_v;
 
@@ -441,7 +441,7 @@ foreach $expt ( @ARGV ) {
       $cpio = 'cpio -C 524288';
       $cp = 'cp -b 2097152';
       $mv = 'mv -b 2097152';
-      $mvfile = '/lopt/bin/mvfile'; 
+      $mvfile = '/lopt/bin/mvfile';
       $timecmd = '/bin/time';
       $maxruntime = '18:00:00';
       $systimecmd = '/usr/etc/amtime1970';
@@ -501,9 +501,9 @@ EOF
    my $pbsenv = $ENV{'PBS_ENVIRONMENT'};
    if ( "$pbsenv" eq "PBS_BATCH" ) {
       $pbsqueue = $ENV{'PBS_O_QUEUE'};
-      if ( "$pbsqueue" eq "stage" ) { 
-         $schooling = 0; 
-      } elsif ( "$pbsqueue" eq "bigvftmp" ) { 
+      if ( "$pbsqueue" eq "stage" ) {
+         $schooling = 0;
+      } elsif ( "$pbsqueue" eq "bigvftmp" ) {
          unless ( "$opt_m" =~ m/-q bigvftmp/ or "$opt_m" =~ m/-q boost_bigvftmp/) {
             $opt_m .= " -q boost_bigvftmp";
          }
@@ -541,8 +541,8 @@ EOF
       }
    }
 
-   if ( "$opt_m" =~ m/host=.+princeton\.rdhpcs\.noaa\.gov/ 
-            and "$opt_m" !~ m/naccesspolicy=singlejob/ 
+   if ( "$opt_m" =~ m/host=.+princeton\.rdhpcs\.noaa\.gov/
+            and "$opt_m" !~ m/naccesspolicy=singlejob/
             and "$pbsqueue" =~ m/bigvftmp/ ) {
       $opt_m =~ s/(princeton\.rdhpcs\.noaa\.gov)/$1,naccesspolicy=singlejob/;
    }
@@ -574,7 +574,7 @@ EOF
      $time_hsmget      = "$timecmd".' -f "     TIME for hsmget:    real %'."$timereal".' user %U sys %S"';
      $time_hsmput      = "$timecmd".' -f "     TIME for hsmput:    real %'."$timereal".' user %U sys %S"';
      $time_combine     = "$timecmd".' -f "     TIME for combine:   real %'."$timereal".' user %U sys %S"';
-  } 
+  }
 
    my $version_info = "$version_head";
    if ( $opt_f ) { $version_info .= "-f "; }
@@ -594,14 +594,14 @@ EOF
    $this_frepp_cmd =~ s/.*# //smg;
    my $outscript = "$outscriptdir/$expt"."_$opt_t";
    my $pbs_job_name = "$expt"."_$opt_t";
-   if ( $opt_r ) { 
+   if ( $opt_r ) {
       $outscript = "$outscriptdir/$expt"."_$opt_r"."_$opt_t";
       $maxruntime = "01:00:00";
-      $pbs_job_name = "$expt"."_$opt_r"."_$opt_t"; 
+      $pbs_job_name = "$expt"."_$opt_r"."_$opt_t";
    }
-   if ( $opt_D ) { 
-      $outscript = "$outscriptdir/$expt"."_refineDiag_$opt_t"; 
-      $pbs_job_name = "$expt"."_refineDiag_$opt_t"; 
+   if ( $opt_D ) {
+      $outscript = "$outscriptdir/$expt"."_refineDiag_$opt_t";
+      $pbs_job_name = "$expt"."_refineDiag_$opt_t";
    }
 
    my $cshscripttmpl = getTemplate($platform);
@@ -614,12 +614,12 @@ EOF
    $cshscripttmpl =~ s/#get_site_config/$siteconfig/;
 
    #platform_csh_from_xml and check for FRE version mismatch
-   if ( "$platformcsh" ne "" ) { 
+   if ( "$platformcsh" ne "" ) {
       $platformcsh = <<EOF;
 #platform_csh_from_xml
 $platformcsh
 if ( "\$FRE_COMMANDS_HOME" != "\$FRE_COMMANDS_HOME_FREPP" ) then
-  echo "ERROR: FRE version mismatch:" 
+  echo "ERROR: FRE version mismatch:"
   echo "       Frepp version: \$FRE_COMMANDS_HOME_FREPP"
   echo "       XML loads version: \$FRE_COMMANDS_HOME"
   exit 1
@@ -628,6 +628,19 @@ EOF
       my $fremodule = `echo $ENV{LOADEDMODULES} | tr ':' '\n' | egrep '^fre/.+'`;
       chomp $fremodule;
       my $xmlfremodule = $platformcsh;
+      my @fremodulecsh = ();
+      # Loop through the CSH and remove all comments
+      foreach ( split (/\n/, $xmlfremodule )){
+          if ( $_ =~ /#/ ){
+              my $noncomment = (split( /#/, $_))[0];
+              if ( $noncomment =~ /\S/ ){
+                  push @fremodulecsh, $noncomment;
+              }
+          } else {
+              push @fremodulecsh, $_;
+          }
+      }
+      $xmlfremodule = join( /\n/, @fremodulecsh );
       $xmlfremodule =~ s/.*module load (fre\/\S+)\s*.*/$1/s;
       if ( "$fremodule" ne "$xmlfremodule" ) {
          print STDERR "ERROR: FRE version mismatch. Must use the same version of FRE in the shell and XML.\n";
@@ -642,7 +655,7 @@ EOF
       $cshscripttmpl =~ s/#\$ -l h_cpu/#\$ -l h_cpu=$maxruntime/;
       $cshscripttmpl =~ s/#\$ -o/#\$ -o $stdoutdir\/postProcess/;
    } else {
-      $cshscripttmpl =~ s/#PBS -N/#PBS -N $pbs_job_name/; 
+      $cshscripttmpl =~ s/#PBS -N/#PBS -N $pbs_job_name/;
       $cshscripttmpl =~ s/#PBS -l walltime/#PBS -l walltime=$maxruntime/;
       $cshscripttmpl =~ s/#PBS -o/#PBS -o $stdoutdir\/postProcess\//;
       $cshscripttmpl =~ s/setenv FRE_STDOUT_PATH/setenv FRE_STDOUT_PATH $stdoutdir\/postProcess\/$pbs_job_name.o\$JOB_ID/;
@@ -679,7 +692,7 @@ EOF
       $cshscripttmpl =~ s/(-soft -l fre_info=)/$1ppYears\@$maxyrs+/;
       writescript($cshscripttmpl,$outscript,"$batchSubmit$opt_w $opt_m",$statefile);
       $opt_w = '';
-      next; 
+      next;
    }
    }
    if ( "$opt_M" ne "" ) {
@@ -724,7 +737,7 @@ EOF
    if ( "$gridspec" eq '' ) {
       die "ERROR: gridSpec for platform $opt_P was not found in $opt_x.\n";
    } elsif (! -e $gridspec) {
-      die "ERROR: gridSpec file does not exist: $gridspec\n"; 
+      die "ERROR: gridSpec file does not exist: $gridspec\n";
    } else {
       print STDERR "NOTE: Using gridSpec $gridspec\n" if $opt_v;
    }
@@ -751,7 +764,7 @@ EOF
          #if ( $opt_p ) {
          #   my $prev = FREUtil::modifydate($opt_t,"- 1 years");
          #   $prev = FREUtil::graindate($prev,"day");
-         #   $cshscripttmpl .= "-w $expt"."_$prev "; 
+         #   $cshscripttmpl .= "-w $expt"."_$prev ";
          #}
          $cshscripttmpl .= "$expt\n";
          $cshscripttmpl .= errorstr("$relfrepp had a problem creating next script $expt"."_$opt_t");
@@ -784,7 +797,7 @@ EOF
       $cshscripttmpl =~ s/(-soft -l fre_info=)/$1ppYears\@$maxyrs+/;
       writescript($cshscripttmpl,$outscript,"$batchSubmit$opt_w $opt_m",$statefile);
       $opt_w = '';
-      next; 
+      next;
    } else {
       $cshscripttmpl =~ s/set histDir = .*/set histDir = $tmphistdir/;
    }
@@ -794,7 +807,7 @@ EOF
       my $writeIDorINTER = <<EOF;
 if ( "\$JOB_ID" != '' ) then
  echo \$PBS_JOBID > \$statefile
-else 
+else
  echo INTERACTIVE > \$statefile
  set PBS_JOBID = INTERACTIVE
 endif
@@ -835,7 +848,7 @@ EOF
    if ($opt_v) { print "Creating archive directories...\n"; }
    $ppRootDir = $postprocessdir;
    if ( "$opt_u" ne '' ) { $ppRootDir .= "_$opt_u"; }
-   if ( $opt_A and ! -d "$ppRootDir")  { print "ERROR: directory $ppRootDir not found. Exiting.\n"; exit 1; } 
+   if ( $opt_A and ! -d "$ppRootDir")  { print "ERROR: directory $ppRootDir not found. Exiting.\n"; exit 1; }
    $mkdircommand = "";
    $mkdircommand .= "mkdir -p $ppRootDir/.dec $ppRootDir/.checkpoint " unless $opt_A;
    my $nocommentver = $version_info;
@@ -994,7 +1007,6 @@ if ( "\$fregrid_wt" != '' ) then
             endif
         endif
    end
-
    foreach fregridwtfile ( `ls $opt_d/\${fregrid_yr}????.nc.*` )
       set fregridwtfile = \$fregridwtfile:t:r
       $time_hsmget \$hsmget -a $opt_d -p $ptmpDir/history -w $tmphistdir \$fregridwtfile/\\*land_static\\*
@@ -1057,7 +1069,7 @@ EOF
    my $cshscript = $cshscripttmpl;
    my @ppComponentNodes = $ppNode->findnodes("component");
    if ( $opt_c and "$opt_c" ne "split") {
-      @ppComponentNodes = $ppNode->findnodes("component[\@type='$opt_c']");      
+      @ppComponentNodes = $ppNode->findnodes("component[\@type='$opt_c']");
    }
 
    if ( "@ppComponentNodes" eq '' ) {
@@ -1167,7 +1179,7 @@ EOF
 
       #backwards reproducibility
       my $c2l = $ppcNode->findvalue('@cubicToLatLon');
-      
+
       if ( "$c2l" eq 'none' ) { #leave data on cubed sphere grid
          $sourceGrid = 'cubedsphere';
          $xyInterp = '';
@@ -1209,7 +1221,7 @@ EOF
       } elsif ( "$sourceGrid" !~ /(cubedsphere|latlon|tripolar|none)/ ) {
          die "ERROR: sourceGrid must be 'none' or '{atmos,ocean,land}-{cubedsphere,latlon,tripolar}'\n";
       }
-      $nlat = 0; 
+      $nlat = 0;
       $nlon = 0;
       if ( "$xyInterp" eq '' ) {
          print STDERR "Data will be left on $sourceGrid grid\n" if $opt_v;
@@ -1242,25 +1254,25 @@ EOF
       if ($opt_v) {print STDERR "diag_table source files are '@dtsources'\n";}
 
       #get list of variables for each file from diag table information.
-      foreach my $srcfile (@dtsources) { 
+      foreach my $srcfile (@dtsources) {
          my @dtv = ();
          my @dtvall = ();
 
          foreach (@diagtablecontent) {
             if ( /.*,.*,\s*"(\w*)"\s*,\s*"$srcfile"\s*,.*,.*,.*,.*/ and not /^#/ ) {
                push @dtvall,$1;
-            } 
+            }
             #omit static/instantaneous variables
             if ( /.*,.*,\s*"(\w*)"\s*,\s*"$srcfile"\s*,.*,\s*\.true\.\s*,.*,.*/ and not /^#/ ) {
                push @dtv,$1;
-            } 
-         }  
+            }
+         }
          my $varstr = join(',',@dtv);
          my $varstrall = join(',',@dtvall);
          my $srcfileall = "all_$srcfile";
-         if ( "$varstrall" ne "" ) { 
-            $dtvars{$srcfile} = $varstr; 
-            $dtvars{$srcfileall} = $varstrall; 
+         if ( "$varstrall" ne "" ) {
+            $dtvars{$srcfile} = $varstr;
+            $dtvars{$srcfileall} = $varstrall;
             if ($opt_V) {print "$srcfile vars, static/instant omitted: $dtvars{$srcfile}\n\n";}
             if ($opt_v) {print "All $srcfile diag_table variables: $dtvars{$srcfileall}\n\n"};
          }
@@ -1285,10 +1297,10 @@ EOF
          $sim0 = &FREUtil::parseFortranDate($basedate);
          print "NOTE: sim0 from basedate: $sim0\n" if $opt_v;
       }
-      if ( "$sim0" eq "" ) { 
+      if ( "$sim0" eq "" ) {
          mailuser("$relfrepp had a problem calculating sim0.  Please contact Amy.");
          sysmailuser();
-         die "ERROR: $relfrepp had a problem calculating sim0.  Please contact Amy.\n"; 
+         die "ERROR: $relfrepp had a problem calculating sim0.  Please contact Amy.\n";
       }
       my $startflag = &Date_Cmp($t0,$sim0);
       my $startofrun = 0;
@@ -1308,7 +1320,7 @@ EOF
       my $simTime = FREUtil::getxpathval('runtime/production/@simTime'); #not currently used
       my $simUnits = FREUtil::getxpathval('runtime/production/@units');  #not currently used
       if($opt_S) {
-         $segTime = $opt_S; $segUnits = "months" 
+         $segTime = $opt_S; $segUnits = "months"
       } else {
          $segTime = FREUtil::getxpathval('runtime/production/segment/@simTime'); #global
          $segUnits = FREUtil::getxpathval('runtime/production/segment/@units');  #global
@@ -1321,7 +1333,7 @@ EOF
          if ( $simEND < $t0 ) {
             print "WARNING: The simulation time calculated from the basedate in your diag_table ($basedate) and the simulation length from the xml ($simTime $simUnits) ends before this year of postprocessing ($opt_t).\n";
             $simEND = $tEND; #simEND not currently used for anything else
-         } else { 
+         } else {
             $tEND = $simEND;
             print "      adjusting tEND to simulation end: $tEND\n";
          }
@@ -1344,7 +1356,7 @@ EOF
       if ( ! $opt_l ) { $diag_source =~ s/_.*//; }
       my $staticfile = "$ppRootDir/$component/$component.static.nc";
       print STDERR "      static vars from '$diag_source'\n" if $opt_v;
-      if ( ! $opt_A ) { $cshscript .= staticvars ( $diag_source, $ptmpDir, $tmphistdir, $refinedir ); } 
+      if ( ! $opt_A ) { $cshscript .= staticvars ( $diag_source, $ptmpDir, $tmphistdir, $refinedir ); }
 
       #TIMEAVERAGES - MONTHLY
       my @taNodes = sort by_interval $ppcNode->findnodes('timeAverage[@source="monthly"]');
@@ -1356,22 +1368,50 @@ EOF
          push ( @depyears, @dep );
          if ( $opt_v ) {
             print STDERR "      monthly av int=$int subint=$subint";
-            if ( "$subint" eq "" ) { print STDERR "history\n"; } else { print STDERR "\n"; } 
+            if ( "$subint" eq "" ) { print STDERR "history\n"; } else { print STDERR "\n"; }
          }
 
          if (! $opt_A) {
             if ($subint) {
-               $cshscript .= monthlyAVfromav( $taNode, $sim0, $subint ); 
+               $cshscript .= monthlyAVfromav( $taNode, $sim0, $subint );
             } else {
                #does monthly 1year and monthly xyear, order is unimportant
                $cshscript .= monthlyAVfromhist( $taNode, $sim0 );
             }
          }
-         $cshscript .= analysis( $taNode, $expt, $gridspec, $staticfile,"timeAverage",$diag_source,$ppRootDir,$component," " ,$analysisdir,$aoutscriptdir,$workdir,$archivedir,$opt_t,$opt_O,$opt_Y,$opt_Z,$opt_V,$opt_u,$sim0,$opt_R,$opt_s,$histDir,$nlat,$nlon,$abs_xml_path,$stdoutdir,$opt_P,$standardTarget);
+         $cshscript .= analysis({ node => $taNode,
+                                  experiment => $expt,
+                                  gridSpec => $gridspec,
+                                  staticFile => $staticfile,
+                                  type => "timeAverage",
+                                  diagSrc => $diag_source,
+                                  ppRootDir => $ppRootDir,
+                                  comp => $component,
+                                  dtvarsRef => " ",
+                                  analysisDir => $analysisdir,
+                                  scriptDir => $aoutscriptdir,
+                                  workDir => $workdir,
+                                  archDir => $archivedir,
+                                  opt_t => $opt_t,
+                                  opt_O => $opt_O,
+                                  opt_Y => $opt_Y,
+                                  opt_Z => $opt_Z,
+                                  opt_V => $opt_V,
+                                  opt_u => $opt_u,
+                                  sim0 => $sim0,
+                                  opt_R => $opt_R,
+                                  histDir => $histDir,
+                                  nLat => $nlat,
+                                  nLon => $nlon,
+                                  absXmlPath => $abs_xml_path,
+                                  stdoutDir => $stdoutdir,
+                                  opt_P => $opt_P,
+                                  stdTarget => $standardTarget,
+                                  opt_s => $opt_s});
       }
-      
 
-      #TIMEAVERAGES - ANNUAL 
+
+      #TIMEAVERAGES - ANNUAL
       my @taNodes = sort by_interval $ppcNode->findnodes('timeAverage[@source="annual" and @interval!="1yr"]');
       my @intervals = map { $_->findvalue('@interval') } @taNodes;
       my @annavnodes = $ppcNode->findnodes('timeAverage[@source="annual" and @interval="1yr"]');
@@ -1382,11 +1422,39 @@ EOF
          if ( not scalar @taNodes or "$annCalcInterval" eq "1yr" ) {
             push ( @intervals, $annCalcInterval );
             $hsmfiles = $hsmfiles . jpkSrcFiles($taNode) . ",";
-            if (! $opt_A ) { 
+            if (! $opt_A ) {
                print STDERR "      annual av int=1yr subint=history\n" if $opt_v;
                $cshscript .= annualAV1yrfromhist( $taNode, $sim0, 1 );
             }
-            $cshscript .= analysis( $taNode, $expt, $gridspec, $staticfile,"timeAverage",$diag_source,$ppRootDir,$component,\%dtvars,$analysisdir,$aoutscriptdir,$workdir,$archivedir,$opt_t,$opt_O,$opt_Y,$opt_Z,$opt_V,$opt_u,$sim0,$opt_R,$opt_s,$histDir,$nlat,$nlon,$abs_xml_path,$stdoutdir,$opt_P,$standardTarget);
+            $cshscript .= analysis({ node => $taNode,
+                                     experiment => $expt,
+                                     gridSpec => $gridspec,
+                                     staticFile => $staticfile,
+                                     type => "timeAverage",
+                                     diagSrc => $diag_source,
+                                     ppRootDir => $ppRootDir,
+                                     comp => $component,
+                                     dtvarsRef => \%dtvars,
+                                     analysisDir => $analysisdir,
+                                     scriptDir => $aoutscriptdir,
+                                     workDir => $workdir,
+                                     archDir => $archivedir,
+                                     opt_t => $opt_t,
+                                     opt_O => $opt_O,
+                                     opt_Y => $opt_Y,
+                                     opt_Z => $opt_Z,
+                                     opt_V => $opt_V,
+                                     opt_u => $opt_u,
+                                     sim0 => $sim0,
+                                     opt_R => $opt_R,
+                                     histDir => $histDir,
+                                     nLat => $nlat,
+                                     nLon => $nlon,
+                                     absXmlPath => $abs_xml_path,
+                                     stdoutDir => $stdoutdir,
+                                     opt_P => $opt_P,
+                                     stdTarget => $standardTarget,
+                                     opt_s => $opt_s});
          }
       }
       foreach my $taNode ( @taNodes ) {
@@ -1399,12 +1467,40 @@ EOF
          }
          if (! $opt_A ) {
             if ($subint>1) {
-               $cshscript .= annualAVfromav( $taNode, $sim0, $subint ); 
+               $cshscript .= annualAVfromav( $taNode, $sim0, $subint );
             } else {
                $cshscript .= annualAVxyrfromann( $taNode, $sim0, $ppcNode, scalar @annavnodes, $annCalcInterval );
             }
          }
-         $cshscript .= analysis( $taNode, $expt, $gridspec, $staticfile,"timeAverage",$diag_source,$ppRootDir,$component,\%dtvars,$analysisdir,$aoutscriptdir,$workdir,$archivedir,$opt_t,$opt_O,$opt_Y,$opt_Z,$opt_V,$sim0,$opt_R,$opt_s,$histDir,$nlat,$nlon,$abs_xml_path,$stdoutdir,$opt_P,$standardTarget);
+         $cshscript .= analysis({ node => $taNode,
+                                  experiment => $expt,
+                                  gridSpec => $gridspec,
+                                  staticFile => $staticfile,
+                                  type => "timeAverage",
+                                  diagSrc => $diag_source,
+                                  ppRootDir => $ppRootDir,
+                                  comp => $component,
+                                  dtvarsRef => \%dtvars,
+                                  analysisDir => $analysisdir,
+                                  scriptDir => $aoutscriptdir,
+                                  workDir => $workdir,
+                                  archDir => $archivedir,
+                                  opt_t => $opt_t,
+                                  opt_O => $opt_O,
+                                  opt_Y => $opt_Y,
+                                  opt_Z => $opt_Z,
+                                  opt_V => $opt_V,
+                                  opt_u => $opt_u,
+                                  sim0 => $sim0,
+                                  opt_R => $opt_R,
+                                  histDir => $histDir,
+                                  nLat => $nlat,
+                                  nLon => $nlon,
+                                  absXmlPath => $abs_xml_path,
+                                  stdoutDir => $stdoutdir,
+                                  opt_P => $opt_P,
+                                  stdTarget => $standardTarget,
+                                  opt_s => $opt_s});
       }
 
       #TIMEAVERAGES - SEASONAL
@@ -1418,22 +1514,50 @@ EOF
          if (! $opt_A ) {
             if ($subint) {
                print STDERR "      seasonal av int=$int subint=$subint\n" if $opt_v;
-               $cshscript .= seasonalAVfromav( $taNode, $sim0, $subint ); 
+               $cshscript .= seasonalAVfromav( $taNode, $sim0, $subint );
             } else {
                print STDERR "      seasonal av int=$int subint=history\n" if $opt_v;
                $cshscript .= seasonalAVfromhist( $taNode, $sim0 );
             }
          }
-         $cshscript .= analysis( $taNode, $expt, $gridspec, $staticfile,"timeAverage",$diag_source,$ppRootDir,$component,\%dtvars,$analysisdir,$aoutscriptdir,$workdir,$archivedir,$opt_t,$opt_O,$opt_Y,$opt_Z,$opt_V,$opt_u,$sim0,$opt_R,$opt_s,$histDir,$nlat,$nlon,$abs_xml_path,$stdoutdir,$opt_P,$standardTarget);
+         $cshscript .= analysis({ node => $taNode,
+                                  experiment => $expt,
+                                  gridSpec => $gridspec,
+                                  staticFile => $staticfile,
+                                  type => "timeAverage",
+                                  diagSrc => $diag_source,
+                                  ppRootDir => $ppRootDir,
+                                  comp => $component,
+                                  dtvarsRef => \%dtvars,
+                                  analysisDir => $analysisdir,
+                                  scriptDir => $aoutscriptdir,
+                                  workDir => $workdir,
+                                  archDir => $archivedir,
+                                  opt_t => $opt_t,
+                                  opt_O => $opt_O,
+                                  opt_Y => $opt_Y,
+                                  opt_Z => $opt_Z,
+                                  opt_V => $opt_V,
+                                  opt_u => $opt_u,
+                                  sim0 => $sim0,
+                                  opt_R => $opt_R,
+                                  histDir => $histDir,
+                                  nLat => $nlat,
+                                  nLon => $nlon,
+                                  absXmlPath => $abs_xml_path,
+                                  stdoutDir => $stdoutdir,
+                                  opt_P => $opt_P,
+                                  stdTarget => $standardTarget,
+                                  opt_s => $opt_s});
       }
-      
+
 
       #TIMESERIES - HOURLY
       my @hrfreqs = ('hourly','2hr','3hr','4hr','6hr','8hr','12hr','120hr');
       foreach my $hrfreq ( @hrfreqs ) {
          my @tsNodes = sort by_chunk $ppcNode->findnodes("timeSeries[\@freq='$hrfreq']");
          my @chunks = map { $_->findvalue('@chunkLength') } @tsNodes;
-         my $diag_source = diagfile($ppcNode,"$hrfreq"); 
+         my $diag_source = diagfile($ppcNode,"$hrfreq");
          foreach my $tsNode ( @tsNodes ) {
             $hsmfiles = $hsmfiles . jpkSrcFiles($tsNode) . ",";
             (my $cl,my $subchunk,my @dep) = get_subint($tsNode,@chunks);
@@ -1450,7 +1574,35 @@ EOF
                   $cshscript .= directTS( $tsNode, $sim0, $startofrun );
                }
             }
-            $cshscript .= analysis( $tsNode, $expt, $gridspec,$staticfile,"timeSeries",$diag_source,$ppRootDir,$component,\%dtvars,$analysisdir,$aoutscriptdir,$workdir,$archivedir,$opt_t,$opt_O,$opt_Y,$opt_Z,$opt_V,$opt_u,$sim0,$opt_R,$opt_s,$histDir,$nlat,$nlon,$abs_xml_path,$stdoutdir,$opt_P,$standardTarget);
+            $cshscript .= analysis({ node => $tsNode,
+                                     experiment => $expt,
+                                     gridSpec => $gridspec,
+                                     staticFile => $staticfile,
+                                     type => "timeSeries",
+                                     diagSrc => $diag_source,
+                                     ppRootDir => $ppRootDir,
+                                     comp => $component,
+                                     dtvarsRef => \%dtvars,
+                                     analysisDir => $analysisdir,
+                                     scriptDir => $aoutscriptdir,
+                                     workDir => $workdir,
+                                     archDir => $archivedir,
+                                     opt_t => $opt_t,
+                                     opt_O => $opt_O,
+                                     opt_Y => $opt_Y,
+                                     opt_Z => $opt_Z,
+                                     opt_V => $opt_V,
+                                     opt_u => $opt_u,
+                                     sim0 => $sim0,
+                                     opt_R => $opt_R,
+                                     histDir => $histDir,
+                                     nLat => $nlat,
+                                     nLon => $nlon,
+                                     absXmlPath => $abs_xml_path,
+                                     stdoutDir => $stdoutdir,
+                                     opt_P => $opt_P,
+                                     stdTarget => $standardTarget,
+                                     opt_s => $opt_s});
          }
       }
 
@@ -1470,11 +1622,39 @@ EOF
          if (! $opt_A ) {
             if ($subchunk) {
                $cshscript .= TSfromts( $tsNode, $sim0, $subchunk );
-            } else { 
+            } else {
                $cshscript .= directTS( $tsNode, $sim0, $startofrun );
-            } 
-         } 
-         $cshscript .= analysis( $tsNode, $expt, $gridspec,$staticfile,"timeSeries",$diag_source,$ppRootDir,$component,\%dtvars,$analysisdir,$aoutscriptdir,$workdir,$archivedir,$opt_t,$opt_O,$opt_Y,$opt_Z,$opt_V,$opt_u,$sim0,$opt_R,$opt_s,$histDir,$nlat,$nlon,$abs_xml_path,$stdoutdir,$opt_P,$standardTarget);
+            }
+         }
+         $cshscript .= analysis({ node => $tsNode,
+                                  experiment => $expt,
+                                  gridSpec => $gridspec,
+                                  staticFile => $staticfile,
+                                  type => "timeSeries",
+                                  diagSrc => $diag_source,
+                                  ppRootDir => $ppRootDir,
+                                  comp => $component,
+                                  dtvarsRef => \%dtvars,
+                                  analysisDir => $analysisdir,
+                                  scriptDir => $aoutscriptdir,
+                                  workDir => $workdir,
+                                  archDir => $archivedir,
+                                  opt_t => $opt_t,
+                                  opt_O => $opt_O,
+                                  opt_Y => $opt_Y,
+                                  opt_Z => $opt_Z,
+                                  opt_V => $opt_V,
+                                  opt_u => $opt_u,
+                                  sim0 => $sim0,
+                                  opt_R => $opt_R,
+                                  histDir => $histDir,
+                                  nLat => $nlat,
+                                  nLon => $nlon,
+                                  absXmlPath => $abs_xml_path,
+                                  stdoutDir => $stdoutdir,
+                                  opt_P => $opt_P,
+                                  stdTarget => $standardTarget,
+                                  opt_s => $opt_s});
       }
 
       #TIMESERIES - MONTHLY
@@ -1497,7 +1677,35 @@ EOF
                $cshscript .= directTS( $tsNode, $sim0, $startofrun );
             }
          }
-         $cshscript .= analysis( $tsNode, $expt, $gridspec,$staticfile,"timeSeries",$diag_source,$ppRootDir,$component,\%dtvars,$analysisdir,$aoutscriptdir,$workdir,$archivedir,$opt_t,$opt_O,$opt_Y,$opt_Z,$opt_V,$opt_u,$sim0,$opt_R,$opt_s,$histDir,$nlat,$nlon,$abs_xml_path,$stdoutdir,$opt_P,$standardTarget);
+         $cshscript .= analysis({ node => $tsNode,
+                                  experiment => $expt,
+                                  gridSpec => $gridspec,
+                                  staticFile => $staticfile,
+                                  type => "timeSeries",
+                                  diagSrc => $diag_source,
+                                  ppRootDir => $ppRootDir,
+                                  comp => $component,
+                                  dtvarsRef => \%dtvars,
+                                  analysisDir => $analysisdir,
+                                  scriptDir => $aoutscriptdir,
+                                  workDir => $workdir,
+                                  archDir => $archivedir,
+                                  opt_t => $opt_t,
+                                  opt_O => $opt_O,
+                                  opt_Y => $opt_Y,
+                                  opt_Z => $opt_Z,
+                                  opt_V => $opt_V,
+                                  opt_u => $opt_u,
+                                  sim0 => $sim0,
+                                  opt_R => $opt_R,
+                                  histDir => $histDir,
+                                  nLat => $nlat,
+                                  nLon => $nlon,
+                                  absXmlPath => $abs_xml_path,
+                                  stdoutDir => $stdoutdir,
+                                  opt_P => $opt_P,
+                                  stdTrget => $standardTarget,
+                                  opt_s => $opt_s});
       }
 
       #TIMESERIES - ANNUAL
@@ -1520,7 +1728,35 @@ EOF
                $cshscript .= annualTS( $tsNode, $sim0, $startofrun, join("\n",@diagtablecontent) );
             }
          }
-         $cshscript .= analysis( $tsNode, $expt, $gridspec,$staticfile,"timeSeries",$diag_source,$ppRootDir,$component,\%dtvars,$analysisdir,$aoutscriptdir,$workdir,$archivedir,$opt_t,$opt_O,$opt_Y,$opt_Z,$opt_V,$opt_u,$sim0,$opt_R,$opt_s,$histDir,$nlat,$nlon,$abs_xml_path,$stdoutdir,$opt_P,$standardTarget);
+         $cshscript .= analysis({ node => $tsNode,
+                                  experiment => $expt,
+                                  gridSpec => $gridspec,
+                                  staticFile => $staticfile,
+                                  type => "timeSeries",
+                                  diagSrc => $diag_source,
+                                  ppRootDir => $ppRootDir,
+                                  comp => $component,
+                                  dtvarsRef => \%dtvars,
+                                  analysisDir => $analysisdir,
+                                  scriptDir => $aoutscriptdir,
+                                  workDir => $workdir,
+                                  archDir => $archivedir,
+                                  opt_t => $opt_t,
+                                  opt_O => $opt_O,
+                                  opt_Y => $opt_Y,
+                                  opt_Z => $opt_Z,
+                                  opt_V => $opt_V,
+                                  opt_u => $opt_u,
+                                  sim0 => $sim0,
+                                  opt_R => $opt_R,
+                                  histDir => $histDir,
+                                  nLat => $nlat,
+                                  nLon => $nlon,
+                                  absXmlPath => $abs_xml_path,
+                                  stdoutDir => $stdoutdir,
+                                  opt_P => $opt_P,
+                                  stdTarget => $standardTarget,
+                                  opt_s => $opt_s});
       }
 
       #TIMESERIES - SEASONAL
@@ -1543,7 +1779,35 @@ EOF
                $cshscript .= seasonalTS( $tsNode, $sim0 );
             }
          }
-         $cshscript .= analysis( $tsNode, $expt, $gridspec,$staticfile,"timeSeries",$diag_source,$ppRootDir,$component,\%dtvars,$analysisdir,$aoutscriptdir,$workdir,$archivedir,$opt_t,$opt_O,$opt_Y,$opt_Z,$opt_V,$opt_u,$sim0,$opt_R,$opt_s,$histDir,$nlat,$nlon,$abs_xml_path,$stdoutdir,$opt_P,$standardTarget);
+         $cshscript .= analysis({ node => $tsNode,
+                                  experiment => $expt,
+                                  gridSpec => $gridspec,
+                                  staticFile => $staticfile,
+                                  type => "timeSeries",
+                                  diagSrc => $diag_source,
+                                  ppRootDir => $ppRootDir,
+                                  comp => $component,
+                                  dtvarsRef => \%dtvars,
+                                  analysisDir => $analysisdir,
+                                  scriptDir => $aoutscriptdir,
+                                  workDir => $workdir,
+                                  archDir => $archivedir,
+                                  opt_t => $opt_t,
+                                  opt_O => $opt_O,
+                                  opt_Y => $opt_Y,
+                                  opt_Z => $opt_Z,
+                                  opt_V => $opt_V,
+                                  opt_u => $opt_u,
+                                  sim0 => $sim0,
+                                  opt_R => $opt_R,
+                                  histDir => $histDir,
+                                  nLat => $nlat,
+                                  nLon => $nlon,
+                                  absXmlPath => $abs_xml_path,
+                                  stdoutDir => $stdoutdir,
+                                  opt_P => $opt_P,
+                                  stdTarget => $standardTarget,
+                                  opt_s => $opt_s});
       }
 
       if ( $didsomething ) {
@@ -1562,7 +1826,7 @@ EOF
       my %seen = (); my @u = grep { ! $seen{$_} ++ } @depyears;
       @depyears=sort {$a <=> $b} @u;
       print "\nThis frepp year depends on: @depyears\n" if $opt_v;
-      
+
       foreach my $depyear ( @depyears ) {
          my $depfile = "$statedir/$component.$depyear";
          my $redo = 0;
@@ -1674,7 +1938,7 @@ EOF
                }
             }
          }
-         
+
       }
       }
       #I'm not sure whether "redothisyear" means that old dependencies in the current list could be wrong? -arl
@@ -1713,18 +1977,18 @@ EOF
          $cshscript .= call_frepp($abs_xml_path, $outscript, $component, "");
          if ( "$platform" eq 'ia64' ) { $cshscript .= "qstat -j \$PBS_JOBID | grep ^usage\n"; }
          $cshscript .= "echo END-OF-SCRIPT for postprocessing job $t0-$tEND for $expt\n";
-         if ( $maxyrs < 2 ) { 
+         if ( $maxyrs < 2 ) {
             if ( "$platform" eq 'ia64' ) {
-               $cshscript =~ s/#\$ -l h_cpu.*/#\$ -l h_cpu=20:00:00/; 
+               $cshscript =~ s/#\$ -l h_cpu.*/#\$ -l h_cpu=20:00:00/;
             } else {
-               $cshscript =~ s/#PBS -l walltime.*/#PBS -l walltime=20:00:00/; 
+               $cshscript =~ s/#PBS -l walltime.*/#PBS -l walltime=20:00:00/;
             }
          }
-         if ( $maxyrs >= 20 ) { 
+         if ( $maxyrs >= 20 ) {
             if ( "$platform" eq 'ia64' ) {
-               $cshscript =~ s/#\$ -l h_cpu.*/#\$ -l h_cpu=$maxruntime/; 
+               $cshscript =~ s/#\$ -l h_cpu.*/#\$ -l h_cpu=$maxruntime/;
             } else {
-               $cshscript =~ s/#PBS -l walltime.*/#PBS -l walltime=$maxruntime/; 
+               $cshscript =~ s/#PBS -l walltime.*/#PBS -l walltime=$maxruntime/;
             }
             my $npes = $basenpes;
             $cshscript =~ s/pe ic.postp (.+)/pe ic.postp $npes/;
@@ -1748,7 +2012,7 @@ EOF
       }
    }
 
-   if ( ! $opt_c ) { 
+   if ( ! $opt_c ) {
       die "Calling frepp without -c is no longer supported.\n";
    }
 
@@ -1782,9 +2046,9 @@ sub jpk_hsmget_files {
    my @hsmf = ();
    my %seen = ();
    my @hsmfilesa = split ',',$hsmfiles;
-   foreach (@hsmfilesa) { 
+   foreach (@hsmfilesa) {
       push(@hsmf, $_) unless ($seen{$_}++); #uniq
-   } 
+   }
    if ($opt_v) {print "diagnostic files to be extracted: @hsmf\n\n";}
    $hsmfiles = '';
    return @hsmf;
@@ -1796,9 +2060,9 @@ sub dmget_files {
    my @hf = ();
    my %seen = ();
    my @historyfilesa = split ' ',$historyfiles;
-   foreach (@historyfilesa) { 
+   foreach (@historyfilesa) {
       push(@hf, $_) unless ($seen{$_}++); #uniq
-   } 
+   }
    @hf = sort(@hf);
    if ($opt_v) {print "historyfiles used: @hf\n\n";}
    $historyfiles = '';
@@ -1820,7 +2084,7 @@ sub hsmget_history_csh {
    my $beginCombineTime = `date +\%s`;
 
 #check for and combine raw history files online
-   
+
   my @histfiles = split " ",$hf;
   #print "histfiles:".join(", ",@histfiles)."\n";
   #print "hsmf $hsmf\n";
@@ -1835,7 +2099,7 @@ sub hsmget_history_csh {
     #print "availhf:".join(", ", @availhf)."\n";
 
     #if both raw and combined data exist, and raw is newer, replace. Otherwise exit on error.
-    if ( @availraw and @availhf ) {    
+    if ( @availraw and @availhf ) {
       my %count = ();
       my @modavailraw = @availraw;
       s/\.raw\.nc/\.nc/ for @modavailraw;
@@ -1886,11 +2150,11 @@ sub hsmget_history_csh {
        #set initial timing stats
        chomp( my $segmentStart = `date +\%s` );
        my $combine = <<EOF;
-$time_cp $cp $opt_d/$file .    
+$time_cp $cp $opt_d/$file .
 MYSTATUS=\$?
 if [ \$MYSTATUS -ne 0 ]; then
    echo WARNING: copy filed for raw history file $file, retrying.
-   $time_cp $cp $opt_d/$file . 
+   $time_cp $cp $opt_d/$file .
    MYSTATUS=\$?
    if [ \$MYSTATUS -ne 0 ]; then
       echo ERROR: copy failed twice for raw history file $file, exiting.
@@ -1916,7 +2180,7 @@ fi
 $time_hsmput hsmput -v -t -s tar -a $opt_d -p $ptmpDir/history -w $combinedir $histdate
 MYSTATUS=\$?
 if [ \$MYSTATUS -eq 0 ]; then
- if [ -f $opt_d/$file ] && [ -f $opt_d/$histdate.tar ]; then 
+ if [ -f $opt_d/$file ] && [ -f $opt_d/$histdate.tar ]; then
  $time_rm rm $opt_d/$file
  fi
 fi
@@ -1959,11 +2223,11 @@ Your FRE post-processing job ( \$JOB_ID ) has exited because no history files
 were found for year \$historyyear in directory:
 $opt_d
 
-FRE will attempt to transfer the history files on the remote side by retrying 
+FRE will attempt to transfer the history files on the remote side by retrying
 the failed output stager transfers.  If later postprocessing jobs require
 this postprocessing interval, this year of postprocessing will be rerun.
 
-To recover manually, please transfer the history data with gcp or send_file, 
+To recover manually, please transfer the history data with gcp or send_file,
 and then resubmit this postprocessing job via:
 
 $this_frepp_cmd
@@ -2042,11 +2306,11 @@ sub checkHistComplete {
          my $efields = 0;
          my $efields2 = 0;
          if ("$units" eq "months") {
-            $efields = &Delta_Format( $delta ,0,"%Mt");         
+            $efields = &Delta_Format( $delta ,0,"%Mt");
             $efields /= $freq;
             $efields2 = $efields;
          } elsif ("$units" eq "years") {
-            $efields = &Delta_Format( $delta ,0,"%yt");         
+            $efields = &Delta_Format( $delta ,0,"%yt");
             $efields /= $freq;
             $efields2 = $efields;
          } elsif ("$units" eq "days") {
@@ -2083,15 +2347,15 @@ else if ( \$afields == $efields2 ) then
 else
    echo ERROR: Incomplete history data
    Mail -s "\$name year \$historyyear cannot be postprocessed" \$USER <<END
-Your FRE post-processing job ( \$JOB_ID ) has exited because of incomplete 
-history data.  FRE expected $efields time levels in $diagfile data, but 
+Your FRE post-processing job ( \$JOB_ID ) has exited because of incomplete
+history data.  FRE expected $efields time levels in $diagfile data, but
 found \$afields time levels for the interval $firsthisty$firsthistm$firsthistd-$tENDy$tENDm$tENDd.
 
-FRE will attempt to transfer the history files on the remote side by retrying 
+FRE will attempt to transfer the history files on the remote side by retrying
 the failed output stager transfers.  If later postprocessing jobs require
 this postprocessing interval, this year of postprocessing will be rerun.
 
-To recover manually, please transfer the history data with gcp or send_file, 
+To recover manually, please transfer the history data with gcp or send_file,
 and then resubmit this postprocessing job via:
 
 $frepp_cmd
@@ -2107,15 +2371,15 @@ END
 
 endif
 EOF
-      } 
+      }
    }
 
-   return $script;  
+   return $script;
 }
 
 #make directories
 sub createdirs {
-   my $mkdircommand = $_[0];   
+   my $mkdircommand = $_[0];
 
    if ( "$mkdircommand" ne "" and "$mkdircommand" ne "mkdir -p " ) {
       #if ( $opt_v ) { print "length of mkdircommand: ".length("$mkdircommand")."\n"; }
@@ -2161,13 +2425,13 @@ sub call_frepp {
    my $year = $_[3];
    my $depjobs = $_[4];
    my $csh = "";
-  
+
    my $nextyear = FREUtil::modifydate($tEND,"+ 1 sec");
    my $nextyearf = FREUtil::graindate($nextyear,"day");
 
 
    if ( "$depjobs" ne "" ) {
-      chop $depjobs;  
+      chop $depjobs;
       $depjobs = "-w $depjobs ";
    }
 
@@ -2220,10 +2484,10 @@ sub call_frepp {
    return $csh;
 }
 
-#set up checkpointing 
+#set up checkpointing
 sub setcheckpt {
    my $checkpt = "$component"."_$_[0]";
-   unless ( "$_[0]" eq "staticvars" ) { $didsomething = 1; 
+   unless ( "$_[0]" eq "staticvars" ) { $didsomething = 1;
       #print STDERR "DID SOMETHING: $checkpt\n";
    }
    my $csh = <<EOF;
@@ -2235,8 +2499,8 @@ if ( -f /home/gfdl/flags/fre/checkpoint.\$HOST || -f /home/gfdl/flags/fre/checkp
    set now = `date +\%s`
    echo "Exiting early by HPCS request at \$now, will resume with $checkpt"
    Mail -s "\$name job \$JOB_ID has been checkpointed by frepp" \$USER <<END
-Your FRE post-processing job ( \$JOB_ID ) has been stopped and resubmitted 
-to the batch queue.  It will be re-run by the operators as soon as possible 
+Your FRE post-processing job ( \$JOB_ID ) has been stopped and resubmitted
+to the batch queue.  It will be re-run by the operators as soon as possible
 and resume calculating $checkpt.
 
 Job details:
@@ -2266,7 +2530,7 @@ if ( \$status != 0 ) then
 endif
 
 EOF
-   return $str; 
+   return $str;
 }
 
 sub retryonerrorstart {
@@ -2276,9 +2540,9 @@ sub retryonerrorstart {
    set thisstatus = \$status
    if ( \$thisstatus != 0 ) then
       echo ERROR: $cmd returned status \$thisstatus
-      sleep 30 
+      sleep 30
 EOF
-   return $str; 
+   return $str;
 }
 
 sub retryonerrorend {
@@ -2294,10 +2558,10 @@ sub retryonerrorend {
       else
          echo RETRY SUCCESSFUL.
       endif
-   endif 
+   endif
 
 EOF
-   return $str; 
+   return $str;
 
 }
 
@@ -2345,7 +2609,7 @@ if ( -e \$work/.errors ) then
 Errors are reported by the shell script created by $relfrepp working in
 $outdir
 Grep for 'ERROR' in
-\$FRE_STDOUT_PATH 
+\$FRE_STDOUT_PATH
 for details.
 END
     if ( -e \$work/.errorssend ) then
@@ -2402,10 +2666,10 @@ sub sysmailuser {
          my $str = <<EOF;
 Mail -s "$relfrepp PERL ERROR: $expt $opt_t" $username <<END
 Error message(s) have been reported by $relfrepp while
-creating postprocessing scripts for year $opt_t of the 
+creating postprocessing scripts for year $opt_t of the
 experiment $expt, in the stdout file
 
-$outpath 
+$outpath
 
 $perlerrors
 END
@@ -2532,7 +2796,7 @@ EOF
       $variables =~ s/^-v//g;
       $plev_command = '$PLEVEL';
       if ($opt_v) {
-         my $count = $variables =~ s/((^|\s)\S)/$1/g; 
+         my $count = $variables =~ s/((^|\s)\S)/$1/g;
          print STDERR "NOTE: will interpolate $count variables to pressure levels for $infile\n";
       }
    }
@@ -2572,8 +2836,8 @@ EOF
 EOF
 
    } elsif( "$zInterp" eq "zgrid" ) {  #ocean
-         if( "$variables" eq "") { 
-            $variables = "temp,salt,age,u,v"; 
+         if( "$variables" eq "") {
+            $variables = "temp,salt,age,u,v";
             print STDERR "NOTE: No variables specified, resampling $variables to zgrid\n";
          } else {
             $variables =~ s/ //;
@@ -2586,9 +2850,9 @@ EOF
          }
          if( "$platform" eq "ia64" ) {
          $csh .= <<EOF;
-    set taxis = `ncdump -h $infile | grep -i '.*=.*unlimited.*currently' | awk '{print \$1}'`  
+    set taxis = `ncdump -h $infile | grep -i '.*=.*unlimited.*currently' | awk '{print \$1}'`
     #set hasclimbounds = `ncdump -h $infile | grep 'climatology_bounds' | wc -l`
-    if ( `ncdump -h $infile | grep -c " climatology_bounds("` == 1 ) then 
+    if ( `ncdump -h $infile | grep -c " climatology_bounds("` == 1 ) then
       $time_zgrid /home/fms/local/ia64/v11/Resample_on_Z_new -d/home/rwh/data/regrid_MESO/OM3_zgrid.nc -V:$variables -T:average_T1,average_T2,average_DT,climatology_bounds -ee -o$outfile $infile
       $check_zgrid
     else
@@ -2598,9 +2862,9 @@ EOF
 EOF
          } else {
          $csh .= <<EOF;
-    set taxis = `ncdump -h $infile | grep -i '.*=.*unlimited.*currently' | awk '{print \$1}'`  
+    set taxis = `ncdump -h $infile | grep -i '.*=.*unlimited.*currently' | awk '{print \$1}'`
     #set hasclimbounds = `ncdump -h $infile | grep 'climatology_bounds' | wc -l`
-    if ( `ncdump -h $infile | grep -c " climatology_bounds("` == 1 ) then 
+    if ( `ncdump -h $infile | grep -c " climatology_bounds("` == 1 ) then
       $time_zgrid /home/rwh/data/regrid_MESO/Resample_on_Z_new -d/home/rwh/data/regrid_MESO/OM3_zgrid.nc -V:$variables -T:average_T1,average_T2,average_DT,climatology_bounds -ee -o$outfile $infile
       $check_zgrid
     else
@@ -2622,7 +2886,7 @@ EOF
 sub segStartMonths {
    my $segTime = $_[0];
    my $segUnits = $_[1];
-   
+
    if (($segTime==1 and "$segUnits" eq "years") or ($segTime==12 and "$segUnits" eq "months")) {
       return qw(0101);
    } elsif ( $segTime == 6 ) {
@@ -2903,12 +3167,12 @@ sub get_subint {
    }
    $interval =~ s/yr$//;
    my $from = $_[0]->findvalue('@from');
-   if( "$from" ne "" ) { 
+   if( "$from" ne "" ) {
       $from =~ s/yr$//;
-      return ($interval,$from);  
+      return ($interval,$from);
    }
    shift(@_);
-   
+
    my @ints = map { (my $x = $_) =~ s/yr$//; $x; } @_;
    #if($opt_v){print "nodename is $name, interval is $interval, ints is @ints, from is $from, rest is @_\n";}
    my $subint = undef;
@@ -2920,7 +3184,7 @@ sub get_subint {
    my @depyears = ();
    my $thisyear = substr($t0,0,4);
    my $simstart = substr($sim0,0,4);
-   
+
    #print "in get_subint with thisyear=$thisyear, simstart=$simstart, interval=$interval, subint=$subint\n";
 
    unless ( "$subint" eq '' ) {
@@ -2994,7 +3258,7 @@ if ( ! -e $outdir/$prefix.$abbrev.nc.cpio ) then
       $checktransfer
    endif
    $time_rm rm \$work/$prefix.$abbrev.nc.cpio
-else 
+else
    $time_dmget dmget $outdir/$prefix.$abbrev.nc.cpio
    $time_cp $cp $outdir/$prefix.$abbrev.nc.cpio .
    if ( \$status ) then
@@ -3058,7 +3322,7 @@ sub gettimelevels {
    my $freq = $_[0];
    my $cl = $_[1];
    $cl =~ s/yr//;
-   
+
    if( "$freq" =~ /daily/ or "$freq" =~ /day/) {
       return 365*$cl;
    } elsif( "$freq" =~ /mon/ ) {
@@ -3078,7 +3342,7 @@ sub gettimelevels {
    } else{
       print STDERR "WARNING: frequency not recognized in gettimelevels\n";
       return $cl;
-   }  
+   }
 }
 
 #get the name of the diagnostic output file from the source attribute
@@ -3094,7 +3358,7 @@ sub diagfile {
       if ( scalar @monthnodes ) {
         my $monthnode = $ppcNode->findnodes('timeSeries[@freq="monthly"]')->get_node(1);
         $diag_source = $monthnode->getAttribute('@source');
-      }   
+      }
       if ( "$diag_source" eq "" ) { $diag_source = $_[0]->findvalue('@source'); }
       if( "$diag_source" eq "") { $diag_source = $component."_month"; }
    }
@@ -3125,7 +3389,7 @@ sub annualTS {
    my $chunkLength = $_[0]->findvalue('@chunkLength');
    my $outdirpath = "$component/ts/$freq/$chunkLength";
    my $outdir = "$ppRootDir/$outdirpath";
-   if("$chunkLength" eq "") { 
+   if("$chunkLength" eq "") {
          mailuser("Cannot create $component $freq timeSeries unless you set a chunkLength.");
          print STDERR "ERROR: Cannot create $component $freq timeSeries unless you set a chunkLength.\n";
          return "";
@@ -3202,7 +3466,7 @@ sub annualTS {
    if ( scalar @monthnodes ) {
      my $monthnode = $ppcNode->findnodes('timeSeries[@freq="monthly"]')->get_node(1);
      $diag_source = $monthnode->getAttribute('@source');
-   }        
+   }
    if ( "$diag_source" eq "" ) { $diag_source = $_[0]->findvalue('../@source'); }
    if( "$diag_source" eq "") { $diag_source = $component."_month"; }
 
@@ -3278,9 +3542,9 @@ EOF
       }
 
       #set up loop over variables
-      my $forloop = ""; 
+      my $forloop = "";
       if ("$variables" eq "") {
-         $forloop = <<EOF; 
+         $forloop = <<EOF;
   foreach file ( $reqpath/$component.$tBEGf-$tENDf.*.nc )
     set var = `echo \$file | sed "s#.*/##;s/$component.$tBEGf-$tENDf.//"`
 EOF
@@ -3289,7 +3553,7 @@ EOF
   foreach var ( $variables )
     set file = $reqpath/$component.$tBEGf-$tENDf.\$var
 EOF
-      }      
+      }
 
       $csh .= <<EOF;
 
@@ -3396,7 +3660,7 @@ sub seasonalTS {
    if ( scalar @monthnodes ) {
      my $monthnode = $ppcNode->findnodes('timeSeries[@freq="monthly"]')->get_node(1);
      $diag_source = $monthnode->getAttribute('@source');
-   }        
+   }
    if ( "$diag_source" eq "" ) { $diag_source = $_[0]->findvalue('../@source'); }
    if( "$diag_source" eq "") { $diag_source = $component."_month"; }
 
@@ -3424,7 +3688,7 @@ EOF
   foreach var ( $variables )
     set file = \$tempCache/$reqpath/$component.$tBEGf-$tENDf.\$var
 EOF
-   }     
+   }
 
    my $check_ncks = errorstr("NCKS ($component seasonal ts)");
    my $check_ncdump = errorstr("NCDUMP ($component seasonal ts)");
@@ -3451,7 +3715,7 @@ EOF
    my $totalseasons = 4 * $lcmchunk;
    my $startseason = 1;
    my $startflag = &Date_Cmp($tBEG,$sim0);
-   
+
    foreach my $season ($startseason .. $totalseasons) {
       my $nummonths = $season * 3 - 4;
       my $tSEASON = FREUtil::modifydate($tBEG,"+ $nummonths months");
@@ -3497,7 +3761,7 @@ EOF
 $forloop
     if ( ! -f \$file ) then
       if ( -f $ppRootDir/$reqpath/\$file:t ) then
-         $time_cp $cp $ppRootDir/$reqpath/\$file:t \$file 
+         $time_cp $cp $ppRootDir/$reqpath/\$file:t \$file
          if ( \$status ) then
             echo "WARNING: data transfer failure, retrying..."
             $time_cp $cp $ppRootDir/$reqpath/\$file:t \$file
@@ -3511,14 +3775,14 @@ $forloop
     set timename   = `echo \$string[1]`
     $time_ncks ncks \$ncksopt -d \$timename,1,2 -d \$timename,12,12 \$file janfeb.nc > ncks.out
     $check_ncks
-    $time_timavg \$TIMAVG -o $component.$tSEASONf.\$var janfeb.nc 
+    $time_timavg \$TIMAVG -o $component.$tSEASONf.\$var janfeb.nc
     $retry_timavg
-       $time_timavg \$TIMAVG -o $component.$tSEASONf.\$var janfeb.nc 
+       $time_timavg \$TIMAVG -o $component.$tSEASONf.\$var janfeb.nc
     $check_timavg
     $time_rm rm -f janfeb.nc
     $catfiles
-  end 
-         
+  end
+
 EOF
          } else {
 ########################## FIRST DJF OF THIS PP ################################
@@ -3530,7 +3794,7 @@ EOF
 $forloop
     if ( ! -f \$file ) then
       if ( -f $ppRootDir/$reqpath/\$file:t ) then
-         $time_cp $cp $ppRootDir/$reqpath/\$file:t \$file 
+         $time_cp $cp $ppRootDir/$reqpath/\$file:t \$file
          if ( \$status ) then
             echo "WARNING: data transfer failure, retrying..."
             $time_cp $cp $ppRootDir/$reqpath/\$file:t \$file
@@ -3618,7 +3882,7 @@ EOF
        endif
        test -e \$var
        $check_hist
-       $time_mv $mv \$var dec.nc 
+       $time_mv $mv \$var dec.nc
     endif
     test -e dec.nc
     $check_prev
@@ -3626,14 +3890,14 @@ EOF
     if ( -e decjanfeb.nc ) rm -f decjanfeb.nc
     $time_ncrcat ncrcat \$ncrcatopt dec.nc janfeb.nc decjanfeb.nc
     $check_ncrcat
-    $time_timavg \$TIMAVG -o $component.$tSEASONf.\$var decjanfeb.nc 
+    $time_timavg \$TIMAVG -o $component.$tSEASONf.\$var decjanfeb.nc
     $retry_timavg
-       $time_timavg \$TIMAVG -o $component.$tSEASONf.\$var decjanfeb.nc 
+       $time_timavg \$TIMAVG -o $component.$tSEASONf.\$var decjanfeb.nc
     $check_timavg
     $time_rm rm -f janfeb.nc dec.nc decjanfeb.nc
     $catfiles
-  end 
-         
+  end
+
 EOF
          }
        } else {
@@ -3740,9 +4004,9 @@ sub monthlyAVfromhist {
    $csh .= <<EOF;
 #####################################
 echo 'timeAverage ($component $src $interval averages)'
-cd \$work   
+cd \$work
 find \$work/* -maxdepth 1 -exec rm -rf {} \\;
-set outdir = $outdir 
+set outdir = $outdir
 if ( ! -e \$outdir ) mkdir -p \$outdir
 EOF
    if ($opt_z) { $csh .= begin_systime(); }
@@ -3759,7 +4023,7 @@ EOF
       end
    end
    foreach hDate ( @hDates )
-   $convertSeg  
+   $convertSeg
    end
 
 set month = 1
@@ -3866,7 +4130,7 @@ foreach hDate ( @hDates )
    foreach file ( `ls \$histDir/\$hDate*/*.$diag_source.nc`)
      ln -s \$file .
    end
-   $convertSeg  
+   $convertSeg
 end
 set month = 1
 while (\$month <= 12)
@@ -4012,7 +4276,7 @@ sub annualAV1yrfromhist {
    $csh .= <<EOF;
 #####################################
 echo 'timeAverage ($component $src averages)'
-set outdir = $outdir 
+set outdir = $outdir
 if ( ! -e \$outdir && \$write2arch ) mkdir -p \$outdir
 if ( ! -e \$tempCache/$outdirpath ) mkdir -p \$tempCache/$outdirpath
 cd \$work
@@ -4053,7 +4317,7 @@ $retry_timavg
    $time_timavg \$TIMAVG -o $yr2do.$diag_source$tile.nc annual$tile.nc
 $check_timavg
 $time_rm rm -f annual$tile.nc
-   
+
 EOF
    }
 
@@ -4148,7 +4412,7 @@ $time_timavg \$TIMAVG -o $component.$tENDf.ann.nc annual.nc
 $retry_timavg
    $time_timavg \$TIMAVG -o $component.$tENDf.ann.nc annual.nc
 $check_timavg
-   
+
 EOF
    }
 
@@ -4258,9 +4522,9 @@ sub annualAVxyrfromann {
 
 #####################################
 echo 'timeAverage ($component $src $interval averages)'
-set outdir = $outdir 
+set outdir = $outdir
 if ( ! -e \$outdir ) mkdir -p \$outdir
-if ( ! -e \$tempCache/$component/av/annual_1yr ) mkdir -p \$tempCache/$component/av/annual_1yr 
+if ( ! -e \$tempCache/$component/av/annual_1yr ) mkdir -p \$tempCache/$component/av/annual_1yr
 if ( ! -e \$tempCache/$outdirpath ) mkdir -p \$tempCache/$outdirpath
 set anndir = $ppRootDir/$component/av/annual_1yr
 cd \$work
@@ -4270,7 +4534,7 @@ EOF
    if ($opt_z) { $csh .= begin_systime(); }
 
    my $endinterval = FREUtil::padzeros($first + $int - 1 );
-   until ( $endinterval > $tENDf ) { 
+   until ( $endinterval > $tENDf ) {
       #print "in tA, endinterval($endinterval) tENDf($tENDf)\n";
       my $filelist = "";
       my $getlist = "";
@@ -4388,7 +4652,7 @@ sub monthlyTSfromdailyTS {
       mailuser("Cannot create $component $freq timeSeries unless you set a chunkLength.");
       return "";
    }
-   my $outdir = "$ppRootDir/$component/ts/$freq/$chunkLength";                                                               
+   my $outdir = "$ppRootDir/$component/ts/$freq/$chunkLength";
    $chunkLength =~ s/yr//;
    my $yrsSoFar=&Delta_Format( &DateCalc($sim0,$t0,\$err,1) ,0,"%yd");
    my $mod = ($yrsSoFar+1) % $chunkLength;
@@ -4404,17 +4668,17 @@ sub monthlyTSfromdailyTS {
    my $out_end = FREUtil::graindate($tEND,$freq);
    #
    my $variables = FREUtil::cleanstr( $_[0]->findvalue('variables') );
-   if ("$variables" eq "") { 
+   if ("$variables" eq "") {
       $variables = $dtvars{$component};
       $variables =~ s/,/ /g;
    }
    my $dmgetvars = $variables;
-   if ("$variables" ne "") { 
-      print STDERR "           from xml, vars are '$variables'\n" if $opt_v; 
-      $dmgetvars =~ s/ /.nc \$in./g; 
-      $dmgetvars =~ s/^/$time_dmget dmget -d $indir \$in./; 
-      $dmgetvars =~ s/$/.nc/; 
-   } 
+   if ("$variables" ne "") {
+      print STDERR "           from xml, vars are '$variables'\n" if $opt_v;
+      $dmgetvars =~ s/ /.nc \$in./g;
+      $dmgetvars =~ s/^/$time_dmget dmget -d $indir \$in./;
+      $dmgetvars =~ s/$/.nc/;
+   }
 
    my $numtimelevels = gettimelevels($freq,$chunkLength);
    my $check_ncrcat = errorstr("NCRCAT ($component $freq ts calculated from $avgatt ts)");
@@ -4455,7 +4719,7 @@ foreach var ( $variables )
          $time_cp $cp $indir/\$in.day.nc.cpio .
          $checktransfer
       endif
-      $time_uncpio $uncpio -ivI \$in.day.nc.cpio \$in.\$var.nc 
+      $time_uncpio $uncpio -ivI \$in.day.nc.cpio \$in.\$var.nc
       $check_cpio
       $time_dmput dmput "$indir/\$in.day.nc.cpio" &
    else
@@ -4497,7 +4761,7 @@ foreach var ( $variables )
         $retry_timavg
            $time_timavg \$TIMAVG -o \$y1\$m1.\$var.nc \$y1\$m1.\$var.daily.nc
         $check_timavg
-        $time_rm rm -f \$y1\$m1.\$var.daily.nc 
+        $time_rm rm -f \$y1\$m1.\$var.daily.nc
       end
    end
 
@@ -4552,7 +4816,7 @@ sub directTS{
       print STDERR "ERROR: Cannot create $component $freq timeSeries unless you set a chunkLength.\n";
       mailuser("Cannot create $component $freq timeSeries unless you set a chunkLength.");
       return "";
-   } 
+   }
    my $outdirpath = "$component/ts/$freq/$chunkLength";
    my $outdir = "$ppRootDir/$outdirpath";
 
@@ -4603,7 +4867,7 @@ sub directTS{
    my $availablevars = $dtvars{"all_$source"};
    $availablevars =~ s/^/,/g;
    $availablevars =~ s/$/,/g;
-   $availablevars .= 'hght,slp,' if $do_zInterp; 
+   $availablevars .= 'hght,slp,' if $do_zInterp;
    my $variables = '';
    foreach my $v ( split(',',$uservariables) ) {
       if ( $availablevars =~ /,$v,/ ) {
@@ -4658,11 +4922,11 @@ EOF
    $csh .= <<EOF;
    foreach hDate ( @hDates )
       set nhistfiles = 0
-      foreach file ( `ls \$histDir/\$hDate*/*.$tmpsrcstr`) 
+      foreach file ( `ls \$histDir/\$hDate*/*.$tmpsrcstr`)
         ln -s \$file .
         @ nhistfiles ++
       end
-      foreach file ( `ls \$histDir/\$hDate*/*.grid_spec.tile*.nc`) 
+      foreach file ( `ls \$histDir/\$hDate*/*.grid_spec.tile*.nc`)
         ln -s \$file .
       end
       if ( \$nhistfiles == 0 ) then
@@ -4678,7 +4942,7 @@ EOF
          $csh .= <<EOF;
 if ( -e modellevels.nc ) rm -f modellevels*.nc
 set i = 1
-while ( \$i <= 6 ) 
+while ( \$i <= 6 )
 $time_ncrcat ncrcat \$ncrcatopt *.$source.tile\$i.nc $hDate.modellevels.tile\$i.nc
 $check_ncrcat
 @ i ++
@@ -4832,11 +5096,11 @@ EOF
    $variablesopt = "-v $variables" if "$variables" ne '';
    $csh .= <<EOF;
 foreach filetosplit ( \$filestosplit )
- 
+
 #set hasAVT1 = `ncdump -v average_T1 \$filetosplit | wc -l`
 #set hasbounds = `ncdump -h \$filetosplit | grep '_bounds' | wc -l`
 #if ( \$hasAVT1 && ! \$hasbounds ) then
-if ( `ncdump -h \$filetosplit | grep -c " average_T1("` == 1 && `ncdump -h \$filetosplit | grep -c "_bounds("` == 0) then 
+if ( `ncdump -h \$filetosplit | grep -c " average_T1("` == 1 && `ncdump -h \$filetosplit | grep -c "_bounds("` == 0) then
    ncdump -v average_T1,average_T2 \$filetosplit | /home/fms/bin/addbounds.pl | ncgen -o tmp.nc
    set taxis = `ncdump -h \$filetosplit | grep -i '.*=.*unlimited.*currently' | awk '{print \$1}'`
    $time_ncks ncks \$ncksopt -C -A -v \${taxis}_bounds tmp.nc \$filetosplit
@@ -4885,7 +5149,7 @@ EOF
       } else {
          $cpioTS = createcpio( "\$tempCache/$outdirpath",$outdir,"$component.$start-$tENDf",$abbrev,1);
       }
-      if ("$freq" eq "monthly") { $cpiomonTS .= $cpioTS; } 
+      if ("$freq" eq "monthly") { $cpiomonTS .= $cpioTS; }
       else { $csh .= $cpioTS; }
    }
 
@@ -4911,7 +5175,7 @@ sub monthlyAVfromav {
    my $outdir = "$ppRootDir/$component/av/$src"."_$interval";
    my $srcdir = "$ppRootDir/$component/av/$src"."_$subint"."yr";
    my $chunkLength = $_[0]->findvalue('@chunkLength');
-   
+
    my $tmp = FREUtil::modifydate($tEND,"+ 1 sec");
    my $yrsSoFar = &Delta_Format( &DateCalc($sim0,$tmp,\$err,1) ,0,"%yd");
    my $int = $interval;
@@ -4939,7 +5203,7 @@ sub monthlyAVfromav {
    my $start = FREUtil::padzeros($end-$int+1);
 
    my $substart = $start;
-   my $subend = FREUtil::padzeros($start + $subint - 1); 
+   my $subend = FREUtil::padzeros($start + $subint - 1);
    my $filelist = "";
    until( $subend > $end ) {
       if($substart == $subend) {$filelist .= "$component.$substart.\$monthf\$tile.nc ";}
@@ -4957,7 +5221,7 @@ sub monthlyAVfromav {
       $tilestart = "set tileN=1\nwhile (\$tileN <= 6)\nset tile = .tile\$tileN";
       $tileend = "@ tileN++\nend";
    }
-   
+
    my $check_ncatted = errorstr("NCATTED ($component $src $interval averages)");
    my $check_ncrcat = errorstr("NCRCAT ($component $src $interval averages)");
    my $check_timavg = retryonerrorend("TIMAVG ($component $src $interval averages)");
@@ -4967,9 +5231,9 @@ sub monthlyAVfromav {
    $csh .= <<EOF;
 #####################################
 echo 'timeAverage ($component $src $interval averages from $subint yr averages)'
-cd \$work   
+cd \$work
 find \$work/* -maxdepth 1 -exec rm -rf {} \\;
-set outdir = $outdir 
+set outdir = $outdir
 if ( ! -e \$outdir ) mkdir -p \$outdir
 
 EOF
@@ -5063,7 +5327,7 @@ sub annualAVfromav {
    $csh .= <<EOF;
 #####################################
 echo 'timeAverage ($component $src $interval averages from $subint yr averages)'
-set outdir = $outdir 
+set outdir = $outdir
 if ( ! -e \$outdir ) mkdir -p \$outdir
 cd \$work
 find \$work/* -maxdepth 1 -exec rm -rf {} \\;
@@ -5071,7 +5335,7 @@ EOF
    if ($opt_z) { $csh .= begin_systime(); }
 
    my $endinterval = FREUtil::padzeros($first + $int - 1 );
-   until ( $endinterval > $tENDf ) { 
+   until ( $endinterval > $tENDf ) {
       #print "in tA, endinterval($endinterval) tENDf($tENDf)\n";
       my $substart = $first;
       my $subend = FREUtil::padzeros($first + $subint - 1);
@@ -5177,14 +5441,14 @@ if ( ! -e $ppRootDir/$component/$component.static.nc ) then
       $time_hsmget \$hsmget -a $refinedir -p $ptmpDir/history_refineDiag -w $tmphistdir $hDate.nc/\\*$diag_source\\*
       $checktransfer
    endif
-   foreach file ( `ls \$histDir/*/*nc`) 
+   foreach file ( `ls \$histDir/*/*nc`)
      ln -s \$file .
    end
    set output_files = ( )
 EOF
 
 
-   if ( "$sourceGrid" eq 'cubedsphere' and "$xyInterp" eq '' ) { 
+   if ( "$sourceGrid" eq 'cubedsphere' and "$xyInterp" eq '' ) {
       #DATA LEFT ON CUBED SPHERE GRID
       $csh = setcheckpt('staticvars');
       $csh .= <<EOF;
@@ -5247,12 +5511,12 @@ EOF
 
    set output_files = ( )
    set tiles = (`ls $hDate.$diag_source*.tile1.nc | grep -v grid_spec`)
-   foreach tfile ( \$tiles ) 
+   foreach tfile ( \$tiles )
      if ( ! -w \$tfile ) then
       set i = 1
       while ( \$i <= 6 )
         set tf = \$tfile:r:r.tile\$i.nc
-        $time_cp cp \$tf copy 
+        $time_cp cp \$tf copy
         $time_rm rm -f \$tf
         $time_mv $mv copy \$tf
         chmod 644 \$tf
@@ -5277,7 +5541,7 @@ EOF
      $call_and_check_fregrid
 
         set output_files = (\$output_files \$fregrid_in.nc)
-     
+
      endif
      end
 EOF
@@ -5301,7 +5565,7 @@ EOF
          $csh .= <<EOF;
          set output_files = ( )
          set files = (`ls $hDate.$diag_source*.nc | grep -v grid_spec`)
-         foreach file ( \$files ) 
+         foreach file ( \$files )
            set fregrid_wt = "$fregrid_wt"
            set fregrid_in_date = $hDate
            set fregrid_in = \$file:r
@@ -5357,7 +5621,7 @@ sub TSfromts {
    my $chunkLength = $_[0]->findvalue('@chunkLength');
    my $outdirpath = "$component/ts/$freq/$chunkLength";
    my $outdir = "$ppRootDir/$outdirpath";
-   if("$chunkLength" eq "") { 
+   if("$chunkLength" eq "") {
          mailuser("Cannot create $component $freq timeSeries unless you set a chunkLength.");
          print STDERR "ERROR: Cannot create $component $freq timeSeries unless you set a chunkLength.\n";
          return "";
@@ -5438,9 +5702,9 @@ sub TSfromts {
    $csh .= <<EOF;
 #####################################
 echo 'timeSeries ($component $freq $chunkLength ts from $subchunk yr ts)'
-cd \$work   
+cd \$work
 find \$work/* -maxdepth 1 -exec rm -rf {} \\;
-set outdir = $outdir 
+set outdir = $outdir
 if ( ! -e \$outdir ) mkdir -p \$outdir
 if ( ! -e \$tempCache/$outdirpath ) mkdir -p \$tempCache/$outdirpath
 
@@ -5465,7 +5729,7 @@ if ( \$cpiosexist ) then
          $time_cp $cp $reqpath/\$cpio .
          $checktransfer
       endif
-      $time_uncpio $uncpio -ivI \$cpio || ( echo "$check_cpio_msg"; echo "$check_cpio_msg" > \$work/.errors ) 
+      $time_uncpio $uncpio -ivI \$cpio || ( echo "$check_cpio_msg"; echo "$check_cpio_msg" > \$work/.errors )
    end
    set varlist = `ls -1 $getlist | cut -f3- -d'.' | sort -u`
    $varlist_from_xml
@@ -5480,10 +5744,10 @@ else
          set varlistprev = 'error'
          break
       else
-         set varlistprev = \$#varlist 
-      endif 
+         set varlistprev = \$#varlist
+      endif
    end
-   test \$#varlist != 0 -o "\$varlistprev" != "error" 
+   test \$#varlist != 0 -o "\$varlistprev" != "error"
    $check_vars
    $varlist_from_xml
    $time_dmget dmget "$getlist"
@@ -5547,7 +5811,7 @@ sub seaTSfromts {
    my $chunkLength = $_[0]->findvalue('@chunkLength');
    my $outdirpath = "$component/ts/$freq/$chunkLength";
    my $outdir = "$ppRootDir/$outdirpath";
-   if("$chunkLength" eq "") { 
+   if("$chunkLength" eq "") {
          mailuser("Cannot create $component $freq timeSeries unless you set a chunkLength.");
          print STDERR "ERROR: Cannot create $component $freq timeSeries unless you set a chunkLength.\n";
          return "";
@@ -5570,7 +5834,7 @@ sub seaTSfromts {
    if ( scalar @monthnodes ) {
      my $monthnode = $ppcNode->findnodes('timeSeries[@freq="monthly"]')->get_node(1);
      $diag_source = $monthnode->getAttribute('@source');
-   }        
+   }
    if ( "$diag_source" eq "" ) { $diag_source = $_[0]->findvalue('../@source'); }
    if( "$diag_source" eq "") { $diag_source = $component."_month"; }
 
@@ -5623,14 +5887,14 @@ sub seaTSfromts {
    foreach my $piece ( @pieces ) {
       $piece =~ s/\$sea.\$var/*.nc/g;
       $dmgetcommand .= "$time_dmget dmget \"$piece\"\n";
-   } 
+   }
    my $csh = setcheckpt("seaTSfromts_$chunkLength");
    $csh .= <<EOF;
 #####################################
 echo 'timeSeries ($component $freq $chunkLength ts from $subchunk yr ts)'
-cd \$work   
+cd \$work
 find \$work/* -maxdepth 1 -exec rm -rf {} \\;
-set outdir = $outdir 
+set outdir = $outdir
 if ( ! -e \$outdir ) mkdir -p \$outdir
 if ( ! -e \$tempCache/$outdirpath ) mkdir -p \$tempCache/$outdirpath
 
@@ -5654,7 +5918,7 @@ if ( \$cpiosexist ) then
          $time_cp $cp $reqpath/\$cpio .
          $checktransfer
       endif
-      $time_uncpio $uncpio -ivI \$cpio || ( echo "$check_cpio_msg"; echo "$check_cpio_msg" > \$work/.errors ) 
+      $time_uncpio $uncpio -ivI \$cpio || ( echo "$check_cpio_msg"; echo "$check_cpio_msg" > \$work/.errors )
    end
    $setvarlist
 else
@@ -5682,7 +5946,7 @@ cd \$work
 foreach sea (DJF MAM JJA SON)
    foreach var (\$varlist)
       set missingfiles = 0
-      foreach file ($filelist) 
+      foreach file ($filelist)
          test -e \$file
          $check_vars
          if ( ! -e \$file ) set missingfiles = 1
@@ -5786,9 +6050,9 @@ sub seasonalAVfromhist {
    $csh .= <<EOF;
 #####################################
 echo 'timeAverage ($component $src $interval averages)'
-cd \$work   
+cd \$work
 find \$work/* -maxdepth 1 -exec rm -rf {} \\;
-set outdir = $outdir 
+set outdir = $outdir
 if ( ! -e \$outdir ) mkdir -p \$outdir
 mkdir out
 EOF
@@ -5865,7 +6129,7 @@ if ( ! -e $seahist.$diag_source.tile1.nc ) then
       $time_rm rm -f $ppRootDir/.dec/$seahist.$diag_source.tile?.nc
    else if ( -e $opt_d/$prevhistcpio ) then
       $time_dmget dmget $opt_d/$prevhistcpio
-      $time_uncpio $uncpio -ivI $opt_d/$prevhistcpio '*.$diag_source.tile*.nc' 
+      $time_uncpio $uncpio -ivI $opt_d/$prevhistcpio '*.$diag_source.tile*.nc'
       $check_cpio
       $time_dmput dmput $opt_d/$prevhistcpio &
       set prevyear = $prevyear
@@ -5876,7 +6140,7 @@ if ( ! -e $seahist.$diag_source.tile1.nc ) then
       end
    else if ( -e $opt_d/$prevhisttar ) then
       $time_dmget dmget $opt_d/$prevhisttar
-      $time_untar tar -xvf $opt_d/$prevhisttar --wildcards '*.$diag_source.tile*.nc' 
+      $time_untar tar -xvf $opt_d/$prevhisttar --wildcards '*.$diag_source.tile*.nc'
       $check_cpio
       $time_dmput dmput $opt_d/$prevhisttar &
       set prevyear = $prevyear
@@ -5885,11 +6149,11 @@ if ( ! -e $seahist.$diag_source.tile1.nc ) then
         $convertDec
         @ i ++
       end
-   else 
+   else
       set t = `ncdump -h $nextdec.tile1.nc | grep -i '.*=.*unlimited.*currently' | awk '{print \$1}'`
       set att_copy = (`ncdump -h $nextdec.tile1.nc | sed -ne "s/.*\${t}:\\(.*\\) =.*/\$t@\\1=\$t@\\1;/gp"`)
       #set hasAVT1 = `ncdump -v average_T1 $nextdec.tile1.nc | wc -l`
-      if ( `ncdump -h $nextdec.tile1.nc | grep -c " average_T1("` == 1 ) then 
+      if ( `ncdump -h $nextdec.tile1.nc | grep -c " average_T1("` == 1 ) then
          $time_ncap ncap2 -h -O -s "\${t}[\${t}]=\${t}-365; average_T1=average_T1-365; average_T2=average_T2-365; \${t}_bounds=\${t}_bounds-365; \$att_copy" $nextdec.tile1.nc $seahist.$diag_source.tile1.nc
          $check_ncap
          $time_ncap ncap2 -h -O -s "\${t}[\${t}]=\${t}-365; average_T1=average_T1-365; average_T2=average_T2-365; \${t}_bounds=\${t}_bounds-365; \$att_copy" $nextdec.tile2.nc $seahist.$diag_source.tile2.nc
@@ -5919,7 +6183,7 @@ if ( ! -e $seahist.$diag_source.tile1.nc ) then
    endif
 endif
 EOF
-      } 
+      }
 
       $csh .= <<EOF;
 if ( -e sea1.nc ) $time_rm rm -f sea?.nc
@@ -6037,7 +6301,7 @@ while ( \$i <= 6 )
   if ( -e sea\$i.nc ) $time_rm rm -f sea\$i.nc
   $time_ncrcat ncrcat \$ncrcatopt \$list sea\$i.nc
   $check_ncrcat
-  $time_rm rm -f \$list 
+  $time_rm rm -f \$list
 EOF
 
       if ( $do_zInterp ) {
@@ -6096,7 +6360,7 @@ EOF
    }
    }
 
-   } else { #ELSE NOT CUBIC     
+   } else { #ELSE NOT CUBIC
 
       my $tmpsrcstr = "$diag_source.nc";
       $csh .= <<EOF;
@@ -6150,23 +6414,23 @@ if ( ! -e $seahist.$diag_source.nc ) then
       $time_rm rm -f $ppRootDir/.dec/$seahist.$diag_source.nc
    else if ( -e $opt_d/$prevhistcpio ) then
       $time_dmget dmget $opt_d/$prevhistcpio
-      $time_uncpio $uncpio -ivI $opt_d/$prevhistcpio '*.$diag_source.nc' 
+      $time_uncpio $uncpio -ivI $opt_d/$prevhistcpio '*.$diag_source.nc'
       $check_cpio
       $time_dmput dmput $opt_d/$prevhistcpio &
       set prevyear = $prevyear
       $convertDec
    else if ( -e $opt_d/$prevhisttar ) then
       $time_dmget dmget $opt_d/$prevhisttar
-      $time_untar tar -xvf $opt_d/$prevhisttar --wildcards '*.$diag_source.nc' 
+      $time_untar tar -xvf $opt_d/$prevhisttar --wildcards '*.$diag_source.nc'
       $check_cpio
       $time_dmput dmput $opt_d/$prevhisttar &
       set prevyear = $prevyear
       $convertDec
-   else 
+   else
       set t = `ncdump -h $nextdec | grep -i '.*=.*unlimited.*currently' | awk '{print \$1}'`
       set att_copy = (`ncdump -h $nextdec | sed -ne "s/.*\${t}:\\(.*\\) =.*/\$t@\\1=\$t@\\1;/gp"`)
       #set hasAVT1 = `ncdump -v average_T1 $nextdec | wc -l`
-      if ( `ncdump -h $nextdec | grep -c " average_T1("` == 1 ) then 
+      if ( `ncdump -h $nextdec | grep -c " average_T1("` == 1 ) then
          $time_ncap ncap2 -h -O -s "\${t}[\${t}]=\${t}-365; average_T1=average_T1-365; average_T2=average_T2-365; \${t}_bounds=\${t}_bounds-365; \$att_copy" $nextdec $seahist.$diag_source.nc
          $check_ncap
       else
@@ -6284,7 +6548,7 @@ EOF
 
    $csh .= <<EOF;
 $time_ncatted ncatted -h -O -a filename,global,m,c,"\$outdir/$component.$dates.nc" $component.$dates.nc
-$check_ncatted 
+$check_ncatted
 $time_mv $mvfile $component.$dates.nc \$outdir/$component.$dates.nc
 if ( \$status ) then
    echo "WARNING: data transfer failure, retrying..."
@@ -6298,7 +6562,7 @@ EOF
    }
    }
 
-  #END NOT CUBIC        
+  #END NOT CUBIC
   }
 
    if ($opt_z) { $csh .= end_systime(); }
@@ -6343,7 +6607,7 @@ sub seasonalAVfromav {
    my $start = FREUtil::padzeros($end-$int+1);
 
    my $substart = $start;
-   my $subend = FREUtil::padzeros($start + $subint - 1); 
+   my $subend = FREUtil::padzeros($start + $subint - 1);
    my $filelist = "";
    my $getlist = "";
    until( $subend > $end ) {
@@ -6366,9 +6630,9 @@ sub seasonalAVfromav {
    $csh .= <<EOF;
 #####################################
 echo 'timeAverage ($component $src $interval averages from $subint yr averages)'
-cd \$work   
+cd \$work
 find \$work/* -maxdepth 1 -exec rm -rf {} \\;
-set outdir = $outdir 
+set outdir = $outdir
 if ( ! -e \$outdir ) mkdir -p \$outdir
 
 EOF
@@ -6405,7 +6669,7 @@ foreach sea (DJF MAM JJA SON)
      endif
      $time_rm rm $component.$start-$end.\$sea.nc
      $time_dmput dmput \$outdir/$component.$start-$end.\$sea.nc &
-     $time_rm rm -f \$sea.nc 
+     $time_rm rm -f \$sea.nc
 end
 
 EOF
@@ -6461,18 +6725,18 @@ EOF
 
    my @refineScripts = split ',',$opt_D;
    foreach my $s ( @refineScripts ) {
-      if ( ! -e "$s" ) { die "ERROR: Your refineDiag script does not exist: $s\n"; } 
+      if ( ! -e "$s" ) { die "ERROR: Your refineDiag script does not exist: $s\n"; }
       $csh .= <<EOF;
    source $s
    set refineStatus = \$status
    if ( \$refineStatus < 0 ) then
-      echo "NOTE: RefineDiag script $s requested no further processing after refineDiag scripts complete" 
+      echo "NOTE: RefineDiag script $s requested no further processing after refineDiag scripts complete"
       set refineRequestsExit = 1
    else if ( \$refineStatus ) then
       echo "ERROR: RefineDiag script got an error status \$refineStatus"
       set refineError = 1
-   endif 
-     
+   endif
+
 EOF
    }
 
@@ -6623,7 +6887,7 @@ EOF
       $cshscripttmpl .= <<EOF;
 
 setenv JOB_ID `echo \$PBS_JOBID |cut -f1 -d.`
-setenv FRE_STDOUT_PATH 
+setenv FRE_STDOUT_PATH
 if ( -d "$workdir" ) then
   rm -rf $workdir
 endif
