@@ -1,5 +1,5 @@
 #
-# $Id: FREExperiment.pm,v 18.1.2.21.4.1 2014/09/18 15:16:12 sdu Exp $
+# $Id: FREExperiment.pm,v 18.1.2.21.4.1.2.2 2014/12/05 17:08:12 Seth.Underwood Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: Experiment Management Module
 # ------------------------------------------------------------------------------
@@ -1370,44 +1370,64 @@ sub extractTable($$)
   my ($r, $l) = @_;
   my ($exp, $fre, $value) = ($r, $r->fre(), '');
 
-  while ($exp and !$value)
+  # ------------------------------------------- get the input node
+  my $inputNode = $exp->node()->findnodes('input')->get_node(1);
+  # --------------------------------------------- process the input node
+  if ($inputNode)
   {
-    # ------------------------------------------- get the input node
-    my $inputNode = $exp->node()->findnodes('input')->get_node(1);
-    # --------------------------------------------- process the input node
-    if ($inputNode)
+    # ----------------- Find nodes that have the wrong @order attribute.
+    my @inlineAppendTableNodes = $inputNode->findnodes($l . '[@order and not(@order="append")]');
+    if (@inlineAppendTableNodes)
     {
-      # ----------------- get inline tables (they must be before tables from files)
-      my @inlineTableNodes = $inputNode->findnodes($l . '[not(@file)]');
-      foreach my $inlineTableNode (@inlineTableNodes)
+      $fre->out(FREMsg::FATAL, "The value for attribute order in $l is not valid.");
+      return undef;
+    }
+    # ----------------- get inline tables except for "@order="append"" (they must be before tables from files and appended nodes)
+    my @inlineTableNodes = $inputNode->findnodes($l . '[not(@file) and not(@order="append")]');
+    foreach my $inlineTableNode (@inlineTableNodes)
+    {
+      $value .= $exp->nodeValue($inlineTableNode, 'text()');
+    }
+    # --------------------------------------------------------------- get tables from files
+    my @tableFiles = $fre->dataFilesMerged($inputNode, $l, 'file');
+    foreach my $filePath (@tableFiles)
+    {
+      if (-f $filePath and -r $filePath)
       {
-	$value .= $exp->nodeValue($inlineTableNode, 'text()');
+	my $fileContent = qx(cat $filePath);
+	$fileContent = $fre->placeholdersExpand($fileContent);
+	$fileContent = $exp->placeholdersExpand($fileContent);
+	$value .= $fileContent;
       }
-      # --------------------------------------------------------------- get tables from files
-      my @tableFiles = $fre->dataFilesMerged($inputNode, $l, 'file');
-      foreach my $filePath (@tableFiles)
+      else
       {
-        if (-f $filePath and -r $filePath)
-	{
-	  my $fileContent = qx(cat $filePath);
-	  $fileContent = $fre->placeholdersExpand($fileContent);
-	  $fileContent = $exp->placeholdersExpand($fileContent);
-	  $value .= $fileContent;
-	}
-	else
-	{
-	  return undef;
-	}
+	return undef;
       }
     }
-    # ---------------------------- repeat for the parent
-    $exp = $exp->parent();
   }
 
+  # ---------------------------- repeat for the parent
+  if ($exp->parent() and !$value)
+  {
+    $value .= $exp->parent()->extractTable($l);
+  }
+
+  #  ---------------------------- now add appended tables
+  if ($inputNode)
+  {
+    # ----------------- get [@order="append"] tables
+    my @inlineAppendTableNodes = $inputNode->findnodes($l . '[@order="append"]');
+    foreach my $inlineAppendTableNode (@inlineAppendTableNodes)
+    {
+      $value .= $exp->nodeValue($inlineAppendTableNode, 'text()');
+    }
+  }
+
+  # ---------------------------- sanitize table
   $value =~ s/\n\s*\n/\n/sg;
   $value =~ s/^\s*\n\s*//s;
   $value =~ s/\s*\n\s*$//s;
-  
+
   return $value;
 
 }
