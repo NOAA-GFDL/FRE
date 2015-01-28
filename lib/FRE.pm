@@ -234,6 +234,52 @@ sub home()
   return FREUtil::home();
 }
 
+sub curator($$$)
+{
+  my ($x, $expName, $s, $v ) = @_;
+  my $xmlParser = XML::LibXML->new();
+  my $xmlOrigDoc = $xmlParser->parse_file($x);
+  my $root = $xmlOrigDoc->getDocumentElement;
+  my $experimentNode = $root->findnodes("experiment[\@label='$expName' or \@name='$expName']")->get_node(1);
+  my $descriptionNode = $experimentNode->findnodes("description")->get_node(1);
+  my @curatorTags = qw{communityModel communityProject communityExperimentID};
+  my @missingCuratorTags;
+  print "Set curator tags for $expName:\n";
+  foreach ( @curatorTags ){
+    my $value = $descriptionNode->getAttribute($_);
+    if ( $value ){
+      print "$_: $value\n";
+    } else {
+      push @missingCuratorTags, $_;
+    }
+  }
+  my $realizationNode = $experimentNode->findnodes("realization")->get_node(1);
+  my @realizationVals = qw{ r i p };
+  my $realizationString = '';
+  if ( $realizationNode ){
+    foreach ( @realizationVals ){
+      my $value = $realizationNode->getAttribute($_);
+      if ( $value ){
+        $realizationString = $realizationString . $_ . $value;
+      } else {
+        push @missingCuratorTags, 'realization';
+        last;
+      }
+    }
+  } else {
+    push @missingCuratorTags, 'realization';
+  }
+  if ( ! grep ( /realization/, @missingCuratorTags)){
+    print "realization: $realizationString\n";
+  }
+  if ( @missingCuratorTags ){
+    foreach ( @missingCuratorTags ){
+      print "MISSING: $_ \n";
+    }
+  }
+  return;
+}
+
 sub validate($$)
 # ------ arguments: $xmlfile $verbose
 # ------ return 1 if the $xmlfile has been successfully validated

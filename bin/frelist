@@ -89,6 +89,7 @@ use FREUtil();
     'remote-user|R=s',
     'quiet|q',
     'validate|C',
+    'curator|c',
     'Xml|X',
     'help|h',
     'platform|p=s',
@@ -136,6 +137,7 @@ use FREUtil();
       "   -r STRING, --regression=STRING         use regression tests STRING (usable for --postfix and --namelist options only)\n",
       "   -R STRING, --remote-user=STRING        use the remote user STRING for inter-site directory listings\n",
       "   -C,        --validate                  validate (i.e. check) the FILE against the XML schema and exit\n",
+      "   -c,        --curator                   check that mandatory curator tags are included in the experiment\n",
       "   -X,        --Xml                       print the experiment suite XML configuration FILE with all expansions and exit\n\n",
       "   -h,        --help                      print help message and exit\n",
       "   -p STRING, --platform=STRING           hardware and software platform STRING (default is '$pfm')\n", 
@@ -454,7 +456,13 @@ use FREUtil();
     }
     
   }
-  
+  if ($opt{curator})
+  {
+    my @expNamesRequested = FREUtil::listUnique(@ARGV);
+    my $expName = @expNamesRequested[0];
+    FRE::curator($opt{xmlfile}, $expName, $opt{verbose});
+    exit FREDefaults::STATUS_OK;
+  }  
   if ($opt{validate})
   {
     if (FRE::validate($opt{xmlfile}, $opt{verbose}))
