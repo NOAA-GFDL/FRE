@@ -143,38 +143,43 @@ sub parseFortranDate {
 
 #pad to 4 digits
 sub padzeros {
-   my $date = "$_[0]";
-   if ( length($date) > 3 ) { return $date; }
-#this causes a bug.  you should think of another way to test this.
-#   if (scalar "$date" == 4) { return $date; }
-#maybe this will do?
-   $date = $date + 1 - 1;
-   if ($date > 999) { return $date; }
-   elsif ($date > 99) { return "0$date"; }
-   elsif ($date > 9) { return "00$date"; }
-   else { return "000$date"; } 
+  my $date = "$_[0]";
+  return sprintf("%04d", int($date));
+#
+#
+#    if ( length($date) > 3 ) { return $date; }
+# #this causes a bug.  you should think of another way to test this.
+# #   if (scalar "$date" == 4) { return $date; }
+# #maybe this will do?
+#    $date = $date + 1 - 1;
+#    if ($date > 999) { return $date; }
+#    elsif ($date > 99) { return "0$date"; }
+#    elsif ($date > 9) { return "00$date"; }
+#    else { return "000$date"; } 
 }        
          
 #pad to 2 digits
 sub pad2digits {
    my $date = $_[0];
-   $date = $date + 1 - 1;
-   if ($date > 9) { return "$date"; }
-   else { return "0$date"; }
-}                 
+   return sprintf("%02d", int($date));
+#   $date = $date + 1 - 1;
+#   if ($date > 9) { return "$date"; }
+#   else { return "0$date"; }
+}
                   
 #pad to 8 digits
 sub pad8digits {
    my $date = "$_[0]";
-   $date = $date + 1 - 1;
-   if ($date > 9999999) { return $date; }
-   elsif ($date > 999999) { return "0$date"; }
-   elsif ($date > 99999) { return "00$date"; }
-   elsif ($date > 9999) { return "000$date"; }
-   elsif ($date > 999) { return "0000$date"; }
-   elsif ($date > 99) { return "00000$date"; }
-   elsif ($date > 9)  { return "000000$date"; }
-   else { return "0000000$date"; }
+   return sprintf("%08d", int($date));
+#   $date = $date + 1 - 1;
+#   if ($date > 9999999) { return $date; }
+#   elsif ($date > 999999) { return "0$date"; }
+#   elsif ($date > 99999) { return "00$date"; }
+#   elsif ($date > 9999) { return "000$date"; }
+#   elsif ($date > 999) { return "0000$date"; }
+#   elsif ($date > 99) { return "00000$date"; }
+#   elsif ($date > 9)  { return "000000$date"; }
+#   else { return "0000000$date"; }
 }
 
 #wrapper for DateCalc handling low year numbers
