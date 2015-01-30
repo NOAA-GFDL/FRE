@@ -9,8 +9,9 @@
 
 package FREUtil;
 
-use strict; 
+use strict;
 
+use POSIX qw(floor);
 use File::Path();
 use File::Spec();
 use File::stat;
@@ -38,39 +39,39 @@ sub checkExptExists {
    if ( $nodecount eq 0 ) {
       print STDERR "ERROR: Experiment $e not found in your xml file $::opt_x.\n";
       return 0;
-   }  
+   }
    if ( $nodecount gt 1 ) {
-      print STDERR "WARNING: Multiple experiments called $e were found in $::opt_x.\nWARNING: Using first instance.\n"; 
+      print STDERR "WARNING: Multiple experiments called $e were found in $::opt_x.\nWARNING: Using first instance.\n";
    }
    if ( !$omit and substr($e,0,1) =~ /[0-9]/ ) {
       print STDERR "WARNING: Batch system does not accept jobs that start with a number.  Please change the name of experiment '$e' to start with a letter.\n";
    }
 
-   return 1; 
-}  
+   return 1;
+}
 
 #gets a value from xml, recurse using @inherit and optional second argument $expt
 sub getxpathval {
    my $path = $_[0];
    my $e = $::expt;
    if ( $_[1] ) { $e = $_[1]; }
-   checkExptExists($e,1); 
+   checkExptExists($e,1);
    my $value = $::root->findvalue("experiment[\@label='$e' or \@name='$e']/$path");
    $value =~ s/\$root/$::rootdir/g;
    $value =~ s/\$FREROOT/$::rootdir/g;
    $value =~ s/\$archive/$::archivedir/g;
    $value =~ s/\$name/$e/g;
-   $value =~ s/\$label/$e/g;                                                                          
+   $value =~ s/\$label/$e/g;
    if ("$value" eq "") {
       my $mommy = $::root->findvalue("experiment[\@label='$e' or \@name='$e']/\@inherit");
       if( "$mommy" eq "" ) {
-         return "";
+	 return "";
       } else {
-         return getxpathval($path,$mommy);
+	 return getxpathval($path,$mommy);
       }
    } else {
-      return $value; 
-   }                                                                                               
+      return $value;
+   }
 }
 
 #write c-shell runscript, chmod, and optionally submit
@@ -119,14 +120,14 @@ sub writescript {
       print "\nTO SUBMIT: $batchCmd $outscript\n";
    }
 }
- 
+
 #convert a fortran date string ( "1,1,1,0,0,0" ) to a Date::Manip date
 sub parseFortranDate {
    my $date = $_[0];
    my @tmparray = split(',',$date);
    if ($#tmparray < 5 ) {
       @tmparray = split(' ',$date);
-   }           
+   }
    $tmparray[0] = padzeros($tmparray[0]);    #year
    $tmparray[1] = pad2digits($tmparray[1]);  #mo
    $tmparray[2] = pad2digits($tmparray[2]);  #day
@@ -139,113 +140,75 @@ sub parseFortranDate {
    if ("$newdate" eq '00010101000000') {$parseddate = '0001010100:00:00';}
    #print STDERR "parseddate is $parseddate\n";
    return $parseddate;
-}        
+}
 
 #pad to 4 digits
 sub padzeros {
   my $date = "$_[0]";
   return sprintf("%04d", int($date));
-#
-#
-#    if ( length($date) > 3 ) { return $date; }
-# #this causes a bug.  you should think of another way to test this.
-# #   if (scalar "$date" == 4) { return $date; }
-# #maybe this will do?
-#    $date = $date + 1 - 1;
-#    if ($date > 999) { return $date; }
-#    elsif ($date > 99) { return "0$date"; }
-#    elsif ($date > 9) { return "00$date"; }
-#    else { return "000$date"; } 
-}        
-         
+}
+
 #pad to 2 digits
 sub pad2digits {
    my $date = $_[0];
    return sprintf("%02d", int($date));
-#   $date = $date + 1 - 1;
-#   if ($date > 9) { return "$date"; }
-#   else { return "0$date"; }
 }
-                  
+
 #pad to 8 digits
 sub pad8digits {
    my $date = "$_[0]";
    return sprintf("%08d", int($date));
-#   $date = $date + 1 - 1;
-#   if ($date > 9999999) { return $date; }
-#   elsif ($date > 999999) { return "0$date"; }
-#   elsif ($date > 99999) { return "00$date"; }
-#   elsif ($date > 9999) { return "000$date"; }
-#   elsif ($date > 999) { return "0000$date"; }
-#   elsif ($date > 99) { return "00000$date"; }
-#   elsif ($date > 9)  { return "000000$date"; }
-#   else { return "0000000$date"; }
 }
 
 #wrapper for DateCalc handling low year numbers
+# modifydate takes a date (usually of format yyyymmddhh:mm:ss), and modifies it via the
+# instructions in $str (i.e. +1 year, -1 second --- using the manipulation rules for
+# Date::Manip.
 sub modifydate {
-   my $date = $_[0];
-   my $str = $_[1];
-   my $err = '';
-   if ( "$date" eq '' ) { $date = '0000'; }
-   #print "modifydate date $date str $str: ";
+  my $date = $_[0];
+  my $str = $_[1];
+  my $err;
+  if ( "$date" eq '' ) {
+    # Force the date to follow 0000010100:00:00 if $date is empty
+    $date = "0000010100:00:00"
+  }
+  #print "modifydate date '$date' str '$str': \n";
 
-   if ( "$date" eq '0001010100:00:00' ) { 
- 
-      my $date1 = '0002010100:00:00';
-      $err=''; $date1 = Date::Manip::DateCalc($date1,$str,\$err);
-      if ( "$err" ne "" ) { 
-         print STDERR "NOTE: Encountered Date::Manip problem with modifydate/DateCalc $date1 $str: '$err'\n";
-         last; 
-      }
+  # Date::Manip handles dates in the range 01 Feb, 0001 to 30 Nov, 9999.  Because we could deal
+  # with dates outside that range, we force all dates to be within the years 2000-2999 to overcome
+  # Date::Manip's issues.
+  my $y2k = 2000;
 
-      $err=''; $date1 = Date::Manip::DateCalc($date1,'-1 years',\$err);
-      if ( "$err" ne "" ) { 
-         print STDERR "NOTE: Encountered Date::Manip problem with modifydate/DateCalc $date1 -1y: '$err'\n"; 
-         last; 
-      }
-      $date = $date1;
+  if ( $date !~ /\d{4,}\d{4}\d{2}:\d{2}:\d{2}/ ) {
+    print STDERR "NOTE: Date '$date' not in the correct format.  Expected 'yyyymmddhh:mm:ss'\n";
+    return undef;
+  }
 
-   } else {
+  # Separate the passed in yyyy and mmddhh:mm:ss
+  my ($oYear, $oMDT) = $date =~ /(\d{4,})(\d{4}\d{2}:\d{2}:\d{2})/;
 
-      $date = Date::Manip::DateCalc($date,$str,\$err);
-      if ( "$err" ne "" ) { 
-         print STDERR "NOTE: Encountered Date::Manip problem with modifydate/DateCalc $date $str: '$err'\n";
-      }
-      #$date = Date::Manip::Date_SetDateField($date,"d","01",1);
+  # Save how many 2thousand years the passed in yyyy has
+  my $yyyyMult = floor(int($oYear)/$y2k);
 
-   }
+  # Get the yyyy in the range [2000,3999]
+  my $yyyy2to4 = $y2k + int($oYear)%$y2k;
 
-   if ( "$err" ne "" ) { 
+  # New date string to pass to Date::Manip
+  my $dDate = $yyyy2to4 . $oMDT;
 
-      my $date2k = $date;
-      $err=''; $date2k = Date::Manip::DateCalc($date2k,'+2000 years',\$err);
-      if ( "$err" ne "" ) { 
-         print STDERR "NOTE: Encountered Date::Manip problem with modifydate/DateCalc $date2k +2000y: '$err'\n";
-         last; 
-      }
+  my $dateManipd = Date::Manip::DateCalc($dDate,$str,\$err);
+  if ( "$err" ne "" ) {
+    print STDERR "NOTE: Encountered Date::Manip problem with modifydate/DateCalc '$date' '$str': '$err'\n";
+    return undef;
+  }
 
-      $err=''; $date2k = Date::Manip::DateCalc($date2k,$str,\$err);
-      if ( "$err" ne "" ) { 
-         print STDERR "NOTE: Encountered Date::Manip problem with modifydate/DateCalc $date2k $str: '$err'\n";
-         last; 
-      }
+  # Convert back to a date based on the original date
+  my ($nYear, $nMDT) = $dateManipd =~ /(\d{4})(\d{4}\d{2}:\d{2}:\d{2})/;
+  my $yyyy = sprintf("%04d", $y2k * $yyyyMult + int($nYear)-$y2k);
 
-      $err=''; $date2k = Date::Manip::DateCalc($date2k,'-2000 years',\$err);
-      if ( "$err" ne "" ) { 
-         print STDERR "NOTE: Encountered Date::Manip problem with modifydate/DateCalc $date2k -2000y: '$err'\n"; 
-         last; 
-      }
-      $date = $date2k;
-   }
-
-   if ( "$err" ne "" ) {
-      die "ERROR: modifydate/DateCalc $date $str\n";
-   }
-
-   #print "got $date\n";
-   return $date;
+  return $yyyy . $nMDT;
 }
+
 #wrapper for DateCalc handling low year numbers
 sub cmpdate {
    my $date = $_[0];
@@ -258,7 +221,7 @@ sub cmpdate {
 #print "date=$date,date2=$date2\n";
 #print "y1=$y1,md1=$md1,y2=$y2,md2=$md2\n";
 
-   if ( "$md1" eq "$md2" ) { 
+   if ( "$md1" eq "$md2" ) {
       my $diff = $y2 - $y1;
       my $delta = Date::Manip::ParseDateDelta("$diff years");
 #print "delta=$delta\n";
@@ -266,7 +229,7 @@ sub cmpdate {
    } else {
       die "ERROR: Date calculation malfunction, date=$date,date2=$date2\n";
    }
- 
+
 }
 
 #return appropriate date granularity
@@ -276,9 +239,9 @@ sub graindate {
    my $formatstr = "";
 
    if ( "$freq" =~ /daily/ or "$freq" =~ /day/) {
-      $formatstr = 8; 
+      $formatstr = 8;
    } elsif ( "$freq" =~ /mon/ ) {
-      $formatstr = 6; 
+      $formatstr = 6;
    } elsif ( "$freq" =~ /ann/ or "$freq" =~ /yr/ or "$freq" =~ /year/) {
       $formatstr = 4;
    } elsif ( "$freq" =~ /hour/ or "$freq" =~ /hr/ ) {
@@ -286,24 +249,24 @@ sub graindate {
    } elsif ( "$freq" =~ /season/ ) {
       my $month = substr($date,4,2);
       unless ( $month==12 or $month==3 or $month==6 or $month==9  ) {
-         if ($::opt_v) {print STDERR "WARNING: graindate: $month is not the beginning of a known season in date $date.\n";}
+	 if ($::opt_v) {print STDERR "WARNING: graindate: $month is not the beginning of a known season in date $date.\n";}
       }
       my $year = substr($date,0,4);
       if ( $month == 12 ) {
-         $year = $year + 1;
-         $year = padzeros($year);
-         return "$year.DJF";
+	 $year = $year + 1;
+	 $year = padzeros($year);
+	 return "$year.DJF";
       } elsif ( $month == 1 or $month == 2 ) {
-         return "$year.DJF";
+	 return "$year.DJF";
       } elsif ( $month == 3 or $month == 4 or $month == 5 ) {
-         return "$year.MAM";
+	 return "$year.MAM";
       } elsif ( $month == 6 or $month == 7 or $month == 8 ) {
-         return "$year.JJA";
+	 return "$year.JJA";
       } elsif ( $month == 9 or $month == 10 or $month == 11 ) {
-         return "$year.SON";
+	 return "$year.SON";
       } else {
-         print STDERR "WARNING: graindate: month $month not recognized";
-         $formatstr = 6;
+	 print STDERR "WARNING: graindate: month $month not recognized";
+	 $formatstr = 6;
       }
    } else {
       print STDERR "WARNING: frequency not recognized in graindate\n";
@@ -338,20 +301,20 @@ sub timeabbrev {
 sub getppNode {
    my $e = $_[0];
 
-   my $ppNode = $::root->findnodes("experiment[\@label='$e' or \@name='$e']/postProcess")->get_node(1); 
+   my $ppNode = $::root->findnodes("experiment[\@label='$e' or \@name='$e']/postProcess")->get_node(1);
 
    if( $ppNode ) {
       return $ppNode;
    } else {
       my $mommy = $::root->findvalue("experiment[\@label='$e' or \@name='$e']/\@inherit");
       if( "$mommy" eq "" ) {
-         print STDERR "WARNING: Can't find postProcess node for experiment '$e'.\n";
-         return "";
-      } else { 
-         getppNode($mommy);
+	 print STDERR "WARNING: Can't find postProcess node for experiment '$e'.\n";
+	 return "";
+      } else {
+	 getppNode($mommy);
       }
-   }  
-}  
+   }
+}
 
 sub cleanstr
 # ------ clean up a string that should be space delimited tokens
@@ -366,7 +329,7 @@ sub cleanstr
 }
 
 sub makeminutes($)
-# ------ arguments: $string 
+# ------ arguments: $string
 # ------ translates $string in "HH:MM:SS" format to minutes integer
 {
    my $timevar = $_[0];
@@ -382,7 +345,7 @@ sub makeminutes($)
 sub strStripPaired($;$)
 # ------ arguments: $string $pattern
 # ------ strip paired substrings, surrounding the $string
-# ------ all the heading and tailing whitespaces will be stripped as well 
+# ------ all the heading and tailing whitespaces will be stripped as well
 {
   my ($s, $t) = @_;
   my $p = ($t) ? qr/$t/ : '"';
@@ -408,7 +371,7 @@ sub strFindByPattern($$)
 	  my ($value, $key) = ($1, $2);
 	  if ($k =~ m/$key/m)
 	  {
-            $result = $value;
+	    $result = $value;
 	    last;
 	  }
 	}
@@ -420,7 +383,7 @@ sub strFindByPattern($$)
       }
       else
       {
-        $result = $mapping;
+	$result = $mapping;
 	last;
       }
     }
@@ -450,7 +413,7 @@ sub strFindByInterval($$)
 	  my ($value, $key) = ($1, $2);
 	  if ($n <= $key)
 	  {
-            $result = $value;
+	    $result = $value;
 	    last;
 	  }
 	}
@@ -462,7 +425,7 @@ sub strFindByInterval($$)
       }
       else
       {
-        $result = $mapping;
+	$result = $mapping;
 	last;
       }
     }
@@ -519,7 +482,7 @@ sub fileArchiveExtensionStrip($)
 
 sub createDir($)
 # ------ arguments: $dirName
-# ------ create a (multilevel) directory, passed as an argument 
+# ------ create a (multilevel) directory, passed as an argument
 # ------ return the created directory or an empty value
 {
   my ($d, $v) = @_;
@@ -531,7 +494,7 @@ sub createDir($)
   }
   elsif (scalar(@dirs) > 0)
   {
-    return $dirs[$#dirs];    
+    return $dirs[$#dirs];
   }
   else
   {
@@ -550,7 +513,7 @@ sub dirContains($$)
 
 sub environmentVariablesExpand($)
 # ------ arguments: $string
-# ------ expand environment variable placeholders in the given $string 
+# ------ expand environment variable placeholders in the given $string
 {
   my $s = shift;
   foreach my $k ('HOME', 'USER', 'ARCHIVE')
@@ -582,7 +545,7 @@ sub timeString
     ($time[4] + 1) * 100
     +
     $time[3]
-    + 
+    +
     $time[2] * 0.01
     +
     $time[1] * 0.0001
@@ -626,7 +589,7 @@ sub optionIntegersListParse($$)
     {
       if ($value eq 'all')
       {
-        $valuesAll = 1;
+	$valuesAll = 1;
       }
       elsif ($value =~ m/^0*(\d+)$/)
       {
@@ -651,7 +614,7 @@ sub optionIntegersListParse($$)
 }
 
 sub optionValuesListParse($$@)
-# ------ arguments: $name $value @allowedValuesList  
+# ------ arguments: $name $value @allowedValuesList
 {
   my ($n, $v, @a) = @_;
   if (substr($v, 0, 1) ne '-')
@@ -661,18 +624,18 @@ sub optionValuesListParse($$@)
     {
       if ($value eq 'all')
       {
-        $valuesAll = 1;
+	$valuesAll = 1;
       }
       elsif (scalar(grep($_ eq $value, @a)) > 0)
       {
-        $valuesHash{$value} = 1;
+	$valuesHash{$value} = 1;
       }
       else
       {
-        my $allowed = join("', '", @a);
-        return ('', "The --$n option values list contains the unknown '$value' value", "Allowed values are '$allowed' and 'all'");
+	my $allowed = join("', '", @a);
+	return ('', "The --$n option values list contains the unknown '$value' value", "Allowed values are '$allowed' and 'all'");
       }
-    }    
+    }
     my @values = ($valuesAll) ? @a : grep($valuesHash{$_}, @a);
     return join(',', @values);
   }
@@ -681,7 +644,7 @@ sub optionValuesListParse($$@)
     return ('', "The --$n option value is missed");
   }
 }
-  
+
 # //////////////////////////////////////////////////////////////////////////////
 # //////////////////////////////////////////////////////////// Initialization //
 # //////////////////////////////////////////////////////////////////////////////
