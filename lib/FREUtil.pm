@@ -169,7 +169,7 @@ sub modifydate {
   my $str = $_[1];
   my $err;
   if ( "$date" eq '' ) {
-    # Force the date to follow 0000010100:00:00 if $date is empty
+    # Force the date to be 0000010100:00:00 if $date is empty
     $date = "0000010100:00:00"
   }
   #print "modifydate date '$date' str '$str': \n";
@@ -183,6 +183,16 @@ sub modifydate {
     print STDERR "NOTE: Date '$date' not in the correct format.  Expected 'yyyymmddhh:mm:ss'\n";
     return undef;
   }
+  # Parse $str for number of years to add.  There will be issues if adding more than 6000 or subtracting
+  # more than 2000 from the passed in date (because of how the date is forced to be between years [2000,3999].
+  # We need to do something similar if changing the date more than 2000 years.
+  my ( $preStr, $pm, $dYears, $postStr ) = $str =~ /(.*?)([-+])\s*(\d+)\s*years?(.*)/i;
+  my $dYearsMult = floor(int($dYears)/$y2k);
+  my $dYearsMod = int($dYears)%$y2k;
+  # New string to pass to Date::Manip::DateCalc
+  my $newStr = "$preStr $pm $dYearsMod year $postStr";
+  # Amount to add/subtract at the end.
+  my $newDeltaYears = eval("$pm 1 * ($dYearsMult * $y2k)");
 
   # Separate the passed in yyyy and mmddhh:mm:ss
   my ($oYear, $oMDT) = $date =~ /(\d{4,})(\d{4}\d{2}:\d{2}:\d{2})/;
@@ -204,9 +214,47 @@ sub modifydate {
 
   # Convert back to a date based on the original date
   my ($nYear, $nMDT) = $dateManipd =~ /(\d{4})(\d{4}\d{2}:\d{2}:\d{2})/;
-  my $yyyy = sprintf("%04d", $y2k * $yyyyMult + int($nYear)-$y2k);
+  my $yyyy = sprintf("%04d", $y2k * $yyyyMult + int($nYear)-$y2k + $newDeltaYears);
+  if (int($yyyy) < 1) {
+    print STDERR "NOTE: Performing '$str' on '$date' does not give a valid year: got '$yyyy'\n";
+    return undef;
+  }
 
   return $yyyy . $nMDT;
+}
+
+# Wrapper to Date::Manip::Date_DaysSince1BC to deal with possible years beyond 9999
+sub daysSince1BC($) {
+  my $date = $_[0];
+
+  if ( $date !~ /\d{4,}\d{4}\d{2}:\d{2}:\d{2}/ ) {
+    print STDERR "NOTE: Date '$date' not in the correct format.  Expected 'yyyymmddhh:mm:ss'\n";
+    return undef;
+  }
+
+  # To overcome Date::Manip's inability to handle dates beyond 9999, we
+  # force all calculations to be rebased to 2000, then convert back.
+  my $y2k = 2000;
+
+  # Separate the passed in yyyy and mmddhh:mm:ss
+  my ($oYear, $oMon, $oDay) = $date =~ /(\d{4,})(\d{2})(\d{2})\d{2}:\d{2}:\d{2}/;
+
+  my $y2k = 2000;
+
+  my $y2kMult = floor($oYear/$y2k);
+  my $y2kMod = $oYear%$y2k;
+
+  # Number of days from 00010101 - 20001221 (2000 years)
+  my $d2kyears = Date::Manip::Date_DaysSince1BC(12,31,2000);
+
+  # Number of days in from 00010101 - $y2k + $ydkMod
+  my $numDaysTmp = Date::Manip::Date_DaysSince1BC($oMon, $oDay, $y2k + $y2kMod);
+
+  # Because we rebase to 2000, we need to remove the 1st 2000 years off all calculations
+  # (it is already done in the above Date_SaysSince1BC call).  If the original year is
+  # less than 2000, then the $y2kMult - 1 will remove the counting of the first 2000
+  # years.
+  return ($y2kMult - 1) * $d2kyears + $numDaysTmp;
 }
 
 #wrapper for DateCalc handling low year numbers
