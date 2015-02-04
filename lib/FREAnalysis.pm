@@ -103,6 +103,9 @@ sub analysis {
      my $astart = $arrayofExptsH[$iExpt]{astartYear};
      my $aend = $arrayofExptsH[$iExpt]{aendYear};
      my ($flag, $astartYear, $aendYear, $databegyr, $dataendyr,@missing) = start_end_date($astart,$aend,$opt_Y, $opt_Z,\@availablechunksfirst, \@availablechunkslast,$clnumber);
+     if (@missing > 0) {
+        print STDERR "ANALYSIS: cannot process timeSeries analysis, missing these chunks: @missing \n";
+     }
      if ($flag eq "bad" or ($tsORav eq "timeSeries" and @missing > 0) ) {next;}
 
      #make sure asrcdir ends in '/' (arl)
@@ -157,6 +160,10 @@ sub analysis {
        if ( ! -e  $arrayofExptsH[$iExpt]->{xmlfile} ) {print STDERR "ANALYSIS: xmlfile does not exist for the addexpt. Skipped\n"; 
             $myflag = -1;last;}
 
+       my $freopts = '';
+       if ( "$arrayofExptsH[$iExpt]->{platform}" ne '' ) { $freopts .= " -p $arrayofExptsH[$iExpt]->{platform}"; }
+       if ( "$arrayofExptsH[$iExpt]->{target}" ne '' ) { $freopts .= " -t $arrayofExptsH[$iExpt]->{target}"; }
+
        #----passed basic checking, find info from the xmlfile and expt name
        my $xmlfile = $arrayofExptsH[$iExpt]->{xmlfile};
        my $exptname = $arrayofExptsH[$iExpt]->{exptname};
@@ -164,10 +171,11 @@ sub analysis {
        my $clnumber = $addexptcl;
        $clnumber =~ s/yr$//;
 
-       chomp( my $ppRootDir = `frelist -dir=postProcess -x $xmlfile $exptname` );
-       chomp( my $gridspec = `frelist -e 'input/dataFile[\@label="gridSpec"]/dataSource' -x $xmlfile $exptname` );
+       chomp( my $ppRootDir = `frelist $freopts -d postProcess -x $xmlfile $exptname` );
+
+       chomp( my $gridspec = `frelist $freopts -e 'input/dataFile[\@label="gridSpec"]/dataSource' -x $xmlfile $exptname` );
        if ( ! -f $gridSpec ) {
-          chomp( my $gridspec = `frelist -e 'input/gridSpec/\@file' -x $xmlfile $exptname` );
+          chomp( my $gridspec = `frelist $freopts -e 'input/gridSpec/\@file' -x $xmlfile $exptname` );
        }
        my $staticfile = "$ppRootDir/$component/$component.static.nc";
        my $asrcdir_addexpt;
@@ -717,9 +725,12 @@ sub queueAnaAttr {
      
      my $name = $anaNode->findvalue('@name');
      my $xml = $anaNode->findvalue('@xmlfile');
+     my $platform = $anaNode->findvalue('@platform');
+     my $target = $anaNode->findvalue('@target');
+
      my $script = $anaNode->findvalue('@script');
 
-     return ('switch' => $switch, mode => $mode, cumulative => $cumulative, momGrid => $momGrid,figureDir => $figureDir,specify1year => $specify1year,astartYear => $astartYear,aendYear => $aendYear,chunk => $chunk,afreq => $afreq,exptname => $name,xmlfile => $xml,script => $script);
+     return ('switch' => $switch, mode => $mode, cumulative => $cumulative, momGrid => $momGrid,figureDir => $figureDir,specify1year => $specify1year,astartYear => $astartYear,aendYear => $aendYear,chunk => $chunk,afreq => $afreq,exptname => $name,xmlfile => $xml,platform => $platform,target => $target,script => $script);
 }
 
 sub seasonAV {
@@ -833,9 +844,9 @@ sub start_end_date {
      # now check for the missing chunks
      my @themissing = checkmissingchunks($databegyr,$dataendyr,$clnumber,$pt,\@availablechunksfirst);
 
-#     if (@themissing > 0) {
-#        print STDERR "missing these chunks: @themissing. \n";
-#     }
+     #if (@themissing > 0) {
+     #   print STDERR "Analysis: cannot process timeSeries, missing these chunks: @themissing. \n";
+     #}
 
      if ( $opt_v) {print STDERR "ANALYSIS: data needed for the start year and end year: $databegyr - $dataendyr\n";}
 

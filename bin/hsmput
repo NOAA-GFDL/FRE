@@ -1,13 +1,21 @@
 #!/usr/bin/perl
-# $Id: hsmput,v 18.0.10.8 2011/07/12 23:23:21 vb Exp $
+# $Id: hsmput,v 18.0.2.7 2011/12/08 01:20:44 afy Exp $
 # script for calling hsmput.mk
+
 require 5;
 use strict;
+
 use Carp;                       # error messages in modules
 use Cwd;
 use Getopt::Long;
 use File::Spec;
 use File::Basename;
+use FindBin();
+
+use lib "$FindBin::Bin/../lib";
+
+use HSM();
+
 #option processing
 my %opt;
 my @optlist = ( 'archroot=s',
@@ -28,7 +36,8 @@ my @optlist = ( 'archroot=s',
 		'verbose',
                 'help'
 	      );
-my $usage = "Usage: $0 [options] path [path...] 
+my $appName = basename($0);	      
+my $usage = "Usage: $appName [options] path [path...] 
   Options: 
       -a|--archroot <dir> anchor point on remote storage 
       -p|--ptmproot <dir> anchor point on long-term scratch 
@@ -54,7 +63,7 @@ croak "\n$usage" unless GetOptions( \%opt, @optlist );
 
 #help: print usage and exit
 if ( $opt{help}) {
-   print "$0 puts files to archive storage.\n\n";
+   print "$appName puts files to archive storage.\n\n";
    print "$usage\n";
    exit 0;
 }
@@ -94,11 +103,11 @@ $cmd .= ' -B' if $opt{force};
 $cmd .= ' -s' if $opt{quiet};
 $cmd .= " -r -f $makefile";
 
-undef my $result;
 undef my $target;
 undef my $source;
 undef my $result;
 undef my $okfile;
+
 foreach ( @ARGV ) {
    croak "$0 source $_ cannot be an absolute pathname!\n\n$usage" 
      if File::Spec->file_name_is_absolute($_);
@@ -114,7 +123,7 @@ foreach ( @ARGV ) {
       } else {
          print "No $opt{store} processing for simple file $source ...\n";
       }
-      print "+ $cmd $target.ok\n" if $verbose;
+      print STDERR "+CMD: $cmd $target.ok\n" if $verbose;
       $result = qx/$cmd $target.ok/;
       croak "Unable to make $target.ok\n$result\n" if $?;
       print $result unless $result =~ / is up to date./;
@@ -136,12 +145,21 @@ foreach ( @ARGV ) {
    exit 0 if $opt{delete};
 # pass to ptmp
    $target = "$ptmproot/" . File::Spec->abs2rel($source,$workroot);
-   print "+ $cmd $target.ok\n" if $verbose;
-   $result = qx/$cmd $target.ok/;
-   croak "Unable to make $target.ok\n$result\n" if $?;
+   HSM::lock($target,30) or exit 1;
+   HSM::clean($target);
+   $okfile = "$target.ok";
+   print STDERR "+CMD: $cmd $okfile\n" if $verbose;
+   $result = qx/$cmd $okfile/;
+   if ( $? ) {
+      unlink $okfile if -f $okfile;
+      HSM::unlock($target);
+      croak "ERROR: Unable to make $okfile\n$result\n";
+   }
    print $result unless $result =~ / is up to date./;
    chdir $target or chdir dirname($target);
-   print qx/md5sum -c $target.ok/ if $opt{checksum};
+   print qx/md5sum -c $okfile/ if $opt{checksum};
+   HSM::alignAccessTime($target);
+   HSM::unlock($target);
 }
 
 sub deleteFiles ($) {

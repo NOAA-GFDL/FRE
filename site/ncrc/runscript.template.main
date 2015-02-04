@@ -1,23 +1,11 @@
-#!/bin/csh -f
+#!/bin/csh -fx
 #FRE scheduler-options
 # 
-# $Id: runscript.template.main,v 1.1.4.26.4.6 2011/09/13 23:00:46 fms Exp $
+# $Id: runscript.template.main,v 1.1.4.87.4.1.2.3.2.1 2013/01/04 00:54:53 afy Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: Runscript Template - NCRC Version
 # ------------------------------------------------------------------------------
 # arl    Ver   1.00  Copied from the NCCS version                   July 10
-# arl    Ver   1.01  Unset/set echo around platform csh             July 10
-# arl    Ver   1.02  Modify alias 'mppnccombine'                    July 10
-# arl    Ver   1.03  Modify alias 'combine_parallel'                July 10
-# arl    Ver   1.04  Remove all the saving to the HPSS              July 10
-# arl    Ver   1.05  Remove sending ascii/restarts to the GFDL      July 10
-# arl    Ver   1.06  Replace history combining by online one        July 10
-# arl -------------- Branch 1.1.2 --------------------------------- July 10
-# arl    Ver   1.00  Fix hsmSiteDir variable                        July 10
-# arl    Ver   2.00  Modify LFS striping settings                   August 10
-# arl    Ver   3.00  Modify alias 'combine_parallel' (use siteDir)  August 10
-# arl    Ver   3.01  Fix LFS striping settings                      August 10
-# arl    Ver   3.02  Add staged history combining                   August 10
 # afy -------------- Branch 1.1.4 --------------------------------- August 10
 # afy    Ver   1.00  Cosmetics                                      August 10
 # afy    Ver   1.01  Fix check for 'fre-transfer' module            August 10
@@ -109,239 +97,491 @@
 # afy    Ver  25.01  Make all the '*Time' constants settable        December 10
 # afy    Ver  25.02  Add settable constant 'mailMode'               December 10
 # afy    Ver  26.00  Don't check presence of refine scripts         January 11
+# afy    Ver  27.00  Improve the 'reload_commands' file handling    February 11
+# afy    Ver  27.01  Add the 'queue_commands' file processing       February 11
+# afy    Ver  28.00  Fix loop counters incrementing                 February 11
+# afy    Ver  28.01  Don't remove state files                       February 11
+# afy    Ver  29.00  Add alias 'submitNext'                         March 11
+# afy    Ver  30.00  Add settable alias 'runCommand'                March 11
+# afy    Ver  31.00  Prepend 'cp -p' calls by 'ln -f' calls         March 11
+# afy    Ver  31.01  Remove 'fre-transfer' submodule                March 11
+# afy    Ver  31.02  Remove 'FREROOT' environment variable          March 11
+# afy    Ver  31.03  Add aliases '(set|get)StripingMode'            March 11
+# afy    Ver  32.00  Modify alias 'mppnccombine' (aprun)            May 11
+# afy    Ver  32.01  Modify alias 'slmnccombine' (aprun)            May 11
+# afy    Ver  33.00  Revamping to adapt to the new output stager    May 11
+# afy    Ver  33.01  Add work directory cleaner call/submitting     May 11
+# afy    Ver  33.02  Remove Globus settings (!?)                    May 11
+# afy    Ver  33.03  Absolute segment number printing               May 11
+# afy    Ver  33.04  Call the script with -fx options               May 11
+# afy    Ver  33.05  Conditional unset echo/set echo                May 11
+# afy    Ver  33.06  Standardize jobName/jobNameFull determination  May 11
+# afy    Ver  33.07  Redesign post-processing starter submitting    May 11
+# afy    Ver  34.00  Add settable constant 'stateDir'               May 11
+# afy    Ver  34.01  Use new 'prepare_dir.csh' helper script        May 11
+# afy    Ver  34.02  Add alias 'gcp'                                May 11
+# afy    Ver  35.00  Use new 'output.stager' (saveOn => ptmpOn)     May 11
+# afy    Ver  35.01  Elaborate restarts saving                      May 11
+# afy    Ver  35.02  Don't chmod the stdout file                    May 11
+# afy    Ver  35.03  Simplify aliases 'submit*'                     May 11
+# afy    Ver  36.00  Use dummy file to create the remote stdoutDir  May 11
+# afy    Ver  36.01  Copy the XML file with mirroring               May 11
+# afy    Ver  37.00  More careful XML file copying (with backup)    May 11
+# afy    Ver  38.00  Modify alias 'gcp' (no --create-dirs)          May 11
+# afy    Ver  39.00  Clarifications in the XML copying              May 11
+# afy    Ver  40.00  Don't copy the XML file (temporarily?)         May 11
+# afy    Ver  41.00  Modify patternSed(Home|FS|LTFS) (destination)  May 11
+# afy    Ver  41.01  Replicate the XML file (rather sync?)          May 11
+# afy    Ver  42.00  Modify pp.starter submission (add target)      May 11
+# afy    Ver  43.00  New constant FRE_JOBID (used in workDir)       June 11
+# afy    Ver  44.00  New separator '&' for PP refine diag scripts   June 11
+# afy    Ver  45.00  Add settable constant 'project'                June 11
+# afy    Ver  45.01  Revamp all the Moab submission options         June 11
+# afy    Ver  45.02  Use the wrapper 'batch.scheduler.submit' (!)   June 11
+# afy    Ver  45.03  Make pp.starter depend on ALL history jobs     June 11
+# afy    Ver  45.04  Make next job depend on the last restart       June 11
+# afy    Ver  45.05  Check status after ALL submissions             June 11
+# afy    Ver  46.00  Fix job id assigment after the 'msub' fail     June 11
+# afy    Ver  46.01  Load module XML-LibXML (for helper scripts)    June 11
+# afy    Ver  47.00  Get remote environment string in two steps     June 11
+# afy    Ver  48.00  Fix the 'ppOptions' variable evaluation        June 11
+# afy    Ver  49.00  Add 'DEBUG' input staging                      June 11
+# afy    Ver  49.01  Move the input staging control section         June 11
+# afy    Ver  50.00  Split restarts output staging into two steps   June 11
+# afy    Ver  50.01  Save 'reload_commands' in the job end only     June 11
+# afy    Ver  50.02  Fix the remote environment packing             June 11
+# afy    Ver  50.03  Rename output stager jobs                      June 11
+# afy    Ver  51.00  Protect 'msub' options by combined quotes      June 11
+# afy    Ver  51.01  Modify the after-MPI-crash section             June 11
+# afy    Ver  52.00  Files/dirs for pp starter in a separate job    June 11
+# afy    Ver  53.00  Save unexpanded namelists, then expand them    June 11
+# afy    Ver  53.01  Process the *OutputHashing* flag               June 11
+# afy    Ver  53.02  Redesign constants 'patternGrep*'              June 11
+# afy    Ver  53.03  Modify patternGrepAscii (add three patterns)   June 11
+# afy    Ver  53.04  Modify patternGrepRestart (add pattern)        June 11
+# afy    Ver  54.00  Rename 'flagOutputHashing' => 'flagCheckSum'   June 11
+# afy    Ver  55.00  Split ascii/history outstaging in two steps    June 11
+# afy    Ver  55.01  Don't use the Moab option -V                   June 11
+# afy    Ver  55.02  Add delay before the second $envFile update    June 11
+# afy    Ver  55.03  Modify the $envFile location                   June 11
+# afy    Ver  55.04  Modify remote output directory after crash     June 11
+# afy    Ver  56.00  Don't pass the whole PATH to subjobs           July 11
+# afy    Ver  56.01  Don't use the HOSTNAME variable                July 11
+# afy    Ver  56.02  Process multi-part XML files                   July 11
+# afy    Ver  57.00  Don't prepend the PERL5LIB variable            July 11
+# afy    Ver  57.01  Don't load module XML-LibXML                   July 11
+# afy    Ver  57.02  Add saving 'set -r' into the $envFile          July 11
+# afy    Ver  57.03  Add settable constant 'flagArgFiles'           July 11
+# afy    Ver  57.04  Add settable constants 'flagOutputCache*'      July 11
+# afy    Ver  57.05  Add settable constants 'flagOutputCompress*'   July 11
+# afy    Ver  57.06  Implement arguments passing via argFiles       July 11
+# afy    Ver  57.07  Set remote output directories based on flags   July 11
+# afy    Ver  58.00  Fix a bug with 'set -r'                        July 11
+# afy    Ver  59.00  Allow caching for history only                 July 11
+# afy    Ver  60.00  Don't exit after fail to submit pp.starter     August 11
+# afy    Ver  61.00  Add settable constant 'hourslist'              August 11
+# afy    Ver  61.01  Rename 'timeStampFormat' => 'timeStampOptions' August 11
+# afy    Ver  61.02  Remove settable constant 'flagArgFiles'        August 11
+# afy    Ver  61.03  Save intermediate restarts                     August 11
+# afy    Ver  61.04  Simplify the irunNext logic                    August 11
+# afy    Ver  62.00  Remove separate region files processing        August 11
+# afy    Ver  62.01  Redesign logics after the aprun fail           August 11
+# afy    Ver  62.02  Call output stager with argfile in online mode August 11
+# afy    Ver  62.03  Pass the compress option to the output stager  August 11
+# afy    Ver  62.04  Don't pass the user path to the output stager  August 11
+# afy    Ver  62.05  Don't pass the user path to the pp preparer    August 11
+# afy    Ver  63.00  Fix emailing from the runscript                September 11
+# afy    Ver  64.00  Fix emailing from the runscript (printf)       September 11
+# arl    Ver  65.00  Better wording for after-the-crash email       September 11
+# arl    Ver  66.00  Add stdout to the after-crash email            September 11
+# arl    Ver  67.00  Modify the 'patternGrepAscii' (more files)     September 11
+# afy    Ver  68.00  Fix emailing from the runscript                September 11
+# afy    Ver  68.01  Rename 'combineFreq' => 'segmentsPerPPCall'    September 11
+# afy    Ver  68.02  Rename '*Transfer*' => '*Xfer*'                September 11
+# afy    Ver  68.03  Tweak the 'gcpInfo' (use 'find_module_info')   September 11
+# afy    Ver  68.04  Tweak the 'envRemote' (prepend $ by backslash) September 11
+# afy    Ver  68.05  Modify the ppRefineDiag* separator (& => +)    September 11
+# afy    Ver  68.06  Move the ppPreparer logics to the outStager    September 11
+# afy    Ver  68.07  Implement the 'chained' output staging (!)     September 11
+# afy    Ver  68.08  Add the $freCommandsHomeDir/sbin to the PATH   September 11
+# afy    Ver  68.09  More strict condition to post-process          September 11
+# afy    Ver  69.00  Remove striping parameters/commands            October 11
+# afy    Ver  69.01  Add settable constant 'modulesHomeDir'         October 11
+# afy    Ver  69.02  Add settable constant 'stdoutDirRemote'        October 11
+# afy    Ver  69.03  Add settable constant 'stmpDirRemote'          October 11
+# afy    Ver  69.04  Add settable constant 'archiveDirRemote'       October 11
+# afy    Ver  69.05  Add settable constant 'platformRemote'         October 11
+# afy    Ver  69.06  Add settable constant 'envRemote'              October 11
+# afy    Ver  69.07  Don't call 'frelist' to get remote settings    October 11
+# afy    Ver  69.08  Replace 'setenv' by 'env --unset=TERMCAP'      October 11
+# afy    Ver  69.09  Rename region files separately                 October 11
+# afy    Ver  70.00  Rename 'gcpModule*' => 'xferToolModule*'       October 11
+# afy    Ver  70.01  Switch to 'stdoutDir' before submission        October 11
+# afy    Ver  71.00  Rename 'xferTool*Dir' => 'xferTool*FilesDir'   November 11
+# afy    Ver  71.01  Add settable constant 'freModuleFilesDir'      November 11
+# afy    Ver  71.02  Cosmetics in messages                          November 11
+# afy    Ver  72.00  Load 'XML-LibXML' (for the msub wrapper)       November 11
+# afy    Ver  73.00  Add the 'freTempDir' argument for outstager    January 12
+# afy    Ver  73.01  Add settable flag 'flagWorkDirClean'           January 12
+# afy    Ver  74.00  Don't remove the output stager tempDir         January 12
+# afy    Ver  74.01  Add checkpointing into the loop beginning      January 12
+# afy    Ver  74.02  Improve after-the-MPI-crash message            January 12
+# afy    Ver  74.03  Don't echo history files moving                January 12
+# afy    Ver  74.04  Add version string to the first message        January 12
+# afy    Ver  75.00  Remove version string from the first message   January 12
+# afy    Ver  76.00  Fix version string in the first message        January 12
+# afy    Ver  76.01  Don't start post-processing after crash        January 12
+# afy    Ver  77.00  Set memory option (-l mem) for saving jobs     February 12
+# afy    Ver  77.01  Improve after-the-MPI-crash message            February 12
+# afy    Ver  78.00  Don't checkpoint in interactive mode           February 12
+# afy    Ver  79.00  Fix a typo in checkpointing                    February 12
+# afy    Ver  80.00  Use xargs to hardlink restarts                 February 12
+# afy    Ver  80.01  Use xargs to move history files                February 12
+# afy    Ver  81.00  Use hsmput to save end-of-job restarts         February 12
+# afy    Ver  81.01  Add modulefiles directory for 'banner'         February 12
+# afy    Ver  82.00  Modify 'submitOptionsCommon' (add -S)          February 12
+# afy    Ver  83.00  Modify project/partition/queue initialization  February 12
+# afy    Ver  83.01  Add settable constant 'stdoutTmpDir'           February 12
+# afy    Ver  83.02  Add settable constants 'finisher*'             February 12
+# afy    Ver  83.03  Move constants/aliases to the beginning        February 12
+# afy    Ver  83.04  Add (conditional) finisher submission          February 12
+# afy    Ver  83.05  Don't pushd into stdoutDir before submission   February 12
+# afy    Ver  84.00  Recreate INPUT/RESTART for doublestarts        February 12
+# afy    Ver  85.00  Make 'workDir.cleaner' site-independent        March 12
+# afy    Ver  85.01  Make 'finisher' site-independent               March 12
+# afy    Ver  85.02  Fix a bug in 'hours' assignment                March 12
+# afy    Ver  86.00  Keep all current files after MPI crash         April 12
+# afy    Ver  86.01  Rename intermediate arguments for outstager    April 12
+# afy    Ver  87.00  Refactor end-of-job restarts saving            April 12
+# afy    Ver  87.01  Generalize memory options settings             April 12
+# afy -------------- Branch 1.1.4.87.4 ---------------------------- August 12
+# afy    Ver   1.00  Load default 'banner' module                   August 12
+# afy -------------- Branch 1.1.4.87.4.1.2.3.2 -------------------- January 13
+# afy    Ver   1.00  Add settable constants 'windfall*'             January 13
+# afy    Ver   1.01  Add variable 'windfallFlag'                    January 13
+# afy    Ver   1.02  Add variable 'submitOptionsWindfall'           January 13
 # ------------------------------------------------------------------------------
-# Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2000-2011
+# Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2000-2013
 # Designed and written by V. Balaji, Amy Langenhorst and Aleksey Yakovlev
-# 
+#
 
 #===============================================================================
 #FRE version-info
 #===============================================================================
 
-  echo ====== FRE RUNSCRIPT ======
-  echo "Starting on `date`"
-  echo "Starting on $HOST $HOSTNAME"
-  set echo
+  set -r echoOn = $?echo
+  set -r runtimeBeg = `date "+%s"`
+
+  if ( $echoOn ) unset echo
+  echo '<NOTE> : ====== FRE RUNSCRIPT $Id: runscript.template.main,v 1.1.4.87.4.1.2.3.2.1 2013/01/04 00:54:53 afy Exp $ ======'
+  echo "<NOTE> : Starting at $HOST on `date`"
+  if ( $echoOn ) set echo
+
   unalias *
 
   # ---------------- initialize environment modules
 
-  unset echo
-  source $MODULESHOME/init/tcsh
-  module load banner 
-  set echo
+  if ( $echoOn ) unset echo
+  #FRE const(modulesHomeDir)
+  source $modulesHomeDir/init/tcsh
+  module load banner
+  setenv COLUMNS 148
+  if ( $echoOn ) set echo
 
-  # ---------------- adjust stdout permissions, define constants for non-scheduler runs
+  # ---------------- define constants
 
-  if ( $?PBS_ENVIRONMENT ) then
-    if ( $PBS_ENVIRONMENT == 'PBS_BATCH' ) then
-      #if ( $?PBS_O_WORKDIR ) then
-      #  chmod 644 $PBS_O_WORKDIR/$PBS_JOBID.OU
-      #endif
-    endif 
+  if ( $?MOAB_BATCH ) then
+    set -r FRE_JOBID = $PBS_JOBNAME:t.o`echo $PBS_JOBID | sed -r 's/^([0-9]+).*$/\1/'`
+    set -r projectInit = $MOAB_ACCOUNT
+    set -r queueInit = $MOAB_CLASS
+    set -r batch 
   else
-    set -r PBS_JOBID = '000000'
-    set -r PBS_JOBNAME = 'STDIN'
-    set -r PBS_QUEUE = 'batch'
+    set -r FRE_JOBID = $0:t.o`date +%s`
+    set -r projectInit = ""
+    set -r queueInit = 'batch'
   endif
 
-  banner $PBS_JOBNAME
+  # ---------------- print starting banner
+
+  banner $FRE_JOBID
 
 ################################################################################
 #---------------- global constants and variables, set by frerun ----------------
 ################################################################################
 
+  #FRE const(windfallFlagInit)
+
   #FRE const(platform)
   #FRE const(target)
   #FRE const(name)
   #FRE const(rtsxml)
+  #FRE const(freModuleFilesDir)
   #FRE const(freCommandsHomeDir)
   #FRE const(stdoutDir)
+  #FRE const(stdoutTmpDir)
+  #FRE const(stateDir)
   #FRE const(workDir)
+  #FRE const(ptmpDir)
   #FRE const(archiveDir)
   #FRE const(scriptName)
   #FRE const(ppRefineDiagScriptNames)
   #FRE const(executable)
   #FRE const(segmentsPerSimulation)
+  #FRE const(segmentsPerPPCall)
   #FRE const(segmentsPerJob)
   #FRE const(jobsPerSimulation)
-  #FRE const(combineFreq)
   #FRE const(monthslist)
   #FRE const(dayslist)
-  #FRE const(timeStampFormat)
+  #FRE const(hourslist)
+  #FRE const(timeStampOptions)
   #FRE const(baseDate)
   #FRE const(mailMode)
+  #FRE const(windfallOptionsSet)
+  #FRE const(windfallOptionsUnset)
 
-  #FRE const(outputStagerPartition)
-  #FRE const(outputStagerQueue)
-  #FRE const(outputStagerTime)
+  #FRE const(stdoutDirRemote)
+  #FRE const(stmpDirRemote)
+  #FRE const(archiveDirRemote)
+  #FRE const(platformRemote)
+  #FRE const(envRemote)
 
-  #FRE const(fileSenderPartition)
-  #FRE const(fileSenderQueue)
-  #FRE const(fileSenderTimeAscii)
-  #FRE const(fileSenderTimeRestarts)
-  #FRE const(fileSenderTimeHistory)
+  #FRE const(outputStagerSavePartition)
+  #FRE const(outputStagerSaveQueue)
+  #FRE const(outputStagerSaveCoreSpec)
+  #FRE const(outputStagerSaveRuntimeAscii)
+  #FRE const(outputStagerSaveRuntimeRestart)
+  #FRE const(outputStagerSaveRuntimeHistory)
+
+  #FRE const(outputStagerXferPartition)
+  #FRE const(outputStagerXferQueue)
+  #FRE const(outputStagerXferCoreSpec)
+  #FRE const(outputStagerXferRuntimeAscii)
+  #FRE const(outputStagerXferRuntimeRestart)
+  #FRE const(outputStagerXferRuntimeHistory)
+
+  #FRE const(workDirCleanerPartition)
+  #FRE const(workDirCleanerQueue)
+  #FRE const(workDirCleanerCoreSpec)
+  #FRE const(workDirCleanerRuntime)
+
+  #FRE const(finisherPartition)
+  #FRE const(finisherQueue)
+  #FRE const(finisherCoreSpec)
+  #FRE const(finisherRuntime)
+
+  #FRE const(ppStarterPartition)
+  #FRE const(ppStarterQueue)
+  #FRE const(ppStarterCoreSpec)
+  #FRE const(ppStarterRuntime)
 
   #FRE flag(flagRunType)
+  #FRE flag(flagCheckSum)
+  #FRE flag(flagWorkDirClean)
   #FRE flag(flagOutputType)
   #FRE flag(flagOutputFormat)
   #FRE flag(flagOutputStagingType)
+  #FRE flag(flagOutputCacheHistory)
   #FRE flag(flagOutputCombineHistory)
+  #FRE flag(flagOutputCompressAscii)
+  #FRE flag(flagOutputCompressRestart)
+  #FRE flag(flagOutputCompressHistory)
   #FRE flag(flagOutputArchive)
   #FRE flag(flagOutputPostProcess)
-  #FRE flag(flagOutputTransfer)
+  #FRE flag(flagOutputXfer)
   #FRE flag(flagOutputCheck)
 
   #FRE var(npes)
-  #FRE var(ptmpDir)
   #FRE var(outputDir)
   #FRE var(gridSpec)
   #FRE var(initCond)
 
-################################################################################
-#------------------------ global environment settings --------------------------
-################################################################################
-
-  # ---------------- FRE environment variables, which have to be set after the platform csh:
-
-  # FRE_NCTOOLS_HOME	- toot of the fre-nctools module
-
-  # ---------------- FRE scripts/executables, which have to be accessible via the PATH after the platform csh:
-
-  # combine-ncc		- part of the fre-nctools module
-  # compare_dual.csh	- part of the fre-commands module
-  # hsmget		- part of the fre-commands module 
-  # hsmput		- part of the fre-commands module 
-  # mppnccombine	- part of the fre-nctools module
-  # prepare_dir.csh	- part of the fre-commands module
-  # send_file		- part of the fre-commands module
-  # time_stamp.csh	- part of the fre-commands module
-
-  # ---------------- this alias can be overridden by a user
-
-  alias runCommand `which aprun` -n $npes ./$executable:t
-
-  # ---------------- commands, copied from XML (setup/platform/csh)
-
-  unset echo
-  #FRE setup-platform-csh
-  set echo
-
-  # ---------------- exit if no fre-nctools module is loaded
-
-  if ( ! $?FRE_NCTOOLS_HOME ) then
-    unset echo
-    echo "ERROR: The script '$scriptName' must load a 'fre-nctools' module"
-    set echo
-    exit 1
-  endif
-
-  # ---------------- the settings below aren't changeable (FREROOT is for compatibility only)
-
-  setenv FRE_COMMANDS_HOME $freCommandsHomeDir
-  setenv PATH $FRE_COMMANDS_HOME/bin:$PATH
-  setenv FREROOT $FRE_COMMANDS_HOME
-
-  # ---------------- adjust the job name for interactive runs 
-
-  if ( $PBS_JOBNAME == 'STDIN' ) then
-    setenv PBS_JOBNAME $name
-  endif
-
-  # ---------------- enable Globus certificates
-
-  unset echo
-  if ( ! $?GLOBUS_LOCATION ) setenv GLOBUS_LOCATION /sw/xt6/globus/default
-  source $GLOBUS_LOCATION/etc/globus-user-env.csh
-  set echo
-
-  if ( -f $HOME/.x509_user_proxy && -r $HOME/.x509_user_proxy ) then
-    setenv X509_USER_PROXY $HOME/.x509_user_proxy
-  else
-    unset echo
-    echo "WARNING: The certificate file '$HOME/.x509_user_proxy' doesn't exist or not readable"
-    set echo
-  endif
-
-  # ---------------- adjust environment to fix Moab issue
-
-  unsetenv PBS_SERVER
+  #FRE alias(runCommand)
 
 ################################################################################
 #------------------------ global constants and aliases -------------------------
 ################################################################################
 
-  set -r beginruntime = `date "+%s"`
-  set -r jobId = `echo $PBS_JOBID | sed -r 's/^([0-9]+).*$/o\1/'`
+  # ---------------- machine architecture
+
+  set -r architecture = 'x86_64'
 
   # ---------------- for compatibility only
+
   set -r work = $workDir
 
   # ---------------- HSM site-dependent directory
-  set -r hsmSiteDir = $FRE_COMMANDS_HOME/site/ncrc
+
+  set -r hsmSiteDir = $freCommandsHomeDir/site/ncrc
 
   # ---------------- top directory for all the HSM-copied files
+
   set -r hsmDir = $workDir/hsm
 
+  # ---------------- top directory for all the temporary output files 
+
+  set -r tmpOutputDir = $workDir/output.stager
+
+  # ---------------- checkpointing directory
+
+  set -r checkPointDir = /usw/checkpoint
+
+  # ---------------- file to save shell plus environment variables
+
+  set -r envFile = /tmp/shell.variables.$FRE_JOBID
+  set -r envFileDelay = 2
+
   # ---------------- selection patterns for grep
+
   set -r patternGrepTail = '\.[0-9]{4}$'
   set -r patternGrepAscii = '\<out\>|\<results\>|\<timestats\>|\<velocity_truncations\>'
   set -r patternGrepRestart = '\<res\>|\<nc\>|\.input.\tgz$'
   set -r patternGrepRestartNextDrop = '\<res\>'
   set -r patternGrepRestartNextMove = '\<res\>|\<nc\>'
-  set -r patternGrepRegion = '^rregion'
   set -r patternGrepHistory = '\<nc\>'
+  set -r patternGrepRegion = '^rregion'
 
-  # ---------------- FRE string date generation for file name labels
-  alias timeStamp `which time_stamp.csh` -f $timeStampFormat
+  # ---------------- search and replacement patterns for sed
 
-  # ---------------- FRE directory making/cleaning utility
-  alias prepareDir `which prepare_dir.csh`
+  set -r patternSedHome = 's/^\/(autofs|ncrc)\/.+\/'$USER'\//\/home\/'$USER'\/ncrc\//'
+  set -r patternSedFS = 's/^\/lustre\/fs\/.+\/'$USER'\//\/home\/'$USER'\/ncrc\//'
+  set -r patternSedLTFS = 's/^\/lustre\/ltfs\/.+\/'$USER'\//\/home\/'$USER'\/ncrc\//'
 
-  # ---------------- FRE dual archives comparing utility
-  alias compareDual `which compare_dual.csh`
+  # ---------------- archive extension
 
-  # ---------------- FRE postprocessing utility
-  alias frepp `which frepp` -v -c split -s
+  set -r archExt = 'tar'
 
-  # ---------------- FRE data copying between work directory and archive directory via ptmp directory
-  alias hsmget `which hsmget` -t -m $hsmSiteDir/hsmget.mk -w $hsmDir -p '$ptmpDir' -a /
+  # ---------------- batch scheduler output staging options
 
-  if ( $?flagOutputArchiveOn ) then
-    alias hsmput `which hsmput` -t -m $hsmSiteDir/hsmput.mk -w $hsmDir -p '$ptmpDir' -a / -s tar
+  set -r submitOptionsCommon = ( -m $mailMode -j oe -r y -W umask=026 -S /bin/tcsh )
+  set -r submitOptionsOutputStagerSave = ( $submitOptionsCommon -d $stdoutDir -o $stdoutDir/ -l partition=$outputStagerSavePartition -q $outputStagerSaveQueue )
+  set -r submitOptionsOutputStagerXfer = ( $submitOptionsCommon -d $stdoutDir -o $stdoutDir/ -l partition=$outputStagerXferPartition -q $outputStagerXferQueue )
+  set -r submitOptionsWorkDirCleaner = ( $submitOptionsCommon -d $stdoutDir -o $stdoutDir/ -l partition=$workDirCleanerPartition -q $workDirCleanerQueue )
+  set -r submitOptionsFinisher = ( $submitOptionsCommon -d $stdoutDir -o $stdoutDir/ -l partition=$finisherPartition -q $finisherQueue ) 
+  set -r submitOptionsPPStarter = ( $submitOptionsCommon -l partition=$ppStarterPartition -q $ppStarterQueue )
+
+  if ( "$projectInit" != "" ) then
+    set submitOptionsProject = ( -A $projectInit )
   else
-    alias hsmput `which hsmput` -t -m $hsmSiteDir/hsmput.mk -w $hsmDir -p '$ptmpDir' -a /
+    set submitOptionsProject = ( )
   endif
 
-  # ---------------- FRE script for sending files to GFDL
-  alias fileSender `which send_file`
+  set submitOptionsQueue = ( -q $queueInit )
 
-  # ---------------- FRE netCDF files combining utilities
-  alias mppnccombine `which mppnccombine` -64
-  alias mppnccombine_mpi aprun -n 1 -N 1 `which mppnccombine_mpi` -64 -h 16384 -r
-  alias slmnccombine `which combine-ncc` 
-  alias slmnccombine_mpi aprun -n 1 -N 1 `which combine-ncc` 
+  # ---------------- default memory to be used by batch scheduler (in mb)
 
-  # ---------------- FRE output stager 
-  alias outputStager $freCommandsHomeDir/site/ncrc/fresavehist
+  set -r memoryDefault = 16
 
-  # ---------------- FRE copying command with extended functionality 
-  alias gcp `which gcp` --verbose
+  # ---------------- output staging type as a string
 
-  # ---------------- batch scheduler submit commands
-  alias submit `which msub`
-  alias submitFileSender `which msub` -l size=1,partition=$fileSenderPartition -q $fileSenderQueue -m $mailMode -V
-  alias submitOutputStager `which msub` -l nodes=1:ppn=8,walltime=$outputStagerTime,partition=$outputStagerPartition -q $outputStagerQueue -m $mailMode -V
+  set -r outputStagingType = `set -r | grep '^flagOutputStagingType' | sed 's/flagOutputStagingType//'`
 
-  # ---------------- archiving command
-  alias tar `which tar` -b 1024
+  # ---------------- FRE data copying between work directory and archive directory via ptmp directory
+
+  alias hsmget $freCommandsHomeDir/bin/hsmget --quiet --time --makefile=$hsmSiteDir/hsmget.mk --workroot=$hsmDir --ptmproot=$ptmpDir --archroot=//
+  alias hsmput $freCommandsHomeDir/bin/hsmput --quiet --time --makefile=$hsmSiteDir/hsmput.mk --workroot=$tmpOutputDir --ptmproot=$ptmpDir --archroot=//
+
+  # ---------------- FRE runscript site-independent helper scripts
+
+  set freCommandsSysBinDir = $freCommandsHomeDir/sbin
+
+  alias expandVariables $freCommandsSysBinDir/expand_variables --verbose
+  alias findModuleInfo $freCommandsSysBinDir/find_module_info --verbose
+  alias findXIncludes $freCommandsSysBinDir/find_xincludes --verbose
+  alias finisher $freCommandsSysBinDir/batch_copy.csh
+  alias memoryLimit $freCommandsSysBinDir/memory_limit.csh
+  alias prepareDir $freCommandsSysBinDir/prepare_dir.csh
+  alias timeStamp $freCommandsSysBinDir/time_stamp.csh $timeStampOptions
+  alias workDirCleaner $freCommandsSysBinDir/batch_rmdir.csh
+
+  set -r workDirCleaner = `alias workDirCleaner`
+  set -r finisher = `alias finisher`
+
+  unset freCommandsSysBinDir
+
+  # ---------------- FRE runscript site-dependent helper scripts
+
+  set freCommandsSiteBinDir = $freCommandsHomeDir/site/ncrc/bin
+
+  alias submit $freCommandsSiteBinDir/batch.scheduler.submit --verbose
+  alias outputStager $freCommandsSiteBinDir/output.stager
+
+  set -r outputStager = `alias outputStager`
+
+  unset freCommandsSiteBinDir
+
+  # ---------------- library for the 'batch.scheduler.list' script
+
+  if ( $echoOn ) unset echo
+  module use $freModuleFilesDir
+  module load XML-LibXML/1.70
+  if ( $echoOn ) set echo
 
   # ---------------- finding command
+
   alias find `which lfs` find
 
 ################################################################################
-#------------------------------ environment checks -----------------------------
+#---------------------------------- finisher -----------------------------------
 ################################################################################
+
+  if ( $?batch && ! $?FRE_STAGE && ( "$stdoutDir" != "$stdoutTmpDir" ) ) then
+
+    set finisherOptions = ( $submitOptionsProject $submitOptionsFinisher )
+    set finisherOptions = ( $finisherOptions -N $FRE_JOBID.finisher)
+    set finisherOptions = ( $finisherOptions -l walltime=$finisherRuntime,$finisherCoreSpec )
+    set finisherOptions = ( $finisherOptions -v src=$stdoutTmpDir/$FRE_JOBID,dstDir=$stdoutDir )
+    set finisherOptions = ( $finisherOptions -l depend=afterany:$MOAB_JOBID )
+
+    set finisherResult = `submit -O "$finisherOptions" $finisher`
+
+    if ( $status == 0 ) then
+      if ( $echoOn ) unset echo
+      echo "<NOTE> : The finisher job '$finisherResult' has been submitted successfully"
+      if ( $echoOn ) set echo
+    else
+      if ( $echoOn ) unset echo
+      echo "WARNING: Can't submit the finisher job"
+      if ( $echoOn ) set echo
+    endif
+
+    unset finisherResult
+    unset finisherOptions
+
+  endif
+
+################################################################################
+#--------------------------------- environment ---------------------------------
+################################################################################
+
+  # ---------------- commands, copied from XML (setup/platform/csh)
+
+  if ( $echoOn ) unset echo
+  #FRE setup-platform-csh
+  module list
+  if ( $echoOn ) set echo
+
+  # ---------------- exit if no fre-nctools module is loaded
+
+  if ( $?FRE_NCTOOLS_HOME ) then
+    if ( $echoOn ) unset echo
+    echo "<NOTE> : Using the 'fre-nctools' home directory '$FRE_NCTOOLS_HOME'..."
+    if ( $echoOn ) set echo
+  else
+    if ( $echoOn ) unset echo
+    echo "*ERROR*: The script '$scriptName' must load a 'fre-nctools' module"
+    if ( $echoOn ) set echo
+    exit 1
+  endif
+
+  # ---------------- the settings below aren't changeable
+
+  setenv FRE_COMMANDS_HOME $freCommandsHomeDir
+
+  if ( $?PATH ) then
+    setenv PATH $freCommandsHomeDir/bin:$freCommandsHomeDir/sbin:$PATH
+  else
+    setenv PATH $freCommandsHomeDir/bin:$freCommandsHomeDir/sbin
+  endif
 
   # ---------------- some global configuration
 
@@ -349,14 +589,14 @@
   limit coredumpsize unlimited
   limit
       
-  # ---------------- exit if not running on Cray XT*
+  # ---------------- exit if not running on right machine architecture
 
   set machine = `uname -m`
 
-  if ( $machine != 'x86_64' ) then
-    unset echo
-    echo "ERROR: The script '$scriptName' is intended for platform x86_64"
-    set echo
+  if ( $machine != $architecture ) then
+    if ( $echoOn ) unset echo
+    echo "*ERROR*: The script '$scriptName' is intended for the machine architecture '$architecture'"
+    if ( $echoOn ) set echo
     exit 1
   endif
 
@@ -364,33 +604,79 @@
 
   # ---------------- exit if number of days/months/hours is not equal to number of segments per job
 
-  if ( $#dayslist != $segmentsPerJob || $#monthslist != $segmentsPerJob) then
-    unset echo
-    echo "ERROR: dayslist and monthslist must be equal to a number of segments per job"
-    set echo
+  if ( $#dayslist != $segmentsPerJob || $#monthslist != $segmentsPerJob || $#hourslist != $segmentsPerJob ) then
+    if ( $echoOn ) unset echo
+    echo "*ERROR*: dayslist, monthslist and hourslist lengths must be equal to a number of segments per job"
+    if ( $echoOn ) set echo
     exit 1
   endif
 
-  if ( $?hourslist ) then
-    if ( $#hourslist != $segmentsPerJob ) then
-      unset echo
-      echo "ERROR: hourslist must be equal to a number of segments per job"
-      set echo
-      exit 1
-    endif
+  # ---------------- determine the gcp info, exit if no gcp available
+
+  set gcpInfo = ( `findModuleInfo 'gcp'` )
+
+  if ( $status == 0 ) then
+    set -r xferToolModuleFilesDir = $gcpInfo[1]
+    set -r xferToolModuleFile = $gcpInfo[3]
+    if ( $echoOn ) unset echo
+    echo "<NOTE> : Using the 'gcp' module directory '$xferToolModuleFilesDir' and modulefile '$xferToolModuleFile'..."
+    if ( $echoOn ) set echo
+  else
+    if ( $echoOn ) unset echo
+    echo "*ERROR*: The script '$scriptName' must load a 'gcp' module"
+    if ( $echoOn ) set echo
+    exit 1
+  endif
+
+  unset gcpInfo
+
+  # ---------------- determine the list of xml files, exit if not all of them available
+
+  set xmlFiles = ( `findXIncludes $rtsxml` )
+
+  if ( $status == 0 ) then
+    if ( $echoOn ) unset echo
+    echo "<NOTE> : All the needed pieces of the XML file have been found"
+    if ( $echoOn ) set echo
+  else
+    if ( $echoOn ) unset echo
+    echo "*ERROR*: Can't find all the needed pieces of the XML file"
+    if ( $echoOn ) set echo
+    exit 1
+  endif
+
+  # ---------------- setup the FRE temporary directory, exit if it's not defined
+
+  if ( $?FRE_SYSTEM_TMP ) then
+    set -r freTempDir = $FRE_SYSTEM_TMP
+    if ( $echoOn ) unset echo
+    echo "<NOTE> : Using the '$freTempDir' temporary directory"
+    if ( $echoOn ) set echo
+    prepareDir $freTempDir || exit 1
+  else if ( $?FRE_AFY_SYSTEM_TMP ) then
+    set -r freTempDir = $FRE_AFY_SYSTEM_TMP
+    if ( $echoOn ) unset echo
+    echo "<NOTE> : Using the '$freTempDir' temporary directory"
+    if ( $echoOn ) set echo
+    prepareDir $freTempDir || exit 1
+  else
+    if ( $echoOn ) unset echo
+    echo "*ERROR*: The FRE temporary directory is not defined"
+    if ( $echoOn ) set echo
+    exit 1
   endif
 
 ################################################################################
 #----------------------------- global variables --------------------------------
 ################################################################################
 
-  if ( $?FRE_PROJECT ) then  
-    set project = $FRE_PROJECT
-  else
-    set project = ""
-  endif
+  set continueFlag = 1
+
+  set windfallFlag = $windfallFlagInit
+  set submitOptionsWindfall = ( )
 
   set combineList = ( )
+  set saveJobIds = ( )
 
   @ ireload = 1
   @ irun = 1
@@ -398,13 +684,6 @@
 ################################################################################
 #--------------------------- before the main loop ------------------------------
 ################################################################################
-
-  # ---------------- print the script parameters
-
-  unset echo 
-  echo $name
-  echo ${npes}pe_${segmentsPerJob}run
-  set echo
 
   # ---------------- commands, copied from XML (experiment/runtime/csh)
 
@@ -414,47 +693,114 @@
 
   if ( $?flagRunTypeProduction ) then
 
-    set reload_file = $outputDir/ascii/reload_commands
+    prepareDir $stateDir || exit 1
+
+    set reload_file = $stateDir/reload_commands
 
     if ( -f $reload_file ) then
       if ( -r $reload_file ) then
 	source $reload_file
       else
-	unset echo
-	echo "ERROR: reload file is not readable: $reload_file"
-        set echo
+	if ( $echoOn ) unset echo
+	echo "*ERROR*: The reload file '$reload_file' is not readable"
+        if ( $echoOn ) set echo
 	exit 1
       endif
     endif
 
-    @ currentSeg = ( $ireload - 1 ) * $segmentsPerJob + $irun
+    set queue_file = $stateDir/queue_commands
+
+    if ( -f $queue_file ) then
+      if ( -r $queue_file ) then
+	source $queue_file
+      else
+	if ( $echoOn ) unset echo
+	echo "*ERROR*: The queue file '$queue_file' is not readable"
+        if ( $echoOn ) set echo
+	exit 1
+      endif
+    endif
+
+    if ( ! $continueFlag ) then
+      if ( $echoOn ) unset echo
+      echo "<NOTE> : Stopping execution"
+      if ( $echoOn ) set echo
+      exit 0
+    endif
 
   endif
 
+  # ---------------- reassign the batch scheduler project and queue options
+
+  if ( ${?queue} ) then
+    set submitOptionsQueue = ( -q $queue )
+  endif
+  if ( ${?project} ) then
+    if ( "${project}" != "" ) then
+      set submitOptionsProject = ( -A $project )
+    endif
+  endif
+
+  if ( $windfallFlag != $windfallFlagInit ) then
+    if ( $windfallFlag ) then
+      set submitOptionsWindfall = ( $windfallOptionsSet )
+    else
+      set submitOptionsWindfall = ( $windfallOptionsUnset )
+    endif
+  endif
+
+  # ---------------- absolute segment number
+
+  @ currentSeg = ( $ireload - 1 ) * $segmentsPerJob + $irun
+
   # ---------------- set up working directory structure
 
-  prepareDir $workDir		|| exit 1
-  prepareDir $workDir/INPUT	|| exit 1
-  prepareDir $workDir/RESTART	|| exit 1
-
-  lfs setstripe $workDir/INPUT   -s 1048576 -c 0 -i -1
-  lfs setstripe $workDir/RESTART -s 1048576 -c 0 -i -1
+  if ( -e $workDir ) then
+    if ( -d $workDir ) then
+      if ( -r $workDir ) then
+	if ( -w $workDir ) then
+          ls -1 --directory --file-type $workDir/* | grep --fixed-strings --invert-match $tmpOutputDir | xargs rm --force --recursive
+          prepareDir $workDir/INPUT 'clean'	|| exit 1
+          prepareDir $workDir/RESTART 'clean'	|| exit 1
+	else
+	  if ( $echoOn ) unset echo
+	  echo "*ERROR*: The directory '$workDir' exists, but is not writable"
+	  if ( $echoOn ) set echo
+	  exit 1
+	endif
+      else
+	if ( $echoOn ) unset echo
+	echo "*ERROR*: The directory '$workDir' exists, but is not readable"
+	if ( $echoOn ) set echo
+	exit 1
+      endif
+    else
+      if ( $echoOn ) unset echo
+      echo "*ERROR*: The pathname '$workDir' exists, but is not a directory"
+      if ( $echoOn ) set echo
+      exit 1
+    endif
+  else
+    prepareDir $workDir		|| exit 1
+    prepareDir $workDir/INPUT	|| exit 1
+    prepareDir $workDir/RESTART	|| exit 1
+  endif
 
   # ---------------- input data loading
 
   cd $workDir
 
-  set dataFilesNotOK = ()
+  set dataFilesNotOK = ( )
 
 #dataFiles_from_xml
 
-  if ( $#dataFilesNotOK > 0) then
-    unset echo
+  if ( $#dataFilesNotOK > 0 ) then
+    if ( $echoOn ) unset echo
     foreach dataFile ( $dataFilesNotOK )
-      echo "A problem with the data file: $dataFile"
+      echo "*ERROR*: A problem with the data file: $dataFile"
     end
-    echo "ERROR: Failed to copy data files"
-    set echo
+    echo "*ERROR*: Failed to copy data files"
+    if ( $echoOn ) set echo
     exit 1
   endif
 
@@ -483,9 +829,9 @@
   endif
 
   if ( $gridSpecStatus ) then
-    unset echo
-    echo "ERROR: Failed to copy grid specification"
-    set echo
+    if ( $echoOn ) unset echo
+    echo "*ERROR*: Failed to copy grid specification"
+    if ( $echoOn ) set echo
     exit 1
   endif
 
@@ -516,9 +862,9 @@
   endif
 
   if ( $initCondStatus ) then
-    unset echo
-    echo "ERROR: Failed to copy initial conditions"
-    set echo
+    if ( $echoOn ) unset echo
+    echo "*ERROR*: Failed to copy initial conditions"
+    if ( $echoOn ) set echo
     exit 1
   endif
 
@@ -536,45 +882,22 @@
 
   # ---------------- list files in the INPUT directory
 
-  unset echo
+  if ( $echoOn ) unset echo
   ls -l INPUT/*
-  set echo
-
-  # ---------------- normal exit if in the input data staging mode
-
-  if ( $?FRE_STAGE ) then
-    if ( $FRE_STAGE == 'INPUT' ) then
-      rm -rf $workDir
-      unset echo
-      echo end_of_input
-      echo "NOTE: Natural end-of-input for $scriptName."
-      set echo
-      exit 0
-    else if ( $FRE_STAGE == 'CHAIN' ) then
-      pushd $stdoutDir
-      if ( "$project" != "" ) then
-        submit -A $project -v FRE_PROJECT=$project $scriptName
-      else
-        submit $scriptName
-      endif
-      popd
-      rm -rf $workDir
-      unset echo
-      echo end_of_chaining
-      echo "NOTE: Natural end-of-chaining for $scriptName."
-      set echo
-      exit 0
-    endif
-  endif 
+  if ( $echoOn ) set echo
 
   # ---------------- executable and tables loading
 
-  cp -p $ptmpDir$executable .
+  ln -f $ptmpDir$executable . || cp -pf $ptmpDir$executable .
 
-  if ( $status ) then
-    unset echo
-    echo "ERROR: Failed to copy the executable"
-    set echo
+  if ( $status == 0 ) then
+    if ( $echoOn ) unset echo
+    echo "<NOTE> : Using the executable '$ptmpDir$executable'"
+    if ( $echoOn ) set echo
+  else
+    if ( $echoOn ) unset echo
+    echo "*ERROR*: Failed to copy the executable"
+    if ( $echoOn ) set echo
     exit 1
   endif
 
@@ -586,34 +909,180 @@
 #dataTable_from_xml
 #tracerTreeTable_from_xml
 #tracerTreeInit_from_xml
+#namelists_from_xml
 
-  # ---------------- check and prepare refine diagnostics scripts
+  # ---------------- expand namelists 
 
-  if ( $?flagOutputStagingTypeStaged || $?flagOutputStagingTypeBySegment ) then
+  set months = $monthslist[1]
+  set days = $dayslist[1]
+  set hours = $hourslist[1]
 
-    if ( $#ppRefineDiagScriptNames > 0 ) then
+  set | sort > $envFile
+  sleep $envFileDelay
+  set -r | sort >> $envFile
+  sleep $envFileDelay
+  env --unset=TERMCAP | sort >> $envFile
 
-      set ppRefineDiagScriptNamesList = ""
+  expandVariables $envFile < input.nml.unexpanded > input.nml || exit 1
 
-      foreach ppRefineDiagScriptName ( $ppRefineDiagScriptNames )
-        if ( $ppRefineDiagScriptNamesList == "" ) then
-          set ppRefineDiagScriptNamesList = $ppRefineDiagScriptName
+  rm -f $envFile
+
+  # ---------------- normal exit if in the input data staging mode
+
+  if ( $?FRE_STAGE ) then
+    if ( $FRE_STAGE == 'CHAIN' ) then
+      if ( -f $scriptName ) then
+        if ( -r $scriptName ) then
+	  set result = `submit $scriptName`
+	  if ( $status == 0 ) then
+            if ( $echoOn ) unset echo
+            echo "<NOTE> : The job '$result' to run the '$scriptName' has been submitted successfully"
+            if ( $echoOn ) set echo
+	    workDirCleaner $workDir
+	    if ( $echoOn ) unset echo
+	    echo "<NOTE> : Natural end-of-input-chaining for '$scriptName'"
+	    if ( $echoOn ) set echo
+	    exit 0
+	  else
+	    workDirCleaner $workDir
+            if ( $echoOn ) unset echo
+            echo "*ERROR*: Can't submit the '$scriptName'"
+            if ( $echoOn ) set echo
+            exit 1
+	  endif
+          unset result
         else
-          set ppRefineDiagScriptNamesList = $ppRefineDiagScriptNamesList\&$ppRefineDiagScriptName
+          workDirCleaner $workDir
+	  if ( $echoOn ) unset echo
+	  echo "*ERROR*: The script '$scriptName' exists, but is not readable - it can't be submitted"
+          if ( $echoOn ) set echo
+          exit 1
         endif
-      end
-
+      else
+        workDirCleaner $workDir
+	if ( $echoOn ) unset echo
+	echo "*ERROR*: The script '$scriptName' does not exist - it can't be submitted"
+        if ( $echoOn ) set echo
+        exit 1
+      endif
+    else if ( $FRE_STAGE == 'DEBUG' ) then
+      if ( $echoOn ) unset echo
+      echo "<NOTE> : The working directory '$workDir' is ready for debugging"
+      echo "<NOTE> : Natural end-of-debug-staging for '$scriptName'"
+      if ( $echoOn ) set echo
+      exit 0
+    else
+      workDirCleaner $workDir
+      if ( $echoOn ) unset echo
+      echo "<NOTE> : Natural end-of-input-staging for '$scriptName'"
+      if ( $echoOn ) set echo
+      exit 0
     endif
+  endif 
 
+  # ---------------- prepare list of refine diagnostics scripts
+
+  set -r ppRefineDiagScriptNamesList = `echo $ppRefineDiagScriptNames | tr ' ' '+'`
+
+################################################################################
+#------------------------------ remote settings --------------------------------
+################################################################################
+
+  # ---------------- remote output directories
+
+  set outputDirRemoteAscii = $archiveDirRemote
+  set outputDirRemoteRestart = $archiveDirRemote
+
+  if ( $?flagOutputCacheHistoryOn ) then
+    set outputDirRemoteHistory = $stmpDirRemote
+  else
+    set outputDirRemoteHistory = $archiveDirRemote
+  endif
+
+  # ---------------- remote XML files for post-processing
+    
+  if ( $?flagOutputXferOn && $?flagOutputPostProcessOn ) then
+    set xmlFilesRemote = ( )
+    foreach xmlFile ( $xmlFiles )
+      set xmlFileRemote = `echo $xmlFile | sed -r "$patternSedHome;$patternSedFS;$patternSedLTFS"` 
+      if ( $echoOn ) unset echo
+      echo "<NOTE> : The file '$xmlFile' will be copied to the file '$xmlFileRemote' @ GFDL to be used in the post-processing..."
+      if ( $echoOn ) set echo
+      set xmlFilesRemote = ( $xmlFilesRemote $xmlFileRemote )
+      unset xmlFileRemote
+    end
+    set -r xmlFilesRemote = ( $xmlFilesRemote )
+  else
+    set -r xmlFilesRemote = ( )
   endif
 
 ################################################################################
 #------------------------------- the main loop ---------------------------------
 ################################################################################
 
-  while ( $irun <= $segmentsPerJob )
+  while ( $irun <= $segmentsPerJob && $currentSeg <= $segmentsPerSimulation )
 
-    banner $irun/$segmentsPerJob
+    banner $currentSeg/$segmentsPerSimulation
+
+    # ---------------- test checkpointing conditions and exit if it has been requested
+
+    if ( $?batch ) then
+      if ( -e $checkPointDir/all ) then
+	if ( $echoOn ) unset echo
+	echo "<NOTE> : The checkpointing condition 'all' is on - exiting..."
+	if ( $echoOn ) set echo
+	exit 99
+      else if ( -e $checkPointDir/$MOAB_PARTITION ) then
+	if ( $echoOn ) unset echo
+	echo "<NOTE> : The checkpointing condition '$MOAB_PARTITION' is on - exiting..."
+	if ( $echoOn ) set echo
+	exit 99
+      else if ( -e $checkPointDir/$MOAB_PARTITION-$MOAB_CLASS ) then
+	if ( $echoOn ) unset echo
+	echo "<NOTE> : The checkpointing condition '$MOAB_PARTITION-$MOAB_CLASS' is on - exiting..."
+	if ( $echoOn ) set echo
+	exit 99
+      else if ( -e $checkPointDir/$MOAB_USER ) then
+	if ( $echoOn ) unset echo
+	echo "<NOTE> : The checkpointing condition '$MOAB_USER' is on - exiting..."
+	if ( $echoOn ) set echo
+	exit 99
+      endif
+    endif
+
+    # ---------------- reload the queue file and exit if it has been requested
+
+    if ( $?flagRunTypeProduction ) then
+
+      if ( -f $queue_file ) then
+	if ( -r $queue_file ) then
+	  source $queue_file
+	else
+	  if ( $echoOn ) unset echo
+	  echo "*ERROR*: The queue file '$queue_file' is not readable"
+          if ( $echoOn ) set echo
+	  exit 1
+	endif
+      endif
+
+      if ( ! $continueFlag ) then
+	if ( $echoOn ) unset echo
+	echo "<NOTE> : Stopping execution"
+	if ( $echoOn ) set echo
+	exit 0
+      endif
+
+      if ( $windfallFlag != $windfallFlagInit ) then
+	if ( $windfallFlag ) then
+	  set submitOptionsWindfall = ( $windfallOptionsSet )
+	else
+	  set submitOptionsWindfall = ( $windfallOptionsUnset )
+	endif
+      else
+	set submitOptionsWindfall = ( )
+      endif
+
+    endif
 
     # ---------------- commands, copied from XML (experiment/input/csh[@type="always" or @type="postInit"])
 
@@ -621,21 +1090,21 @@
 
     cd $workDir
 
-    # ---------------- set timing parameters
+    # ---------------- expand namelists
 
     set months = $monthslist[$irun]
     set days = $dayslist[$irun]
+    set hours = $hourslist[$irun]
 
-    # ---------------- include namelists from XML
+    set | sort > $envFile
+    sleep $envFileDelay
+    set -r | sort >> $envFile
+    sleep $envFileDelay
+    env --unset=TERMCAP | sort >> $envFile
 
-#namelists_from_xml
+    expandVariables $envFile < input.nml.unexpanded > input.nml || exit 1
 
-    # ---------------- print run parameters
-
-    unset echo
-    echo loop_$irun/$segmentsPerJob
-    echo run
-    set echo
+    rm -f $envFile
 
     # ---------------- prepare MPI call, execute it, analyze results
 
@@ -647,30 +1116,91 @@
 
     runCommand |& tee fms.out
 
-    if ( $status ) then
-      @ cores_dumped = 0
-      if ( ! $?MPI_COREDUMP_DEBUGGER ) setenv MPI_COREDUMP_DEBUGGER 'gdb -batch'
-      echo where > .gdbinit
-      foreach corefile ( `ls core*` )
-        echo "dump of core file $corefile" > $corefile.out
-        $MPI_COREDUMP_DEBUGGER $executable:t $corefile >> $corefile.out &
-        @ cores_dumped++
-      end
-      unset echo
-      wait
-      set MPI_FAIL
-      set outputDir = ${outputDir}_crash
-      prepareDir $outputDir/ascii || exit 1
-      if ( $cores_dumped > 0 ) then
-        cat core*.out >> fms.out
-        cat core*.out
-        echo "ERROR: in mpirun, core dumped: run $ireload, loop $irun" 
+    if ( $status == 0 ) then
+
+      if ( $echoOn ) unset echo
+      echo "<NOTE> : Normal exit from the runCommand..."
+      if ( $echoOn ) set echo
+
+    else
+
+      set msg =       "*ERROR*: Automatic message from the job '$FRE_JOBID'\n"
+      set msg = "${msg}*ERROR*: -----------------------------------------------------------------------\n"
+      set msg = "${msg}*ERROR*: The MPI launcher has failed...\n"
+      set msg = "${msg}*ERROR*: \n"
+      set msg = "${msg}*ERROR*: The job stdout:\n"
+      set msg = "${msg}*ERROR*: \n"
+      set msg = "${msg}*ERROR*: \t$stdoutDir/$FRE_JOBID\n"
+      set msg = "${msg}*ERROR*: \n"
+
+      set coreFiles = ( `ls core*` )
+
+      if ( $#coreFiles > 0 ) then
+
+	if ( ! $?MPI_COREDUMP_DEBUGGER ) setenv MPI_COREDUMP_DEBUGGER 'gdb -batch'
+        echo 'where' > .gdbinit
+
+        set coreFileFirst = $coreFiles[1]
+        echo "Dump of the core file '$coreFileFirst'" > $coreFileFirst.out
+        $MPI_COREDUMP_DEBUGGER $executable:t $coreFileFirst >> $coreFileFirst.out
+        cat $coreFileFirst.out >> fms.out
+        cat $coreFileFirst.out
+        unset coreFileFirst
+
+        set msg = "${msg}*ERROR*: Your job has produced $#coreFiles core files (run $ireload, loop $irun)\n"
+        set msg = "${msg}*ERROR*: Please go to the working directory '$workDir' and issue the following command for each core file there:\n"
+        set msg = "${msg}*ERROR*: \n"
+
+        @ count = 0
+        @ countMax = 20
+
+        foreach coreFile ( $coreFiles )
+          set msg = "${msg}*ERROR*: \t$MPI_COREDUMP_DEBUGGER $executable:t $coreFile >> $coreFile.out\n"
+          if ( $count < $countMax ) then
+            @ count++
+          else
+            break
+          endif
+        end
+
+        set msg = "${msg}*ERROR*: \n"
+        set msg = "${msg}*ERROR*: FRE has executed the command above for one core file and echoed the result to the job stdout.\n"
+
+        if ( $count == $countMax ) then
+          set msg = "${msg}*ERROR*: In order to save space only the first $countMax core files are presented in this list.\n"
+          set msg = "${msg}*ERROR*: \n"
+        endif
+
+        unset countMax
+        unset count
+
       else
+
         set cdsize = `limit coredumpsize`
-        echo "ERROR: in mpirun, no cores produced: run $ireload, loop $irun"
-        echo "NOTE: You are using $cdsize"
+        set msg = "${msg}*ERROR*: No core files produced (run $ireload, loop $irun)\n"
+        set msg = "${msg}*ERROR*: You are using the $cdsize\n"
+        set msg = "${msg}*ERROR*: \n"
+        unset cdsize
+
       endif
-      set echo
+
+      set msg = "${msg}*ERROR*: -----------------------------------------------------------------------\n"
+      set msg = "${msg}*ERROR*: This message has been generated by FRE\n"
+      set msg = "${msg}*ERROR*: `date`"
+
+      if ( $?batch ) then
+        if ( $echoOn ) unset echo
+        printf "$msg" | mailx -s "The MPI launcher has failed" $USER@noaa.gov
+        printf "$msg"
+        if ( $echoOn ) set echo
+      endif
+
+      unset coreFiles
+      unset msg
+
+      set outputDir = ${outputDir}_crash
+      set MPI_FAIL
+
     endif
 
     # ---------------- generate date for file names
@@ -691,61 +1221,199 @@
 
     if ( -f time_stamp.out ) rm -f time_stamp.out
 
-    # ---------------- save ascii files: online
+    # ---------------- save ascii files
 
     set asciiFiles = ( `ls -1 | egrep "$patternGrepAscii"` )
 
     if ( $#asciiFiles > 0 ) then
 
-      set asciiArchDir = $outputDir/ascii/$begindate.ascii_out
-      set asciiWorkDir = $hsmDir$asciiArchDir
+      set asciiSuffix = ascii/$begindate.ascii_out
+      set asciiArchDir = $outputDir/$asciiSuffix
+      set asciiWorkDir = $tmpOutputDir$asciiArchDir
 
-      prepareDir $asciiWorkDir || exit 1
+      prepareDir $asciiWorkDir 'clean' || exit 1
 
-      foreach file ( $asciiFiles )
-	mv $file $asciiWorkDir/$begindate.$file
-      end
+      if ( ! $?MPI_FAIL ) then
 
-      hsmput $asciiArchDir:s+/++
+        ls -1 | egrep "$patternGrepAscii" | xargs -I'{}' mv --force '{}' $asciiWorkDir/$begindate.'{}'
 
-      if ( $status ) then
-        unset echo
-        echo "ERROR: Can't save the $asciiArchDir"
-        set echo
-        exit 1
+	if ( $?flagOutputXferOn ) then
+	  if ( $?flagRunTypeRegression || $?flagOutputTypeUnique ) then
+            set asciiOutputDirRemote = $outputDirRemoteAscii/$outputDir:t/$asciiSuffix
+          else
+            set asciiOutputDirRemote = $outputDirRemoteAscii/$asciiSuffix
+          endif
+	else
+          set asciiOutputDirRemote = ""
+	endif
+
+        set actionSaveOn	= 1
+        set actionXferOn	= $?flagOutputXferOn
+        set paramArchiveOn	= $?flagOutputArchiveOn
+        @   paramPtmpOn		= ! $?flagOutputArchiveOn
+        set paramCheckSumOn	= $?flagCheckSumOn
+        set paramCompressOn	= $?flagOutputCompressAsciiOn
+
+      else
+
+        ls -1 | egrep "$patternGrepAscii" | xargs -I'{}' ln --force '{}' $asciiWorkDir/$begindate.'{}'
+
+        set asciiOutputDirRemote = ""
+
+        set actionSaveOn	= 1
+        set actionXferOn	= 0
+        set paramArchiveOn	= 1
+        set paramPtmpOn		= 0
+        set paramCheckSumOn	= 0
+        set paramCompressOn	= 0
+
       endif
 
-      if ( $?flagOutputTransferOn ) then
-        pushd $stdoutDir
-        set jobName = $scriptName:t.$jobId.file_sender.A.$begindate
-        if ( "$project" != "" ) then
-	  submitFileSender \
-          -A $project \
-          -N $jobName \
-          -o $stdoutDir/ \
-          -l walltime=$fileSenderTimeAscii \
-          -v file=$asciiArchDir.tar \
-          `alias fileSender`
-        else
-	  submitFileSender \
-          -N $jobName \
-          -o $stdoutDir/ \
-          -l walltime=$fileSenderTimeAscii \
-          -v file=$asciiArchDir.tar \
-          `alias fileSender`
+      set asciiJobName = $FRE_JOBID.output.stager.$begindate.A
+      set asciiArgFile = $stateDir/$asciiJobName.args
+
+      set asciiSaveOptions = ( $submitOptionsProject $submitOptionsOutputStagerSave )
+      set asciiSaveOptions = ( $asciiSaveOptions -N ${asciiJobName}S )
+      set asciiSaveOptions = ( $asciiSaveOptions -l walltime=$outputStagerSaveRuntimeAscii,$outputStagerSaveCoreSpec,mem=${memoryDefault}mb )
+
+      set asciiXferOptions = ( $submitOptionsProject $submitOptionsOutputStagerXfer )
+      set asciiXferOptions = ( $asciiXferOptions -N ${asciiJobName}T )
+      set asciiXferOptions = ( $asciiXferOptions -l walltime=$outputStagerXferRuntimeAscii,$outputStagerXferCoreSpec )
+
+      echo "set expName			=   $name"				 > $asciiArgFile
+      echo "set type			=   ascii"				>> $asciiArgFile
+      echo "set stagingType		=   $outputStagingType"			>> $asciiArgFile
+      echo "set actionSaveOn		=   $actionSaveOn" 			>> $asciiArgFile
+      echo "set actionXferOn		=   $actionXferOn"			>> $asciiArgFile
+      echo "set paramArchiveOn		=   $paramArchiveOn"			>> $asciiArgFile
+      echo "set paramPtmpOn		=   $paramPtmpOn"	 		>> $asciiArgFile
+      echo "set paramCheckSumOn		=   $paramCheckSumOn"			>> $asciiArgFile
+      echo "set paramCompressOn		=   $paramCompressOn"			>> $asciiArgFile
+      echo "set workDir			=   $tmpOutputDir"			>> $asciiArgFile
+      echo "set ptmpDir			=   $ptmpDir"				>> $asciiArgFile
+      echo "set archDir			=   $asciiArchDir"			>> $asciiArgFile
+      echo "set outputDirRemote		=   $asciiOutputDirRemote"		>> $asciiArgFile
+      echo "set saveOptions		= ( $asciiSaveOptions )"		>> $asciiArgFile
+      echo "set xferOptions		= ( $asciiXferOptions )"		>> $asciiArgFile
+      echo "set freModuleFilesDir       =   $freModuleFilesDir"			>> $asciiArgFile
+      echo "set freCommandsHomeDir	=   $freCommandsHomeDir"		>> $asciiArgFile
+      echo "set xferToolModuleFilesDir	=   $xferToolModuleFilesDir"		>> $asciiArgFile
+      echo "set xferToolModuleFile	=   $xferToolModuleFile"		>> $asciiArgFile
+      echo "set modulesHomeDir		=   $modulesHomeDir"			>> $asciiArgFile
+
+      if ( $?flagOutputStagingTypeOnline ) then
+
+        if ( $?MPICH_RANK_REORDER_METHOD ) then
+          set mpiRankReorderMethod = $MPICH_RANK_REORDER_METHOD
+          unsetenv MPICH_RANK_REORDER_METHOD
         endif
-        unset jobName
-        popd
+
+        outputStager $asciiArgFile
+
+	if ( $status == 0 ) then
+          if ( $echoOn ) unset echo
+          echo "<NOTE> : The ascii directory '$asciiArchDir' has been processed successfully"
+          if ( $echoOn ) set echo
+        else
+          if ( $echoOn ) unset echo
+          echo "*ERROR*: Can't process the ascii directory '$asciiArchDir'"
+          if ( $echoOn ) set echo
+          exit 1
+	endif
+
+        if ( $?mpiRankReorderMethod ) then
+          setenv MPICH_RANK_REORDER_METHOD $mpiRankReorderMethod
+          unset $mpiRankReorderMethod
+        endif
+
+      else if ( $?flagOutputStagingTypeStaged ) then
+
+        if ( $actionSaveOn ) then
+
+	  set asciiResult = `submit -O "$asciiSaveOptions -v argFile=$asciiArgFile" $outputStager`
+
+	  if ( $status == 0 ) then
+            if ( $echoOn ) unset echo
+            echo "<NOTE> : The output stager job '$asciiResult' to process the '$asciiArchDir' (saving) has been submitted successfully"
+            if ( $echoOn ) set echo
+            set saveJobIds = ( $saveJobIds $asciiResult )
+          else
+            if ( $echoOn ) unset echo
+            echo "*ERROR*: Can't submit the output stager job to process the '$asciiArchDir' (saving)"
+            if ( $echoOn ) set echo
+            exit 1
+	  endif
+
+          unset asciiResult
+
+        endif
+
+        if ( $actionXferOn ) then
+
+	  set asciiResult = `submit -O "$asciiXferOptions -v argFile=$asciiArgFile -l depend=afterok:$saveJobIds[$#saveJobIds]" $outputStager`
+
+	  if ( $status == 0 ) then
+            if ( $echoOn ) unset echo
+            echo "<NOTE> : The output stager job '$asciiResult' to process the '$asciiArchDir' (transfer) has been submitted successfully"
+            if ( $echoOn ) set echo
+          else
+            if ( $echoOn ) unset echo
+            echo "*ERROR*: Can't submit the output stager job to process the '$asciiArchDir' (transfer)"
+            if ( $echoOn ) set echo
+            exit 1
+	  endif
+
+          unset asciiResult
+
+        endif
+
+      else if ( $?flagOutputStagingTypeChained ) then
+
+        if ( $actionSaveOn || $actionXferOn ) then
+
+	  set asciiResult = `submit -O "$asciiSaveOptions -v argFile=$asciiArgFile" $outputStager`
+
+	  if ( $status == 0 ) then
+            if ( $echoOn ) unset echo
+            echo "<NOTE> : The output stager job '$asciiResult' to process the '$asciiArchDir' has been submitted successfully"
+            if ( $echoOn ) set echo
+            set saveJobIds = ( $saveJobIds $asciiResult )
+          else
+            if ( $echoOn ) unset echo
+            echo "*ERROR*: Can't submit the output stager job to process the '$asciiArchDir'"
+            if ( $echoOn ) set echo
+            exit 1
+	  endif
+
+          unset asciiResult
+
+        endif
+
       endif
 
-      rm -rf $asciiWorkDir
+      unset asciiXferOptions
+      unset asciiSaveOptions
 
+      unset asciiArgFile
+      unset asciiJobName
+
+      unset paramCompressOn
+      unset paramCheckSumOn
+      unset paramPtmpOn
+      unset paramArchiveOn
+      unset actionXferOn
+      unset actionSaveOn
+
+      unset asciiOutputDirRemote
       unset asciiWorkDir
       unset asciiArchDir
+      unset asciiSuffix
 
     endif
 
-    # ---------------- save restart files, namelist, tables etc. and move them from RESTART to INPUT: online
+    unset asciiFiles
+
+    # ---------------- save restart files, namelist, tables etc. and move them from RESTART to INPUT
 
     pushd $workDir/RESTART
 
@@ -753,362 +1421,515 @@
 
     if ( $#restartFiles > 0 ) then
 
-      set restartArchDir = $outputDir/restart/$enddate
-      set restartWorkDir = $hsmDir$restartArchDir
+      set restartSuffix = restart/$enddate
+      set restartArchDir = $outputDir/$restartSuffix
+      set restartWorkDir = $tmpOutputDir$restartArchDir
 
-      prepareDir $restartWorkDir || exit 1 
+      prepareDir $restartWorkDir 'clean' || exit 1
 
-      cp -p $restartFiles	$restartWorkDir
-      cp -p $workDir/input.nml	$restartWorkDir
-      cp -p $workDir/*_table	$restartWorkDir
-      cp -p $rtsxml		$restartWorkDir
-      cp -p $scriptName		$restartWorkDir
+      ls -1 | egrep "$patternGrepRestart" | xargs ln --force --target-directory=$restartWorkDir
 
-      hsmput $restartArchDir:s+/++
+      cp --force --preserve=mode,ownership,timestamps $workDir/input.nml	$restartWorkDir
+      cp --force --preserve=mode,ownership,timestamps $workDir/*_table		$restartWorkDir
+      cp --force --preserve=mode,ownership,timestamps $rtsxml			$restartWorkDir
+      cp --force --preserve=mode,ownership,timestamps $scriptName		$restartWorkDir
 
-      if ( $status ) then
-        unset echo
-        echo "ERROR: Can't save the $restartArchDir"
-        set echo
-        exit 1
-      endif
+      if ( ! $?MPI_FAIL ) then
 
-      if ( $?flagOutputCheckOn ) then
-        compareDual $name $PBS_JOBID $restartArchDir.tar
-      endif
-
-      if ( $?flagRunTypeProduction ) then
-        rm -rf $restartWorkDir
-      endif
-
-      if ( $irun < $segmentsPerJob ) then
-        find $workDir/INPUT   -maxdepth 1 -type f | egrep "$patternGrepRestartNextDrop" | xargs -r rm -f
-        find $workDir/RESTART -maxdepth 1 -type f | egrep "$patternGrepRestartNextMove" | xargs -r mv -f -t ../INPUT
-      endif
-
-      if ( $?flagOutputTransferOn ) then
-        pushd $stdoutDir
-        set jobName = $scriptName:t.$jobId.file_sender.R.$enddate
-        if ( "$project" != "" ) then
-	  submitFileSender \
-          -A $project \
-          -N $jobName \
-          -o $stdoutDir/ \
-          -l walltime=$fileSenderTimeRestarts \
-          -v file=$restartArchDir.tar \
-          `alias fileSender`
+        if ( $?flagOutputXferOn ) then
+	  if ( $?flagRunTypeRegression || $?flagOutputTypeUnique  ) then
+            set restartOutputDirRemote = $outputDirRemoteRestart/$outputDir:t/$restartSuffix
+	  else
+            set restartOutputDirRemote = $outputDirRemoteRestart/$restartSuffix
+	  endif
         else
-	  submitFileSender \
-          -N $jobName \
-          -o $stdoutDir/ \
-          -l walltime=$fileSenderTimeRestarts \
-          -v file=$restartArchDir.tar \
-          `alias fileSender`
+          set restartOutputDirRemote = ""
         endif
-        unset jobName
-        popd
+
+	if ( $currentSeg < $segmentsPerSimulation ) then
+
+          if ( $irun < $segmentsPerJob ) then
+
+            find $workDir/INPUT   -maxdepth 1 -type f | egrep "$patternGrepRestartNextDrop" | xargs --no-run-if-empty rm --force
+            find $workDir/RESTART -maxdepth 1 -type f | egrep "$patternGrepRestartNextMove" | xargs --no-run-if-empty mv --force --target-directory ../INPUT
+
+	  else if ( $?flagOutputStagingTypeStaged || $?flagOutputStagingTypeChained ) then
+
+            hsmput $restartArchDir:s+/++
+
+	    if ( $status == 0 ) then
+              if ( $echoOn ) unset echo
+              echo "<NOTE> : The restart directory '$restartArchDir' has been saved successfully"
+              if ( $echoOn ) set echo
+	    else
+	      if ( $echoOn ) unset echo
+	      echo "*ERROR*: Can't save the restart directory '$restartArchDir'"
+	      if ( $echoOn ) set echo
+	      exit 1
+	    endif
+
+          endif
+
+          set actionCombineOn	= 0
+          set actionCheckOn	= $?flagOutputCheckOn
+          set actionSaveOn	= 1
+          set actionXferOn	= $?flagOutputXferOn
+          set paramArchiveOn	= $?flagOutputArchiveOn
+          set paramPtmpOn	= 1
+          set paramCheckSumOn	= $?flagCheckSumOn
+          set paramCompressOn	= $?flagOutputCompressRestartOn
+
+        else
+
+          set actionCombineOn	= $?flagRunTypeRegression
+          set actionCheckOn	= $?flagOutputCheckOn
+          set actionSaveOn	= 1
+          set actionXferOn	= $?flagOutputXferOn
+          set paramArchiveOn	= $?flagOutputArchiveOn
+          set paramPtmpOn	= 1
+          set paramCheckSumOn	= $?flagCheckSumOn
+          set paramCompressOn	= $?flagOutputCompressRestartOn
+
+	endif
+
+      else
+
+        set restartOutputDirRemote = ""
+
+        set actionCombineOn	= 0
+        set actionCheckOn	= 0
+        set actionSaveOn	= 1
+        set actionXferOn	= 0
+        set paramArchiveOn	= 1
+        set paramPtmpOn		= 0
+        set paramCheckSumOn	= 0
+        set paramCompressOn 	= 0
+
       endif
+
+      if ( $actionCombineOn ) then
+        set combineMemory = `memoryLimit $restartWorkDir`
+      else
+        set combineMemory = $memoryDefault
+      endif
+
+      set restartJobName = $FRE_JOBID.output.stager.$enddate.R
+      set restartArgFile = $stateDir/$restartJobName.args
+
+      set restartSaveOptions = ( $submitOptionsProject $submitOptionsOutputStagerSave )
+      set restartSaveOptions = ( $restartSaveOptions -N ${restartJobName}S )
+      set restartSaveOptions = ( $restartSaveOptions -l walltime=$outputStagerSaveRuntimeRestart,$outputStagerSaveCoreSpec,mem=${combineMemory}mb )
+
+      set restartXferOptions = ( $submitOptionsProject $submitOptionsOutputStagerXfer )
+      set restartXferOptions = ( $restartXferOptions -N ${restartJobName}T )
+      set restartXferOptions = ( $restartXferOptions -l walltime=$outputStagerXferRuntimeRestart,$outputStagerXferCoreSpec )
+
+      echo "set expName			=   $name"			 > $restartArgFile 
+      echo "set type			=   restart"			>> $restartArgFile 
+      echo "set stagingType		=   $outputStagingType"		>> $restartArgFile
+      echo "set actionCombineOn		=   $actionCombineOn"		>> $restartArgFile
+      echo "set actionCheckOn		=   $actionCheckOn"		>> $restartArgFile
+      echo "set actionSaveOn		=   $actionSaveOn"		>> $restartArgFile 
+      echo "set actionXferOn		=   $actionXferOn"		>> $restartArgFile
+      echo "set paramArchiveOn		=   $paramArchiveOn"		>> $restartArgFile
+      echo "set paramPtmpOn		=   $paramPtmpOn"		>> $restartArgFile 
+      echo "set paramCheckSumOn		=   $paramCheckSumOn"		>> $restartArgFile
+      echo "set paramCompressOn		=   $paramCompressOn"		>> $restartArgFile
+      echo "set combineMemory		=   $combineMemory"		>> $restartArgFile
+      echo "set workDir			=   $tmpOutputDir"		>> $restartArgFile 
+      echo "set ptmpDir			=   $ptmpDir"			>> $restartArgFile 
+      echo "set archDir			=   $restartArchDir"		>> $restartArgFile 
+      echo "set outputDirRemote		=   $restartOutputDirRemote"	>> $restartArgFile
+      echo "set saveOptions		= ( $restartSaveOptions )"	>> $restartArgFile
+      echo "set xferOptions		= ( $restartXferOptions )"	>> $restartArgFile
+      echo "set freModuleFilesDir       =   $freModuleFilesDir"		>> $restartArgFile
+      echo "set freCommandsHomeDir	=   $freCommandsHomeDir"	>> $restartArgFile
+      echo "set freNCToolsHomeDir	=   $FRE_NCTOOLS_HOME"		>> $restartArgFile
+      echo "set freTempDir		=   $freTempDir"		>> $restartArgFile
+      echo "set xferToolModuleFilesDir	=   $xferToolModuleFilesDir"	>> $restartArgFile
+      echo "set xferToolModuleFile	=   $xferToolModuleFile"	>> $restartArgFile
+      echo "set modulesHomeDir		=   $modulesHomeDir"		>> $restartArgFile
+
+      if ( $?flagOutputStagingTypeOnline ) then
+
+        if ( $?MPICH_RANK_REORDER_METHOD ) then
+          set mpiRankReorderMethod = $MPICH_RANK_REORDER_METHOD
+          unsetenv MPICH_RANK_REORDER_METHOD
+        endif
+
+        outputStager $restartArgFile
+ 
+	if ( $status == 0 ) then
+          if ( $echoOn ) unset echo
+          echo "<NOTE> : The restart directory '$restartArchDir' has been processed successfully"
+          if ( $echoOn ) set echo
+        else
+          if ( $echoOn ) unset echo
+          echo "*ERROR*: Can't save the restart directory '$restartArchDir'"
+          if ( $echoOn ) set echo
+          exit 1
+	endif
+
+        if ( $?mpiRankReorderMethod ) then
+          setenv MPICH_RANK_REORDER_METHOD $mpiRankReorderMethod
+          unset $mpiRankReorderMethod
+        endif
+
+      else if ( $?flagOutputStagingTypeStaged ) then
+
+        if ( $actionCombineOn || $actionSaveOn || $actionCheckOn ) then
+
+	  set restartResult = `submit -O "$restartSaveOptions -v argFile=$restartArgFile" $outputStager`
+
+	  if ( $status == 0 ) then
+            if ( $echoOn ) unset echo
+            echo "<NOTE> : The output stager job '$restartResult' to process the '$restartArchDir' (saving) has been submitted successfully"
+            if ( $echoOn ) set echo
+            set saveJobIds = ( $saveJobIds $restartResult )
+          else
+            if ( $echoOn ) unset echo
+            echo "*ERROR*: Can't submit the output stager job to process the '$restartArchDir' (saving)"
+            if ( $echoOn ) set echo
+            exit 1
+	  endif
+
+          unset restartResult
+
+        endif
+
+        if ( $actionXferOn ) then
+
+	  set restartResult = `submit -O "$restartXferOptions -v argFile=$restartArgFile -l depend=afterok:$saveJobIds[$#saveJobIds]" $outputStager`
+
+	  if ( $status == 0 ) then
+            if ( $echoOn ) unset echo
+            echo "<NOTE> : The output stager job '$restartResult' to process the '$restartArchDir' (transfer) has been submitted successfully"
+            if ( $echoOn ) set echo
+          else
+            if ( $echoOn ) unset echo
+            echo "*ERROR*: Can't submit the output stager job to process the '$restartArchDir' (transfer)"
+            if ( $echoOn ) set echo
+            exit 1
+	  endif
+
+          unset restartResult
+
+        endif
+
+      else if ( $?flagOutputStagingTypeChained ) then
+
+        if ( $actionCombineOn || $actionSaveOn || $actionCheckOn || $actionXferOn ) then
+
+	  set restartResult = `submit -O "$restartSaveOptions -v argFile=$restartArgFile" $outputStager`
+
+	  if ( $status == 0 ) then
+            if ( $echoOn ) unset echo
+            echo "<NOTE> : The output stager job '$restartResult' to process the '$restartArchDir' has been submitted successfully"
+            if ( $echoOn ) set echo
+            set saveJobIds = ( $saveJobIds $restartResult )
+          else
+            if ( $echoOn ) unset echo
+            echo "*ERROR*: Can't submit the output stager job to process the '$restartArchDir'"
+            if ( $echoOn ) set echo
+            exit 1
+	  endif
+
+          unset restartResult
+
+        endif
+
+      endif
+
+      unset restartXferOptions
+      unset restartSaveOptions
+
+      unset restartArgFile
+      unset restartJobName
+
+      unset combineMemory
+      unset paramCompressOn
+      unset paramCheckSumOn
+      unset paramPtmpOn
+      unset paramArchiveOn
+      unset actionXferOn
+      unset actionSaveOn
+      unset actionCheckOn
+      unset actionCombineOn
+
+      unset restartOutputDirRemote
+      unset restartWorkDir
+      unset restartSuffix
 
     endif
 
     popd
 
-    # ---------------- combine region files
+    # ---------------- rename region history files
 
-    set regionFiles = ( `ls -1 | egrep "$patternGrepRegion.*$patternGrepTail" | sed -r "s/$patternGrepTail//g" | sort -u` )
+    set regionHistoryFiles = ( `ls -1 | egrep "$patternGrepRegion"` )
 
-    if ( $#regionFiles > 0 ) then
+    if ( $#regionHistoryFiles > 0 ) then
 
-      set filesNotOK = ()
-
-      if ( $?MPICH_RANK_REORDER_METHOD ) then
-        set mpi_rrm_save = $MPICH_RANK_REORDER_METHOD
-        unsetenv MPICH_RANK_REORDER_METHOD
-      endif
-      foreach file ( $regionFiles )
-        set inputFiles = ( `ls -1 | egrep "$file$patternGrepTail"` )
-        if ( $#inputFiles > 0 ) then
-          mppnccombine_mpi $file $inputFiles
-        endif
-      end
-      wait
-      foreach file ( $regionFiles )
-        if ( -s $file ) then
-          mv -f $file `echo $file | sed "s/$patternGrepRegion//"`
-        else
-          set filesNotOK = ( $filesNotOK $file )
-        endif
-      end
-      if ( $?mpi_rrm_save ) then
-        setenv MPICH_RANK_REORDER_METHOD $mpi_rrm_save
-      endif
-
-      if ( $#filesNotOK > 0) then
-	unset echo
-	foreach file ( $filesNotOK )
-	  echo "A problem during combining the region file: $file"
+      if ( ! $?MPI_FAIL ) then
+	foreach file ( $regionHistoryFiles )
+          mv -f $file `echo $file | sed -r "s/$patternGrepRegion//"`
 	end
-	echo "ERROR: Failed to combine region files"
-	set echo
-	exit 1
-      endif
-
-      unset filesNotOK 
-
-    endif
-
-    # ---------------- combine, save and post-process history files: online
-
-    if ( $?flagOutputStagingTypeOnline ) then
-
-      if ( $?flagOutputCombineHistoryOn ) then
-
-	set historyFiles = ( `ls -1 | egrep "$patternGrepHistory.*$patternGrepTail" | sed -r "s/$patternGrepTail//g" | sort -u` )
-
-        if ( $#historyFiles > 0 ) then
-
-          set filesNotOK = ()
-
-          if ( $?MPICH_RANK_REORDER_METHOD ) then
-            set mpi_rrm_save = $MPICH_RANK_REORDER_METHOD
-            unsetenv MPICH_RANK_REORDER_METHOD
-          endif
-          foreach file ( $historyFiles )
-            set inputFiles = ( `ls -1 | egrep "$file$patternGrepTail"` )
-            if ( $#inputFiles > 0 ) then
-              mppnccombine_mpi $file $inputFiles
-            endif
-          end
-          wait
-          foreach file ( $historyFiles )
-            if ( -s $file ) then
-              mv -f $file `echo $file | sed "s/$patternGrepRegion//"`
-            else
-              set filesNotOK = ( $filesNotOK $file )
-            endif
-          end
-          if ( $?mpi_rrm_save ) then
-            setenv MPICH_RANK_REORDER_METHOD $mpi_rrm_save
-          endif
-
-
-	  if ( $#filesNotOK > 0) then
-	    unset echo
-	    foreach file ( $filesNotOK )
-	      echo "A problem during combining the history file: $file"
-	    end
-	    echo "ERROR: Failed to combine history files"
-	    set echo
-	    exit 1
-	  endif
-
-          unset filesNotOK 
-
-        endif
-
-      endif
-
-      set historyCombinedFiles = ( `ls -1 | egrep "$patternGrepHistory"$` )
-
-      if ( $#historyCombinedFiles > 0 ) then
-
-        set historyCombinedArchDir = $outputDir/history/$begindate.nc
-        set historyCombinedWorkDir = $hsmDir$historyCombinedArchDir
-
-        prepareDir $historyCombinedWorkDir || exit 1
-      
-	foreach file ( $historyCombinedFiles )
-	  mv $file $historyCombinedWorkDir/$begindate.$file
-	end
-
-        hsmput $historyCombinedArchDir:s+/++
-
-	if ( $status ) then
-          unset echo
-          echo "ERROR: Can't save the $historyCombinedArchDir"
-          set echo
-          exit 1
-	endif
-
-	if ( $?flagOutputCheckOn ) then
-          compareDual $name $PBS_JOBID $historyCombinedArchDir.tar
-	endif
-
-	if ( $?flagOutputTransferOn ) then
-          pushd $stdoutDir
-          set jobName = $scriptName:t.$jobId.file_sender.H.$begindate
-          if ( "$project" != "" ) then
-	    submitFileSender \
-            -A $project \
-            -N $jobName \
-            -o $stdoutDir/ \
-            -l walltime=$fileSenderTimeHistory \
-            -v file=$historyCombinedArchDir.tar \
-            `alias fileSender`
-          else
-	    submitFileSender \
-            -N $jobName \
-            -o $stdoutDir/ \
-            -l walltime=$fileSenderTimeHistory \
-            -v file=$historyCombinedArchDir.tar \
-            `alias fileSender`
-          endif
-          unset jobName
-          popd
-	endif
-
-	set combineList = ( $combineList $historyCombinedArchDir:t.tar )
-
-        rm -fr $historyCombinedWorkDir
-
-        unset historyCombinedWorkDir
-        unset historyCombinedArchDir
-
-      endif
-
-      set historyUncombinedFiles = ( `ls -1 | egrep "$patternGrepHistory.*$patternGrepTail"` )
-
-      if ( $#historyUncombinedFiles > 0 ) then
-
-	set historyUncombinedArchDir = $outputDir/history/$begindate.nc.0000
-        set historyUncombinedWorkDir = $hsmDir$historyUncombinedArchDir
-
-	prepareDir $historyUncombinedWorkDir || exit 1
-
-	foreach file ( $historyUncombinedFiles )
-	  mv $file $historyUncombinedWorkDir/$begindate.$file
-	end
-
-        hsmput $historyUncombinedArchDir:s+/++
-
-	if ( $status ) then
-          unset echo
-          echo "ERROR: Can't save the $historyUncombinedArchDir"
-          set echo
-          exit 1
-	endif
-
-	if ( $?flagOutputCheckOn ) then
-          compareDual $name $PBS_JOBID $historyUncombinedArchDir.tar
-	endif
-
-	if ( $?flagOutputTransferOn ) then
-          pushd $stdoutDir
-          set jobName = $scriptName:t.$jobId.file_sender.U.$begindate
-          if ( "$project" != "" ) then
-	    submitFileSender \
-            -A $project \
-            -N $jobName \
-            -o $stdoutDir/ \
-            -l walltime=$fileSenderTimeHistory \
-            -v file=$historyUncombinedArchDir.tar \
-            `alias fileSender`
-          else
-	    submitFileSender \
-            -N $jobName \
-            -o $stdoutDir/ \
-            -l walltime=$fileSenderTimeHistory \
-            -v file=$historyUncombinedArchDir.tar \
-            `alias fileSender`
-          endif
-          unset jobName
-          popd
-	endif
-
-        rm -fr $historyUncombinedWorkDir
-
-        unset historyUncombinedWorkDir
-        unset historyUncombinedArchDir
-
-      endif
-      
-      if ( $?flagRunTypeProduction ) then
-	if ( ( $combineFreq > 0 && $#combineList == $combineFreq ) || $currentSeg == $segmentsPerSimulation || $#restartFiles == 0 ) then
-	  if ( $#combineList > 0 ) then
-            set firstdate = `echo $combineList[1] | cut -c -8`
-	  else
-            set firstdate = $begindate
-	  endif
-          if ( $?flagOutputPostProcessOn ) then
-	    echo "`alias frepp` -t $firstdate -d $outputDir/history -x $rtsxml $name"
-          endif
-	  set combineList = ( )
-          unset firstdate
-        endif
       endif
 
     endif
 
-    # ---------------- combine, save and post-process history files: staged
+    unset regionHistoryFiles
 
-    if ( $?flagOutputStagingTypeStaged ) then
+    # ---------------- combine, save and post-process history files
 
-      if ( $?flagOutputPostProcessOn ) then
-	if ( $#combineList + 1 == $combineFreq || $currentSeg == $segmentsPerSimulation || $#restartFiles == 0 ) then
-	  if ( $#combineList > 0 ) then
-            set firstdate = `echo $combineList[1] | cut -c -8`
+    set historyFiles = ( `ls -1 | egrep "$patternGrepHistory"` )
+
+    if ( $#historyFiles > 0 ) then
+
+      set historySuffix = history/$begindate.nc
+      set historyArchDir = $outputDir/$historySuffix
+      set historyWorkDir = $tmpOutputDir$historyArchDir
+
+      prepareDir $historyWorkDir 'clean' || exit 1
+      
+      if ( ! $?MPI_FAIL ) then
+
+	ls -1 | egrep "$patternGrepHistory" | xargs -I'{}' mv --force '{}' $historyWorkDir/$begindate.'{}'
+
+	if ( $?flagOutputXferOn ) then
+	  if ( $?flagRunTypeRegression || $?flagOutputTypeUnique  ) then
+            set historyOutputDirRemote = $outputDirRemoteHistory/$outputDir:t/$historySuffix
 	  else
-            set firstdate = $begindate
+            set historyOutputDirRemote = $outputDirRemoteHistory/$historySuffix
 	  endif
-          if ( $?ppRefineDiagScriptNamesList ) then
-	    set PPcmd = "`alias frepp` -t $firstdate -D $ppRefineDiagScriptNamesList -d $outputDir/history -x $rtsxml $name"
-          else
-	    set PPcmd = "`alias frepp` -t $firstdate -d $outputDir/history -x $rtsxml $name"
-          endif
-          unset firstdate
 	else
-          set PPcmd = ""
+          set historyOutputDirRemote = ""
 	endif
+
+        set actionCombineOn	= $?flagOutputCombineHistoryOn
+        set actionCheckOn	= $?flagOutputCheckOn
+        set actionSaveOn	= 1
+        set actionXferOn	= $?flagOutputXferOn
+
+	set combineList = ( $combineList $historyArchDir:t.tar )
+
+	if ( $?flagOutputPostProcessOn && $?flagOutputXferOn && $segmentsPerPPCall > 0 && $#combineList == $segmentsPerPPCall ) then
+          set actionPPStartOn = 1
+	  if ( $#combineList > 0 ) then
+            set firstDate = `echo $combineList[1] | cut -c -8`
+	  else
+            set firstDate = $begindate
+	  endif
+          set ppStarterOptions = ( $submitOptionsProject $submitOptionsPPStarter )
+          set ppStarterOptions = ( $ppStarterOptions -N $FRE_JOBID.pp.starter.$firstDate )
+          set ppStarterOptions = ( $ppStarterOptions -l walltime=$ppStarterRuntime,$ppStarterCoreSpec )
+          set ppStarterOptions = ( $ppStarterOptions -v expName=$name,xmlFile=$xmlFilesRemote[1],platform=$platformRemote,target=$target,dir=$historyOutputDirRemote:h,firstDate=$firstDate,refineDiagList="'$ppRefineDiagScriptNamesList'",ppEnv="'$envRemote'" )
+          set combineList = ( )
+          unset firstDate
+	else
+          set actionPPStartOn = 0
+          set ppStarterOptions = ( )
+	endif
+
+        set paramArchiveOn	= $?flagOutputArchiveOn
+        @   paramPtmpOn		= ! $?flagOutputArchiveOn
+        set paramCheckSumOn	= $?flagCheckSumOn
+        set paramCompressOn 	= $?flagOutputCompressHistoryOn
+
       else
-        set PPcmd = ""
+
+	ls -1 | egrep "$patternGrepHistory" | xargs -I'{}' ln --force '{}' $historyWorkDir/$begindate.'{}'
+
+        set historyOutputDirRemote = ""
+
+        set actionCombineOn	= 0
+        set actionCheckOn	= 0
+        set actionSaveOn	= 1
+        set actionXferOn	= 0
+        set actionPPStartOn	= 0
+        set ppStarterOptions	= ( )
+        set paramArchiveOn	= 1
+        set paramPtmpOn		= 0
+        set paramCheckSumOn	= 0
+        set paramCompressOn 	= 0
+
       endif
 
-      set tempHistoryDateDir = $outputDir/history/$begindate
-
-      prepareDir $tempHistoryDateDir || exit 1
-
-      find $workDir -maxdepth 1 -type f | egrep "$patternGrepHistory" | xargs -r mv -f -t $tempHistoryDateDir
-
-      pushd $stdoutDir
-      set jobName = $scriptName:t.$jobId.output_stager.$begindate
-      if ( "$project" != "" ) then
-        submitOutputStager \
-        -A $project \
-        -N $jobName \
-        -o $stdoutDir/ \
-        -v project=$project,datedir=$tempHistoryDateDir,check=$?flagOutputCheckOn,transfer=$?flagOutputTransferOn,frepp="'$PPcmd'",platform=$platform,stdout=$stdoutDir/ \
-        `alias outputStager`
+      if ( $actionCombineOn ) then
+        set combineMemory = `memoryLimit $historyWorkDir`
       else
-        submitOutputStager \
-        -N $jobName \
-        -o $stdoutDir/ \
-        -v datedir=$tempHistoryDateDir,check=$?flagOutputCheckOn,transfer=$?flagOutputTransferOn,frepp="'$PPcmd'",platform=$platform,stdout=$stdoutDir/ \
-        `alias outputStager`
-      endif
-      unset jobName
-      popd
-
-      if ( "$PPcmd" == "" ) then
-	set combineList = ( $combineList $tempHistoryDateDir:t.tar )
-      else
-	set combineList = ( )
+        set combineMemory = $memoryDefault
       endif
 
-      unset tempHistoryDateDir
-      unset PPcmd
+      set historyJobName = $FRE_JOBID.output.stager.$begindate.H
+      set historyArgFile = $stateDir/$historyJobName.args
+
+      set historySaveOptions = ( $submitOptionsProject $submitOptionsOutputStagerSave )
+      set historySaveOptions = ( $historySaveOptions -N ${historyJobName}S )
+      set historySaveOptions = ( $historySaveOptions -l walltime=$outputStagerSaveRuntimeHistory,$outputStagerSaveCoreSpec,mem=${combineMemory}mb )
+
+      set historyXferOptions = ( $submitOptionsProject $submitOptionsOutputStagerXfer )
+      set historyXferOptions = ( $historyXferOptions -N ${historyJobName}T )
+      set historyXferOptions = ( $historyXferOptions -l walltime=$outputStagerXferRuntimeHistory,$outputStagerXferCoreSpec )
+
+      echo "set expName			=   $name"				 > $historyArgFile
+      echo "set type			=   history"				>> $historyArgFile
+      echo "set stagingType		=   $outputStagingType"			>> $historyArgFile
+      echo "set actionCombineOn		=   $actionCombineOn"			>> $historyArgFile
+      echo "set actionSaveOn		=   $actionSaveOn"			>> $historyArgFile
+      echo "set actionCheckOn		=   $actionCheckOn"			>> $historyArgFile
+      echo "set actionXferOn		=   $actionXferOn"			>> $historyArgFile
+      echo "set actionPPStartOn		=   $actionPPStartOn"			>> $historyArgFile
+      echo "set paramArchiveOn		=   $paramArchiveOn"			>> $historyArgFile
+      echo "set paramPtmpOn		=   $paramPtmpOn"			>> $historyArgFile
+      echo "set paramCheckSumOn		=   $paramCheckSumOn"			>> $historyArgFile
+      echo "set paramCompressOn		=   $paramCompressOn"			>> $historyArgFile
+      echo "set combineMemory		=   $combineMemory"			>> $historyArgFile
+      echo "set workDir			=   $tmpOutputDir"			>> $historyArgFile
+      echo "set ptmpDir			=   $ptmpDir"				>> $historyArgFile
+      echo "set archDir			=   $historyArchDir"			>> $historyArgFile
+      echo "set outputDirRemote		=   $historyOutputDirRemote"		>> $historyArgFile
+      echo "set saveOptions		= ( $historySaveOptions )"		>> $historyArgFile
+      echo "set xferOptions		= ( $historyXferOptions )"		>> $historyArgFile
+      echo "set xmlFiles		= ( $xmlFiles )"			>> $historyArgFile
+      echo "set xmlFilesRemote		= ( $xmlFilesRemote )"			>> $historyArgFile
+      echo "set ppStarterOptions	= ( $ppStarterOptions )"		>> $historyArgFile
+      echo "set stdoutDirRemote		=   $stdoutDirRemote"			>> $historyArgFile
+      echo "set freModuleFilesDir       =   $freModuleFilesDir"			>> $historyArgFile
+      echo "set freCommandsHomeDir	=   $freCommandsHomeDir"		>> $historyArgFile
+      echo "set freNCToolsHomeDir	=   $FRE_NCTOOLS_HOME"			>> $historyArgFile
+      echo "set freTempDir		=   $freTempDir"			>> $historyArgFile
+      echo "set xferToolModuleFilesDir	=   $xferToolModuleFilesDir"		>> $historyArgFile
+      echo "set xferToolModuleFile	=   $xferToolModuleFile"		>> $historyArgFile
+      echo "set modulesHomeDir		=   $modulesHomeDir"			>> $historyArgFile
+
+      if ( $?flagOutputStagingTypeOnline ) then
+
+        if ( $?MPICH_RANK_REORDER_METHOD ) then
+          set mpiRankReorderMethod = $MPICH_RANK_REORDER_METHOD
+          unsetenv MPICH_RANK_REORDER_METHOD
+        endif
+
+        outputStager $historyArgFile
+
+	if ( $status == 0 ) then
+          if ( $echoOn ) unset echo
+          echo "<NOTE> : The history directory '$historyArchDir' has been processed successfully"
+          if ( $echoOn ) set echo
+        else
+          if ( $echoOn ) unset echo
+          echo "*ERROR*: Can't process the history directory '$historyArchDir'"
+          if ( $echoOn ) set echo
+          exit 1
+	endif
+
+        if ( $?mpiRankReorderMethod ) then
+          setenv MPICH_RANK_REORDER_METHOD $mpiRankReorderMethod
+          unset $mpiRankReorderMethod
+        endif
+
+      else if ( $?flagOutputStagingTypeStaged ) then
+
+        if ( $actionCombineOn || $actionSaveOn || $actionCheckOn ) then
+
+	  set historyResult = `submit -O "$historySaveOptions -v argFile=$historyArgFile" $outputStager`
+
+	  if ( $status == 0 ) then
+            if ( $echoOn ) unset echo
+            echo "<NOTE> : The output stager job '$historyResult' to process the '$historyArchDir' (saving) has been submitted successfully"
+            if ( $echoOn ) set echo
+            set saveJobIds = ( $saveJobIds $historyResult )
+          else
+            if ( $echoOn ) unset echo
+            echo "*ERROR*: Can't submit the output stager job to process the '$historyArchDir' (saving)"
+            if ( $echoOn ) set echo
+            exit 1
+	  endif
+
+          unset historyResult
+
+        endif
+
+        if ( $actionXferOn || $actionPPStartOn ) then
+
+	  set historyResult = `submit -O "$historyXferOptions -v argFile=$historyArgFile -l depend=afterok:$saveJobIds[$#saveJobIds]" $outputStager`
+
+	  if ( $status == 0 ) then
+            if ( $echoOn ) unset echo
+            echo "<NOTE> : The output stager job '$historyResult' to process the '$historyArchDir' (transfer) has been submitted successfully"
+            if ( $echoOn ) set echo
+          else
+            if ( $echoOn ) unset echo
+            echo "*ERROR*: Can't submit the output stager job to process the '$historyArchDir' (transfer)"
+            if ( $echoOn ) set echo
+            exit 1
+	  endif
+
+          unset historyResult
+
+        endif
+
+      else if ( $?flagOutputStagingTypeChained ) then
+
+        if ( $actionCombineOn || $actionSaveOn || $actionCheckOn || $actionXferOn || $actionPPStartOn ) then
+
+	  set historyResult = `submit -O "$historySaveOptions -v argFile=$historyArgFile" $outputStager`
+
+	  if ( $status == 0 ) then
+            if ( $echoOn ) unset echo
+            echo "<NOTE> : The output stager job '$historyResult' to process the '$historyArchDir' has been submitted successfully"
+            if ( $echoOn ) set echo
+            set saveJobIds = ( $saveJobIds $historyResult )
+          else
+            if ( $echoOn ) unset echo
+            echo "*ERROR*: Can't submit the output stager job to process the '$historyArchDir'"
+            if ( $echoOn ) set echo
+            exit 1
+	  endif
+
+          unset historyResult
+
+        endif
+
+      endif
+
+      unset historyXferOptions
+      unset historySaveOptions
+
+      unset historyArgFile
+      unset historyJobName
+
+      unset combineMemory
+      unset paramCompressOn
+      unset paramCheckSumOn
+      unset paramPtmpOn
+      unset paramArchiveOn
+      unset ppStarterOptions
+      unset actionPPStartOn
+      unset actionXferOn
+      unset actionSaveOn
+      unset actionCheckOn
+      unset actionCombineOn
+
+      unset historyOutputDirRemote
+      unset historyWorkDir
+      unset historyArchDir
+      unset historySuffix
 
     endif
 
-    # ---------------- terminate script if mpirun crashed
+    unset historyFiles
+
+    # ---------------- terminate script if MPI failed
 
     if ( $?MPI_FAIL ) then
 
-      unset echo
-      echo "ERROR: in mpirun, core dumped: run $ireload, loop $irun"
-      echo "ERROR: Any output that may have been generated is in $outputDir"
+      if ( $echoOn ) unset echo
+      echo "*ERROR*: The MPI failed (run $ireload, loop $irun)"
+      echo "*ERROR*: Any output that may have been generated is in the '$outputDir'"
+      echo "*ERROR*: The '$workDir' is being kept for possible debugging"
+      if ( $echoOn ) set echo
 
-      sleep 30
-      set echo
       exit 1
 
     endif
@@ -1116,48 +1937,59 @@
     # ---------------- terminate script if there are no restart files
 
     if ( $#restartFiles == 0 ) then
-      unset echo
-      echo "ERROR: no restart files exist, run $ireload, loop $irun"
-      set echo
+
+      if ( $echoOn ) unset echo
+      echo "*ERROR*: no restart files exist (run $ireload, loop $irun)"
+      if ( $echoOn ) set echo
+
       exit 1
+
     endif
-
-    # ---------------- increment the loop counter
-
-    @ irun++
 
     # ---------------- write new reload information (production runs only)
 
     if ( $?flagRunTypeProduction ) then
 
-      unset echo
-      echo "Writing reload information to $reload_file at `date +%s`"
-      set echo
-
-      if ( -f $reload_file ) then
-	mv -f $reload_file ${reload_file}_prev
-      endif
-
-      if ( $irun <= $segmentsPerJob ) then
-	echo "@ irun          =   $irun"               >  $reload_file
+      if ( $irun < $segmentsPerJob ) then
+        @ irunNext = $irun + 1
       else
-	@ ireload++
-	echo "@ irun          =   1"                   >  $reload_file
+        @ ireload++
+        @ irunNext = 1
       endif
 
-      echo   "@ ireload       =   $ireload"            >> $reload_file
-      echo   "set initCond    =   $restartArchDir.tar" >> $reload_file
-      echo   "set combineList = ( $combineList )"      >> $reload_file
-      echo   "set fyear       =   $fyear"              >> $reload_file
+      if ( -f $reload_file ) mv -f $reload_file ${reload_file}_prev
+      touch $reload_file
+
+      if ( $status == 0 ) then
+	if ( $echoOn ) unset echo
+	echo "<NOTE> : Writing reload information to the reload file '$reload_file' at `date +%s`"
+	if ( $echoOn ) set echo
+	echo "@ ireload       =   $ireload"            		>> $reload_file
+	echo "@ irun          =   $irunNext"           		>> $reload_file
+	echo "set initCond    =   $restartArchDir.$archExt"	>> $reload_file
+	echo "set combineList = ( $combineList )"      		>> $reload_file
+	echo "set fyear       =   $fyear"              		>> $reload_file
+        chmod 644 $reload_file
+      else
+	if ( $echoOn ) unset echo
+	echo "*ERROR*: The reload file '$reload_file' can't be saved"
+        if ( $echoOn ) set echo
+        exit 1
+      endif
+
+      unset irunNext
 
     endif
 
-    # ---------------- check if simulation complete
+    # ---------------- unset remaining restart variables
 
-    if ( $?flagRunTypeProduction ) then
-      @ currentSeg++
-      if ( $currentSeg > $segmentsPerSimulation ) break
-    endif
+    unset restartArchDir
+    unset restartFiles
+
+    # ---------------- increment loop counters
+
+    @ currentSeg++
+    @ irun++
 
   end
 
@@ -1173,99 +2005,147 @@
 
     if ( $ireload <= $jobsPerSimulation && $currentSeg <= $segmentsPerSimulation ) then
 
-      if ( -f $scriptName ) then
-        pushd $stdoutDir
-        if ( "$project" != "" ) then
-          submit -A $project -v FRE_PROJECT=$project $scriptName
-        else
-          submit $scriptName
-        endif
-        popd
+      if ( -f $queue_file ) then
+	if ( -r $queue_file ) then
+	  source $queue_file
+	else
+	  if ( $echoOn ) unset echo
+	  echo "*ERROR*: The queue file '$queue_file' is not readable"
+          if ( $echoOn ) set echo
+	  exit 1
+	endif
+      endif
+
+      if ( ! $continueFlag ) then
+	if ( $echoOn ) unset echo
+	echo "<NOTE> : Stopping execution"
+	if ( $echoOn ) set echo
+	exit 0
+      endif
+
+      if ( $windfallFlag != $windfallFlagInit ) then
+	if ( $windfallFlag ) then
+	  set submitOptionsWindfall = ( $windfallOptionsSet )
+	else
+	  set submitOptionsWindfall = ( $windfallOptionsUnset )
+	endif
       else
-	unset echo
+	set submitOptionsWindfall = ( )
+      endif
+
+      if ( -f $scriptName ) then
+        if ( -r $scriptName ) then
+          set nextOptions = ( $submitOptionsProject $submitOptionsQueue $submitOptionsWindfall )
+          set result = `submit -O "$nextOptions" $scriptName`
+	  if ( $status == 0 ) then
+            if ( $echoOn ) unset echo
+            echo "<NOTE> : The job '$result' to run the '$scriptName' has been submitted successfully"
+            if ( $echoOn ) set echo
+	  else
+            if ( $echoOn ) unset echo
+            echo "*ERROR*: Can't submit the '$scriptName'"
+            if ( $echoOn ) set echo
+            exit 1
+	  endif
+          unset result
+          unset nextOptions
+        else
+	  if ( $echoOn ) unset echo
+	  echo "WARNING: The script '$scriptName' exists, but is not readable (run $ireload, loop $irun) - it can't be resubmitted"
+          if ( $echoOn ) set echo
+        endif
+      else
+	if ( $echoOn ) unset echo
 	echo "WARNING: The script '$scriptName' does not exist (run $ireload, loop $irun) - it can't be resubmitted"
-        set echo
+        if ( $echoOn ) set echo
+      endif
+
+      if ( -f $queue_file ) mv -f $queue_file ${queue_file}_prev
+      touch $queue_file
+
+      if ( $status == 0 ) then
+	if ( $echoOn ) unset echo
+	echo "<NOTE> : Writing queue information to the queue file '$queue_file' at `date +%s`"
+	if ( $echoOn ) set echo
+        echo "set continueFlag = $continueFlag" >> $queue_file
+        echo "set windfallFlag = $windfallFlag" >> $queue_file
+        if ( ${?project} ) then
+          echo "set project      = $project"      >> $queue_file
+        endif
+        if ( ${?queue} ) then
+          echo "set queue        = $queue"        >> $queue_file
+        endif
+        chmod 644 $queue_file
+      else
+	if ( $echoOn ) unset echo
+	echo "*ERROR*: The queue file '$queue_file' can't be saved"
+        if ( $echoOn ) set echo
+        exit 1
       endif
 
     endif
 
   endif
 
-  # ---------------- combine distributed restart files (regression runs only)
+  # ---------------- working directory cleaning
 
-  if ( $?flagRunTypeRegression ) then
+  if ( $?flagWorkDirCleanOn ) then
 
-    pushd $restartWorkDir
+    if ( $?flagOutputStagingTypeOnline ) then
 
-    set restartFilesUncombined = ( `ls -1 | egrep "($patternGrepRestartNextMove).*$patternGrepTail"` )
+      workDirCleaner $workDir
 
-    if ( $#restartFilesUncombined > 0 ) then
-
-      set restartFiles = ( `ls -1 | egrep "($patternGrepRestartNextMove).*$patternGrepTail" | sed -r "s/$patternGrepTail//g" | sort -u` )
-
-      foreach file ( $restartFiles )
-	set inputFiles = ( `ls -1 | egrep "$file$patternGrepTail"` )
-	if ( $#inputFiles > 0 ) then
-	  set compressed = `ncdump -h $inputFiles[1] | grep 'tile_index:compress' | wc -l`
-	  if ( $compressed > 0 ) then
-            slmnccombine_mpi $inputFiles $file
-            if ( $status ) then
-              unset echo
-              echo "ERROR: in execution of slmnccombine on restarts"
-              set echo
-              exit 1
-            else
-              rm -f $inputFiles
-            endif
-	  else
-            if ( $?MPICH_RANK_REORDER_METHOD ) then
-              unsetenv MPICH_RANK_REORDER_METHOD
-            endif
-            mppnccombine_mpi $file $inputFiles
-            if ( $status ) then
-              unset echo
-              echo "ERROR: in execution of mppnccombine on restarts"
-              set echo
-              exit 1
-            endif
-	  endif
-	endif
-      end
-
-      hsmput $restartArchDir:s+/++
-
-      if ( $status ) then
-	unset echo
-	echo "ERROR: Can't save the $restartArchDir"
-	set echo
-	exit 1
+      if ( $status == 0 ) then
+	if ( $echoOn ) unset echo
+	echo "<NOTE> : The working directory has been cleaned successfully"
+	if ( $echoOn ) set echo
+      else
+	if ( $echoOn ) unset echo
+	echo "WARNING: Can't clean the working directory"
+	if ( $echoOn ) set echo
       endif
 
+    else if ( $?flagOutputStagingTypeStaged || $?flagOutputStagingTypeChained ) then
+
+      set workDirCleanerOptions = ( $submitOptionsProject $submitOptionsWorkDirCleaner )
+      set workDirCleanerOptions = ( $workDirCleanerOptions -N $FRE_JOBID.workDir.cleaner )
+      set workDirCleanerOptions = ( $workDirCleanerOptions -l walltime=$workDirCleanerRuntime,$workDirCleanerCoreSpec )
+      set workDirCleanerOptions = ( $workDirCleanerOptions -v dir=$workDir )
+
+      if ( $#saveJobIds > 0 ) then
+	set saveJobList = `echo $saveJobIds | tr ' ' ':'`
+	set workDirCleanerOptions = ( $workDirCleanerOptions -l depend=afterok:$saveJobList )
+	unset saveJobList
+      endif
+
+      set workDirCleanerResult = `submit -O "$workDirCleanerOptions" $workDirCleaner`
+
+      if ( $status == 0 ) then
+	if ( $echoOn ) unset echo
+	echo "<NOTE> : The working directory cleaning job '$workDirCleanerResult' has been submitted successfully"
+	if ( $echoOn ) set echo
+      else
+	if ( $echoOn ) unset echo
+	echo "WARNING: Can't submit the working directory cleaning job"
+	if ( $echoOn ) set echo
+      endif
+
+      unset workDirCleanerResult
+      unset workDirCleanerOptions
+
     endif
-
-    unset restartFilesUncombined
-
-    popd
-
-    rm -rf $restartWorkDir
-
-    unset restartWorkDir
-    unset restartArchDir
 
   endif
 
   # ---------------- normal end of script 
 
-  rm -rf $workDir
-  unset echo
-  set beforewaittime = `date "+%s"`
-  set ttlnowait = `echo "$beforewaittime - $beginruntime" | bc -l`
-  echo "beginruntime $beginruntime beforewaittime $beforewaittime ttlnowait $ttlnowait"
-  wait
-  set endruntime = `date "+%s"`
-  set ttlruntime = `echo "$endruntime - $beginruntime" | bc -l`
-  echo "beginruntime $beginruntime endruntime $endruntime ttlruntime $ttlruntime"
+  set -r runtimeEnd = `date "+%s"`
+  set -r runtime = `echo "$runtimeEnd - $runtimeBeg" | bc -l`
 
-  echo end_of_run
-  echo "NOTE: Natural end-of-script for $scriptName."
+  if ( $echoOn ) unset echo
+  echo "<NOTE> : Finishing on `date`"
+  echo "<NOTE> : Runtime = '$runtime' (seconds)"
+  echo "<NOTE> : Natural end-of-script for '$scriptName'"
+  if ( $echoOn ) set echo
+
   exit 0

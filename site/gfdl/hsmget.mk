@@ -1,5 +1,5 @@
 # -*- Makefile -*-
-# $Id: hsmget.mk,v 1.1.4.11 2011/08/10 13:08:44 vb Exp $
+# $Id: hsmget.mk,v 1.1.4.15.2.1 2013/03/27 23:23:08 afy Exp $
 # HSM.mk: data transfer using three-level storage model
 
 #use csh, with no user .cshrc
@@ -37,8 +37,10 @@ DELAY := && sleep 70
 endif
 endif
 
-foo := $(shell ssh $(dtn) pwd\; hostname)
+ifdef dtn
+checkdtn := $(shell ssh $(dtn) pwd\; hostname)
 # dtn is defined at this point if writing from /archive to /ptmp or /work
+endif
 
 # commands: these are all the external dependencies
 # (some of these could have further dependencies within them...)
@@ -62,7 +64,7 @@ GCPOPTS := # --disable-checksum
 ifeq ($(verbose),)
 REMOTECP ?= $(GCP) $(GCPOPTS) --quiet
 else
-REMOTECP ?= $(GCP) $(GCPOPTS) --debug
+REMOTECP ?= $(GCP) $(GCPOPTS) --verbose
 endif
 commands += $(firstword $(REMOTECP))
 ifneq ($(time),)
@@ -73,12 +75,19 @@ endif
 ifeq ($(verbose),)
 LOCALCP ?= $(GCP) $(GCPOPTS) --quiet
 else
-LOCALCP ?= $(GCP) $(GCPOPTS) --debug
+LOCALCP ?= $(GCP) $(GCPOPTS) --verbose
 endif
 commands += $(firstword $(LOCALCP))
 ifneq ($(time),)
 #timer
 LOCALCP := $(TIMECMD) -f "$(firstword $(LOCALCP)) took %e secs." $(LOCALCP)
+endif
+# get from tape
+DEEPGET := dmget
+commands += $(firstword $(DEEPGET))
+ifneq ($(time),)
+#timer
+DEEPGET := $(TIMECMD) -f "$(firstword $(DEEPGET)) took %e secs." $(DEEPGET)
 endif
 # resolve symbolic links
 RESOLVE = readlink -f
@@ -158,7 +167,7 @@ what:
 	@echo WORKROOT = $(WORKROOT)
 	@echo ptmptmp = $(ptmptmp)
 	@echo dtn = $(dtn) archfs = $(archfs) ptmpfs = $(ptmpfs)
-	@echo $(foo)
+	@echo $(checkdtn)
 which:
 	@echo Command paths: $(shell which $(commands))
 # data movement: this is HSMget/put
@@ -185,6 +194,7 @@ endif
 #had problems if you ^C'd in the middle of an untar...
 $(PTMPROOT)/%.ok: $(ARCHROOT)/%
 	@touch $@.LOCK
+	$(DEEPGET) $<
 	-test -f $< && $(MKDIR) $(@D) && $(LOCALCP) `$(RESOLVE) $<` $(@D) || \
 	 test -d $< && $(MKDIR) $(PTMPROOT)/$* && $(LOCALCP) `$(FIND) $< $(FINDFLAGS)` $(PTMPROOT)/$* $(DELAY)
 ifneq ($(check),)
@@ -197,9 +207,16 @@ endif
 	@$(RM) -f $@.LOCK
 $(PTMPROOT)/%.ok: $(ARCHROOT)/%.tar
 	@touch $@.LOCK
+	$(DEEPGET) $<
+	$(RM) -rf $(PTMPROOT)/$*
 	@$(MKDIR) $(PTMPROOT)/$* $(ptmptmp)
+# if dtn defined do everything on dtn servers
+ifdef dtn
+	cd $(ptmptmp) && $(TAR) $< && $(MV) -f $(ptmptmp)/* $(PTMPROOT)/$* && $(RM) -rf $(ptmptmp) $(DELAY)
+else
 	$(LOCALCP) $< $(ptmptmp)
 	cd $(ptmptmp) && $(TAR) $(<F) && $(RM) -f $(ptmptmp)/$(<F) && $(MV) -f $(ptmptmp)/* $(PTMPROOT)/$* && $(RM) -rf $(ptmptmp) $(DELAY)
+endif
 ifneq ($(check),)
 	cd $(PTMPROOT)/$* && $(SUM) `$(FIND) . -type f` > $@
 else
@@ -209,9 +226,16 @@ endif
 	@$(RM) -f $@.LOCK
 $(PTMPROOT)/%.ok: $(ARCHROOT)/%.nc.tar
 	@touch $@.LOCK
+	$(DEEPGET) $<
+	$(RM) -rf $(PTMPROOT)/$*
 	@$(MKDIR) $(PTMPROOT)/$* $(ptmptmp)
+# if dtn defined do everything on dtn servers
+ifdef dtn
+	cd $(ptmptmp) && $(TAR) $< && $(MV) -f $(ptmptmp)/* $(PTMPROOT)/$* && $(RM) -rf $(ptmptmp) $(DELAY)
+else
 	$(LOCALCP) $< $(ptmptmp)
 	cd $(ptmptmp) && $(TAR) $(<F) && $(RM) -f $(ptmptmp)/$(<F) && $(MV) -f $(ptmptmp)/* $(PTMPROOT)/$* && $(RM) -rf $(ptmptmp) $(DELAY)
+endif
 ifneq ($(check),)
 	cd $(PTMPROOT)/$* && $(SUM) `$(FIND) . -type f` > $@
 else
@@ -221,9 +245,16 @@ endif
 	@$(RM) -f $@.LOCK
 $(PTMPROOT)/%.ok: $(ARCHROOT)/%.cpio
 	@touch $@.LOCK
+	$(DEEPGET) $<
+	$(RM) -rf $(PTMPROOT)/$*
 	@$(MKDIR) $(PTMPROOT)/$* $(ptmptmp)
+# if dtn defined do everything on dtn servers
+ifdef dtn
+	cd $(ptmptmp) && $(CPIO) $< && $(MV) -f $(ptmptmp)/* $(PTMPROOT)/$* && $(RM) -rf $(ptmptmp) $(DELAY)
+else
 	$(LOCALCP) $< $(ptmptmp)
 	cd $(ptmptmp) && $(CPIO) $(<F) && $(RM) -f $(ptmptmp)/$(<F) && $(MV) -f $(ptmptmp)/* $(PTMPROOT)/$* && $(RM) -rf $(ptmptmp) $(DELAY)
+endif
 # 	test -d $@ && cd $@ && $(CPIO) $< || \
 # 	test -f $@ || $(MKDIR) $@ && cd $@ && $(CPIO) $<
 ifneq ($(check),)
@@ -235,9 +266,16 @@ endif
 	@$(RM) -f $@.LOCK
 $(PTMPROOT)/%.ok: $(ARCHROOT)/%.nc.cpio
 	@touch $@.LOCK
+	$(DEEPGET) $<
+	$(RM) -rf $(PTMPROOT)/$*
 	@$(MKDIR) $(PTMPROOT)/$* $(ptmptmp)
+# if dtn defined do everything on dtn servers
+ifdef dtn
+	cd $(ptmptmp) && $(CPIO) $< && $(MV) -f $(ptmptmp)/* $(PTMPROOT)/$* && $(RM) -rf $(ptmptmp) $(DELAY)
+else
 	$(LOCALCP) $< $(ptmptmp)
 	cd $(ptmptmp) && $(CPIO) $(<F) && $(RM) -f $(ptmptmp)/$(<F) && $(MV) -f $(ptmptmp)/* $(PTMPROOT)/$* && $(RM) -rf $(ptmptmp) $(DELAY)
+endif
 # 	test -d $@ && cd $@ && $(CPIO) $< || \
 # 	test -f $@ || $(MKDIR) $@ && cd $@ && $(CPIO) $<
 ifneq ($(check),)

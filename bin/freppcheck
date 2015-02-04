@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 # -*- cperl -*-
-# $Id: freppcheck,v 18.0.4.5.2.5 2011/09/01 22:08:44 fms Exp $
+# $Id: freppcheck,v 18.0.4.5.2.10 2012/02/23 16:56:13 Amy.Langenhorst Exp $
 # ------------------------------------------------------------------------------
 # freppcheck: report missing post processing files for FRE experiments
 # ------------------------------------------------------------------------------
@@ -278,7 +278,7 @@ sub reporting {
                      print "   ---Suspicious filesize: $f (is $infiles{$f}{size}, should be $n[-1])\n";
                   }        
                } else {
-                  unless ( $infiles{$f}{size} == $n[-1] or $infiles{$f}{size} == $n[-2] ) {
+                  unless ( $infiles{$f}{size} == $n[-1] or $infiles{$f}{size} == $n[-2] or $n[-2] eq '' ) {
                      print "   ---Suspicious filesize: $f (is $infiles{$f}{size}, should be $n[-1] or $n[-2])\n";
                   }        
                }
@@ -330,6 +330,7 @@ sub lookup_chunk{
         "6hr"      => "${chunklow}010100-${chunkhi}123123",
         "8hr"      => "${chunklow}010100-${chunkhi}123123",
         "12hr"     => "${chunklow}010100-${chunkhi}123123",
+        "120hr"     => "${chunklow}010100-${chunkhi}123123",
         "hourly"   => "${chunklow}010100-${chunkhi}123123",
         "daily"    => "${chunklow}0101-${chunkhi}1231",
         "monthly"  => "${chunklow}01-${chunkhi}12",
@@ -345,7 +346,7 @@ sub lookup_chunk{
 { #begin package freppcheck
    package freppcheck;
 
-   use constant VERSION => '$Id: freppcheck,v 18.0.4.5.2.5 2011/09/01 22:08:44 fms Exp $';
+   use constant VERSION => '$Id: freppcheck,v 18.0.4.5.2.10 2012/02/23 16:56:13 Amy.Langenhorst Exp $';
 
    use constant OPTLIST =>
    (
@@ -528,7 +529,8 @@ sub check_ppnodes {
              if (defined $commandline_int and $commandline_int !~ m/$interval/ ) { next ;}
              my $asrcdir = $e->{ppRootDir}."/$c/av/$freq\_$interval";
              $interval =~ s/yr//;
-             my $firstyr = adjust_startyr($firstyr_user,$interval,$startdate);
+             die "ERROR: In component '$c', a timeAverage tag is missing an 'interval' attribute\n" if "$interval" eq '';
+             my $firstyr = adjust_startyr($firstyr_user,$interval,$startdate,$c,$opt->{verbose});
              my $lastyr = adjust_endyr($lastyr_user,$interval,$startdate);
              # don't check if the chunks's ending edge is larger than user specified ending year
              if ($lastyr_user < $interval + $firstyr - 1 ) {next;}
@@ -550,7 +552,8 @@ sub check_ppnodes {
            #print "freq $ts->{freq}, srcfile $srcfile, chunklength $ts->{chunklength}\n" if $e->{verbose};
            my $asrcdir = $e->{ppRootDir}."/$c/ts/$freq/$interval";
            $interval =~ s/yr//;
-           my $firstyr = adjust_startyr($firstyr_user,$interval,$startdate);
+           die "ERROR: In component '$c', a timeSeries tag is missing a 'chunklength' attribute\n" if "$interval" eq '';
+           my $firstyr = adjust_startyr($firstyr_user,$interval,$startdate,$c,$opt->{verbose});
            my $lastyr = adjust_endyr($lastyr_user,$interval,$startdate);
            # don't check if the chunks's ending edge is larger than user specified ending year
            if ($lastyr_user < $interval + $firstyr - 1 ) {next;}
@@ -612,13 +615,15 @@ sub check_ppnodes {
 
 # move the first checking year $firstyr to the lower edge of the chunk
 sub adjust_startyr {
-   my ($firstyr,$interval,$startdate) = @_;
+   my ($firstyr,$interval,$startdate,$c,$verbose) = @_;
    if (! $startdate) { $startdate = $firstyr;}
    if ($firstyr <= $startdate) {return $startdate ;}
-   my $adjYr = ($firstyr  +  $interval - 1) % $interval;
-   $firstyr = $firstyr - $adjYr ;
-   if (($firstyr -  $interval - 1) % $interval != 0) { die "ERROR: start year not on chunk edge\n"; }
-   if ($firstyr <= $startdate) {$firstyr =  $startdate ;}
+   my $adjYr = ($firstyr-$startdate) % $interval;
+   if ( $adjYr != 0 ) { 
+      my $newvalue = $firstyr - $adjYr ;
+      print "\nNOTE: Adjusting the $c first year to check from $firstyr to $newvalue to match the chunk boundaries\n" if $verbose;
+      $firstyr = $newvalue;
+   }
    return FREUtil::padzeros($firstyr);
 }
 
@@ -708,7 +713,7 @@ my %opt =
     if ("$opt{dir}" ne '') {$archivedir = $opt{dir};}
     my $analysisdir = $exp->analysisDir();
     my $statedir = $exp->stateDir()."/postProcess";
-    print "statedir " . $statedir . "\n";
+    print "State files in: " . $statedir . "\n" if $opt{verbose};
     my $rootdir = $exp->rootDir();
     my $ppNode = freppcheck::getppNode($exp);
     unless( $ppNode ) { print "No postProcess node found, exiting\n";exit; }
@@ -738,7 +743,7 @@ my %opt =
       foreach (@dts) {
          push(@dtsources, $_) unless ($_=~/monthly/ or $_=~/annual/ or $_=~/seasonal/ or $seen{$_}++);
       }
-      if ($opt{verbose}) {print "diag_table source files for $component are '@dtsources'\n";}
+      if ($opt{verbose}) {print "Diag_table source files for $component: '@dtsources'\n";}
 
       #get list of variables for each file from diag table information.
       foreach my $srcfile (@dtsources) {

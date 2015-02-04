@@ -14,7 +14,7 @@
   set beginruntime = `date "+%s"`
 
 #get command line options for interactive usage
-  set argv = (`getopt hiq $*`)
+  set argv = (`getopt hiqd $*`)
 #---------------------------------------------------
   while ("$argv[1]" != "--")
       switch ($argv[1])
@@ -24,6 +24,8 @@
               set interactive; breaksw
           case -q:
               set quiet; breaksw
+          case -d:
+              set direct; breaksw
       endsw
       shift argv
   end
@@ -66,14 +68,23 @@ Synopsis:  get a file from GFDL filesystems to Gaea's /lustre/ltfs/scratch/\$USE
 
               /lustre/ltfs/scratch/\$USER/fms/testing/fileA
 
+           Note that send_file will alter the platform portion of filenames to aid in
+           transferring FRE files between sites unless you use the -d option.
+
    Usage:  get_file filename
 
               The filename can use the relative or full path.
               This will submit a batch job to get the file.
 
-           get_file -i filename 
+           get_file -i filename OR get_file -i -q filename
 
-              This will get the file interactively instead of in batch.
+              This will get the file interactively instead of in batch.  Adding -q (quiet)
+              will print fewer messages to the screen during the transfer.
+
+           get_file -d filename
+
+              "direct": prevent get_file from translating portions of the path like
+              gfdl.ncrc2-default-prod-openmp -> ncrc2.default-prod-openmp
 
 EOF
     exit 1
@@ -126,6 +137,9 @@ EOF
   endif
 
   set outpath = $inpath
+  if ( ! $?direct ) then
+     set outpath = `echo $outpath | sed 's:\(.\+\)\/gfdl\.\(ncrc[1-2]\?\)-\(.\+\):\1\/\2\.\3:'`
+  endif
 
   echo "Getting /$fs/$u/$inpath$filename"
   echo "Writing to /lustre/ltfs/scratch/$USER/$outpath"
@@ -136,7 +150,8 @@ EOF
     #endif
   else
     if ( ! $?interactive ) then
-      msub -v file=/$fs/$u/$inpath$filename $0
+      set freversion = `echo $LOADEDMODULES | tr ':' '\n' | egrep '^fre/.+' | sed 's,^fre/,,'`
+      msub -v file=/$fs/$u/$inpath$filename,freversion=$freversion $0
       exit $status
     endif
   endif

@@ -1,5 +1,5 @@
 #
-# $Id: FRE.pm,v 18.0.2.9 2011/02/09 19:51:56 afy Exp $
+# $Id: FRE.pm,v 18.0.2.19 2012/04/24 23:56:21 afy Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: Main Library Module
 # ------------------------------------------------------------------------------
@@ -24,8 +24,25 @@
 # afy    Ver   7.01  Add mailMode subroutine                        December 10
 # afy    Ver   8.00  Modify new (add the site locality test)        January 11
 # afy    Ver   9.00  Modify home (use FRE_COMMANDS_HOME)            February 11
+# afy    Ver  10.00  Use new FREUtil module (home)                  March 11
+# afy    Ver  10.01  Use new FREDefaults module (Sites)             March 11
+# afy    Ver  10.02  Use new FREPlatforms module                    March 11
+# afy    Ver  10.03  Modify new (improve sites checking)            March 11
+# afy    Ver  11.00  Add propertyParameterized subroutine           March 11
+# afy    Ver  12.00  Replace 'xmlLoadAndValidate' => 'xmlLoad'      September 11
+# afy    Ver  12.01  Add 'validate' class method                    September 11
+# afy    Ver  12.02  Add 'init' initialization method               September 11
+# afy    Ver  12.03  Modify 'new' (call 'init')                     September 11
+# afy    Ver  13.00  Remove 'new' initialization method             October 11
+# afy    Ver  13.01  Rename 'init' => 'new' (and roll it back)      October 11
+# afy    Ver  14.00  Modify 'new' (FREPlatforms::equals*SiteRoot)   December 11
+# afy    Ver  15.00  Modify 'new' (new FREProperties module)        December 11
+# afy    Ver  16.00  Modify 'new' (more explanatory message)        January 12
+# afy    Ver  17.00  Modify 'new' (FREPlatforms/FREProperties)      January 12
+# afy    Ver  18.00  Modify 'new' (process option --project)        January 12
+# afy    Ver  19.00  Modify 'propertyParameterized' subroutine      April 12
 # ------------------------------------------------------------------------------
-# Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2000-2011
+# Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2000-2012
 # Designed and written by V. Balaji, Amy Langenhorst and Aleksey Yakovlev
 #
 
@@ -39,6 +56,7 @@ use XML::LibXML();
 use FREDefaults();
 use FREExperiment();
 use FREMsg();
+use FREPlatforms();
 use FREProperties();
 use FRETargets();
 use FRETrace();
@@ -58,41 +76,22 @@ use constant MAIL_MODE_DEFAULT => 'a';
 # ///////////////////////////////////////////////////////// Private utilities //
 # //////////////////////////////////////////////////////////////////////////////
 
-my $xmlLoadAndValidate = sub($$$)
-# ------ arguments: $xmlfile $validate $verbose
+my $xmlLoad = sub($$)
+# ------ arguments: $xmlfile $verbose
+# ------ return the loaded document 
 {
-  my ($x, $s, $v) = @_;
+  my ($x, $v) = @_; 
+  my $document = undef;
   my $parser = XML::LibXML->new(line_numbers => 1, xinclude => 1);
-  my $document = $parser->parse_file($x);
-  if ($s)
+  eval {$document = $parser->parse_file($x)};
+  if ($@ eq '')
   {
-    my $schemaLocation = FRE::home() . '/etc/schema/fre.xsd';
-    if (-f $schemaLocation and -r $schemaLocation)
-    {
-      my $schema = XML::LibXML::Schema->new(location => $schemaLocation);
-      eval {$schema->validate($document)};
-      if ($@)
-      {
-	my ($line, $message) = ($@->line(), $@->message());
-	$message =~ s/\n$//s;
-	FREMsg::out($v, FREMsg::FATAL, "The XML file '$x', line '$line' - $message"); 
-	return '';
-      }
-      else
-      {
-	FREMsg::out($v, FREMsg::NOTE, "The XML file '$x' has been successfully validated"); 
-	return $document->getDocumentElement();
-      }
-    }
-    else
-    {
-      FREMsg::out($v, FREMsg::FATAL, "The XML schema file '$schemaLocation' doesn't exist or not readable");
-      return '';
-    }
+    return $document;
   }
   else
   {
-    return $document->getDocumentElement();
+    FREMsg::out($v, FREMsg::FATAL, $@); 
+    return undef;
   }
 };
 
@@ -135,21 +134,6 @@ my $platformNodeGet = sub($)
   my $r = shift;
   my @nodes = $r->findnodes('setup/platform');
   return (scalar(@nodes) == 1) ? $nodes[0] : '';
-};
-
-my $platformSiteGet = sub($)
-# ------ arguments: $platform
-# ------ return platform site and prefixed (if needed) platform
-{
-  my $p = FREDefaults::PlatformStandardized(shift);
-  if ($p)
-  {
-    return ((split /\./, $p)[0], $p);
-  }
-  else
-  {
-    return '';
-  }
 };
 
 my $infoGet = sub($$$)
@@ -229,177 +213,233 @@ my $baseCshCompatibleWithTargets = sub($$)
   }
 };
 
+my $projectGet = sub($$)
+# ------ arguments: $fre $project
+{
+  my ($fre, $p) = @_;
+  return (defined($p)) ? $p : ($fre->platformValue('project') || $fre->property('FRE.scheduler.project'));
+};
+
 # //////////////////////////////////////////////////////////////////////////////
 # ///////////////////////////////////////////////////////////// Class methods //
 # //////////////////////////////////////////////////////////////////////////////
 
-sub home
+sub home()
 # ------ arguments: none
 # ------ called as class method
 # ------ return the FRE commands home 
 {
-  return $ENV{FRE_COMMANDS_HOME};
+  return FREUtil::home();
+}
+
+sub validate($$)
+# ------ arguments: $xmlfile $verbose
+# ------ return 1 if the $xmlfile has been successfully validated
+{
+  my ($x, $s, $v) = @_;
+  my $document = $xmlLoad->($x, $v);
+  if ($document)
+  {
+    my $schemaLocation = FRE::home() . '/etc/schema/fre.xsd';
+    if (-f $schemaLocation and -r $schemaLocation)
+    {
+      my $schema = XML::LibXML::Schema->new(location => $schemaLocation);
+      eval {$schema->validate($document)};
+      if ($@ eq '')
+      {
+	FREMsg::out($v, FREMsg::NOTE, "The XML file '$x' has been successfully validated"); 
+	return 1;
+      }
+      else
+      {
+	my ($line, $message) = ($@->line(), $@->message());
+	$message =~ s/\n$//s;
+	FREMsg::out($v, FREMsg::FATAL, "The XML file '$x', line '$line' - $message"); 
+	return undef;
+      }
+    }
+    else
+    {
+      FREMsg::out($v, FREMsg::FATAL, "The XML schema file '$schemaLocation' doesn't exist or not readable");
+      return undef;
+    }
+  }
+  else
+  {
+    FREMsg::out($v, FREMsg::FATAL, "The XML file '$x' can't be parsed");
+    return undef;
+  }
 }
 
 # //////////////////////////////////////////////////////////////////////////////
 # ////////////////////////////////////////// Class initialization/termination //
 # //////////////////////////////////////////////////////////////////////////////
 
-sub new
+sub new($$%)
 # ------ arguments: $className $caller %options
 # ------ called as class method
 # ------ read a FRE XML tree from a file, check for basic errors, return the FRE object 
 {
-
   my ($class, $caller, %o) = @_;
   my $xmlfileAbsPath = File::Spec->rel2abs($o{xmlfile});
-
   if (-f $xmlfileAbsPath and -r $xmlfileAbsPath)
   {
     FREMsg::out($o{verbose}, FREMsg::NOTE, "The '$caller' begun using the XML file '$xmlfileAbsPath'...");
     # ----------------------------------------- load the (probably validated) configuration file
-    my $rootNode = $xmlLoadAndValidate->($xmlfileAbsPath, $o{validate}, $o{verbose});
-    if ($rootNode)
+    my $document = $xmlLoad->($xmlfileAbsPath, $o{verbose});
+    if ($document)
     {
+      my $rootNode = $document->documentElement();
       my $version = $versionGet->($rootNode, $o{verbose});
-      # --------------------------------- prefix the platform (if needed) and determine the platform site
-      (my $platformSite, $o{platform}) = $platformSiteGet->($o{platform});
+      # ------------------------------------ standardize the platform string and verify its correctness
+      my ($platformSite, $platformTail) = FREPlatforms::parse($o{platform});
       if ($platformSite)
       {
-        # -------------------------------------------------------------- verify locality of the platform site
-	if (($platformSite eq FREDefaults::Site()) or ($caller eq 'frelist'))
+	$o{platform} = "$platformSite.$platformTail";
+        # -------------------------------------------------------- verify availability of the platform site 
+	if (scalar(grep($_ eq $platformSite, FREDefaults::Sites())) > 0)
 	{
-	  # ----------------------------------------------------------------------- standardize the target string
-	  ($o{target}, my $targetErrorMsg) = FRETargets::standardize($o{target});
-	  if ($o{target})
+          # -------------------------------------------------------------- verify locality of the platform site
+	  if (FREPlatforms::siteIsLocal($platformSite) || $caller eq 'frelist')
 	  {
-	    # -------------------------------------- initialize properties object (properties expansion happens here)
- 	    my $siteDir = FRE::home() . '/site/' . $platformSite;
-	    my $properties = FREProperties->new($rootNode, $platformSite, $siteDir, %o);
-	    if ($properties)
+	    # ----------------------------------------------------------------------- standardize the target string
+	    ($o{target}, my $targetErrorMsg) = FRETargets::standardize($o{target});
+	    if ($o{target})
 	    {
-	      $properties->propertiesList($o{verbose});
-	      # ----------------------------------------------- locate the platform node (no backward compatibility anymore)
-	      my $platformNode = $platformNodeGet->($rootNode);
-	      if ($platformNode)
+	      # -------------------------------------- initialize properties object (properties expansion happens here)
+	      my $siteDir = FREPlatforms::siteDir($platformSite); 
+	      my $properties = FREProperties->new($rootNode, $siteDir, %o);
+	      if ($properties)
 	      {
-        	# --------------------------------------------------------------------------------------------- create the object
-		my $fre = {};
-		bless $fre, $class;
-		# --------------------------------------------------------------- save caller name and global options in the object
-		$fre->{caller} = $caller;
-		$fre->{platformSite} = $platformSite;
-		$fre->{platform} = $o{platform};
-		$fre->{target} = $o{target};
-		$fre->{verbose} = $o{verbose};
-        	# ------------------------------------------------------------------------ save calculated earlier values in the object
-		$fre->{xmlfileAbsPath} = $xmlfileAbsPath;
-        	$fre->{rootNode} = $rootNode;
-		$fre->{version} = $version;
-		$fre->{siteDir} = $siteDir;
-		$fre->{properties} = $properties;
-		$fre->{platformNode} = $platformNode;
-		# ---------------------------------------------------------------------------- calculate and save misc values in the object 
-		$fre->{project} = $fre->platformValue('project') || $fre->property('FRE.scheduler.project');
-		$fre->{baseCsh} = $fre->platformValue('csh');
-		# -------------------------------------------------------------------------------------------------- derive the mkmf template
-		my $mkmfTemplate = $mkmfTemplateGet->($fre, $caller, $platformNode, $o{verbose});
-		if ($mkmfTemplate)
+		$properties->propertiesList($o{verbose});
+		# ----------------------------------------------- locate the platform node (no backward compatibility anymore)
+		my $platformNode = $platformNodeGet->($rootNode);
+		if ($platformNode)
 		{
-		  $fre->{mkmfTemplate} = $mkmfTemplate;
-		  # -------------------------------------------------------------------------- verify compatibility of base <csh> with targets
-		  if ($baseCshCompatibleWithTargets->($fre, $o{verbose}))
+        	  # --------------------------------------------------------------------------------------------- create the object
+		  my $fre = {};
+		  bless $fre, $class;
+		  # --------------------------------------------------------------- save caller name and global options in the object
+		  $fre->{caller} = $caller;
+		  $fre->{platformSite} = $platformSite;
+		  $fre->{platform} = $o{platform};
+		  $fre->{target} = $o{target};
+		  $fre->{verbose} = $o{verbose};
+        	  # ------------------------------------------------------------------------ save calculated earlier values in the object
+		  $fre->{xmlfileAbsPath} = $xmlfileAbsPath;
+        	  $fre->{rootNode} = $rootNode;
+		  $fre->{version} = $version;
+		  $fre->{siteDir} = $siteDir;
+		  $fre->{properties} = $properties;
+		  $fre->{platformNode} = $platformNode;
+		  # ---------------------------------------------------------------------------- calculate and save misc values in the object 
+		  $fre->{project} = $projectGet->($fre, $o{project});
+		  $fre->{baseCsh} = $fre->platformValue('csh');
+		  # -------------------------------------------------------------------------------------------------- derive the mkmf template
+		  my $mkmfTemplate = $mkmfTemplateGet->($fre, $caller, $platformNode, $o{verbose});
+		  if ($mkmfTemplate)
 		  {
-		    # -------------------------------------------------------------------------- read setup-based info (for compatibility only)
-		    $fre->{getFmsData} = $infoGet->($fre, 'setup/getFmsData', $o{verbose});
-		    $fre->{fmsRelease} = $infoGet->($fre, 'setup/fmsRelease', $o{verbose});
-		    # -------------------------------------------------------------------- read experiment nodes, save their names and nodes
-		    my (%counter, %expNode, $expNames);
-		    foreach my $node ($rootNode->findnodes('experiment'))
+		    $fre->{mkmfTemplate} = $mkmfTemplate;
+		    # -------------------------------------------------------------------------- verify compatibility of base <csh> with targets
+		    if ($baseCshCompatibleWithTargets->($fre, $o{verbose}))
 		    {
-		      my $name = $fre->nodeValue($node, '@name') || $fre->nodeValue($node, '@label');
-		      $counter{$name}++;
-		      $expNode{$name} = $node;
-		      $expNames .= ' ' if $expNames;
-		      $expNames .= $name;
-		    }
-		    # ----------------------------------------------------------------------- check experiment names uniqueness
-		    my @expNamesDuplicated = grep($counter{$_} > 1, keys(%counter));
-		    if (scalar(@expNamesDuplicated) == 0)
-		    {
-		      # ------------------------------------------------ save experiment names and nodes in the object
-		      $fre->{expNodes} = \%expNode;
-		      $fre->{expNames} = $expNames;
-		      # -------------------------------------------------------------------- print what we got
-		      $fre->out
-		      (
-			2,
-			"siteDir        = $fre->{siteDir}", 
-			"platform       = $fre->{platform}",
-			"target         = $fre->{target}",
-			"project        = $fre->{project}", 
-			"mkmfTemplate   = $fre->{mkmfTemplate}"
-		      );
-		      # ----------------------------------------------------------- call tracing
-		      if ($fre->property('FRE.call.trace'))
+		      # -------------------------------------------------------------------------- read setup-based info (for compatibility only)
+		      $fre->{getFmsData} = $infoGet->($fre, 'setup/getFmsData', $o{verbose});
+		      $fre->{fmsRelease} = $infoGet->($fre, 'setup/fmsRelease', $o{verbose});
+		      # -------------------------------------------------------------------- read experiment nodes, save their names and nodes
+		      my (%counter, %expNode, $expNames);
+		      foreach my $node ($rootNode->findnodes('experiment'))
 		      {
-			FRETrace::insert($siteDir, $caller, $xmlfileAbsPath, \%o);
+			my $name = $fre->nodeValue($node, '@name') || $fre->nodeValue($node, '@label');
+			$counter{$name}++;
+			$expNode{$name} = $node;
+			$expNames .= ' ' if $expNames;
+			$expNames .= $name;
 		      }
-		      # ------------------------------------------------- normal return
-		      return $fre;
+		      # ----------------------------------------------------------------------- check experiment names uniqueness
+		      my @expNamesDuplicated = grep($counter{$_} > 1, keys(%counter));
+		      if (scalar(@expNamesDuplicated) == 0)
+		      {
+			# ------------------------------------------------ save experiment names and nodes in the object
+			$fre->{expNodes} = \%expNode;
+			$fre->{expNames} = $expNames;
+			# -------------------------------------------------------------------- print what we got
+			$fre->out
+			(
+			  FREMsg::NOTE,
+			  "siteDir        = $fre->{siteDir}", 
+			  "platform       = $fre->{platform}",
+			  "target         = $fre->{target}",
+			  "project        = $fre->{project}", 
+			  "mkmfTemplate   = $fre->{mkmfTemplate}"
+			);
+			# ----------------------------------------------------------- call tracing
+			if ($fre->property('FRE.call.trace'))
+			{
+			  FRETrace::insert($siteDir, $caller, $xmlfileAbsPath, \%o);
+			}
+			# ------------------------------------------------- normal return
+			return $fre;
+		      }
+		      else
+		      {
+			my $expNamesDuplicated = join ' ', @expNamesDuplicated;
+			FREMsg::out($o{verbose}, FREMsg::FATAL, "Experiment names aren't unique: $expNamesDuplicated");
+			return '';
+		      }
 		    }
 		    else
 		    {
-		      my $expNamesDuplicated = join ' ', @expNamesDuplicated;
-		      FREMsg::out($o{verbose}, FREMsg::FATAL, "Experiment names aren't unique: $expNamesDuplicated");
+		      FREMsg::out($o{verbose}, FREMsg::FATAL, "Mismatch between the platform <csh> and the target option value");
 		      return '';
 		    }
-		  }
+        	  }
 		  else
 		  {
-		    FREMsg::out($o{verbose}, FREMsg::FATAL, "Mismatch between the platform <csh> and the target option value");
+        	    FREMsg::out($o{verbose}, FREMsg::FATAL, "A problem with the mkmf template");
 		    return '';
 		  }
-        	}
+		}
 		else
 		{
-        	  FREMsg::out($o{verbose}, FREMsg::FATAL, "A problem with the mkmf template");
+        	  FREMsg::out($o{verbose}, FREMsg::FATAL, "The platform with name '$o{platform}' isn't defined");
 		  return '';
 		}
 	      }
 	      else
 	      {
-        	FREMsg::out($o{verbose}, FREMsg::FATAL, "The platform with name '$o{platform}' isn't defined or defined more than once");
+        	FREMsg::out($o{verbose}, FREMsg::FATAL, "A problem with the XML file '$xmlfileAbsPath'");
 		return '';
 	      }
 	    }
 	    else
 	    {
-              FREMsg::out($o{verbose}, FREMsg::FATAL, "A problem with FRE configuration files");
+	      FREMsg::out($o{verbose}, FREMsg::FATAL, $targetErrorMsg);
 	      return '';
 	    }
 	  }
 	  else
 	  {
-	    FREMsg::out($o{verbose}, FREMsg::FATAL, $targetErrorMsg);
+	    FREMsg::out($o{verbose}, FREMsg::FATAL, "You are not allowed to run the '$caller' tool with the '$o{platform}' platform on this site");
 	    return '';
 	  }
 	}
 	else
 	{
-	  FREMsg::out($o{verbose}, FREMsg::FATAL, "You are not allowed to run the '$caller' tool with the '$o{platform}' platform on this site");
+	  my $sites = join("', '", FREDefaults::Sites());
+	  FREMsg::out($o{verbose}, FREMsg::FATAL, "The site '$platformSite' is unknown", "Known sites are '$sites'");
 	  return '';
 	}
       }
       else
       {
-	FREMsg::out($o{verbose}, FREMsg::FATAL, "The platform option is invalid");
+	FREMsg::out($o{verbose}, FREMsg::FATAL, "The --platform option value '$o{platform}' is not valid");
 	return '';
       }
     }
     else
     {
-      FREMsg::out($o{verbose}, FREMsg::FATAL, "The XML file '$xmlfileAbsPath' hasn't been validated");
+      FREMsg::out($o{verbose}, FREMsg::FATAL, "The XML file '$xmlfileAbsPath' can't be parsed");
       return '';
     }
   }
@@ -408,10 +448,9 @@ sub new
     FREMsg::out($o{verbose}, FREMsg::FATAL, "The XML file '$xmlfileAbsPath' doesn't exist or isn't readable");
     return '';
   }
-
 }
 
-sub DESTROY
+sub DESTROY()
 {
   my $fre = shift;
 }
@@ -668,6 +707,33 @@ sub property($$)
 {
   my ($fre, $k) = @_;
   return $fre->placeholdersExpand($fre->{properties}->property($k));
+}
+
+sub propertyParameterized($$;@)
+# ------ arguments: $fre $propertyName @values
+# ------ called as object method
+# ------ return the external property value, where all the '$' are replaced by @values
+{
+  my ($fre, $k, @v) = @_;
+  my ($s, $i) = ($fre->placeholdersExpand($fre->{properties}->property($k)), 0);
+  while (1)
+  {
+    my $index = index($s, '$');
+    if ($index < 0)
+    {
+      last;
+    }
+    elsif (my $value = $v[$i])
+    {
+      substr($s, $index, 1) = $value;
+      $i++;
+    }
+    else
+    {
+      $s = '';
+    }
+  }
+  return $s;
 }
 
 sub nodeValue($$$)

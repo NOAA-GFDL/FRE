@@ -1,7 +1,7 @@
 #!/usr/bin/perl
 # -*- cperl -*-
 #
-# $Id: fremake,v 18.0.2.22.4.7 2012/03/16 18:03:52 sdu Exp $
+# $Id: fremake,v 18.0.2.24.2.1 2012/12/28 17:41:33 afy Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: Program to Create a Script to Compile a Model
 # ------------------------------------------------------------------------------
@@ -67,6 +67,9 @@
 # afy    Ver  23.00  Modify Usage (remove ASCII escapes)            March 12
 # afy    Ver  23.01  Modify processCheckoutClean (no tmpDir)        March 12
 # afy    Ver  23.02  Modify processCompileClean (no tmpDir)         March 12
+# afy    Ver  24.00  Cosmetics in messages                          April 12
+# afy -------------- Branch 18.0.2.24.2 --------------------------- December 12
+# afy    Ver   1.00  Use new module FRETemplate (account, dualFlag) December 12
 # ------------------------------------------------------------------------------
 # Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2000-2012
 # Designed and written by V. Balaji, Amy Langenhorst and Aleksey Yakovlev
@@ -96,7 +99,7 @@ use FREXML();
 
   package fremake;
 
-  use constant VERSION => '$Id: fremake,v 18.0.2.22.4.7 2012/03/16 18:03:52 sdu Exp $';
+  use constant VERSION => '$Id: fremake,v 18.0.2.24.2.1 2012/12/28 17:41:33 afy Exp $';
 
   use constant OPTLIST =>
   (
@@ -915,8 +918,9 @@ use FREXML();
       FRETemplate::setVersionInfo(\$envScript, $z, $0, %o);
       FRETemplate::setSchedulerMakeVerbose(\$envScript, $z);
 
-      FRETemplate::setSchedulerResources(\$cmpScript, $z, 'make', $o{ncores}, $o{walltime} * 60, undef, undef);
-      FRETemplate::setSchedulerNames(\$cmpScript, $z, File::Basename::basename($cmpScriptName), $z->execDir(), 0);
+      FRETemplate::setSchedulerAccount(\$cmpScript, $z, undef);
+      FRETemplate::setSchedulerResources(\$cmpScript, $z, 'make', $o{ncores}, $o{walltime} * 60, undef, undef, undef);
+      FRETemplate::setSchedulerNames(\$cmpScript, $z, File::Basename::basename($cmpScriptName), $z->execDir());
       FRETemplate::setVersionInfo(\$cmpScript, $z, $0, %o);
       FRETemplate::setSchedulerMakeVerbose(\$cmpScript, $z);
 
@@ -1085,7 +1089,7 @@ use FREXML();
   {
     unless ($opt{platform} && substr($opt{platform}, 0, 1) ne '-')
     {
-      FREMsg::out($opt{verbose}, FREMsg::FATAL, "The --platform option value is missed");
+      FREMsg::out($opt{verbose}, FREMsg::FATAL, "The --platform option's value is missing");
       exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
     }
   }
@@ -1094,7 +1098,7 @@ use FREXML();
   {
     unless ($opt{target} && substr($opt{target}, 0, 1) ne '-')
     {
-      FREMsg::out($opt{verbose}, FREMsg::FATAL, "The --target option value is missed");
+      FREMsg::out($opt{verbose}, FREMsg::FATAL, "The --target option's value is missing");
       exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
     }
   }
@@ -1103,7 +1107,7 @@ use FREXML();
   {
     unless ($opt{xmlfile} && substr($opt{xmlfile}, 0, 1) ne '-')
     {
-      FREMsg::out($opt{verbose}, FREMsg::FATAL, "The --xmlfile option value is missed");
+      FREMsg::out($opt{verbose}, FREMsg::FATAL, "The --xmlfile option's value is missing");
       exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
     }
   }

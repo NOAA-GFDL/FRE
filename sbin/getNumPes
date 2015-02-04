@@ -1,0 +1,379 @@
+#! /usr/bin/perl
+
+# =========================================================================
+# Copyright (C) 2010-2012 Seth Underwood
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+# General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see
+# <http://www.gnu.org/licenses/>.
+# =========================================================================
+
+use strict;
+use warnings;
+use Getopt::Long;
+use Pod::Usage;
+use Sys::Hostname;
+use POSIX qw(ceil floor);
+
+sub displayVersion {
+  # Print the version to STDOUT.
+
+  # Version and Date
+  my $Version = '2.1';
+  my $Date = '04 Jan 2012';
+
+  print "getNumPes $Version ($Date)\n";
+}
+
+sub getCoresPerNode {
+  my $host = shift @_;
+  my $coresPerNode = 0;
+
+  if ( $host =~ /gaea[1-4].*/ or $host =~ /c1ms.*/ or $host =~ /ncrc1/ ) {
+    $coresPerNode = 24;
+  } elsif ( $host =~ /gaea[5-8].*/ or $host =~ /t1.*/ or $host =~ /c2.*/ or $host =~ /ncrc2/ ) {
+    $coresPerNode = 32;
+  }
+
+  return $coresPerNode;
+}
+
+sub fixPeCounts {
+  my ($totPes, $atmPes, $do_atm, $ocnPes, $do_ocn, $omp, $cpn) = @_;
+  my $error;
+  our $debug;
+
+  if ( $debug ) {
+    print STDERR "Tot = $totPes, Atm = $$atmPes, OMP = $omp, Ocn = $$ocnPes, CPN = $cpn\n";
+    print STDERR "do_atmos = ";
+    if ( $do_atm ) {
+      print STDERR "true\n";
+    } else {
+      print STDERR "false\n";
+    }
+    print STDERR "do_ocean = ";
+    if ( $do_ocn ) {
+      print STDERR "true\n";
+    } else {
+      print STDERR "false\n";
+    }
+  }
+
+  if ( $$atmPes == 0 and $$ocnPes != 0 ) {
+    $$atmPes = ($totPes - $$ocnPes)/$omp;
+    $error = 0;
+  } elsif ( $$atmPes != 0 and $$ocnPes == 0 ) {
+    $$ocnPes = $totPes - $$atmPes*$omp;
+    $error = 0;
+  }
+  # Reset number of atmos/ocean pe's if not doing atmos/ocean
+  $$ocnPes = 0 if ( !$do_ocn );
+  $$atmPes = 0 if ( !$do_atm );
+  if ( $$atmPes*$omp + $$ocnPes == $totPes ) {
+    $error = 0;
+  } elsif ( (ceil($$atmPes*$omp/($cpn-$cpn%$omp))+ceil($$ocnPes/$cpn))*$cpn == $totPes ) {
+    $error = 0;
+  } else {
+    $error = 1;
+  }
+
+  # One last sanity check
+  if ( !$error ) {
+    $error = 2 if ( !($$atmPes and $do_atm) );
+    $error = 3 if ( !($$ocnPes and $do_ocn) );
+  }
+  return $error;
+}
+
+sub fixLayout {
+  my ($npes, $ntiles, $layout) = @_;
+  my $error;
+
+  # Is one of the layout numbers a zero?
+  if ( $ntiles != 0 ) {
+    if ( $$layout[0] == 0 and $$layout[1] != 0 ) {
+      $$layout[0] = $npes / ($ntiles * $$layout[1]);
+      $error = 0;
+    } elsif ( $$layout[0] != 0 and $$layout[1] == 0 ) {
+      $$layout[1] = $npes / ($ntiles * $$layout[0]);
+      $error = 0;
+    } elsif ( $$layout[0] != 0 and $$layout[1] != 0 ) {
+      if ( $$layout[0] * $$layout[1] * $ntiles == $npes ) {
+	$error = 0;
+      } else {
+	$error = 1;
+      }
+    }
+  } else {
+    $error = 2;
+  }
+
+  return $error;
+}
+
+sub getTotNumPes {
+  my $script = shift;
+  open (SCRPT, '<', $script) or die $!;
+  local $/;
+  my $allscript = <SCRPT>;
+  close(SCRPT);
+
+  my $npes;
+  if ( $allscript =~ m/set npes = (\d+)/ ) {
+    $npes = $1;
+  }
+
+  return $npes;
+}
+
+sub getNMLfile {
+  my $script = shift;
+  open (NML, '<', $script) or die $!;
+  local $/;
+  my $allnml = <NML>;
+  close(NML);
+
+  my $nml;
+  if ( $allnml =~ m/cat > input.nml.*? <<\\*?EOF\s*\n(.*?EOF)/s ) {
+    $nml = $1;
+  }
+
+  return $nml;
+}
+
+{
+  # Check for usage options (help/version)
+  my $help;
+  our $debug;
+  my $version;
+  my $host = hostname;
+  GetOptions(
+	     "host=s" => \$host,
+	     "help|h" => \$help,
+	     "debug|d+" => \$debug,
+	     "version|v" => \$version,
+	    ) or pod2usage(2);
+  pod2usage(1) if $help;
+  displayVersion() and exit(0) if ( $version );
+
+  # Get the number of cores / node
+  my $cpn = getCoresPerNode($host);
+  die "getNumPes: Unknown host '$host'.  Try a valid host (ncrc1, ncrc2, c1ms, t1, c2).\n" unless ( $cpn );
+
+  die "getNumPes: No file given.\n" unless ( @ARGV );
+  die "getNumPes: file '$ARGV[0]' does not exist or is not readable.  $!\n" unless ( -r -f -e $ARGV[0] );
+  my $nmlFile = &getNMLfile($ARGV[0]);
+  my $npes = &getTotNumPes($ARGV[0]);
+  die "getNumPes: No Fortran namelists found in file '$ARGV[0]'.\n" unless ( $nmlFile );
+
+  my $coupler;
+  my $fv_core;
+  my $ocean_model;
+
+  # Get the three required namelists.
+  if ( $nmlFile =~ m/(&coupler_nml\s*\n.*?\/)/s ) {
+    $coupler = $1;
+  }
+  if ( $nmlFile =~ m/(&fv_core_nml\s*\n.*?\/)/s ) {
+    $fv_core = $1;
+  }
+  if ( $nmlFile =~ m/(&ocean_model_nml\s*\n.*?\/)/s ) {
+    $ocean_model = $1;
+  }
+
+  # coupler_nml is required, die if not found.
+  die "coupler_nml not found\n" unless ( $coupler );
+
+  # Get the number of PEs from the coupler_nml
+  my $atm_pes = 0;
+  my $ocn_pes = 0;
+  my $atm_omp = 1;
+  my $do_ocn = 1;
+  my $do_atm = 1;
+  my $do_concurrent = 0;
+  if ( $coupler =~ /\batmos_npes\b\s*=\s*(\d+)/ ) {
+    $atm_pes = $1;
+  }
+  if ( $coupler =~ /\bocean_npes\b\s*=\s*(\d+)/ ) {
+    $ocn_pes = $1;
+  }
+  if ( $coupler =~ /\batmos_nthreads\b\s*=\s*(\d+)/ ) {
+    $atm_omp = $1;
+  }
+  if ( $coupler =~ /\bconcurrent\b\s*=\s*\.true\./i ) {
+    $do_concurrent = 1;
+  }
+  if ( $coupler =~ /\bdo_ocean\b\s*=\s*\.false\./i ) {
+    $do_ocn = 0;
+  }
+  if ( $coupler =~ /\bdo_atmos\b\s*=\s*\.false\./i ) {
+    $do_atm = 0;
+  }
+  # Non-concurrent runs can have both atm_pes and ocn_pes zero.  
+  # If one is zero, then equal to totPes
+  if ( ! $do_concurrent ) {
+    if ( $do_ocn and $do_atm ) {
+      $atm_pes = $npes if ( $atm_pes == 0 );
+      $ocn_pes = $npes if ( $ocn_pes == 0 );
+    } elsif ( $do_ocn and !$do_atm ) {
+      $atm_pes = 0;
+      $ocn_pes = $npes if ( $ocn_pes == 0 );
+    } elsif ( !$do_ocn and $do_atm ) {
+      $atm_pes = $npes if ( $atm_pes == 0 );
+      $ocn_pes = 0;
+    }
+  }
+  # do_ocean and do_atmos cannot both be false.
+  die "do_ocean and do_atmos in coupler_nml both cannot be .FALSE.\n" if ( !$do_ocn and !$do_atm );
+  # Make sure both atmos_npes and ocean_npes are not zero.
+  die "Both atmos_npes and ocean_npes cannot be zero.\n" if ( $atm_pes + $ocn_pes == 0 );
+  my $err = &fixPeCounts($npes, \$atm_pes, $do_atm, \$ocn_pes, $do_ocn, $atm_omp, $cpn);
+  die "Number of atmosphere pes and ocean PEs does not correspond to the total number of PEs requested\n" if ($err);
+
+  # Only do this if fv_core_nml found
+  my @atm_layout;
+  my $atm_ntiles = 1;
+
+  if ( $fv_core && $atm_pes ) {
+    # Get the number of atmos PEs from the fv_core_nml
+    if ( $fv_core =~ /\blayout\b\s*=\s*(\d+)\s*,\s*(\d+)/ ) {
+      @atm_layout = ($1, $2);
+    }
+
+    # Get the number of tiles for the atmosphere
+    if ( $fv_core =~ /\bntiles\b\s*=\s*(\d+)/ ) {
+      $atm_ntiles = $1;
+    }
+
+    # Fix any 0's in the layout
+    die "Error found in atmosphere layout\n" if ( fixLayout($atm_pes, $atm_ntiles, \@atm_layout) );
+  } elsif ( $atm_pes ) {
+    die "atmosphere processors requested, but no layout found.\n";
+  }
+
+  # Only do this if ocean_model_nml found
+  my @ocn_layout;
+
+  if ( $ocean_model && $ocn_pes ) {
+    # Get the number of ocean PEs from the ocean_model_nl
+    if ( $ocean_model =~ /\blayout\b\s*=\s*(\d+)\s*,\s*(\d+)/ ) {
+      @ocn_layout = ($1,$2);
+    }
+
+    # Fix any 0's in the layout
+    die "Error found in ocean layout\n" if ( fixLayout($ocn_pes, 1, \@ocn_layout) );
+  } elsif ( $ocn_pes ) {
+    die "ocean processors requested, but no layout found.\n";
+  }
+
+  # Print the csh code to for the layout and npes
+  if ( $atm_pes and @atm_layout ) {
+    print "set atm_pes = $atm_pes\n";
+    print "set atm_layout = ",join(',',@atm_layout),"\n";
+    print "set atm_omp = $atm_omp\n";
+  }
+  if ( $ocn_pes and @ocn_layout ) {
+    print "set ocn_pes = $ocn_pes\n";
+    print "set ocn_layout = ",join(',',@ocn_layout),"\n";
+  }
+}
+
+__END__
+
+=head1 NAME
+
+getNumPes - Extract the required ocean and/or atmosphere PEs from a FRE created run script.
+
+=head1 SYNOPSIS
+
+ getNumPes <FRE_Runscript>
+ getNumPes [-h|-v]
+
+=head1 DESCRIPTION
+
+I<getNumPes> will extract the required number of ocean and/or atmosphere PEs from the
+Fortran namelist coupler_nml and print out C-Shell code to set the shell variables
+atm_pes and/or ocn_pes.  I<getNumPes> will also print out the C-Shell code to set the shell
+variables atm_layout and/or ocn_layout for the atmosphere and ocean layouts read from the
+Fortran namelists fv_core_nml and ocean_model_nml respectively for use with the I<mpi_layout>
+script.
+
+A non-zero exit status indicates an error in reading the namelist values.
+
+=head1 OPTIONS
+
+=over 8
+
+=item B<--host> <HOST>
+
+Use this host to configure the aprun command.  I<getNumPes> will guess
+the host based on the current hostname.  Valid values for <HOST> are:
+I<ncrc1>, I<ncrc2>, I<c1ms>, I<t1>, I<c2>.
+
+=item B<-h>, B<--help>
+
+Display usage information.
+
+=item B<-v>, B<--version>
+
+Display version information
+
+=back
+
+=head1 EXAMPLES
+
+Use in a FRE Version 4 XML file.
+
+ <runtime>
+   <csh><![CDATA[
+     eval `getNumPes $scriptName`
+     if ( $? == 0 ) then
+        unalias runCommand
+        alias runCommand `calcPErequest -f -a -omp $atm_omp -atm $atm_pes -ocn $ocn_pes`
+        mpi_layout -atm $atm_pes -atm_layout $atm_layout -ocn $ocn_pes -ocn_layout $ocn_layout
+     endif
+     ]]>
+   </csh>
+   . . .
+ </runtime>
+
+=head1 SEE ALSO
+
+calcPErequest(1), mpi_layout(1), GFDL FMS Runtime Environment documentation.
+
+=head1 AUTHOR
+
+Seth Underwood <SUnderwood@DRC.com>
+
+=head1 BUGS
+
+I<getNumPes> only prints out C-Shell code.
+
+=head1 COPYRIGHT AND LICENSE
+
+Copyright 2010-2012 Seth Underwood <SUnderwood@DRC.com>
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or (at
+your option) any later version.
+
+This program is distributed in the hope that it will be useful, but
+WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+=cut

@@ -1,0 +1,649 @@
+#!/usr/bin/perl
+# -*- cperl -*-
+
+# $Id: freinfo,v 1.1.2.4.2.1 2013/03/27 18:53:10 afy Exp $
+# ------------------------------------------------------------------------------
+# FMS/FRE Project: Program to Extract Statistics From Stdouts
+# ------------------------------------------------------------------------------
+# afy    Ver   1.00  Initial version (the frecheck clone)           January 12 
+# afy    Ver   2.00  Implement option --main                        January 12 
+# afy    Ver   2.01  Modify analyzeRegression (fix patterns)        January 12 
+# afy    Ver   2.02  Modify extractRegressionData (segmentsNmb)     January 12 
+# afy    Ver   2.03  Add outputFilesListing subroutine              January 12 
+# afy    Ver   3.00  Modify analyzeProduction (check refToRunInfo)  January 12
+# afy    Ver   3.01  Modify analyzeRegression (check refToRunInfo)  January 12
+# afy    Ver   4.00  Modify Usage (remove ASCII escapes)            April 12
+# afy    Ver   4.01  Cosmetics in messages                          April 12
+# afy -------------- Branch 1.1.2.4.2 ----------------------------- March 13
+# afy    Ver   1.00  Modify analyzeProduction (FIX)                 March 13
+# ------------------------------------------------------------------------------
+# Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2000-2013
+# Designed and written by V. Balaji, Amy Langenhorst and Aleksey Yakovlev
+#
+
+use strict;
+
+use File::Basename();
+use Getopt::Long(':config', 'no_ignore_case', 'no_auto_abbrev');
+
+use FRE();
+use FREDefaults();
+use FREExperiment();
+use FREUtil();
+
+# //////////////////////////////////////////////////////////////////////////////
+# ////////////////////////////////////////////////////////// Global constants //
+# //////////////////////////////////////////////////////////////////////////////
+
+{
+
+  package freinfo;
+
+  use constant VERSION => '$Id: freinfo,v 1.1.2.4.2.1 2013/03/27 18:53:10 afy Exp $';
+  
+  use constant OPTLIST =>
+  (
+    'long-list|L',
+    'list|l',
+    'main|m',
+    'regression|r=s',
+    'unique|u=s',
+    'help|h',
+    'platform|p=s',
+    'target|t=s',
+    'verbose|v+',
+    'version|V',
+    'xmlfile|x=s'
+  );
+  
+  use constant LISTER_LONG_DEFAULT => 'ls -lU';
+  use constant LISTER_SHORT_DEFAULT => 'ls -1U';
+  
+  use constant DAYS_PER_YEAR => 365.2425;
+  use constant DAYS_PER_MONTH => DAYS_PER_YEAR / 12;
+  use constant DAYS_PER_HOUR => 1.0 / 24.0;
+  
+  use constant SECONDS_PER_YEAR => 86400.0; 
+
+}
+
+# //////////////////////////////////////////////////////////////////////////////
+# ///////////////////////////////////////////////////////////////// Utilities //
+# //////////////////////////////////////////////////////////////////////////////
+
+{
+
+  package freinfo;
+
+  use Cwd();
+  
+  my $self = File::Basename::basename($0);
+
+  sub Usage()
+  # ------ arguments: none
+  {
+    my $cwd = Cwd::getcwd();
+    my $xml = FREDefaults::XMLFile();
+    my $pfm = FREDefaults::Platform();
+    my $tgt = FREDefaults::Target();
+    return
+    (
+      "\n",
+      "  Usage: $self [options] experiment [experiment ...]\n\n",
+      "  Options:\n\n",
+      "   -L,        --long-list                 list all the stdout files in the long format (don't process them)\n",
+      "   -l,        --list                      list all the stdout files in the short format (don't process them)\n", 
+      "   -m,        --main                      show information about the main run (instead of regression tests)\n",
+      "   -r STRING, --regression=STRING         process only regression tests from the STRING (default is 'all')\n",
+      "   -u STRING, --unique=STRING             process additionally unique runs with numbers from the STRING (default is 'all')\n\n",
+      "   -h,        --help                      print this help message and exit\n",
+      "   -p STRING, --platform=STRING           hardware and software platform STRING (default is '$pfm')\n", 
+      "   -t STRING, --target=STRING             use compilation directives, targeted by STRING (default is '$tgt')\n", 
+      "   -V,        --version                   print the tool version and exit\n",
+      "   -v,        --verbose                   get verbose messages (repeat the option to increase verbosity level)\n", 
+      "   -x FILE,   --xmlfile=FILE              experiment suite XML configuration FILE (default is '$cwd/$xml')\n\n", 
+      "  At least one experiment from the FILE must be listed as an argument.\n\n"
+    );
+  }
+
+  sub Help()
+  # ------ arguments: none
+  {
+    my @usage = freinfo::Usage();
+    my $tgts = join("', '", FRETargets::all());
+    my $tgst = join("', '", FRETargets::starters());
+    return
+    (
+      "\n",
+      "   Synopsis: $self extracts various statistics from model stdout files\n",
+      "@usage",
+      "   Use --long-list or --list to produce a list of available stdout files.\n",
+      "      Options --regression and --unique limit this list to the subset, defined by these options.\n",
+      "      Both the listing options suppress the processing of stdout files.\n",
+      "   Use --regression to get information about regression tests with labels from this option value.\n", 
+      "      This option value can contain a number of regression labels, separated by comma.\n",
+      "      The reserved value 'all' (which is default) will select all available regression labels.\n",
+      "   Use --unique to get information about unique runs with numbers from this option value.\n",
+      "      This option value can contain a list of numbers, separated by comma; ranges are also supported.\n",
+      "      The reserved value 'all' (which is default) will select all available unique runs.\n",
+      "   Use --platform to pick a platform for experiment(s).\n", 
+      "      The <platform> node in the experiment suite configuration file is used\n", 
+      "      to set platform-specific data and instructions.\n",
+      "   Use --target to define compilation and linkage directives for experiment(s).\n",
+      "      Predefined targets refer to groups of directives, existing in the 'mkmf' template file.\n",
+      "      Possible predefined targets are: '$tgts'.\n",
+      "      Any number of targets from this list can be used here, and you can also add your own target (but not more than one).\n",
+      "      Targets '$tgst' are mutually exclusive - not more than one of them is allowed in the target list.\n",
+      "      Your own target should refer to a <compile> node with the corresponding value of its 'target' attribute.\n", 
+      "      Multiple targets are separated by comma or dash. All the directives, referred by multiple targets, are merged.\n\n" 
+    );
+  }
+  
+  sub lengthInDays($$$)
+  # ------ arguments: $months $days $hours
+  {
+    my ($m, $d, $h) = @_;
+    if (defined($m) && defined($d) && defined($h))
+    {
+      return freinfo::DAYS_PER_MONTH * $m + $d + freinfo::DAYS_PER_HOUR * $h;
+    }
+    else
+    {
+      return undef;
+    }
+  }
+  
+  sub yearsPerDay($$$)
+  # ------ arguments: $length $runTimeTotal $runTimeMainLoop
+  {
+    my ($l, $t, $m) = @_;
+    if (defined($l) && defined($t) && defined($m))
+    {
+      my $runTime = ($m > 0) ? $m : $t;
+      return ($runTime > 0) ? ((freinfo::SECONDS_PER_YEAR * $l) / (freinfo::DAYS_PER_YEAR * $runTime)) : undef;
+    }
+    else
+    {
+      return undef;
+    }
+  }
+  
+  sub regressionLabels($$)
+  # ------ arguments: $exp $regressionLabelsList
+  {
+    my ($z, $r) = @_;
+    my ($fre, $expName, @expLabels) = ($z->fre(), $z->name(), $z->extractRegressionLabels());
+    my ($all, @optLabels) = (0, FREUtil::listUnique(split(',', $r)));
+    foreach my $optLabel (@optLabels)
+    {
+      if ($optLabel eq 'all')
+      {
+        $all = 1; 
+      }
+      elsif (scalar(grep($_ eq $optLabel, @expLabels)) == 0)
+      {
+        $fre->out(FREMsg::FATAL, "The experiment '$expName' doesn't contain the '$optLabel' regression test");
+	return ();
+      }
+    }
+    return ($all) ? @expLabels : @optLabels;
+  }
+  
+  sub analyzeProduction($$)
+  # ------ arguments: $exp $unique
+  {
+    my ($z, $u) = @_;
+    if (my $ref = $z->extractProductionRunInfo())
+    {
+      my ($expName, $stdoutDir) = ($z->name(), $z->stdoutDir());
+      my ($counter, %info) = (0, ());
+      foreach my $file (glob("$stdoutDir/run/$expName.o*"))
+      {
+	if ($file =~ m/^$stdoutDir\/run\/$expName\.o\d+$/)
+	{
+          my %infoLine = ();
+          $infoLine{ref} = $ref;
+          $infoLine{unique} = 0;
+          $infoLine{file} = $file;
+          $info{$counter} = \%infoLine;
+          $counter++;
+	}
+      }
+      if ($u eq 'all')
+      {
+	foreach my $uniqueFile (glob("$stdoutDir/run/${expName}__*.o*"))
+	{
+	  if ($uniqueFile =~ m/^$stdoutDir\/run\/${expName}__(\d+)\.o\d+$/)
+	  {
+            my %infoLine = ();
+            $infoLine{ref} = $ref;
+            $infoLine{unique} = $1;
+            $infoLine{file} = $uniqueFile;
+            $info{$counter} = \%infoLine;
+            $counter++;
+	  }
+	}
+      }
+      else
+      {
+	foreach my $n (split(',', $u))
+	{
+	  foreach my $uniqueFile (glob("$stdoutDir/run/${expName}__$n.o*"))
+	  {
+	    if ($uniqueFile =~ m/^$stdoutDir\/run\/${expName}__$n\.o\d+$/)
+	    {
+              my %infoLine = ();
+              $infoLine{ref} = $ref;
+              $infoLine{unique} = $n;
+              $infoLine{file} = $uniqueFile;
+              $info{$counter} = \%infoLine;
+              $counter++;
+	    }
+	  }
+	}
+      }
+      return \%info;
+    }
+    else
+    {
+      return undef;
+    }
+  }
+  
+  sub analyzeRegression($$$)
+  # ------ arguments: $exp $refToLabels $unique
+  {
+    my ($z, $l, $u) = @_;
+    my ($expName, $stdoutDir) = ($z->name(), $z->stdoutDir());
+    my ($counter, $ok, %info) = (0, 1, ());
+    foreach my $label (@{$l})
+    {
+      if (my $ref = $z->extractRegressionRunInfo($label))
+      {
+	foreach my $postfix (sort(keys(%{$ref})))
+	{
+          foreach my $file (glob("$stdoutDir/run/${expName}_$postfix.o*"))
+	  {
+	    if ($file =~ m/^$stdoutDir\/run\/${expName}_$postfix\.o\d+$/)
+	    {
+              my %infoLine = ();
+	      $infoLine{postfix} = $postfix;
+	      $infoLine{ref} = $ref->{$postfix};
+	      $infoLine{unique} = 0;
+	      $infoLine{file} = $file;
+	      $info{$counter} = \%infoLine;
+	      $counter++;
+	    }
+	  }
+	  if ($u eq 'all')
+	  {
+	    foreach my $uniqueFile (glob("$stdoutDir/run/${expName}_${postfix}[0-9]*.o*"))
+	    {
+	      if ($uniqueFile =~ m/^$stdoutDir\/run\/${expName}_$postfix(\d+)\.o\d+$/)
+	      {
+        	my %infoLine = ();
+		$infoLine{postfix} = $postfix;
+		$infoLine{ref} = $ref->{$postfix};
+		$infoLine{unique} = $1;
+		$infoLine{file} = $uniqueFile;
+		$info{$counter} = \%infoLine;
+		$counter++;
+	      }
+	    }
+	  }
+	  else
+	  {
+	    foreach my $n (split(',', $u))
+	    {
+	      foreach my $uniqueFile (glob("$stdoutDir/run/${expName}_$postfix$n.o*"))
+	      {
+		if ($uniqueFile =~ m/^$stdoutDir\/run\/${expName}_$postfix$n\.o\d+$/)
+		{
+        	  my %infoLine = ();
+	          $infoLine{postfix} = $postfix;
+		  $infoLine{ref} = $ref->{$postfix};
+		  $infoLine{unique} = $n;
+		  $infoLine{file} = $uniqueFile;
+		  $info{$counter} = \%infoLine;
+		  $counter++;
+		}
+	      }
+	    }
+	  }
+        }
+      }
+      else
+      {
+        $ok = 0;
+      }
+    }    
+    return ($ok) ? \%info : undef;
+  }
+  
+  sub outputFilesListing($$)
+  # ------ arguments: $refToInfo $lister 
+  {
+    my ($r, $l) = @_;
+    my $files = join(' ', sort(map($r->{$_}{file}, keys(%{$r}))));
+    print qx($l $files);
+  }
+  
+  sub extractProductionData($$)
+  # ------ arguments: $exp $refToInfo
+  {
+    my ($z, $r) = @_;
+    my ($fre, $counter, %data) = ($z->fre(), 0, ());
+    foreach my $infoLine (sort(keys(%{$r})))
+    {
+      my ($ref, $unique, $file) = ($r->{$infoLine}{ref}, $r->{$infoLine}{unique}, $r->{$infoLine}{file});
+      if (chomp(my $segmentsNmb = qx(fgrep 'set -r segmentsPerJob = ' $file | awk '{print \$5}')) > 0)
+      {
+	chomp(my $host = qx(fgrep '<NOTE> : Starting at' $file | awk '{print \$5}'));
+	my @runTimesTotal = split(/\n/, qx(fgrep 'Total runtime ' $file | awk '{print \$5}'));
+	my @runTimesMainLoop = split(/\n/, qx(fgrep 'Main loop ' $file | awk '{print \$5}'));
+	my $length = freinfo::lengthInDays($ref->{segTimeMonths}, 0, 0);
+        for (my $segment = 0; $segment < $segmentsNmb; $segment++)
+	{
+	  my %dataLine = ();
+	  my $yearsPerDay = freinfo::yearsPerDay($length, $runTimesTotal[$segment], $runTimesMainLoop[$segment]);
+	  next unless $yearsPerDay;
+	  $dataLine{label} = 'production';
+	  $dataLine{number} = 0;
+	  $dataLine{postfix} = '';
+	  $dataLine{unique} = $unique;
+	  $dataLine{segment} = $segment;
+	  $dataLine{length} = $length;
+	  $dataLine{npes} = $ref->{npes};
+	  $dataLine{runTimeTotal} = $runTimesTotal[$segment];
+	  $dataLine{runTimeMainLoop} = $runTimesMainLoop[$segment];
+	  $dataLine{yearsPerDay} = $yearsPerDay;
+	  $dataLine{host} = $host;
+	  $data{$counter} = \%dataLine;
+	  $counter++;
+	}
+      }
+      else
+      {
+        $fre->out(FREMsg::WARNING, "Unable to extract segments number from '$file' (system error)");
+	next;
+      }
+    }
+    return \%data;
+  }
+  
+  sub extractRegressionData($$)
+  # ------ arguments: $exp $refToInfo
+  {
+    my ($z, $r) = @_;
+    my ($fre, $counter, %data) = ($z->fre(), 0, ());
+    foreach my $infoLine (sort(keys(%{$r})))
+    {
+      my ($postfix, $ref, $unique, $file) = ($r->{$infoLine}{postfix}, $r->{$infoLine}{ref}, $r->{$infoLine}{unique}, $r->{$infoLine}{file});
+      if (chomp(my $segmentsNmb = qx(fgrep 'set -r segmentsPerJob = ' $file | awk '{print \$5}')) > 0)
+      {
+	chomp(my $host = qx(fgrep '<NOTE> : Starting at' $file | awk '{print \$5}'));
+	my @runTimesTotal = split(/\n/, qx(fgrep 'Total runtime ' $file | awk '{print \$5}'));
+	my @runTimesMainLoop = split(/\n/, qx(fgrep 'Main loop ' $file | awk '{print \$5}'));
+	my @months = split(/ /, $ref->{months});
+	my @days = split(/ /, $ref->{days});
+	my @hours = split(/ /, $ref->{hours});
+        for (my $segment = 0; $segment < $segmentsNmb; $segment++)
+	{
+	  my %dataLine = ();
+	  my $length = freinfo::lengthInDays($months[$segment], $days[$segment], $hours[$segment]);
+	  next unless $length;
+	  my $yearsPerDay = freinfo::yearsPerDay($length, $runTimesTotal[$segment], $runTimesMainLoop[$segment]);
+	  next unless $yearsPerDay;
+	  $dataLine{label} = $ref->{label};
+	  $dataLine{number} = $ref->{number};
+	  $dataLine{postfix} = $postfix;
+	  $dataLine{unique} = $unique;
+	  $dataLine{segment} = $segment;
+	  $dataLine{length} = $length;
+	  $dataLine{npes} = $ref->{npes};
+	  $dataLine{runTimeTotal} = $runTimesTotal[$segment];
+	  $dataLine{runTimeMainLoop} = $runTimesMainLoop[$segment];
+	  $dataLine{yearsPerDay} = $yearsPerDay;
+	  $dataLine{host} = $host;
+	  $data{$counter} = \%dataLine;
+	  $counter++;
+	}
+      }
+      else
+      {
+        $fre->out(FREMsg::WARNING, "Unable to extract segments number from '$file' (system error)");
+	next;
+      }
+    }
+    return \%data;
+  }
+  
+  sub outputData($$)
+  # ------ arguments: $exp $refToData
+  {
+    my ($z, $d) = @_;
+    my ($fre, $expName) = ($z->fre(), $z->name());
+    print "\n/// $expName\n";
+    print "/////////////////////////////////////////////////////////////////////////////////////////////////////\n";
+    print "LABEL      RUN#  POSTFIX          UNI# SEG#  LENGTH  NPES    TOTAL  MAINLOOP  YEARS/DAY  HOST        \n";
+    print "-----------------------------------------------------------------------------------------------------\n";
+    foreach my $run (sort {$a <=> $b} keys(%{$d}))
+    {
+      printf
+      (
+        "%-10s %4d  %-16s %4d %4d %7.1f %5d %8.1f  %8.1f   %8.1f  %-12s\n",
+	$d->{$run}{label},
+	$d->{$run}{number},
+	$d->{$run}{postfix},
+	$d->{$run}{unique},
+	$d->{$run}{segment},
+	$d->{$run}{length},
+	$d->{$run}{npes},
+	$d->{$run}{runTimeTotal},
+	$d->{$run}{runTimeMainLoop},
+	$d->{$run}{yearsPerDay},
+	$d->{$run}{host}
+      );
+    }
+    print "-----------------------------------------------------------------------------------------------------\n";
+  }
+  
+  sub skipExp($)
+  # ------ arguments: $exp 
+  {
+    my $z = shift;
+    my ($expName, $fre) = ($z->name(), $z->fre());
+    $fre->out(FREMsg::FATAL, "Skipping the experiment '$expName'...");
+  }
+
+}
+
+# //////////////////////////////////////////////////////////////////////////////
+# ////////////////////////////////////////////////////////////////////// Main //
+# //////////////////////////////////////////////////////////////////////////////
+
+{
+
+  my %opt =
+  (
+    'regression'	=> 'all',
+    'unique'		=> 'all',
+    'platform'		=> FREDefaults::Platform(),
+    'target'		=> FREDefaults::Target(),
+    'xmlfile'		=> FREDefaults::XMLFile()
+  );
+
+  Getopt::Long::GetOptions(\%opt, freinfo::OPTLIST) or (print freinfo::Usage() and exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM);
+  if ($opt{version}) {print freinfo::VERSION,"\n" and exit FREDefaults::STATUS_OK;}
+  if ($opt{help}) {print freinfo::Help() and exit FREDefaults::STATUS_OK;}
+
+  unless (scalar(@ARGV) > 0)
+  {
+    my $self = File::Basename::basename($0);
+    FREMsg::out($opt{verbose}, 0, "At least one experiment name is needed on the command line", "Try '$self --help' for more information");
+    exit FREDefaults::STATUS_COMMAND_NO_EXPERIMENTS;
+  }
+
+  if ($opt{regression})
+  {
+    if (substr($opt{regression}, 0, 1) eq '-')
+    {
+      FREMsg::out($opt{verbose}, FREMsg::FATAL, "The --regression option's value is missing");
+      exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
+    }
+  }
+  
+  if ($opt{unique})
+  {
+    ($opt{unique}, my @messages) = FREUtil::optionIntegersListParse('unique', $opt{unique});
+    if (scalar(@messages) > 0)
+    {
+      FREMsg::out($opt{verbose}, FREMsg::FATAL, @messages);
+      exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
+    }
+  }
+
+  if ($opt{platform})
+  {
+    if (substr($opt{platform}, 0, 1) eq '-')
+    {
+      FREMsg::out($opt{verbose}, FREMsg::FATAL, "The --platform option's value is missing");
+      exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
+    }
+  }
+  
+  if ($opt{target})
+  {
+    if (substr($opt{target}, 0, 1) eq '-')
+    {
+      FREMsg::out($opt{verbose}, FREMsg::FATAL, "The --target option's value is missing");
+      exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
+    }
+  }
+  
+  if ($opt{xmlfile})
+  {
+    if (substr($opt{xmlfile}, 0, 1) eq '-')
+    {
+      FREMsg::out($opt{verbose}, FREMsg::FATAL, "The --xmlfile option's value is missing");
+      exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
+    }
+  }
+  
+  my $fre = FRE->new('freinfo', %opt) or exit FREDefaults::STATUS_FRE_GENERIC_PROBLEM;
+  
+  my @exps = ();
+  foreach my $expName (FREUtil::listUnique(@ARGV))
+  {
+    my $exp = FREExperiment->new($fre, $expName) or exit FREDefaults::STATUS_FRE_GENERIC_PROBLEM;
+    push @exps, $exp;
+  }
+
+  my $status = FREDefaults::STATUS_OK;
+
+  foreach my $exp (@exps)
+  {
+
+    my $expName = $exp->name();
+    $fre->setCurrentExperimentName($expName);
+    
+    if ($opt{main})
+    {
+      if (my $info = freinfo::analyzeProduction($exp, $opt{unique}))
+      {
+	if (scalar(keys(%{$info})) > 0)
+	{
+          if ($opt{'long-list'})
+	  {
+            freinfo::outputFilesListing($info, $fre->property('FRE.tool.lister.long') || freinfo::LISTER_LONG_DEFAULT);
+	  }
+          elsif ($opt{list})
+	  {
+            freinfo::outputFilesListing($info, $fre->property('FRE.tool.lister.short') || freinfo::LISTER_SHORT_DEFAULT);
+	  }
+	  else
+	  {
+	    my $data = freinfo::extractProductionData($exp, $info);
+	    if (scalar(keys(%{$data})) > 0)
+	    {
+	      freinfo::outputData($exp, $data);
+	    }
+	    else
+	    {
+	      $fre->out(FREMsg::FATAL, "Unable to extract any meaningful data from production stdout files");
+              freinfo::skipExp($exp) if scalar(@exps) > 1;
+              $status = FREDefaults::STATUS_FS_GENERIC_PROBLEM;
+	    }
+	  }
+	}
+	else
+	{
+	  $fre->out(FREMsg::FATAL, "Unable to select production stdout files to process");
+          freinfo::skipExp($exp) if scalar(@exps) > 1;
+          $status = FREDefaults::STATUS_FS_GENERIC_PROBLEM;
+	}
+      }
+      else
+      {
+	$fre->out(FREMsg::FATAL, "Unable to extract production parameters from the XML file");
+        freinfo::skipExp($exp) if scalar(@exps) > 1;
+        $status = FREDefaults::STATUS_FS_GENERIC_PROBLEM;
+      }
+    }
+    elsif (my @labels = freinfo::regressionLabels($exp, $opt{regression}))
+    {
+      if (my $info = freinfo::analyzeRegression($exp, \@labels, $opt{unique}))
+      {
+	if (scalar(keys(%{$info})) > 0)
+	{
+          if ($opt{'long-list'})
+	  {
+            freinfo::outputFilesListing($info, $fre->property('FRE.tool.lister.long') || freinfo::LISTER_LONG_DEFAULT);
+	  }
+          elsif ($opt{list})
+	  {
+            freinfo::outputFilesListing($info, $fre->property('FRE.tool.lister.short') || freinfo::LISTER_SHORT_DEFAULT);
+	  }
+	  else
+	  {
+	    my $data = freinfo::extractRegressionData($exp, $info);
+	    if (scalar(keys(%{$data})) > 0)
+	    {
+	      freinfo::outputData($exp, $data);
+	    }
+	    else
+	    {
+	      $fre->out(FREMsg::FATAL, "Unable to extract any meaningful data from regression stdout files");
+              freinfo::skipExp($exp) if scalar(@exps) > 1;
+              $status = FREDefaults::STATUS_FS_GENERIC_PROBLEM;
+	    }
+          }
+	}
+	else
+	{
+	  $fre->out(FREMsg::FATAL, "Unable to select regression stdout files to process");
+          freinfo::skipExp($exp) if scalar(@exps) > 1;
+          $status = FREDefaults::STATUS_FS_GENERIC_PROBLEM;
+	}
+      }
+      else
+      {
+	$fre->out(FREMsg::FATAL, "Unable to extract regression parameters from the XML file");
+        freinfo::skipExp($exp) if scalar(@exps) > 1;
+        $status = FREDefaults::STATUS_FS_GENERIC_PROBLEM;
+      }
+    }
+    else
+    {
+      $fre->out(FREMsg::FATAL, "Unable to select regression tests to process");
+      freinfo::skipExp($exp) if scalar(@exps) > 1;
+      $status = FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
+    }
+        
+    $fre->unsetCurrentExperimentName();
+
+  }
+
+  exit $status;
+
+}

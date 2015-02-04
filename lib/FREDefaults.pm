@@ -1,5 +1,5 @@
 #
-# $Id: FREDefaults.pm,v 18.0.2.14.2.1 2011/09/01 19:29:04 fms Exp $
+# $Id: FREDefaults.pm,v 18.0.2.21 2012/02/21 19:10:07 afy Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: System Defaults Module
 # ------------------------------------------------------------------------------
@@ -39,8 +39,26 @@
 # afy    Ver  14.01  Replace SiteIsGFDL => SiteIsGFDLWS             January 11
 # afy    Ver  14.02  Replace SiteIsGFDLPP => SiteIsGFDL             January 11
 # afy    Ver  14.03  Modify PlatformStandardized (dash in names)    January 11
+# afy    Ver  15.00  Add DOMAINS_TO_SITES_MAPPING constant          March 11
+# afy    Ver  15.01  Modify siteGet utility (use ^)                 March 11
+# afy    Ver  15.02  Add Sites subroutine                           March 11
+# afy    Ver  15.03  Remove all the SiteIs* subroutines             March 11
+# afy    Ver  15.04  Remove PlatformStandardized subroutine         March 11
+# afy    Ver  16.00  Modify EXPERIMENT_DIRS (add state)             May 11
+# afy    Ver  17.00  Modify EXPERIMENT_DIRS (add stmp)              July 11
+# afy    Ver  17.01  Simplify the 'siteGet' utility                 July 11
+# afy    Ver  18.00  Remove the DOMAINS_TO_SITES_MAPPING constant   September 11
+# afy    Ver  18.01  Add SITE_CURRENT/SITES_ALL constants           September 11
+# afy    Ver  18.02  Remove the 'siteGet' utility                   September 11
+# afy    Ver  18.03  Simplify Site/Sites/Platform subroutines       September 11
+# afy    Ver  18.04  Use initialization code to check envvars       September 11
+# afy    Ver  18.05  Don't use the Net::Domain module               September 11
+# afy    Ver  19.00  Add status 'STATUS_XML_NOT_VALID'              October 11
+# afy    Ver  20.00  Add status 'STATUS_DATA_NOT_EXISTS'            January 12
+# afy    Ver  20.01  Add status 'STATUS_DATA_NO_MATCH'              January 12
+# afy    Ver  21.00  Modify EXPERIMENT_DIRS (add stdoutTmp)         February 12
 # ------------------------------------------------------------------------------
-# Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2009-2011
+# Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2009-2012
 # Designed and written by V. Balaji, Amy Langenhorst and Aleksey Yakovlev
 #
 
@@ -48,13 +66,14 @@ package FREDefaults;
 
 use strict;
 
-use Net::Domain();
+use FREMsg();
 
 # //////////////////////////////////////////////////////////////////////////////
 # //////////////////////////////////////////////////// Global Return Statuses //
 # //////////////////////////////////////////////////////////////////////////////
 
-use constant STATUS_OK					=> 0;
+use constant STATUS_OK					=>  0;
+use constant STATUS_XML_NOT_VALID			=>  1;
 
 use constant STATUS_COMMAND_GENERIC_PROBLEM		=> 10;
 use constant STATUS_COMMAND_NO_EXPERIMENTS		=> 11;
@@ -81,74 +100,23 @@ use constant STATUS_FRE_RUN_GENERIC_PROBLEM		=> 60;
 use constant STATUS_FRE_RUN_NO_TEMPLATE			=> 61;
 use constant STATUS_FRE_RUN_EXECUTION_PROBLEM		=> 62;
 
+use constant STATUS_DATA_NOT_EXISTS			=> 70;
+use constant STATUS_DATA_NO_MATCH			=> 71;
+
 # //////////////////////////////////////////////////////////////////////////////
 # ////////////////////////////////////////////////////////// Global Constants //
 # //////////////////////////////////////////////////////////////////////////////
 
-use constant DOMAIN_GFDLWS	=> 'gfdl.noaa.gov';
-use constant DOMAIN_GFDL	=> 'princeton.rdhpcs.noaa.gov'; 
-use constant DOMAIN_NCRC	=> 'ncrc.gov'; 
-use constant DOMAIN_NCCS	=> 'ccs.ornl.gov';
-use constant DOMAIN_NASA	=> 'nas.nasa.gov';
-
-use constant SITE_GFDLWS	=> 'gfdl-ws';
-use constant SITE_GFDL		=> 'gfdl';
-use constant SITE_NCRC		=> 'ncrc';
-use constant SITE_NCCS		=> 'doe';
-use constant SITE_NASA		=> 'nasa';
-use constant SITE_UNKNOWN	=> 'unknown';
+use constant SITE_CURRENT	=> $ENV{FRE_SYSTEM_SITE};
+use constant SITES_ALL		=> split(/:/, $ENV{FRE_SYSTEM_SITES});
 
 use constant XMLFILE_DEFAULT	=> 'rts.xml';
 use constant PLATFORM_DEFAULT	=> 'default';
 use constant TARGET_DEFAULT 	=> 'prod';
 
 use constant GLOBAL_NAMES	=> 'site,siteDir,suite,platform,target,name,root,stem';
-use constant EXPERIMENT_DIRS	=> 'root,src,exec,scripts,stdout,state,work,ptmp,archive,postProcess,analysis';
+use constant EXPERIMENT_DIRS	=> 'root,src,exec,scripts,stdout,stdoutTmp,state,work,ptmp,stmp,archive,postProcess,analysis';
 use constant DEFERRED_NAMES	=> 'name';
-
-# //////////////////////////////////////////////////////////////////////////////
-# ///////////////////////////////////////////////////////////////// Utilities //
-# //////////////////////////////////////////////////////////////////////////////
-
-my $siteGet = sub()
-# ------ arguments: none
-{
-  my $domain = Net::Domain::hostdomain();
-  if ($domain eq FREDefaults::DOMAIN_GFDLWS)
-  {
-    return FREDefaults::SITE_GFDLWS;
-  }
-  elsif ($domain eq FREDefaults::DOMAIN_GFDL)
-  {
-    return FREDefaults::SITE_GFDL;
-  }
-  elsif ($domain eq FREDefaults::DOMAIN_NCRC)
-  {
-    return FREDefaults::SITE_NCRC;
-  }
-  elsif ($domain eq FREDefaults::DOMAIN_NCCS)
-  {
-    return FREDefaults::SITE_NCCS;
-  }
-  elsif ($domain eq FREDefaults::DOMAIN_NASA)
-  {
-    return FREDefaults::SITE_NASA;
-  }
-  elsif ($domain)
-  {
-    return (split(/\./, $domain))[0];
-  }
-  else
-  {
-    return FREDefaults::SITE_UNKNOWN; 
-  }
-};
-
-# //////////////////////////////////////////////////////////////////////////////
-# ////////////////////////////////////////////////////////// Global Variables //
-# //////////////////////////////////////////////////////////////////////////////
-
-my $FREDefaultsSite = $siteGet->();
 
 # //////////////////////////////////////////////////////////////////////////////
 # //////////////////////////////////////////////////////// Exported Functions //
@@ -157,37 +125,13 @@ my $FREDefaultsSite = $siteGet->();
 sub Site()
 # ------ arguments: none
 {
-  return $FREDefaultsSite;
+  return FREDefaults::SITE_CURRENT;
 }
 
-sub SiteIsGFDLWS()
+sub Sites()
 # ------ arguments: none
 {
-  return ($FREDefaultsSite eq FREDefaults::SITE_GFDLWS);
-}
-
-sub SiteIsGFDL()
-# ------ arguments: none
-{
-  return ($FREDefaultsSite eq FREDefaults::SITE_GFDL);
-}
-
-sub SiteIsNCRC()
-# ------ arguments: none
-{
-  return ($FREDefaultsSite eq FREDefaults::SITE_NCRC);
-}
-
-sub SiteIsNCCS()
-# ------ arguments: none
-{
-  return ($FREDefaultsSite eq FREDefaults::SITE_NCCS);
-}
-
-sub SiteIsNASA()
-# ------ arguments: none
-{
-  return ($FREDefaultsSite eq FREDefaults::SITE_NASA);
+  return FREDefaults::SITES_ALL;
 }
 
 sub XMLFile()
@@ -196,27 +140,10 @@ sub XMLFile()
   return FREDefaults::XMLFILE_DEFAULT;
 }
 
-sub PlatformStandardized($)
-# ------ arguments: $platform
-{
-  my $p = shift;
-  my $letter = qr/(?:\w|-)/o;
-  if ($p =~ m/^(?:($letter+)\.)?($letter*)$/o)
-  {
-    my $site = (defined($1)) ? $1 : $FREDefaultsSite;
-    my $tail = ($2) ? $2 : FREDefaults::PLATFORM_DEFAULT;
-    return $site . '.' . $tail;
-  }
-  else
-  {
-    return '';
-  }
-}
-
 sub Platform()
 # ------ arguments: none
 {
-  return $FREDefaultsSite . '.' . FREDefaults::PLATFORM_DEFAULT;
+  return FREDefaults::SITE_CURRENT . '.' . FREDefaults::PLATFORM_DEFAULT;
 }
 
 sub Target()
@@ -247,4 +174,15 @@ sub DeferredPropertyNames()
 # //////////////////////////////////////////////////////////// Initialization //
 # //////////////////////////////////////////////////////////////////////////////
 
-return 1;
+{
+  my ($site, @sites) = (FREDefaults::Site(), FREDefaults::Sites());
+  if ($site and scalar(grep($_ eq $site, @sites)) > 0)
+  {
+    return 1;
+  }
+  else
+  {
+    FREMsg::out(FREMsg::FATAL, 0, "FRE environment variables aren't set correctly");
+    exit STATUS_FRE_GENERIC_PROBLEM;
+  }
+}

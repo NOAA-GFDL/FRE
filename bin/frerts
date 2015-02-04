@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 # -*- cperl -*-
-# $Id: frerts,v 15.1.2.27.2.7 2011/02/10 00:05:29 arl Exp $
+# $Id: frerts,v 15.1.2.27.2.7.2.1 2011/03/08 17:27:45 sdu Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: Automated launch of fremake, frerun and frecheck.
 # ------------------------------------------------------------------------------
@@ -20,7 +20,7 @@ use Date::Manip();
 {
 package frerts;
 
-use constant VERSION => '$Id: frerts,v 15.1.2.27.2.7 2011/02/10 00:05:29 arl Exp $';
+use constant VERSION => '$Id: frerts,v 15.1.2.27.2.7.2.1 2011/03/08 17:27:45 sdu Exp $';
 use constant OPTLIST =>
   (
       'help|h',
@@ -175,6 +175,7 @@ my $schedname = $fre->property('FRE.scheduler.option.name');
 my $schedjobid = $fre->property('FRE.scheduler.variable.jobID');
 my $schedjoin = $fre->property('FRE.scheduler.option.join');
 
+
 my $schedmkpartition = '';
 if ( "$fre->property('FRE.scheduler.make.partition')" ne '' ) {
  $schedmkpartition = $fre->property('FRE.scheduler.option.partition');
@@ -187,6 +188,13 @@ if ( "$fre->property('FRE.scheduler.run.partition')" ne '' ) {
  $schedrunpartition = $fre->property('FRE.scheduler.option.partition');
  my $part = $fre->property('FRE.scheduler.run.partition');
  $schedrunpartition =~ s/\$/$part/;
+}
+
+my $schedmkqueue = '';
+if ( "$fre->property('FRE.scheduler.make.queue')" ne '' ) {
+ $schedmkqueue = $fre->property('FRE.scheduler.option.queue');
+ my $part = $fre->property('FRE.scheduler.make.queue');
+ $schedmkqueue =~ s/\$/$part/;
 }
 
 $schedcputime =~ s/\$//;
@@ -228,6 +236,7 @@ $mkcsh .= "$schedprefix $schedcpuset\n" unless "$schedcpuset" eq '';
 $mkcsh .= "$schedprefix $schedrerun\n" unless "$schedrerun" eq '';
 $mkcsh .= "$schedprefix $schedjoin\n" unless "$schedjoin" eq '';
 $mkcsh .= "$schedprefix $schedmkpartition\n" unless "$schedmkpartition" eq '';
+$mkcsh .= "$schedprefix $schedmkqueue\n" unless "$schedmkqueue" eq '';
 $mkcsh .= "$project\n" unless "$project" eq '';
 
    my $runcsh = <<EOF;

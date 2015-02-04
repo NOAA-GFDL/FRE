@@ -1,7 +1,7 @@
 #!/bin/csh -f
 #FRE scheduler-options
 # 
-# $Id: runscript.template.main,v 18.0.2.14 2010/12/08 01:28:57 afy Exp $
+# $Id: runscript.template.main,v 18.0.2.16 2011/03/29 18:30:49 afy Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: Runscript Template - NCCS Version
 # ------------------------------------------------------------------------------
@@ -70,8 +70,19 @@
 # afy    Ver  14.02  Standardize the script beginning               December 10
 # afy    Ver  14.03  Make all the '*Time' constants settable        December 10
 # afy    Ver  14.04  Add settable constant 'mailMode'               December 10
+# afy    Ver  15.00  Add settable constant 'platform'               March 11
+# afy    Ver  15.01  Add settable constant 'target'                 March 11
+# afy    Ver  15.02  Don't check presence of refine scripts         March 11
+# afy    Ver  15.03  Improve the 'reload_commands' file handling    March 11
+# afy    Ver  15.04  Add the 'queue_commands' file processing       March 11
+# afy    Ver  15.05  Add alias 'submitNext'                         March 11
+# afy    Ver  15.06  Add settable alias 'runCommand'                March 11
+# afy    Ver  16.00  Prepend 'cp -p' calls by 'ln -f' calls         March 11
+# afy    Ver  16.01  Remove 'fre-transfer' submodule                March 11
+# afy    Ver  16.02  Remove 'FREROOT' environment variable          March 11
+# afy    Ver  16.03  Add aliases '(set|get)StripingMode'            March 11
 # ------------------------------------------------------------------------------
-# Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2000-2010
+# Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2000-2011
 # Designed and written by V. Balaji, Amy Langenhorst and Aleksey Yakovlev
 # 
 
@@ -90,6 +101,7 @@
   unset echo
   source $MODULESHOME/init/tcsh
   module load banner 
+  setenv COLUMNS 148
   set echo
 
   # ---------------- adjust stdout permissions, define constants for non-scheduler runs
@@ -109,9 +121,11 @@
   banner $PBS_JOBNAME
 
 ################################################################################
-#---------------- global constants and variables, set by frerun ----------------
+#------------ global constants, variables and aliases, set by frerun -----------
 ################################################################################
 
+  #FRE const(platform)
+  #FRE const(target)
   #FRE const(name)
   #FRE const(rtsxml)
   #FRE const(freCommandsHomeDir)
@@ -155,43 +169,32 @@
   #FRE var(gridSpec)
   #FRE var(initCond)
 
+  #FRE alias(runCommand)
+
 ################################################################################
 #------------------------ global environment settings --------------------------
 ################################################################################
 
   # ---------------- FRE environment variables, which have to be set after the platform csh:
 
-  # FRE_TRANSFER_HOME	- root of the fre-transfer module
-  # FRE_NCTOOLS_HOME	- toot of the fre-nctools module
+  # FRE_NCTOOLS_HOME	- root of the fre-nctools module
 
   # ---------------- FRE scripts/executables, which have to be accessible via the PATH after the platform csh:
 
   # combine-ncc		- part of the fre-nctools module
   # compare_dual.csh	- part of the fre-commands module
-  # hsmget		- part of the fre-transfer module 
+  # hsmget		- part of the fre-commands module 
   # mppnccombine	- part of the fre-nctools module
   # prepare_dir.csh	- part of the fre-commands module
-  # send_file		- part of the fre-transfer module
+  # send_file		- part of the fre-commands module
   # time_stamp.csh	- part of the fre-commands module
-
-  # ---------------- this alias can be overridden by a user
-
-  alias runCommand `which aprun` -n $npes ./$executable:t 
 
   # ---------------- commands, copied from XML (setup/platform/csh)
 
   unset echo
   #FRE setup-platform-csh
+  module list
   set echo
-
-  # ---------------- exit if no fre-transfer module is loaded
-
-  if ( ! $?FRE_TRANSFER_HOME ) then
-    unset echo
-    echo "ERROR: The script '$scriptName' must load a 'fre-transfer' module"
-    set echo
-    exit 1
-  endif
 
   # ---------------- exit if no fre-nctools module is loaded
 
@@ -202,11 +205,10 @@
     exit 1
   endif
 
-  # ---------------- the settings below aren't changeable (FREROOT is for compatibility only)
+  # ---------------- the settings below aren't changeable
 
   setenv FRE_COMMANDS_HOME $freCommandsHomeDir
   setenv PATH $FRE_COMMANDS_HOME/bin:$PATH
-  setenv FREROOT $FRE_COMMANDS_HOME
 
   # ---------------- adjust the job name for interactive runs 
 
@@ -223,15 +225,19 @@
   set -r jobId = `echo $PBS_JOBID | sed -r 's/^([0-9]+).*$/o\1/'`
 
   # ---------------- for compatibility only
+
   set -r work = $workDir
 
   # ---------------- HSM site-dependent directory
-  set -r hsmSiteDir = $FRE_TRANSFER_HOME/site/doe
+
+  set -r hsmSiteDir = $freCommandsHomeDir/site/doe
 
   # ---------------- top directory for all the HSM-copied files
+
   set -r hsmDir = $workDir/hsm
 
   # ---------------- selection patterns for grep
+
   set -r patternGrepTail = '\.[0-9]{4}$'
   set -r patternGrepAscii = '\<out\>|\<results\>'
   set -r patternGrepRestarts = '\<res\>'
@@ -239,46 +245,70 @@
   set -r patternGrepRegion = '^rregion'
   set -r patternGrepNC = '\<nc\>'
 
+  # ---------------- striping parameters
+
+  set -r stripeSize = 1M
+  set -r stripeCount = 4
+
   # ---------------- FRE string date generation for file name labels
+
   alias timeStamp `which time_stamp.csh` -f $timeStampFormat
 
   # ---------------- FRE directory making/cleaning utility
+
   alias prepareDir `which prepare_dir.csh`
 
   # ---------------- FRE dual archives comparing utility
+
   alias compareDual `which compare_dual.csh`
 
   # ---------------- FRE postprocessing utility
-  alias frepp frepp -v -c split -s
+
+  alias frepp `which frepp` -v -c split -s
 
   # ---------------- FRE data copying between work directory and archive directory via ptmp directory
+
   alias hsmget `which hsmget` -q -t -m $hsmSiteDir/hsmget.mk -w $hsmDir -p '$ptmpDir' -a /
 
   # ---------------- FRE script for sending files to GFDL
+
   alias fileSender `which send_file`
 
   # ---------------- FRE netCDF files combining utilities
+
   alias mppnccombine `which mppnccombine` -64
   alias slmnccombine `which combine-ncc` 
 
-  # ---------------- FRE output stager 
+  # ---------------- FRE output stager
+ 
   alias outputStager $freCommandsHomeDir/site/doe/fresavehist
 
+  # ---------------- HPSS access command
+
+  alias hsi `which hsi` -q
+
   # ---------------- batch scheduler submit commands
-  alias submit `which qsub` -q $PBS_QUEUE
+
+  alias submit `which qsub`
+  alias submitNext `which qsub` -q '$queue'
   alias submitFileSender `which qsub` -q $fileSenderQueue -m $mailMode -V
   alias submitOutputStager `which qsub` -l size=48,walltime=$outputStagerTime -q $outputStagerQueue -m $mailMode -V
 
-  # ---------------- HPSS access command
-  alias hsi `which hsi` -q
-
   # ---------------- archiving command
+
   alias tar `which tar` -b 1024
 
   # ---------------- finding command
-  alias find lfs find
+
+  alias find `which lfs` find
+
+  # ---------------- striping mode commands
+
+  alias setStripingMode `which lfs` setstripe -s $stripeSize -c $stripeCount
+  alias getStripingMode `which lfs` getstripe
 
   # ---------------- unique timestamp
+
   alias unique 'date +%s.$$'
 
 ################################################################################
@@ -326,11 +356,15 @@
 #----------------------------- global variables --------------------------------
 ################################################################################
 
+  set continueFlag = 1
+
   if ( $?FRE_PROJECT ) then  
     set project = $FRE_PROJECT
   else
     set project = ""
   endif
+
+  set queue = $PBS_QUEUE
 
   set combineList = ( )
 
@@ -363,7 +397,7 @@
 	source $reload_file
       else
 	unset echo
-	echo "ERROR: reload file is not readable: $reload_file"
+	echo "ERROR: The reload file '$reload_file' is not readable"
         set echo
 	exit 1
       endif
@@ -371,16 +405,36 @@
 
     @ currentSeg = ( $ireload - 1 ) * $segmentsPerJob + $irun
 
+    set queue_file = $outputDir/ascii/queue_commands
+
+    if ( -f $queue_file ) then
+      if ( -r $queue_file ) then
+	source $queue_file
+      else
+	unset echo
+	echo "ERROR: The queue file '$queue_file' is not readable"
+        set echo
+	exit 1
+      endif
+    endif
+
+    if ( ! $continueFlag ) then
+      unset echo
+      echo "NOTE: Stopping execution"
+      set echo
+      exit 0
+    endif
+
   endif
 
   # ---------------- set up working directory structure
 
-  prepareDir $workDir		|| exit 1
-  prepareDir $workDir/INPUT	|| exit 1
-  prepareDir $workDir/RESTART	|| exit 1
+  prepareDir $workDir || exit 1
+  setStripingMode $workDir
+  getStripingMode $workDir | grep -F 'stripe'
 
-  lfs setstripe $workDir/INPUT   -s 1048576 -c 0 -i -1
-  lfs setstripe $workDir/RESTART -s 1048576 -c 0 -i -1
+  prepareDir $workDir/INPUT || exit 1
+  prepareDir $workDir/RESTART || exit 1
 
   # ---------------- input data loading
 
@@ -511,7 +565,7 @@
 
   # ---------------- executable and tables loading
 
-  cp -p $ptmpDir$executable .
+  ln -f $ptmpDir$executable . || cp -pf $ptmpDir$executable .
 
   if ( $status ) then
     unset echo
@@ -536,29 +590,14 @@
     if ( $#ppRefineDiagScriptNames > 0 ) then
 
       set ppRefineDiagScriptNamesList = ""
-      set ppRefineDiagScriptNamesNotOK = ()
 
       foreach ppRefineDiagScriptName ( $ppRefineDiagScriptNames )
-	if ( -f $ppRefineDiagScriptName && -r $ppRefineDiagScriptName ) then
-          if ( $ppRefineDiagScriptNamesList == "" ) then
-            set ppRefineDiagScriptNamesList = $ppRefineDiagScriptName
-          else
-            set ppRefineDiagScriptNamesList = $ppRefineDiagScriptNamesList,$ppRefineDiagScriptName
-          endif
-	else
-          set ppRefineDiagScriptNamesNotOK = ( $ppRefineDiagScriptNamesNotOK $ppRefineDiagScriptName)
-	endif
+        if ( $ppRefineDiagScriptNamesList == "" ) then
+          set ppRefineDiagScriptNamesList = $ppRefineDiagScriptName
+        else
+          set ppRefineDiagScriptNamesList = $ppRefineDiagScriptNamesList,$ppRefineDiagScriptName
+        endif
       end
-
-      if ( $#ppRefineDiagScriptNamesNotOK > 0 ) then
-	unset echo
-	foreach ppRefineDiagScriptName ( $ppRefineDiagScriptNamesNotOK )
-          echo "A problem with the refine diagnostics script: $ppRefineDiagScriptName"
-	end
-	echo "ERROR: Failed to access refine diagnostics scripts"
-        set echo
-	exit 1
-      endif
 
     endif
 
@@ -571,6 +610,30 @@
   while ( $irun <= $segmentsPerJob )
 
     banner $irun/$segmentsPerJob
+
+    # ---------------- reload the queue file and exit if it has been requested
+
+    if ( $?flagRunTypeProduction ) then
+
+      if ( -f $queue_file ) then
+	if ( -r $queue_file ) then
+	  source $queue_file
+	else
+	  unset echo
+	  echo "ERROR: The queue file '$queue_file' is not readable"
+          set echo
+	  exit 1
+	endif
+      endif
+
+      if ( ! $continueFlag ) then
+	unset echo
+	echo "NOTE: Stopping execution"
+	set echo
+	exit 0
+      endif
+
+    endif
 
     # ---------------- commands, copied from XML (experiment/input/csh[@type="always" or @type="postInit"])
 
@@ -596,6 +659,12 @@
 
     # ---------------- prepare MPI call, execute it, analyze results
 
+    if ( $target =~ '*openmp*' ) then
+      if ( ! $?OMP_NUM_THREADS ) setenv OMP_NUM_THREADS 1
+    else
+      unsetenv OMP_NUM_THREADS
+    endif 
+
     runCommand |& tee fms.out
 
     if ( $status ) then
@@ -612,6 +681,8 @@
       set MPI_FAIL
       set outputDir = ${outputDir}_crash
       prepareDir $outputDir/ascii || exit 1
+      setStripingMode $outputDir/ascii
+      getStripingMode $outputDir/ascii | grep -F 'stripe'
       if ( $cores_dumped > 0 ) then
         cat core*.out >> fms.out
         cat core*.out
@@ -652,6 +723,8 @@
 
       if ( ! -e $asciiArchive:h ) then
         prepareDir $asciiArchive:h || exit 1
+        setStripingMode $asciiArchive:h
+        getStripingMode $asciiArchive:h | grep -F 'stripe'
       endif
 
       foreach file ( $asciiFiles )
@@ -708,12 +781,14 @@
 
       if ( ! -e $restartArchive:h ) then
         prepareDir $restartArchive:h || exit 1
+        setStripingMode $restartArchive:h
+        getStripingMode $restartArchive:h | grep -F 'stripe'
       endif
 
-      cp -p $workDir/input.nml .
-      cp -p $workDir/*_table .
-      cp -p $rtsxml .
-      cp -p $scriptName .
+      ln -f $workDir/input.nml	. || cp -p $workDir/input.nml	.
+      ln -f $workDir/*_table	. || cp -p $workDir/*_table	.
+      ln -f $rtsxml		. || cp -p $rtsxml		.
+      ln -f $scriptName		. || cp -p $scriptName		.
 
       set restartArchiveUnique = $restartArchive.`unique`
       ls -1 | egrep "$patternGrepRestartsOrNC" | tar -cf $restartArchiveUnique --files-from -
@@ -838,6 +913,8 @@
 
         if ( ! -e $historyCombinedArchive:h ) then       
           prepareDir $historyCombinedArchive:h || exit 1
+          setStripingMode $historyCombinedArchive:h
+          getStripingMode $historyCombinedArchive:h | grep -F 'stripe'
         endif
       
 	foreach file ( $historyCombinedFiles )
@@ -896,6 +973,8 @@
 
         if ( ! -e $historyUncombinedArchive:h ) then
 	  prepareDir $historyUncombinedArchive:h || exit 1
+          setStripingMode $historyUncombinedArchive:h
+          getStripingMode $historyUncombinedArchive:h | grep -F 'stripe'
         endif
 
 	foreach file ( $historyUncombinedFiles )
@@ -967,7 +1046,7 @@
 
     if ( $?flagOutputStagingTypeStaged ) then
 
-      if ( $?flagRunTypeProduction ) then
+      if ( $?flagOutputPostProcessOn ) then
 	if ( $#combineList + 1 == $combineFreq || $currentSeg == $segmentsPerSimulation || $#restartFiles == 0 ) then
 	  if ( $#combineList > 0 ) then
             set firstdate = `echo $combineList[1] | cut -c -8`
@@ -990,6 +1069,8 @@
       set tempHistoryDateDir = $outputDir/history/$begindate
 
       prepareDir $tempHistoryDateDir || exit 1
+      setStripingMode $tempHistoryDateDir
+      getStripingMode $tempHistoryDateDir | grep -F 'stripe'
 
       find $workDir -maxdepth 1 -type f | egrep "$patternGrepNC" | xargs -r mv -f -t $tempHistoryDateDir
 
@@ -1000,13 +1081,13 @@
         -A $project \
         -N $jobName \
         -o $stdoutDir/ \
-        -v project=$project,datedir=$tempHistoryDateDir,check=$?flagOutputCheck,frepp="$PPcmd",stdout=$stdoutDir/ \
+        -v project=$project,datedir=$tempHistoryDateDir,check=$?flagOutputCheckOn,transfer=$?flagOutputTransferOn,frepp="'$PPcmd'",platform=$platform,stdout=$stdoutDir/ \
         `alias outputStager`
       else
         submitOutputStager \
         -N $jobName \
         -o $stdoutDir/ \
-        -v datedir=$tempHistoryDateDir,check=$?flagOutputCheck,frepp="$PPcmd",stdout=$stdoutDir/ \
+        -v datedir=$tempHistoryDateDir,check=$?flagOutputCheckOn,transfer=$?flagOutputTransferOn,frepp="'$PPcmd'",platform=$platform,stdout=$stdoutDir/ \
         `alias outputStager`
       endif
       unset jobName
@@ -1029,8 +1110,7 @@
 
       unset echo
       echo "ERROR: in mpirun, core dumped: run $ireload, loop $irun"
-      echo "ERROR: Any output that may have been generated "
-      echo "       is in $outputDir"
+      echo "ERROR: Any output that may have been generated is in $outputDir"
 
       sleep 30
       set echo
@@ -1055,25 +1135,32 @@
 
     if ( $?flagRunTypeProduction ) then
 
-      unset echo
-      echo "Writing reload information to $reload_file at `date +%s`"
-      set echo
-
-      if ( -f $reload_file ) then
-	mv -f $reload_file ${reload_file}_prev
-      endif
-
       if ( $irun <= $segmentsPerJob ) then
-	echo "@ irun          =   $irun"           >  $reload_file
+	@ irunNext = $irun
       else
 	@ ireload++
-	echo "@ irun          =   1"               >  $reload_file
+	@ irunNext = 1
       endif
 
-      echo   "@ ireload       =   $ireload"        >> $reload_file
-      echo   "set initCond    =   $restartArchive" >> $reload_file
-      echo   "set combineList = ( $combineList )"  >> $reload_file
-      echo   "set fyear       =   $fyear"          >> $reload_file
+      if ( -f $reload_file ) mv -f $reload_file ${reload_file}_prev
+      touch $reload_file
+
+      if ( $status ) then
+	unset echo
+	echo "ERROR: The reload file '$reload_file' can't be saved"
+        set echo
+        exit 1
+      else
+	unset echo
+	echo "NOTE: Writing reload information to the reload file '$reload_file' at `date +%s`"
+	set echo
+	echo "@ ireload       =   $ireload"            >> $reload_file
+	echo "@ irun          =   $irunNext"           >> $reload_file
+	echo "set initCond    =   $restartArchDir.tar" >> $reload_file
+	echo "set combineList = ( $combineList )"      >> $reload_file
+	echo "set fyear       =   $fyear"              >> $reload_file
+        chmod 644 $reload_file
+      endif
 
     endif
 
@@ -1098,18 +1185,54 @@
 
     if ( $ireload <= $jobsPerSimulation && $currentSeg <= $segmentsPerSimulation ) then
 
+      if ( -f $queue_file ) then
+	if ( -r $queue_file ) then
+	  source $queue_file
+	else
+	  unset echo
+	  echo "ERROR: The queue file '$queue_file' is not readable"
+          set echo
+	  exit 1
+	endif
+      endif
+
+      if ( ! $continueFlag ) then
+	unset echo
+	echo "NOTE: Stopping execution"
+	set echo
+	exit 0
+      endif
+
       if ( -f $scriptName ) then
         pushd $stdoutDir
         if ( "$project" != "" ) then
-          submit -A $project -v FRE_PROJECT=$project $scriptName
+          submitNext -A $project -v FRE_PROJECT=$project $scriptName
         else
-          submit $scriptName
+          submitNext $scriptName
         endif
         popd
       else
 	unset echo
 	echo "WARNING: The script '$scriptName' does not exist (run $ireload, loop $irun) - it can't be resubmitted"
         set echo
+      endif
+
+      if ( -f $queue_file ) mv -f $queue_file ${queue_file}_prev
+      touch $queue_file
+
+      if ( $status ) then
+	unset echo
+	echo "ERROR: The queue file '$queue_file' can't be saved"
+        set echo
+        exit 1
+      else
+	unset echo
+	echo "NOTE: Writing queue information to the queue file '$queue_file' at `date +%s`"
+	set echo
+        echo "set continueFlag = $continueFlag" >> $queue_file
+        echo "set project      = $project"      >> $queue_file
+        echo "set queue        = $queue"        >> $queue_file
+        chmod 644 $queue_file
       endif
 
     endif

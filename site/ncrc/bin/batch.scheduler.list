@@ -1,0 +1,187 @@
+#!/usr/bin/perl
+# -*- cperl -*-
+
+# $Id: batch.scheduler.list,v 1.1.2.7 2012/03/21 21:21:20 afy Exp $
+# ------------------------------------------------------------------------------
+# FMS/FRE Project: Program to List Batch Scheduler Jobs in a Uniform Format
+# ------------------------------------------------------------------------------
+# afy    Ver   1.00  Initial version                                February 11
+# afy    Ver   2.00  Add option --partition                         June 11
+# afy    Ver   2.01  Add option --queue                             June 11
+# afy    Ver   2.02  Analyze status after the 'showq' call          June 11
+# afy    Ver   2.03  Parse the 'showq --xml' output                 June 11
+# afy    Ver   2.04  Return both job ids                            June 11
+# afy    Ver   3.00  Add options --retries-number/retry-delay       June 11
+# afy    Ver   3.01  Add check for extra arguments                  June 11
+# afy    Ver   4.00  Add option --verbose                           June 11
+# afy    Ver   5.00  Downgrade the XML::LibXML parser call          July 11
+# afy    Ver   6.00  Add option --running                           October 11
+# afy    Ver   6.01  Add user name to the output                    October 11
+# afy    Ver   7.00  Add option --noblock to the 'showq' call       March 12
+# ------------------------------------------------------------------------------
+# Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2000-2012
+# Designed and written by V. Balaji, Amy Langenhorst and Aleksey Yakovlev
+#
+
+use strict;
+
+use File::Basename();
+use Getopt::Long(':config', 'no_ignore_case', 'no_auto_abbrev');
+use XML::LibXML();
+
+{
+
+  package batch_scheduler_list;
+
+  use constant VERSION => '$Id: batch.scheduler.list,v 1.1.2.7 2012/03/21 21:21:20 afy Exp $';
+
+  use constant OPTLIST =>
+  (
+    'help|h',
+    'name|n=s',
+    'partition|P=s',
+    'queue|q=s',
+    'retries-number|N=i',
+    'retry-delay|D=i',
+    'running|R',
+    'user|u=s',
+    'verbose|v',
+    'version|V'
+  );
+
+  use constant RETRIES_NUMBER => 8;
+  use constant RETRY_DELAY => 15;
+
+  my $self = File::Basename::basename($0);
+
+  sub Usage()
+  # ------ arguments: none
+  {
+    my $rtn = RETRIES_NUMBER;
+    my $rtd = RETRY_DELAY;
+    return
+    (
+      "\n",
+      "  Usage: $self [option] ...\n\n",
+      "  Options:\n\n",
+      "   -n STRING, --name=STRING          list jobs with name STRING\n",
+      "   -P STRING, --partition=STRING     list jobs in the partition STRING\n",
+      "   -q STRING, --queue=STRING         list jibs in the queue STRING\n",
+      "   -u STRING, --user=STRING          list jobs owned by a user STRING\n",
+      "   -R,        --running              list jobs in the running state only\n\n",
+      "   -N NUM,    --retries-number=NUM   a number NUM of retries (default is '$rtn')\n", 
+      "   -D NUM,    --retry-delay=NUM      a delay NUM between retries (default is '$rtd'), in seconds\n\n",
+      "   -h,        --help                 print the help message and exit\n",
+      "   -V,        --version              print the tool version and exit\n",
+      "   -v         --verbose              increase verbosity\n\n"
+    );
+  }
+  
+  sub Help()
+  # ------ arguments: none
+  {
+    my @usage = Usage();
+    return
+    (
+      "\n",
+      "   Synopsis: The '$self' lists batch scheduler jobs in the standard format 'gid,id,name,state,time'.\n",
+      "@usage",
+      "   Possible job states are ('blocked', 'completed', 'failed', 'running', 'waiting').\n\n"
+    );
+  }
+  
+  my @states = ('blocked', 'completed', 'failed', 'running', 'waiting');
+  
+  my %state_mapping =
+  (
+    BatchHold	=> 0,
+    Canceling	=> 2,
+    Completed	=> 1,
+    Deferred	=> 0,
+    Idle	=> 4,
+    Migrated	=> 4,
+    NotQueued	=> 2,
+    Removed	=> 2,
+    Running	=> 3,
+    Staging	=> 3,
+    Starting	=> 3,
+    Suspended	=> 0,
+    SystemHold	=> 0,
+    UserHold	=> 0,
+    Vacated	=> 2
+  );
+  
+  sub State($)
+  # ------ arguments: $jobState
+  {
+    my $s = shift;
+    return $states[$state_mapping{$s}];
+  }
+  
+}
+
+# //////////////////////////////////////////////////////////////////////////////
+# ////////////////////////////////////////////////////////////////////// Main //
+# //////////////////////////////////////////////////////////////////////////////
+
+{
+
+  my %opt =
+  (
+    'retries-number'	=> batch_scheduler_list::RETRIES_NUMBER,
+    'retry-delay'	=> batch_scheduler_list::RETRY_DELAY
+  );
+  
+  Getopt::Long::GetOptions(\%opt, batch_scheduler_list::OPTLIST) or (print batch_scheduler_list::Usage() and exit 1);
+  if ($opt{version}) {print batch_scheduler_list::VERSION,"\n" and exit 0;}
+  if ($opt{help}) {print batch_scheduler_list::Help() and exit 0;}
+
+  if (scalar(@ARGV) == 0)
+  {
+    my $showqCall = 'showq --xml --noblock';
+    $showqCall .= " -p $opt{partition}" if $opt{partition};
+    $showqCall .= " -w class=$opt{queue}" if $opt{queue};
+    $showqCall .= " -u $opt{user}" if $opt{user};
+    $showqCall .= " -r" if $opt{running};
+    print STDERR "$showqCall\n" if $opt{verbose};
+    my $parser = XML::LibXML->new();
+    my $retry = 0;
+    while (1)
+    {
+      my $res = qx($showqCall);
+      if ($? == 0)
+      {
+	my $root = $parser->parse_string($res)->documentElement();
+	my $xpath = ($opt{name}) ? '/Data/queue/job[@JobName="' . $opt{name} . '"]' : '/Data/queue/job';
+	foreach my $job ($root->findnodes($xpath))
+	{
+	  my $gid = $job->getAttribute('GJID');
+	  my $id = $job->getAttribute('DRMJID');
+	  my $name = $job->getAttribute('JobName');
+	  my $state = batch_scheduler_list::State($job->getAttribute('State'));
+	  my $time = $job->getAttribute('SubmissionTime');
+	  my $user = $job->getAttribute('User');
+	  print "$gid,$id,$name,$state,$time,$user\n";
+	}
+	exit 0;
+      }
+      elsif ($retry < $opt{'retries-number'})
+      {
+	print STDERR "Retrying showq ($retry)...\n";
+	sleep $opt{'retry-delay'};
+	$retry++;
+      }
+      else
+      {
+	print STDERR "No more showq retries\n";
+	exit 1;
+      }
+    }
+  }
+  else
+  {
+    print STDERR "No extra arguments are allowed\n";
+    exit 1;
+  }
+  
+}

@@ -1,0 +1,115 @@
+#!/bin/csh -f
+# 
+# $Id: workDir.cleaner,v 1.1.2.4 2012/01/10 23:26:42 afy Exp $
+# ------------------------------------------------------------------------------
+# FMS/FRE Project: Working Directory Cleaner - NCRC Version
+# ------------------------------------------------------------------------------
+# afy    Ver   1.00  Initial version                                May 11
+# afy    Ver   2.00  Simplify calling interface                     May 11
+# afy    Ver   2.01  Don't trace the script execution               May 11
+# afy    Ver   2.02  Remove the --verbose option                    May 11
+# afy    Ver   2.03  Add directory checks                           May 11
+# afy    Ver   2.04  Don't chmod the stdout file                    May 11
+# afy    Ver   3.00  Remove the --verbose option (again)            October 11
+# afy    Ver   3.01  Cosmetics                                      October 11
+# afy    Ver   4.00  Add final message                              January 12
+# ------------------------------------------------------------------------------
+# Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2000-2012
+# Designed and written by V. Balaji, Amy Langenhorst and Aleksey Yakovlev
+#
+
+  set -r echoOn = $?echo
+
+  if ( $echoOn ) unset echo
+  echo "<NOTE> : ====== FRE WORKING DIRECTORY CLEANER ======"
+  echo "<NOTE> : Starting at $HOST on `date`"
+  if ( $echoOn ) set echo
+
+  unalias *
+
+  # ---------------- define constants depending on the run type
+
+  if ( $?PBS_ENVIRONMENT ) then
+    if ( $PBS_ENVIRONMENT == 'PBS_BATCH' ) then
+      set -r batch
+    endif
+  endif
+
+################################################################################
+#------------------------ arguments initial assignment -------------------------
+################################################################################
+
+  if ( $?batch && $# == 0 ) then
+    if ( $?dir ) then
+      if ( $dir != "" ) then
+        set -r dir = $dir
+      else
+	if ( $echoOn ) unset echo
+	echo "*ERROR*: The argument 'dir' value is empty"
+	if ( $echoOn ) set echo
+	exit 1
+      endif
+    else
+      if ( $echoOn ) unset echo
+      echo "*ERROR*: The argument 'dir' is not defined"
+      if ( $echoOn ) set echo
+      exit 1
+    endif
+  else if ( $# == 1 ) then
+    if ( $1 =~ /* ) then
+      set -r dir = $1
+    else if ( $1 != "" ) then
+      set -r dir = `pwd`/$1
+    else
+      if ( $echoOn ) unset echo
+      echo "*ERROR*: The argument value is empty"
+      if ( $echoOn ) set echo
+      exit 1
+    endif
+  else
+    if ( $echoOn ) unset echo
+    echo "Usage: $0:t dirPath"
+    if ( $echoOn ) set echo
+    exit 1
+  endif
+
+################################################################################
+#----------------------------- directory cleaning ------------------------------
+################################################################################
+
+  if ( -e $dir ) then
+    if ( -d $dir ) then
+      rm --force --recursive $dir
+      if ( $status == 0 ) then
+        if ( $echoOn ) unset echo
+	echo "<NOTE> : The directory '$dir' has been removed successfully"
+        if ( $echoOn ) set echo
+      else
+        if ( $echoOn ) unset echo
+	echo "*ERROR*: The directory '$dir' can't be removed"
+        if ( $echoOn ) set echo
+	exit 1
+      endif
+    else
+      if ( $echoOn ) unset echo
+      echo "*ERROR*: The pathname '$dir' isn't a directory"
+      if ( $echoOn ) set echo
+      exit 1
+    endif
+  else
+    if ( $echoOn ) unset echo
+    echo "*ERROR*: The pathname '$dir' doesn't exist"
+    if ( $echoOn ) set echo
+    exit 1
+  endif
+
+################################################################################
+#----------------------------- normal end of script ----------------------------
+################################################################################
+
+  if ( $echoOn ) unset echo
+  echo "<NOTE> : Finishing on `date`"
+  echo "<NOTE> : Natural end of working directory cleaner"
+  if ( $echoOn ) set echo
+
+  exit 0

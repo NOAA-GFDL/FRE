@@ -1,12 +1,11 @@
 #!/usr/bin/perl
 # -*- cperl -*-
-# $Id: frepp,v 18.0.2.52.2.1.2.75 2011/09/01 21:52:14 arl Exp $
+# $Id: frepp,v 18.0.2.52.2.1.2.92.2.2 2013/09/04 15:49:29 fms Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: History/diagnostics post-processing
 # ------------------------------------------------------------------------------
 
 use strict;
-
 use File::Spec;
 #use File::stat;
 use File::Basename;
@@ -21,6 +20,14 @@ use FREExperiment();
 use FREAnalysis qw(analysis);
 use FREUtil;
 
+use Config;
+use lib "/app/perl/lib/perl5/$Config{version}";
+use lib "/app/perl/lib/perl5/site_perl/$Config{version}";
+use lib "/app/perl/lib64/perl5/$Config{version}/$Config{archname}";
+use lib "/app/perl/lib64/perl5/site_perl/$Config{version}/$Config{archname}";
+use Env::Modulecmd;
+Env::Modulecmd::load ('moab');
+
 
 use vars qw( $expt %nml $err $username %dtvars $root);
 use vars qw( $mkdircommand $hDate $t0 $tEND $sim0 $ppRootDir $component $cpiomonTS $aggregateTS $historyfiles);
@@ -34,7 +41,7 @@ use vars qw( $checktransfer $statefile $state $writestate $didsomething );
 
   package frepp;
 
-  use constant VERSION => '$Id: frepp,v 18.0.2.52.2.1.2.75 2011/09/01 21:52:14 arl Exp $';
+  use constant VERSION => '$Id: frepp,v 18.0.2.52.2.1.2.92.2.2 2013/09/04 15:49:29 fms Exp $';
 
 #Usage:    $relfrepp [ -AB:C:O:RY:Z:c:d:f:hlmMp:oqr:S:st:u:vx:z ] experiment [ experiment2 ... ]                 
   use constant OPTLIST =>
@@ -232,7 +239,7 @@ unless ( $opt_c ) {
    $opt_c = 'split';
 }
 
-$versionId = ' $Id: frepp,v 18.0.2.52.2.1.2.75 2011/09/01 21:52:14 arl Exp $';
+$versionId = ' $Id: frepp,v 18.0.2.52.2.1.2.92.2.2 2013/09/04 15:49:29 fms Exp $';
 
 $perlerrors = "";
 $component = "";
@@ -467,10 +474,10 @@ alias ncks "ncks --64bit --hdr_pad 15000"
 alias ncrcat "ncrcat --64bit -t 2"
 EOF
    } elsif ( "$platform" eq 'x86_64' ) {
-      $cp = 'gmpscp -d';
+      $cp = 'gcp -v';
       $cpio = 'cpio -C 524288';
       $uncpio = 'cpio -C 2097152';
-      $mvfile = 'gmpscp -d';
+      $mvfile = 'gcp -v';
       $platformcsh = $exp->fre()->platformValue('csh');
       $platformcsh .= <<'EOF';
 
@@ -716,7 +723,15 @@ EOF
 
    $writestate = '';
    unless ( $opt_A ) {
-      $cshscripttmpl =~ s/#write_to_statefile/echo \$JOB_ID > \$statefile/;
+      my $writeIDorINTER = <<EOF;
+if ( "\$JOB_ID" != '' ) then
+ echo \$JOB_ID > \$statefile
+else 
+ echo INTERACTIVE > \$statefile
+endif
+EOF
+      $cshscripttmpl =~ s/#write_to_statefile/$writeIDorINTER/;
+
       $writestate = <<EOF;
   if ( "\$prevjobstate" == "ERROR" ) then
      echo FATAL > \$statefile
@@ -767,12 +782,12 @@ END
 #dmget_history_files
 
 if ( \$?checkpt ) then
-   goto \$checkpt
+   #goto \$checkpt
 else
    if ( -e $ppRootDir/.checkpoint/\$checkptfile ) then
       set checkpt = `cat $ppRootDir/.checkpoint/\$checkptfile`
       if ( "\$checkpt" != "" ) then
-         goto \$checkpt
+         #goto \$checkpt
       endif
    endif
 endif
@@ -834,7 +849,7 @@ else
    set interpvars = ( `$NCVARS $ncvars_arg $fregrid_in.tile1.nc` )
    set interpvars = `echo $interpvars |sed 's/ /,/g'`
 endif
-set order1 = ( precip prec_ls snow_ls prec_conv snow_conv uw_precip prec_uwc snow_uwc prc_deep_donner snow_deep_donner prc1_deep_donner prc_mca_donner snow_mca_donner ice_mask land_mask zsurf cld_amt_2d conv_freq IWP_all_clouds WP_all_clouds WVP tot_cloud_area tot_ice_amt tot_liq_amt swdn_sfc_clr swdn_sfc swdn_toa_clr swdn_toa swup_sfc_clr swup_sfc swup_toa_clr swup_toa wind_ref wind_ref_max wind_ref_min )
+set order1 = ( precip prec_ls snow_ls prec_conv snow_conv uw_precip prec_uwc snow_uwc prc_deep_donner snow_deep_donner prc1_deep_donner prc_mca_donner snow_mca_donner ice_mask land_mask zsurf cld_amt_2d conv_freq IWP_all_clouds WP_all_clouds WVP tot_cloud_area tot_ice_amt tot_liq_amt swdn_sfc_clr swdn_sfc swdn_toa_clr swdn_toa swdn_tot_dif swup_sfc_clr swup_sfc swup_toa_clr swup_toa wind_ref wind_ref_max wind_ref_min )
 set attCmds = ()
 unset echo
 EOF
@@ -990,45 +1005,47 @@ EOF
          $statefile = "$statedir/$component.".substr($opt_t,0,4);
 
          #check status of this frepp year
-         if ( -e $statefile ) {
-            open( STATEFILE, "<$statefile") or die $!;
-            $state = FREUtil::cleanstr( <STATEFILE> );
-            close STATEFILE;
-            print "This year ($opt_t) has a state file with state '$state' for $component.\n";
-            if ("$state" eq "OK") {
-               if ( $opt_o ) {
-                  print "Redoing anyway because 'overwrite state files' was specified...\n";
+         unless ( $opt_A ) {
+            if ( -e $statefile ) {
+               open( STATEFILE, "<$statefile") or die $!;
+               $state = FREUtil::cleanstr( <STATEFILE> );
+               close STATEFILE;
+               print "This year ($opt_t) has a state file with state '$state' for $component.\n";
+               if ("$state" eq "OK") {
+                  if ( $opt_o ) {
+                     print "Redoing anyway because 'overwrite state files' was specified...\n";
+                  } else {
+                     print "This year ($opt_t) has already been completed for $component.\n";
+                     #should we continue here in case of opt_p?
+                     next;
+                  }
+               } elsif ("$state" eq "FATAL") {
+                  print "This year ($opt_t) got an error in multiple attempts, exiting.  To retry, delete the state file $statefile\n";
+                  #what if this is the -c split job? continue to other components
+                  exit 1;
+               } elsif ("$state" eq "INTERACTIVE") {
+                  print "This year ($opt_t) was partially run interactively but not completed, resubmitting $component...\n";
+               } elsif ("$state" eq "ERROR") {
+                  print "This year ($opt_t) got an error in the last frepp attempt, resubmitting $component...\n";
+               } elsif ( "$state" eq '' ) {
+                  print "ERROR: statefile $statefile exists but is empty, exiting.\n";
+                  #what if this is the -c split job? continue to other components
+                  exit 1;
                } else {
-                  print "This year ($opt_t) has already been completed for $component.\n";
-                  #should we continue here in case of opt_p?
-                  next;
-               }
-            } elsif ("$state" eq "FATAL") {
-               print "This year ($opt_t) got an error in multiple attempts, exiting.  To retry, delete the state file $statefile\n";
-               #what if this is the -c split job? continue to other components
-               exit 1;
-            } elsif ("$state" eq "ERROR") {
-               print "This year ($opt_t) got an error in the last frepp attempt, resubmitting $component...\n";
-            } elsif ( "$state" eq '' ) {
-               print "ERROR: statefile $statefile exists but is empty, exiting.\n";
-               #what if this is the -c split job? continue to other components
-               exit 1;
-            } else {
-               #check that jobid is still running
-               my $jobrunning = FREUtil::cleanstr( `/home/arl/bin/mq | grep $state | grep Running | wc -l` );
-               #my $jobrunning = FREUtil::cleanstr( `/bin/csh -c "module load moab; showq -u $ENV{'USER'} -n -v --noblock | grep $ENV{'JOBID'} | grep Running | wc -l"` );
-               #my $jobrunning = FREUtil::cleanstr( `/bin/csh -c "set echo; module load moab; mdiag -j $ENV{'JOBID'} | grep $ENV{'JOBID'} |grep Running |wc -l"` ); 
-               print "Checking state in $statefile: $state: jobrunning: $jobrunning\n";
-               if ( $jobrunning ) {
-                  print "Previous frepp job ($state) for $opt_t still running for $component, exiting.\n";
-                  next;
-               } else {
-                  print "Previous frepp job for $opt_t was lost, resubmitting $component...\n";
+                  #check that jobid is still running
+                  my $jobrunning = isjobrunning( $state );
+                  print "Checking state in $statefile: $state: jobrunning: $jobrunning\n";
+                  if ( $jobrunning ) {
+                     print "Previous frepp job ($state) for $opt_t still running for $component, exiting.\n";
+                     next;
+                  } else {
+                     print "Previous frepp job for $opt_t was lost, resubmitting $component...\n";
+                  }
                }
             }
+            $cshscript =~ s/set prevjobstate.*/set prevjobstate = '$state'/;
+            $cshscript =~ s/set statefile.*/set statefile = '$statefile'/;
          }
-         $cshscript =~ s/set prevjobstate.*/set prevjobstate = '$state'/;
-         $cshscript =~ s/set statefile.*/set statefile = '$statefile'/;
 
       }
 
@@ -1199,7 +1216,7 @@ EOF
       my @intervals = map { $_->findvalue('@interval') } @taNodes;
       my @annavnodes = $ppcNode->findnodes('timeAverage[@source="annual" and @interval="1yr"]');
       my $annCalcInterval = '';
-      if ( scalar @annavnodes and not scalar @taNodes ) {
+      if ( scalar @annavnodes ) {
          my $taNode = $ppcNode->findnodes('timeAverage[@source="annual" and @interval="1yr"]')->get_node(1);
          $annCalcInterval = $taNode->findvalue('@calcInterval');
          if ( not scalar @taNodes or "$annCalcInterval" eq "1yr" ) {
@@ -1289,8 +1306,8 @@ foreach h ( @hf )
   end
  end
 
- set availhf = ( `ls -1 \$historyyear????.nc.tar | wc -l` )
- if ( "\$availhf" == "$histPerYear" ) then
+ set availhf = ( `ls -1 \$historyyear????.nc.cpio \$historyyear????.nc.tar | wc -l` )
+ if ( "\$availhf" != "$histPerYear" ) then
    Mail -s "\$name year \$historyyear cannot be postprocessed" \$USER <<END
 Your FRE post-processing job ( \$JOB_ID ) has exited because there is incomplete
 history data for year \$historyyear in directory:
@@ -1462,9 +1479,11 @@ EOF
          $cshscript .= analysis( $tsNode, $expt, $gridspec,$staticfile,"timeSeries",$diag_source,$ppRootDir,$component,\%dtvars,$analysisdir,$aoutscriptdir,$workdir,$archivedir,$opt_t,$opt_O,$opt_Y,$opt_Z,$opt_V,$sim0,$opt_R,$opt_s,$histDir,$nlat,$nlon,$abs_xml_path,$stdoutdir);
       }
 
-      unless ( $didsomething ) {
-         print STDERR "NOTE: No calculations necessary for year $opt_t.\n";
-         exit 0;
+      if ( $didsomething ) {
+         $didsomething = 0;
+      } else {
+         print STDERR "NOTE: No calculations necessary for year $opt_t for $component.\n\n";
+         next;
       }
 
       #PROCESS DEPENDENCIES
@@ -1501,6 +1520,14 @@ EOF
                print "Required year $depyear got an error in multiple attempts, exiting.  To retry, delete the state file $depfile\n";
                #what if this is the -c split job? continue to other components
                exit 1;
+            } elsif ("$depstate" eq "INTERACTIVE") {
+               if ( $opt_s ) {
+                  print "Required year $depyear has been partially run interactively but not completed, resubmitting $component...\n";
+                  $redo = 1;
+                  $redothisyear = 1;
+               } else {
+                  print "WARNING: Required year $depyear has been run interactively but not completed, and should be rerun.\n";
+               }
             } elsif ("$depstate" eq "ERROR") {
                if ( $opt_s ) {
                   print "Required year $depyear got an error in the last frepp attempt, resubmitting $component...\n";
@@ -1515,9 +1542,7 @@ EOF
                exit 1;
             } else {
                #check that jobid is still running
-               my $jobrunning = FREUtil::cleanstr( `/home/arl/bin/mq | grep $depstate | grep Running | wc -l` );
-               #my $jobrunning = FREUtil::cleanstr( `/bin/csh -c "module load moab; showq -u $ENV{'USER'} -n -v --noblock | grep $ENV{'JOBID'} | grep Running | wc -l"` );
-               #my $jobrunning = FREUtil::cleanstr( `/bin/csh -c "set echo; module load moab; mdiag -j $ENV{'JOBID'} | grep $ENV{'JOBID'} |grep Running |wc -l"` ); 
+               my $jobrunning = isjobrunning( $depstate );
                print "Checking state of job $depstate: jobrunning=$jobrunning\n";
                if ( $jobrunning ) {
                   print "Required year $depyear still working, placing a hold for $component.\n";
@@ -1624,7 +1649,7 @@ foreach h ( @hf )
   end
  end
 
- set availhf = ( `ls -1 \$historyyear????.nc.tar | wc -l` )
+ set availhf = ( `ls -1 \$historyyear????.nc.cpio \$historyyear????.nc.tar | wc -l` )
  if ( "\$availhf" != "$histPerYear" ) then
    Mail -s "\$name year \$historyyear cannot be postprocessed" \$USER <<END
 Your FRE post-processing job ( \$JOB_ID ) has exited because there is incomplete
@@ -1863,6 +1888,17 @@ sub createdirs {
    return $mkdircommand;
 }
 
+#print namelists
+sub printnml {
+   my $nmlstring = "";
+   foreach ( sort keys %nml ) {
+      my $content = $nml{$_};
+      $nmlstring .= "      <namelist name=\"$_\">\n$content\n      </namelist>\n";
+   }
+   print "$nmlstring\n";
+   exit 0;
+}
+
 #set up to postprocess the following year if necessary
 sub call_frepp {
    my $abs_xml_path = $_[0];
@@ -1939,9 +1975,8 @@ sub setcheckpt {
 if ( \$errors_found == 0 ) then
    echo $checkpt > $ppRootDir/.checkpoint/\$checkptfile
 endif
-if ( -f /home/gfdl/flags/fre.checkpoint.\$HOSTNAME || -f /home/gfdl/flags/fre.checkpoint.all || -f /home/gfdl/flags/jobs/fre.checkpoint.\$JOB_ID || -f \$HOME/fre.checkpoint.\$JOB_ID ) then
+if ( -f /home/gfdl/flags/fre/checkpoint.\$HOST || -f /home/gfdl/flags/fre/checkpoint.all || -f /home/gfdl/flags/fre/jobs/checkpoint.\$JOB_ID || -f \$HOME/fre.checkpoint.\$JOB_ID ) then
    set now = `date +\%s`
-   $batchSubmit \$scriptName -g $checkpt
    echo "Exiting early by HPCS request at \$now, will resume with $checkpt"
    Mail -s "\$name job \$JOB_ID has been checkpointed by frepp" \$USER <<END
 Your FRE post-processing job ( \$JOB_ID ) has been stopped and resubmitted 
@@ -1954,7 +1989,7 @@ Batch job stdout:
 \$SGE_STDOUT_PATH
 END
    sleep 30
-   exit 5
+   exit 99
 endif
 $checkpt:
 EOF
@@ -2141,6 +2176,21 @@ EOF
    return $csh;
 }
 
+#check whether a job is running
+sub isjobrunning {
+   my $jobid = $_[0];
+   my $cmd = "showq -u $ENV{'USER'} -v";
+   my $SHOWQ;
+   my $line;
+   open($SHOWQ, "$cmd 2>&1 |");
+   while ($line = <$SHOWQ>) {
+     chomp($line);
+     if ( $line =~ /$jobid/ ) { close($SHOWQ); return 1; }
+   }
+   close($SHOWQ);
+   return 0;
+}
+
 #set up interpolation on z levels
 sub zInterpolate {
    my $zInterp = $_[0];
@@ -2185,6 +2235,10 @@ EOF
 echo 'Using zInterp ar5daily'
 set levels = (100000 85000 70000 50000 25000 10000 5000 1000)
 EOF
+   my $ncepSubset_levels = <<EOF;
+echo 'Using zInterp ncep_subset'
+set levels = ( 925 850 700 500 250 )
+EOF
 
    my $set_plevels="";
    if ("$zInterp" eq "ncep") { $set_plevels = $ncep_levels; }
@@ -2193,6 +2247,7 @@ EOF
    elsif ("$zInterp" eq "era40") { $set_plevels = $era40_levels; }
    elsif ("$zInterp" eq "narcaap") { $set_plevels = $narcaap_levels; }
    elsif ("$zInterp" eq "ar5daily") { $set_plevels = $ar5daily_levels; }
+   elsif ("$zInterp" eq "ncep_subset") { $set_plevels = $ncepSubset_levels; }
    elsif ("$zInterp" eq "zgrid") {}
    else {
       if ( "$zInterp" ne "" ) {
@@ -2220,7 +2275,7 @@ EOF
 
    #atmospheric pressure levels
    if("$zInterp" eq "ncep" or "$zInterp" eq "am3" or "$zInterp" eq "narcaap" or
-      "$zInterp" eq "hs20" or "$zInterp" eq "era40" or "$zInterp" eq "ar5daily" ) {
+      "$zInterp" eq "hs20" or "$zInterp" eq "era40" or "$zInterp" eq "ar5daily" or "$zInterp" eq "ncep_subset") {
 
       $csh .= <<EOF;
    $set_plevels
@@ -2307,15 +2362,15 @@ sub segStartMonths {
    if (($segTime==1 and "$segUnits" eq "years") or ($segTime==12 and "$segUnits" eq "months")) {
       return qw(0101);
    } elsif ( $segTime == 6 ) {
-      return qw(0101,0701);
+      return qw(0101 0701);
    } elsif ( $segTime == 4 ) {
-      return qw(0101,0501,0901);
+      return qw(0101 0501 0901);
    } elsif ( $segTime == 3 ) {
-      return qw(0101,0401,0701,1001);
+      return qw(0101 0401 0701 1001);
    } elsif ( $segTime == 2 ) {
-      return qw(0101,0301,0501,0701,0901,1101);
+      return qw(0101 0301 0501 0701 0901 1101);
    } elsif ( $segTime == 1 and "$segUnits" eq "months") {
-      return qw(0101,0201,0301,0401,0501,0601,0701,0801,0901,1001,1101,1201);
+      return qw(0101 0201 0301 0401 0501 0601 0701 0801 0901 1001 1101 1201);
    } else {
       print STDERR "ERROR: segTime $segTime not supported.  Try 1,2,3,4,6 or 12 month segments.\n";
       return ();
@@ -2929,15 +2984,29 @@ sub annualTS {
          return "";
    }
    #need timeSeries freq=monthly chunkLength=something.  Then split apart into yearly data.
-   my $requiredts = "timeSeries[\@freq='monthly']\n";
+   #prefer identical chunklength if available
    my $TSchunkLength = "";
-   foreach my $node ( $ppcNode->findnodes("$requiredts") ) {
+   my $desiredts = "timeSeries[\@freq='monthly' and \@chunkLength='$chunkLength']\n";
+   foreach my $node ( $ppcNode->findnodes("$desiredts") ) {
       $TSchunkLength = $node->findvalue('@chunkLength');
-      if( "$TSchunkLength" ne "" ) {
+      if( "$TSchunkLength" ne "") {
          print STDERR "will use monthly_ts cl=$TSchunkLength\n" if $opt_v;
          last;
       }
    }
+
+   #otherwise use whatever is available, but we don't support 1yr for now
+   if( "$TSchunkLength" eq "" ) {
+      my $requiredts = "timeSeries[\@freq='monthly']\n";
+      foreach my $node ( $ppcNode->findnodes("$requiredts") ) {
+         $TSchunkLength = $node->findvalue('@chunkLength');
+         if( "$TSchunkLength" ne "" and "$TSchunkLength" ne "1yr") {
+            print STDERR "will use monthly_ts cl=$TSchunkLength\n" if $opt_v;
+            last;
+         }
+      }
+   }
+
    my $reqpath = "\$tempCache/$component/ts/monthly/$TSchunkLength";
 
    if( "$TSchunkLength" eq "" ) {
@@ -3052,13 +3121,13 @@ $time_ncrcat ncrcat -h -O $filelist $chunkedoutfile
 $check_ncrcat
 $time_ncatted ncatted -h -O -a filename,global,m,c,"$chunkedoutfile" $chunkedoutfile
 $check_ncatted
-$time_mv $mvfile $chunkedoutfile $outdir
+$time_mv $mvfile $chunkedoutfile $outdir/
 if ( \$status ) then
    echo "WARNING: data transfer failure, retrying..."
-   $time_mv $mvfile $chunkedoutfile $outdir
+   $time_mv $mvfile $chunkedoutfile $outdir/
    $checktransfer
 endif
-$time_mv $mv $chunkedoutfile \$tempCache/$outdirpath
+$time_mv $mv $chunkedoutfile \$tempCache/$outdirpath/
 $time_rm rm -f $filelist
 EOF
       }
@@ -3266,13 +3335,13 @@ EOF
 if ( -e $chunkedoutfile ) rm -f $chunkedoutfile
 $time_ncrcat ncrcat -h -O $filelist $chunkedoutfile
 $check_ncrcat
-$time_mv $mvfile $chunkedoutfile \$outdir
+$time_mv $mvfile $chunkedoutfile \$outdir/
 if ( \$status ) then
    echo "WARNING: data transfer failure, retrying..."
-   $time_mv $mvfile $chunkedoutfile \$outdir
+   $time_mv $mvfile $chunkedoutfile \$outdir/
    $checktransfer
 endif
-$time_mv $mv $chunkedoutfile \$tempCache/$outdirpath
+$time_mv $mv $chunkedoutfile \$tempCache/$outdirpath/
 $time_rm rm -f $filelist
 
 EOF
@@ -3745,7 +3814,6 @@ sub annualAV1yrfromhist {
    #my $missing = checkingAV($src,$interval,$outdir,$sim0,$t0,$diag_source);
    #if ( "$missing" ne "" ) { mailuser($missing); }
 
-   $mkdircommand .= "$outdir ";
    if( 1 > $maxyrs ) { $maxyrs = 1; }
    my $zInterp = $ppcNode->findvalue('@zInterp');
    my $do_zInterp = 0;
@@ -3762,6 +3830,7 @@ sub annualAV1yrfromhist {
    my $csh = setcheckpt('annualAV1yrfromhist');
    if ( "$write2arch" eq "1" ) {
       $csh .= "set write2arch = 1\n";
+      $mkdircommand .= "$outdir ";
    } else {
       $csh .= "set write2arch = 0\n";
    }
@@ -4136,13 +4205,17 @@ sub monthlyTSfromdailyTS {
    my $out_end = FREUtil::graindate($tEND,$freq);
    #
    my $variables = FREUtil::cleanstr( $_[0]->findvalue('variables') );
+   if ("$variables" eq "") { 
+      $variables = $dtvars{$component};
+      $variables =~ s/,/ /g;
+   }
    my $dmgetvars = $variables;
    if ("$variables" ne "") { 
       print STDERR "           from xml, vars are '$variables'\n" if $opt_v; 
-      $dmgetvars =~ s/ /.nc \$in./; 
+      $dmgetvars =~ s/ /.nc \$in./g; 
       $dmgetvars =~ s/^/$time_dmget dmget -d $indir \$in./; 
       $dmgetvars =~ s/$/.nc/; 
-   }
+   } 
 
    my $numtimelevels = gettimelevels($freq,$chunkLength);
    my $check_ncrcat = errorstr("NCRCAT ($component $freq ts calculated from $avgatt ts)");
@@ -4213,7 +4286,7 @@ foreach var ( $variables )
           @ tmp = \$y1 + 1
           set y2 = `printf '%04i' \$tmp`
         else
-          @ tmp = \$m1 + 1
+          @ tmp = \$monthi + 1
           set m2 = `printf '%02i' \$tmp`
           set y2 = \$y1
         endif
@@ -4235,10 +4308,10 @@ foreach var ( $variables )
    $time_ncatted ncatted -h -O -a filename,global,m,c,"\$out.\$var.nc" \$out.\$var.nc
    $check_ncatted
    set tmpstring = `ncdump -h \$out.\$var.nc | grep UNLIMITED`
-   $time_mv $mvfile \$out.\$var.nc $outdir
+   $time_mv $mvfile \$out.\$var.nc $outdir/
    if ( \$status ) then
       echo "WARNING: data transfer failure, retrying..."
-      $time_mv $mvfile \$out.\$var.nc $outdir
+      $time_mv $mvfile \$out.\$var.nc $outdir/
       $checktransfer
    endif
    $time_rm rm \$out.\$var.nc
@@ -4294,10 +4367,10 @@ else
       endif
       cd \$work/mkcpio
       ls -1 \$out.*.nc | $time_mkcpio $cpio -oKvO \$out.mon.nc.cpio
-      $time_mv $mvfile \$out.mon.nc.cpio \$outdir
+      $time_mv $mvfile \$out.mon.nc.cpio \$outdir/
       if ( \$status ) then
          echo "WARNING: data transfer failure, retrying..."
-         $time_mv $mvfile \$out.mon.nc.cpio \$outdir
+         $time_mv $mvfile \$out.mon.nc.cpio \$outdir/
          $checktransfer
       endif
       $time_rm rm \$out.mon.nc.cpio
@@ -4758,10 +4831,10 @@ while (\$month <= 12)
    $check_timavg
    $time_ncatted ncatted -h -O -a filename,global,m,c,"$component.$start-$end.\$monthf\$tile.nc" $component.$start-$end.\$monthf\$tile.nc
    $check_ncatted
-   $time_mv $mvfile $component.$start-$end.\$monthf\$tile.nc \$outdir
+   $time_mv $mvfile $component.$start-$end.\$monthf\$tile.nc \$outdir/
    if ( \$status ) then
       echo "WARNING: data transfer failure, retrying..."
-      $time_mv $mvfile $component.$start-$end.\$monthf\$tile.nc \$outdir
+      $time_mv $mvfile $component.$start-$end.\$monthf\$tile.nc \$outdir/
       $checktransfer
    endif
    $time_rm rm $component.$start-$end.\$monthf\$tile.nc
@@ -4853,9 +4926,9 @@ EOF
       my $check_dmget = errorstr("DMGET ($component $src $interval averages)");
       $csh .= <<EOF;
 cd $srcdir
-$time_dmget dmget "$filelist"
-
 $tilestart
+
+$time_dmget dmget "$filelist"
 
 cd \$work
 foreach file ($filelist)
@@ -5231,18 +5304,18 @@ foreach var (\$varlist)
      $check_ncrcat
      $time_ncatted ncatted -h -O -a filename,global,m,c,"$component.$startf-$tENDf.\$var" $component.$startf-$tENDf.\$var
      $check_ncatted
-     $time_mv $mvfile $component.$startf-$tENDf.\$var $outdir
-     if ( \$status ) then
-         echo "WARNING: data transfer failure, retrying..."
-         $time_mv $mvfile $component.$startf-$tENDf.\$var $outdir
-         $checktransfer
-     endif
-     $time_mv $mv \$work/$component.$startf-$tENDf.\$var \$tempCache/$outdirpath
-     set tmpstring = `ncdump -h \$outdir/$component.$startf-$tENDf.\$var | grep UNLIMITED`
+     set tmpstring = `ncdump -h $component.$startf-$tENDf.\$var | grep UNLIMITED`
      @ len = \$#tmpstring - 1
      set length = `echo \$tmpstring[\$len] | cut -c2-`
      test \$length = $numtimelevels
      $check_levels
+     $time_mv $mvfile $component.$startf-$tENDf.\$var $outdir/
+     if ( \$status ) then
+         echo "WARNING: data transfer failure, retrying..."
+         $time_mv $mvfile $component.$startf-$tENDf.\$var $outdir/
+         $checktransfer
+     endif
+     $time_mv $mv \$work/$component.$startf-$tENDf.\$var \$tempCache/$outdirpath/
 end
 
 EOF
@@ -5418,13 +5491,13 @@ foreach sea (DJF MAM JJA SON)
       @ len = \$#tmpstring - 1
       set length = `echo \$tmpstring[\$len] | cut -c2-`
       test \$length = $numtimelevels
-      $time_mv $mvfile $component.$startf-$tENDf.\$sea.\$var \$outdir
+      $time_mv $mvfile $component.$startf-$tENDf.\$sea.\$var \$outdir/
       if ( \$status ) then
          echo "WARNING: data transfer failure, retrying..."
-         $time_mv $mvfile $component.$startf-$tENDf.\$sea.\$var \$outdir
+         $time_mv $mvfile $component.$startf-$tENDf.\$sea.\$var \$outdir/
          $checktransfer
       endif
-      $time_mv $mv $component.$startf-$tENDf.\$sea.\$var \$tempCache/$outdirpath
+      $time_mv $mv $component.$startf-$tENDf.\$sea.\$var \$tempCache/$outdirpath/
       $check_levels
 
       endif
@@ -5695,10 +5768,10 @@ EOF
     $time_ncatted ncatted -h -O -a filename,global,m,c,"$component.$tSEASONf.nc" $component.$tSEASONf.nc
     $check_ncatted
 
-$time_mv $mvfile $component.$tSEASONf.nc \$outdir
+$time_mv $mvfile $component.$tSEASONf.nc \$outdir/
 if ( \$status ) then
    echo "WARNING: data transfer failure, retrying..."
-   $time_mv $mvfile $component.$tSEASONf.nc \$outdir
+   $time_mv $mvfile $component.$tSEASONf.nc \$outdir/
    $checktransfer
 endif
 $time_rm rm $component.$tSEASONf.nc
@@ -5721,10 +5794,10 @@ EOF
    my $tSEASON = FREUtil::modifydate($tBEG,"+ $startmo months");
    my $nextdec = FREUtil::graindate($tSEASON,'day').".$diag_source";
    $csh .= <<EOF;
-$time_mv $mvfile $nextdec.tile* $ppRootDir/.dec
+$time_mv $mvfile $nextdec.tile* $ppRootDir/.dec/
 if ( \$status ) then
    echo "WARNING: data transfer failure, retrying..."
-   $time_mv $mvfile $nextdec.tile* $ppRootDir/.dec
+   $time_mv $mvfile $nextdec.tile* $ppRootDir/.dec/
    $checktransfer
 endif
 $time_rm rm $nextdec.tile*
@@ -5898,10 +5971,10 @@ $check_timavg
 EOF
             $csh .= zInterpolate($zInterp,'modellevels.nc',"$component.$tSEASONf.nc",$caltype,$variables);
 $csh .= <<EOF;
-$time_mv $mvfile $component.$tSEASONf.nc \$outdir
+$time_mv $mvfile $component.$tSEASONf.nc \$outdir/
 if ( \$status ) then
    echo "WARNING: data transfer failure, retrying..."
-   $time_mv $mvfile $component.$tSEASONf.nc \$outdir
+   $time_mv $mvfile $component.$tSEASONf.nc \$outdir/
    $checktransfer
 endif
 
@@ -5912,10 +5985,10 @@ $time_timavg \$TIMAVG -o $component.$tSEASONf.nc sea.nc
 $retry_timavg
    $time_timavg \$TIMAVG -o $component.$tSEASONf.nc sea.nc
 $check_timavg
-$time_mv $mvfile $component.$tSEASONf.nc \$outdir
+$time_mv $mvfile $component.$tSEASONf.nc \$outdir/
 if ( \$status ) then
    echo "WARNING: data transfer failure, retrying..."
-   $time_mv $mvfile $component.$tSEASONf.nc \$outdir
+   $time_mv $mvfile $component.$tSEASONf.nc \$outdir/
    $checktransfer
 endif
 $time_rm rm $component.$tSEASONf.nc
@@ -5938,10 +6011,10 @@ EOF
    my $tSEASON = FREUtil::modifydate($tBEG,"+ $startmo months");
    my $nextdec = FREUtil::graindate($tSEASON,'day').".$diag_source.nc";
    $csh .= <<EOF;
-$time_mv $mvfile $nextdec $ppRootDir/.dec
+$time_mv $mvfile $nextdec $ppRootDir/.dec/
 if ( \$status ) then
    echo "WARNING: data transfer failure, retrying..."
-   $time_mv $mvfile $nextdec $ppRootDir/.dec
+   $time_mv $mvfile $nextdec $ppRootDir/.dec/
    $checktransfer
 endif
 $time_rm rm $nextdec
@@ -6298,6 +6371,7 @@ EOF
 #PBS -j oe
 #PBS -o
 #PBS -r y
+#PBS -S /bin/csh
 #$ -soft -l fre_info=
 EOF
       $cshscripttmpl .= <<EOF;
@@ -6338,6 +6412,7 @@ EOF
 
 #write_to_statefile
 
+  limit stacksize unlimited
   setenv FMS_FRE_FREPP
   set NCVARS = list_ncvars.csh
   set TIMAVG = "timavg.csh -mb"

@@ -1,0 +1,490 @@
+#! /usr/bin/perl
+
+# =========================================================================
+# Copyright (C) 2010-2012 Seth Underwood
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+# General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see
+# <http://www.gnu.org/licenses/>.
+# =========================================================================
+
+use warnings;
+use strict;
+use Getopt::Long qw(:config bundling no_auto_abbrev no_ignore_case auto_version );
+use Pod::Usage;
+use POSIX qw(ceil floor);
+use List::Util qw(max);
+
+# main
+{
+  # Version and Date information
+  my $Version = '2.2';
+  my $Date = '04 Jan 2012';
+
+  # What host am I running on:
+  my $host = `hostname`;
+  if ( $host =~ /c1ms/ or $host =~ /gaea[1-4]/ ) {
+    $host = 1;
+  } else {
+    $host = 2;
+  }
+  # Host specific global variables
+  our $grid_order;
+  my $cores_per_node;
+  my $cores_per_NUMA;
+  if ( $host == 1 ) {
+    $grid_order = '/opt/xt-tools/craypat/5.0.2/cpatx/sbin/grid_order';
+    $cores_per_node = 24;
+    $cores_per_NUMA = 6;
+  } else {
+    $grid_order = '/opt/cray/perftools/5.2.3/bin/grid_order';
+    $cores_per_node = 32;
+    $cores_per_NUMA = 8;
+  }
+
+  # Global Variables (but not really global)
+  my $xDeCom;
+  my @atm_layout = (0,0);
+  my @ocn_layout = (0,0);
+  my @atm_cpn;
+  my @ocn_cpn;
+  my $NUMA_rows = $cores_per_node/$cores_per_NUMA;
+  my $fh;
+
+  # Variables for CLI Options
+  my $help;
+  my $version;
+  my $atm_pes;
+  my $ocn_pes;
+  my $alayout;
+  my $olayout;
+  my $acpn;
+  my $ocpn;
+  my $file='MPICH_RANK_ORDER';
+  my $stdout;
+  my $debug;
+
+  GetOptions("help|h" => \$help,
+	     "version|v" => \$version,
+	     "file|f=s" => \$file,
+	     "stdout|s" => \$stdout,
+	     "atm=i" => \$atm_pes,
+	     "atm_layout=s" => \$alayout,
+	     "atm_cpn=s" => \$acpn,
+	     "ocn=i" => \$ocn_pes,
+	     "ocn_layout=s" => \$olayout,
+	     "ocn_cpn=s" => \$ocpn,
+	     "grid_order=s" => \$grid_order,
+	     "debug|d" => \$debug) or pod2usage(2);
+  pod2usage(1) if $help;
+  displayVersion($Version, $Date) and exit(0) if ( $version );
+
+  # Verify that both atm_pes and alayout and/or both ocn_pes and olayout have been given.
+  die("ERROR: Need to specify both --atm and --atm_layout\n") if ( ($atm_pes and !$alayout) or (!$atm_pes and $alayout) );
+  die("ERROR: Need to specify both --ocn and --ocn_layout\n") if ( ($ocn_pes and !$olayout) or (!$ocn_pes and $olayout) );
+  die("ERROR: Need to specify both --atm and --atm_layout and/or both --ocn and --ocn_layout\n") unless ( ($atm_pes and $alayout) or ($ocn_pes and $olayout) );
+
+  # Check that the atmoshphere parameters are valid.
+  if ( $atm_pes ) {
+    @atm_layout = split(/,/,$alayout);
+    die("ERROR: atm_layout needs to be exactly two numbers (X,Y)\n") if ( scalar(@atm_layout) != 2 or ($atm_layout[0] !~ /\d+/ or $atm_layout[1] !~ /\d+/) );
+    my $errMsg = '';
+    die("ERROR: $errMsg\n") if ( &verifyLayout('atm', $atm_pes, \@atm_layout, \$errMsg) );
+    my $cpn;
+    if ( $acpn ) {
+      $cpn = $acpn;
+    } else {
+      $cpn = $cores_per_node;
+    }
+    @atm_cpn = split(/,/,$cpn);
+    die("ERROR: $errMsg\n") if ( &genCellPack('atm', $cores_per_node, \@atm_cpn, \@atm_layout, \$errMsg) );
+  }
+
+  # Check that the ocean parameters are valid.
+  if ( $ocn_pes ) {
+    @ocn_layout = split(/,/,$olayout);
+    die("ERROR: ocn_layout needs to be exactly two numbers (X,Y)\n") if ( scalar(@ocn_layout) != 2 or ($ocn_layout[0] !~ /\d+/ or $ocn_layout[1] !~ /\d+/) );
+    my $errMsg = '';
+    die("ERROR: $errMsg\n") if ( &verifyLayout('ocn', $ocn_pes, \@ocn_layout, \$errMsg) );
+    my $cpn;
+    if ( $ocpn ) {
+      $cpn = $ocpn;
+    } else {
+      $cpn = $cores_per_node;
+    }
+    @ocn_cpn = split(/,/,$cpn);
+    die("ERROR: $errMsg\n") if ( &genCellPack('ocn', $cores_per_node, \@ocn_cpn, \@ocn_layout, \$errMsg) );
+  }
+
+  # Verify $file does not already exist, and file can be written. (unless -s is given)
+  if ( $stdout ) {
+    $fh = *STDOUT;
+  } else {
+    die("ERROR: $file already exists.  Move $file out of the way and try again.\n") if ( -e $file );
+    open MPICH_RANK_ORDER, '>', $file or die("ERROR: Cannot open $file for writing.\n");
+    $fh = *MPICH_RANK_ORDER;
+  }
+
+  # Print header warning/information.
+  writeHeader($fh, '#');
+
+  # Verify and display the atmosphere layout.
+  if ( $atm_pes ) {
+    print($fh "# Atmosphere MPI Layout for:\n# atm_pes = $atm_pes\n# atm_layout = " . join(', ',@atm_layout) . "\n");
+    &displayLayout('atm', 0, \@atm_cpn, \@atm_layout, $fh, $debug);
+  }
+
+  # Verify and display the ocean layout.
+  if ( $ocn_pes ) {
+    my $pe_offset;
+    if ( $atm_pes ) {
+      $pe_offset = $atm_pes;
+    } else {
+      $pe_offset = 0;
+    }
+    print($fh "# Ocean MPI Layout for:\n# ocn_pes = $ocn_pes\n# ocn_layout = " . join(', ',@ocn_layout) . "\n");
+    &displayLayout('ocn', $pe_offset, \@ocn_cpn, \@ocn_layout, $fh, $debug);
+  }
+
+  # Print warning about file name and location (same as header, but to STDERR)
+  writeHeader(*STDERR, 'INFO:');
+
+  if ( ! $stdout ) {
+    close $fh;
+  }
+}
+
+# **********************************************************************
+# sub genCellPack
+#    Write the header information to warn about file placement.
+#    Subroutine errors start at 201
+sub genCellPack($$$$$) {
+  my ($name, $cores_per_node, $cpn, $layout, $errMsg) = @_;
+  my $ret = 0;
+
+  # Make sure @$cpn contains all numbers
+  for (my $i=0; $i < scalar(@$cpn); $i++ ) {
+    if ( $$cpn[$i] !~ /\d+/ or $$cpn[$i] <= 0 ) {
+      $$errMsg = "Not a valid core per node value (must be an integer > 0).";
+      $ret = 201;
+    }
+  }
+
+  # Do the following only if there wasn't an error from the above block.
+  if ( ! $ret ) {
+    if ( scalar(@$cpn) == 1 ) {
+      my $cpn_orig = $$cpn[0];
+      my $dnom = 0;
+
+      # check if any multiples of $cores_per_node is a perfect divison of the @$layout[0].
+      # &multiples() returns an array ordered from larges to smallest. (Only if $$cpn[0]
+      # is the same as $cores_per_node.
+      if ( $$cpn[0] == $cores_per_node ) {
+	my @multiples = &multiples($cores_per_node);
+	for ( my $i=0; $i < scalar(@multiples); $i++ ) {
+	  if ( $$layout[0] % $multiples[$i] == 0 ) {
+	    $dnom = $multiples[$i];
+	    last;
+	  }
+	}
+      }
+
+      if ( $dnom == 0 ) { # None of the @standardSplits are divisors of $$layout[0].
+	# Now looking the largest factor of $$cpn less than $$layout[0]
+	my @multiples = &multiples($$cpn[0]);
+	for ( my $i=0; $i<scalar(@multiples); $i++ ) {
+	  if ( $multiples[$i] <= $$layout[0] ) {
+	    $dnom = $multiples[$i];
+	    last;
+	  }
+	}
+      }
+
+      if ( $dnom == 0 ) {
+	$$errMsg = "Cannot create a MPI layout with the values given.";
+	$ret = 202;
+      }
+
+      if ( ! $ret ) { # Do only if there were no errors above.
+	$$cpn[0] = $dnom;
+	$$cpn[1] = $cpn_orig/$dnom;
+	$$cpn[2] = 1 if ( scalar(@$layout) == 3 );
+      }
+    } else {
+      # We assume the user knows what he is doing, since this is an undocumented option.
+      # just verify product(@$cpn) <= $cores_per_node and go!.
+      my $prod = 1;
+      $prod *= $_ foreach @$cpn;
+      if ( $prod > $cores_per_node or $prod <= 0 ) {
+	$$errMsg = "Not a valid core per node value.";
+	$ret = 203;
+      } else {
+	$$cpn[2] = 1 if ( scalar(@$layout) == 3 );
+      }
+    }
+  }
+
+  return $ret;
+}
+
+# **********************************************************************
+# sub multiples
+#    Calculate all possible multiples (less than the acutal value)
+sub multiples($) {
+  my ($num) = @_;
+  my %mults;
+
+  for ( my $i=2; $i < $num/2; $i++ ) {
+    if ( $num % $i == 0 ) {
+      my $tmp = $num/$i;
+      $mults{$i}++;
+      $mults{$tmp}++ unless ( $tmp == $num );
+    }
+  }
+
+  if ( ! scalar(keys(%mults)) ) {
+    $mults{$num}++;
+  }
+  return sort({$a < $b} keys(%mults));
+}
+# **********************************************************************
+
+# **********************************************************************
+# sub writeHeader
+#    Write the header information to warn about file placement.
+sub writeHeader {
+  my ($fh, $note) = @_;
+
+  print($fh "$note To use this file, it must be named MPICH_RANK_ORDER and placed\n");
+  print($fh "$note in the working directory where the aprun command will be executed.\n");
+  print($fh "$note Also, the environment variable MPICH_RANK_REORDER_METHOD must be set to '3'.\n\n");
+}
+
+# **********************************************************************
+# sub displayLayout
+#    Calculate and display the layout
+sub displayLayout($$$$$$) {
+  my ($name, $mpiStart, $cpn, $layout, $fh, $debug) = @_;
+
+  my $cell = join(',',@$cpn);
+  my $grid = join(',',@$layout);
+
+  my $grid_order_output = qx($::grid_order -C -c $cell -g $grid);
+
+  if ( $mpiStart == 0 ) {
+    print($fh "$grid_order_output\n");
+  } else {
+    print($fh &increaseMPIrank($grid_order_output,$mpiStart) . "\n");
+  }
+
+}
+# **********************************************************************
+
+# **********************************************************************
+# sub increaseMPIrank
+#    Increase the value for the MPI rank.  Useful for when both atm and
+#    ocn are to be in the MPICH_RANK_ORDER file.
+sub increaseMPIrank($$) {
+  my ($gridOrder, $add) = @_;
+  my @newGridOrder;
+
+  foreach my $line ( split(/\n/,$gridOrder) ) {
+    if ( $line =~ /^#/ ) {
+      push(@newGridOrder,$line);
+    } else {
+      my @newline;
+      foreach my $value ( split(/,/,$line) ) {
+	push(@newline,$value+$add);
+      }
+      push(@newGridOrder,join(',',@newline));
+    }
+  }
+  return join("\n",@newGridOrder);
+}
+# **********************************************************************
+
+# **********************************************************************
+# sub verifyLayout
+#    Verify the layout matches the given number of processes.
+#    Returns the x decomposition.
+#    subroutine errors start at 101
+sub verifyLayout($$$$) {
+  my ($name, $pes, $layout, $errMsg) = @_;
+  my $ret = 0;
+
+  if ( $$layout[0] * $$layout[1] == 0 ) {
+    if ( $$layout[0] == $$layout[1] ) {
+      $$errMsg = "Only one value in ${name}_layout can be zero.\n";
+      $ret = 101;
+    } elsif ( $$layout[0] == 0 ) {
+      if ( $pes % $$layout[1] ) {
+	$$errMsg = "This layout does not work for the number of ${name}_pes given.";
+	$ret = 102;
+      } else {
+	$$layout[0] = $pes / $$layout[1];
+      }
+    } else {
+      if ( $pes % $$layout[0] ) {
+	$$errMsg = "This layout does not work for the number of ${name}_pes given.";
+	$ret = 103;
+      } else {
+	$$layout[1] = $pes / $$layout[0];
+      }
+    }
+  } elsif ( $$layout[0] * $$layout[1] != $pes ) {
+    if ( $name =~ 'atm' and $$layout[0] * $$layout[1] * 6 == $pes ) {
+      push(@$layout,6);
+    } else {
+      $$errMsg = "This layout does not work for the number of ${name}_pes given.";
+      $ret = 104
+    }
+  }
+  return $ret;
+}
+# **********************************************************************
+
+# **********************************************************************
+# sub displayVersion
+#    Print the version to STDOUT.
+sub displayVersion {
+  my ($version, $date) = @_;
+
+  # Handle SVN Revision and Date differently
+  if ( $version =~ /LastChangedRevision: (\d+)/ ) {
+    $version = $1;
+  }
+  if ( $date =~ /LastChangedDate: \d\d\d\d-\d\d-\d\d \d\d:\d\d:\d\d -\d\d\d\d \(\w\w\w, (\d\d \w+ \d\d\d\d)/ ) {
+    $date = $1;
+  }
+
+  print "mpi_layout $version ($date)\n";
+}
+# **********************************************************************
+
+# **********************************************************************
+# sub sanitizeString
+# Remove the quote marks and any additional space before and after
+# the string.
+sub sanitizeString($) {
+  my ($string) = @_;
+
+  if ( length($string) ) {
+    $string =~ s/"//g;
+    $string =~ s/^\s+//;
+    $string =~ s/\s+$//;
+  }
+  return $string;
+}
+# **********************************************************************
+
+__END__
+
+=head1 NAME
+
+mpi_layout - Create a simple MPI layout file for use with Cray's aprun command.
+
+=head1 SYNOPSIS
+
+ mpi_layout --atm <ATM_PES> --atm_layout <ATM_LAYOUT> [--atm_cpn <ATM_CPN>] [--ocn <OCN_PES> --ocn_layout <OCN_LAYOUT> [--con_cpn <OCN_CPN>]]
+ mpi_layout --ocn <OCN_PES> --ocn_layout <OCN_LAYOUT> [--ocn_cpn <OCN_CPN>]
+ mpi_layout [-h|-v]
+
+=head1 DESCRIPTION
+
+I<mpi_layout> calculates and creates a MPI layout file for use with
+Cray's aprun command.  Currently I<mpi_layout> will only give a "good"
+processor layout for the atmosphere if the X-decomposition value in
+the atm_layout is perfectly divisible by 6.  If not, than the layout
+will be similar to the MPICH_RANK_REORDER_METHOD 1.  The ocean layout,
+for now, also will follow the MPICH_RANK_REORDER_METHOD 1.  This will
+continue until we determine a programmatic method to create a effective
+layout for the ocean.
+
+I<mpi_layout>, by default, will create a file named
+I<MPICH_RANK_ORDER> which must be in the working directory where the
+aprun command is executed.  The -f option can be given to give an
+alternate name to the file.  However, you will then need to copy, or
+link it to I<MPICH_RANK_ORDER>.
+
+=head1 OPTIONS
+
+=over 8
+
+=item B<--atm> I<< <ATM_PES> >>
+
+Number of atmosphere MPI processes.
+
+=item B<--atm_layout> I<< <ATM_LAYOUT> >>
+
+The atmosphere domain decomposition layout.  This is of the form X,Y.
+
+=item B<--atm_cpn> I<< <ATM_CPN> >>
+
+Number of cores per node to use when packing the atmosphere MPI processes.
+
+=item B<--ocn> I<< <OCN_PES> >>
+
+Number of ocean MPI processes.
+
+=item B<--ocn_layout> I<< <OCN_LAYOUT> >>
+
+The ocean domain decomposition layout.  This is of the form X,Y.
+
+=item B<--ocn_cpn> I<< <OCN_CPN> >>
+
+Number of cores per node to use when packing the atmosphere MPI processes.
+
+=item B<-f>, B<--file> I<< <FILE_NAME> >>
+
+Write the I<MPICH_RANK_ORDER> file to I<FILE_NAME> instead.
+
+=item B<-s>, B<--stdout>
+
+Write to STDOUT only.  The option B<-f> will be ignored.
+
+=item B<--grid_order>
+
+Specify the location of the Cray application I<grid_order>.
+
+=item B<-h>, B<--help>
+
+Display usage information.
+
+=item B<-v>, B<--version>
+
+Display version information
+
+=back
+
+=head1 AUTHOR
+
+Seth Underwood <SUnderwood@DRC.com>
+
+=head1 COPYRIGHT AND LICENSE
+
+Copyright 2010-2012 Seth Underwood <SUnderwood@DRC.com>
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or (at
+your option) any later version.
+
+This program is distributed in the hope that it will be useful, but
+WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+=cut

@@ -14,45 +14,61 @@ DEBUG =
 REPRO =
 VERBOSE =
 
+##############################################
+# Need to use at least GNU Make version 3.81 #
+##############################################
+need := 3.81
+ok := $(filter $(need),$(firstword $(sort $(MAKE_VERSION) $(need))))
+ifneq ($(need),$(ok))
+$(error Need at least make version $(need).  Load module gmake/3.81)
+endif 
+
 #################################################################
 # site-dependent definitions, set by environment                #
 #################################################################
 
-NETCDF_ROOT = $(NETCDF_DIR)
+NETCDF_ROOT = $(CRAY_NETCDF_DIR)/netcdf-pgi
 MPI_ROOT    = $(MPICH_DIR)
 INCLUDE = -I$(NETCDF_ROOT)/include
 
 FPPFLAGS = $(INCLUDE)
-FFLAGS = -i4 -r8 -byteswapio -Mcray=pointer
-FFLAGS_OPT = -O2 -Mflushz -Mvect=nosse -Mnoscalarsse -Mallocatable=03 -D_F2000
-FFLAGS_DEBUG = -g -traceback -Ktrap=fp
+FFLAGS = -i4 -r8 -byteswapio -Mcray=pointer -Mcray=pointer -Mflushz -Mdaz -D_F2000
+FFLAGS_OPT = -O3 -Mvect=nosse -Mnoscalarsse -Mallocatable=03 
+FFLAGS_DEBUG = -O0 -g -traceback -Ktrap=fp
+FFLAGS_REPRO = -O2 -nofma
 FFLAGS_OPENMP = -mp
 FFLAGS_VERBOSE = -v
 
 CPPFLAGS = $(INCLUDE)
 CFLAGS_OPT = -O2
-CFLAGS_DEBUG = -g -traceback -Ktrap=fp
+CFLAGS_DEBUG = -O0 -g -traceback -Ktrap=fp
 CFLAGS_OPENMP = -mp
 CFLAGS_VERBOSE = -v
 
-# pathscale wants main program outside libraries, do
-# setenv MAIN_PROGRAM coupler_main.o or something before make
+# Optional Testing compile flags.  Mutually exclusive from DEBUG, REPRO, and OPT
+# *_TEST will match the production if no new option(s) is(are) to be tested.
+FFLAGS_TEST = -O3 -Mflushz -Mvect=simd:128 -Mallocatable=03
+CFLAGS_TEST = -O2
+
 LDFLAGS := -byteswapio
 LDFLAGS_VERBOSE := -v
 
-MAKEFLAGS +=--jobs=8
+MAKEFLAGS +=--jobs=2
 
 ifneq ($(REPRO),)
-CFLAGS += $(CFLAGS_REPRO) $(CFLAGS_OPT)
-FFLAGS += $(FFLAGS_REPRO) $(FFLAGS_OPT)
+CFLAGS += $(CFLAGS_REPRO)
+FFLAGS += $(FFLAGS_REPRO)
+else ifneq ($(DEBUG),)
+CFLAGS += $(CFLAGS_DEBUG)
+FFLAGS += $(FFLAGS_DEBUG)
+else ifneq ($(TEST),)
+CFLAGS += $(CFLAGS_TEST)
+FFLAGS += $(FFLAGS_TEST)
 else
 CFLAGS += $(CFLAGS_OPT)
 FFLAGS += $(FFLAGS_OPT)
 endif
-ifneq ($(DEBUG),)
-CFLAGS += $(CFLAGS_DEBUG)
-FFLAGS += $(FFLAGS_DEBUG)
-endif
+
 ifneq ($(OPENMP),)
 CFLAGS += $(CFLAGS_OPENMP)
 FFLAGS += $(FFLAGS_OPENMP)

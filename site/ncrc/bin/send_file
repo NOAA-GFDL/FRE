@@ -13,7 +13,7 @@
   unalias *
   set beginruntime = `date "+%s"`
 
-  set argv = (`getopt hiq $*`)
+  set argv = (`getopt hiqd $*`)
 #---------------------------------------------------
   while ("$argv[1]" != "--")
       switch ($argv[1])
@@ -23,6 +23,8 @@
               set interactive; breaksw
           case -q:
               set quiet; breaksw
+          case -d:
+              set direct; breaksw
       endsw
       shift argv
   end
@@ -64,14 +66,23 @@ Synopsis:  send a file from Gaea filesystems to GFDL's /archive filesystem.
 
               /archive/\$USER/fms/testing/fileA
 
+           Note that send_file will alter the platform portion of filenames to aid in 
+           transferring FRE files between sites unless you use the -d option.
+
    Usage:  send_file filename
 
               The filename can use the relative or full path.
               This will submit a batch job to send the file to GFDL's archive filesystem.
 
-           send_file -i filename 
+           send_file -i filename OR send_file -i -q filename
 
-              This will send the file interactively instead of in batch.
+              This will send the file interactively instead of in batch. Adding -q (quiet) 
+              will print fewer messages to the screen during the transfer.
+
+           send_file -d filename
+
+              "direct": prevent send_file from translating portions of the path like
+              ncrc2.default-prod-openmp -> gfdl.ncrc2-default-prod-openmp
 
 EOF
     exit 1
@@ -82,11 +93,8 @@ EOF
    echo "WARNING: X509_USER_PROXY file $X509_USER_PROXY does not exist... \
            certificate-based transfers may not work."
 
-  test $?GLOBUS_LOCATION -eq 0 && setenv GLOBUS_LOCATION /sw/xt6/globus/default
-  source $GLOBUS_LOCATION/etc/globus-user-env.csh 
-
 #make sure FRE is loaded
-  test $?MODULESHOME -eq 0 && setenv MODULESHOME /opt/modules/3.2.6.5
+  test $?MODULESHOME -eq 0 && setenv MODULESHOME /opt/modules/3.2.6.6
   source $MODULESHOME/init/csh
   if ( ! $?FRE_COMMANDS_HOME ) then
      module rm fre
@@ -96,6 +104,15 @@ EOF
         echo "NOTE: FRE not loaded in this shell, executing 'module load fre'"
         module load fre
      endif
+  endif
+
+#make sure globus is loaded
+  set globusavail = `$MODULESHOME/bin/modulecmd tcsh avail globus |& grep -c 'globus/'`
+  if ( $globusavail ) then
+    module load globus
+  else
+    test $?GLOBUS_LOCATION -eq 0 && setenv GLOBUS_LOCATION /sw/xt6/globus/default
+    source $GLOBUS_LOCATION/etc/globus-user-env.csh 
   endif
 
 #parse paths
@@ -122,6 +139,9 @@ EOF
   endif
 
   set outpath = $inpath
+  if ( ! $?direct ) then
+     set outpath = `echo $outpath | sed 's:\(.\+\)\/\(ncrc[1-2]\?\)\.\(.\+\):\1\/gfdl\.\2-\3:'`
+  endif
 
   if ( ! -f "$tmpbase/$u/$inpath$filename" ) then
      echo "ERROR: '$tmpbase/$u/$inpath$filename' is not a file"
@@ -138,7 +158,8 @@ EOF
     #endif
   else
     if ( ! $?interactive ) then
-      msub -v file=$tmpbase/$u/$inpath$filename $0
+      set freversion = `echo $LOADEDMODULES | tr ':' '\n' | egrep '^fre/.+' | sed 's,^fre/,,'`
+      msub -v file=$tmpbase/$u/$inpath$filename,freversion=$freversion $0
       exit $status
     endif
   endif

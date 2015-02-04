@@ -11,8 +11,14 @@
 #  echo "$line"
 #end
 
+#source $MODULESHOME/init/csh
+#if ( -d /home/pem/local/modulefiles ) module use -a /home/pem/local/modulefiles
+#if ( -d /ncrc/home1/Tara.McQueen/local/modulefiles ) module use -a /ncrc/home1/Tara.McQueen/local/modulefiles
+#module load gcp
+
 set extraoptions = ""
-set argv = (`getopt qshfgx:v: $*`)
+set copytool = "gcp"
+set argv = (`getopt qshfgx:v:A:c: $*`)
 while ("$argv[1]" != "--")
     switch ($argv[1])
         case -q:
@@ -29,6 +35,10 @@ while ("$argv[1]" != "--")
             set extraoptions = "-x $argv[2] $extraoptions"; shift argv; breaksw
         case -v:
             set extraoptions = "-v $argv[2] $extraoptions"; shift argv; breaksw
+	case -A:
+	    set extraoptions = "-A $argv[2] $extraoptions"; shift argv; breaksw
+        case -c:
+            set copytool = "$argv[2]"; shift argv; breaksw
     endsw
     shift argv
 end
@@ -51,10 +61,11 @@ Synopsis: ardiff is a utility for diffing cpio or tar archives containing
 
 Usage:    ls -1 */history/00010101.nc.cpio | ardiff
 
-          -s   save temporary directory containing the restart
-                    files extracted from the archives.
-          -q   quiet: do not print cpio warnings
-          -h   help: print this help message
+          -s           save temporary directory containing the restart
+                       files extracted from the archives.
+          -c copytool  set the tool used to copy files (default: gcp)
+          -q           quiet: do not print cpio warnings
+          -h           help: print this help message
 
           ardiff compares first with cmp, and if that fails, it uses
           the nccmp utility written by Remik Ziemlinski.
@@ -66,6 +77,7 @@ Usage:    ls -1 */history/00010101.nc.cpio | ardiff
           -g   Compare global attributes  
           -v   Compare variable(s) var1[,...] only
           -x   Exclude variable(s) var1[,...]
+          -A   Ignore attribute(s) att1[,...] for all variables
 
           You may want more control over the order of the files since
           the first archive file will be compared to all the rest:
@@ -78,56 +90,107 @@ exit 1
 endif
 
 unalias *
+
+set site = ''
+if ( "Scopytool" == "gcp" ) then
+   set site = `perl -T -e "use Net::Domain(hostdomain); print hostdomain" | cut -f1 -d'.'`
+   if ( "$site" == "princeton" ) set site = "gfdl"
+   set site = "$site:"
+endif
+
 set top = $cwd
 set mystat = 0
 
+#create list of filenames
+set files = ()
+while ( 1 )
+   set stdinf = "$<"
+   if ( "$stdinf" == "" ) then 
+      break 
+   endif 
+   set files = ( $files $stdinf )
+end
+
 #get first cpio filename  
-set file1 = "$<"
+set file1 = $files[1]
+shift files
 if ( "$file1" == "" ) goto HELP
-if ( ! -f $file1 ) goto HELP
+if ( ! -e $file1 ) echo WARNING: $file1 does not exist on local filesystems
 set firstchar = `echo $file1 | cut -c1`
 if ( "$firstchar" != "/" ) set file1 = "$top/$file1"
 
 #set up temporary directory
-test $?FRETMPDIR -eq 0 && setenv FRETMPDIR /tmp
-test $?TMPDIR -eq 0 && setenv TMPDIR $FRETMPDIR
-set thisdate = `date '+%Y%m%d_%H%M%S'`
-set TMP = $TMPDIR/ardiff_${USER}_$thisdate
-if ( -d $TMP ) then
-   rm -rf $TMP/* >& /dev/null
+unsetenv ARDIFFTMP
+test $?FRE_SYSTEM_TMP -eq 1 && setenv ARDIFFTMP $FRE_SYSTEM_TMP
+test $?ARDIFFTMP -eq 0 && test $?TMPDIR -eq 1 && setenv ARDIFFTMP $TMPDIR
+test $?ARDIFFTMP -eq 0 && setenv ARDIFFTMP /tmp
+
+set mktempv = `mktemp -V | head -1 | awk '{print $NF}'`
+set TMP = ''
+echo mktempv $mktempv
+if ( `echo "$mktempv < 2.0" | bc`) then
+   set TMP = `mktemp -d -p $ARDIFFTMP ardiff.$HOST.$$.XXXXXXXXXX`
+   set thisstatus = $status
 else
-   mkdir -p $TMP
+   set TMP = `mktemp -d --tmpdir=$ARDIFFTMP ardiff.$HOST.$$.XXXXXXXXXX`
+   set thisstatus = $status
+endif
+
+if ( $thisstatus ) then
+   echo "ERROR: Could not create temporary directory, exiting"
+   exit 1
 endif
 
 cd $TMP
-mkdir first
-mkdir second
+mkdir first second firstf secondf
 
 #extract first cpio file
 cd first 
 set type = $file1:e
-if ( "$type" == "cpio" ) then
-   if ( $?quiet ) then
-      cpio -i < $file1 >& /dev/null
-      set thisstatus = $status
+
+if ( "$type" == "cpio" || "$type" == "tar" ) then
+
+   if ( ! $?quiet ) echo $copytool ${site}$file1 $TMP/firstf/
+   $copytool ${site}$file1 $TMP/firstf/
+   if ( $status ) then
+     echo ERROR: unable to copy file $file1
+     exit 1
+   endif
+   set local1 = ${TMP}/firstf/$file1:t
+
+   if ( "$type" == "cpio" ) then
+      if ( $?quiet ) then
+         cpio -i < $local1 >& /dev/null
+         set thisstatus = $status
+      else
+         cpio -i < $local1
+         set thisstatus = $status
+      endif
+      if ( $thisstatus ) echo "WARNING: cpio returned error status for $file1"
+   else if ( "$type" == "tar" ) then
+      if ( $?quiet ) then
+         tar -xf $local1
+         set thisstatus = $status
+      else
+         tar -xvf $local1
+         set thisstatus = $status
+      endif
+      if ( $thisstatus ) then
+         echo "WARNING: tar returned error status for $file1"
+      endif
    else
-      cpio -i < $file1
-      set thisstatus = $status
+      echo ERROR: only tar or cpio supported
    endif
-   if ( $thisstatus ) echo "WARNING: cpio returned error status for $file1"
-else if ( "$type" == "tar" ) then
-   if ( $?quiet ) then
-      tar -xf $file1
-      set thisstatus = $status
-   else
-      tar -xvf $file1
-      set thisstatus = $status
+else 
+
+   #we move everything to TMP/first
+   if ( ! $?quiet ) echo $copytool $file1/\* $TMP/first/
+   $copytool $file1/* $TMP/first/
+   if ( $status ) then
+     echo ERROR: unable to copy files from directory $file1
+     exit 1
    endif
-   if ( $thisstatus ) then
-      echo "WARNING: tar returned error status for $file1"
-   endif
-else
-   echo ERROR: only tar or cpio supported
+
 endif
 
 set list = ( `ls -1 *` )
@@ -135,44 +198,74 @@ cd ../second
 
 #loop over remaining cpio files, do diffs
 while ( 1 )
-  set file2 = "$<"
-  if ( "$file2" == "" ) then
+  if ( "$files" == '' ) then
     if ( $?DID_SOMETHING ) then
       break
     else
       cd ../..
-      rm -rf $TMP >& /dev/null
+      if ( $?do_not_delete ) then
+         echo Files left in $TMP
+      else
+         rm -rf $TMP >& /dev/null
+      endif
+      echo ERROR: Not enough files to check.
       goto HELP
     endif
   endif
+  set file2 = $files[1]
+  shift files
+  set file2 = `echo $file2`
   set firstchar = `echo $file2 | cut -c1`
   if ( "$firstchar" != "/" ) set file2 = "$top/$file2"
-
-  rm -rf * >& /dev/null
+  rm -rf ${TMP}/secondf/* >& /dev/null
   set type = $file2:e
-  if ( "$type" == "cpio" ) then
-     if ( $?quiet ) then
-        cpio -i < $file2 >& /dev/null
-        set thisstatus = $status
-     else
-        cpio -i < $file2
-        set thisstatus = $status
+
+
+  if ( "$type" == "cpio" || "$type" == "tar" ) then
+
+     if ( ! $?quiet ) echo $copytool ${site}$file2 $TMP/secondf/
+     $copytool ${site}$file2 $TMP/secondf/
+     if ( $status ) then
+       echo ERROR: unable to copy file $file2
+       exit 1
      endif
-     if ( $thisstatus ) echo "WARNING: cpio returned error status for $file2"
-  else if ( "$type" == "tar" ) then
-     if ( $?quiet ) then
-        tar -xf $file2
-        set thisstatus = $status
-     else
-        tar -xvf $file2
-        set thisstatus = $status
+     set local2 = ${TMP}/secondf/$file2:t
+
+     rm -rf * >& /dev/null
+     if ( "$type" == "cpio" ) then
+        if ( $?quiet ) then
+           cpio -i < $local2 >& /dev/null
+           set thisstatus = $status
+        else
+           cpio -i < $local2
+           set thisstatus = $status
+        endif
+        if ( $thisstatus ) echo "WARNING: cpio returned error status for $file2"
+     else if ( "$type" == "tar" ) then
+        if ( $?quiet ) then
+           tar -xf $local2
+           set thisstatus = $status
+        else
+           tar -xvf $local2
+           set thisstatus = $status
+        endif
+        if ( $thisstatus ) then
+           echo "WARNING: tar returned error status for $file2"
+        endif
+      else
+        echo ERROR: only tar or cpio supported
+      endif
+
+  else
+
+     if ( ! $?quiet ) echo $copytool $file2/\* $TMP/second/
+     $copytool $file2/* $TMP/second/
+     if ( $status ) then
+       echo ERROR: unable to copy files from directory $file2
+       exit 1
      endif
-     if ( $thisstatus ) then
-        echo "WARNING: tar returned error status for $file2"
-     endif
-   else
-     echo ERROR: only tar or cpio supported
-   endif
+
+  endif
 
   echo "/// $file1"
   echo '\\\' $file2
@@ -182,11 +275,11 @@ while ( 1 )
     cmp ../first/$ncfile ../second/$ncfile >& /dev/null
     set cmpstatus = $status
     if ( $cmpstatus == 2 ) then
-       if ( "$ncfile:e" == 'nc' ) then
+       if ( "$ncfile:e" == 'nc' || "$ncfile:e" == 'res' ) then
           echo "DIFFER : FILE NOT FOUND : $ncfile"
           set mystat = 1
         else
-          echo "WARNING : FILE NOT FOUND : $ncfile"
+          echo "WARNING : NONESSENTIAL FILE NOT FOUND : $ncfile"
         endif
     else if ( $cmpstatus != 0 ) then
        if ( "$ncfile:e" == 'nc' ) then
@@ -204,15 +297,16 @@ while ( 1 )
                 set mystat = 1
              endif
           endif
+       else if ( "$ncfile:e" == 'res' ) then
+          echo "DIFFER : $ncfile"
+          set mystat = 1
        else 
           set ftype = `file ../first/$ncfile | grep text`
           if ( "$ftype" != '' && $?diffall ) then
-             echo "WARNING : ASCII FILES DIFFER : $ncfile"
+             echo "WARNING : NONESSENTIAL ASCII FILES DIFFER : $ncfile"
              diff ../first/$ncfile ../second/$ncfile | head
           else
-             if ( "$ncfile" != "input.nml" ) then 
-                echo "WARNING : FILES DIFFER : $ncfile"
-             endif
+             echo "WARNING : NONESSENTIAL FILES DIFFER : $ncfile"
           endif
           #set mystat = 1
        endif

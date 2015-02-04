@@ -1,4 +1,4 @@
-# $Id: intel.mk,v 1.1.2.2 2011/01/27 22:45:58 afy Exp $
+# $Id: intel.mk,v 1.1.2.2.2.1 2012/03/07 15:08:54 sdu Exp $
 # template for Intel compilers
 # typical use with mkmf:
 # mkmf -t template.mk -c "-Duse_libMPI -Duse_netCDF" path_names /usr/local/include
@@ -36,6 +36,11 @@ CFLAGS_OPT = -O2
 CFLAGS_OPENMP = -openmp
 CFLAGS_DEBUG = -O0 -g -ftrapuv -traceback
 
+# Optional Testing compile flags.  Mutually exclusive from DEBUG, REPRO, and OPT
+# *_TEST will match the production if no new option(s) is(are) to be tested.
+FFLAGS_TEST = -O2
+CFLAGS_TEST = -O2
+
 LDFLAGS :=
 LDFLAGS_OPENMP := -openmp
 LDFLAGS_VERBOSE := -Wl,-V,--verbose,-cref,-M
@@ -48,6 +53,9 @@ endif
 ifneq ($(DEBUG),)
   CFLAGS += $(CFLAGS_DEBUG)
   FFLAGS += $(FFLAGS_DEBUG)
+else ifneq ($(TEST),)
+  CFLAGS += $(CFLAGS_TEST)
+  FFLAGS += $(FFLAGS_TEST)
 else
   CFLAGS += $(CFLAGS_OPT)
   FFLAGS += $(FFLAGS_OPT)
