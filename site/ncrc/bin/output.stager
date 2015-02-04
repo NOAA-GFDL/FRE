@@ -1,6 +1,6 @@
 #!/bin/csh -fx
 # 
-# $Id: output.stager,v 1.1.2.55.2.1 2013/04/17 00:02:43 afy Exp $
+# $Id: output.stager,v 1.1.2.58 2013/04/16 21:33:18 afy Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: Output Stager - NCRC Version
 # ------------------------------------------------------------------------------
@@ -157,8 +157,15 @@
 # afy    Ver  54.00  Combine files with 4+ digits extension         February 13
 # afy    Ver  54.01  Remove all the PBS options                     February 13
 # afy    Ver  55.00  Combine compressed history files               February 13
-# afy -------------- Branch 1.1.2.55.2 ---------------------------- April 13
-# afy    Ver   1.00  Remove 'paramOverrideOn' argument              April 13
+# afy    Ver  56.00  Remove argument 'combineMemory'                March 13
+# afy    Ver  56.01  Dynamically estimate memory to combine         March 13
+# afy    Ver  56.02  Increase combining concurrency                 March 13
+# afy    Ver  56.03  Call 'mppnccombine' without options -n/-e      March 13
+# afy    Ver  56.04  Remove 'paramOverrideOn' argument              March 13
+# afy    Ver  56.05  Call 'mppnccombine' with option -m             March 13
+# afy    Ver  57.00  Modify 'combineMemory' estimation              April 13
+# afy    Ver  58.00  Adjust 'combineMemory' (sharable nodes)        April 13
+# afy    Ver  58.01  Decrease combining concurrency (2)             April 13
 # ------------------------------------------------------------------------------
 # Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2000-2013
 # Designed and written by V. Balaji, Amy Langenhorst and Aleksey Yakovlev
@@ -168,7 +175,7 @@
   set -r runtimeBeg = `date "+%s"`
 
   if ( $echoOn ) unset echo
-  echo '<NOTE> : ====== FRE OUTPUT STAGER $Id: output.stager,v 1.1.2.55.2.1 2013/04/17 00:02:43 afy Exp $ ======'
+  echo '<NOTE> : ====== FRE OUTPUT STAGER $Id: output.stager,v 1.1.2.58 2013/04/16 21:33:18 afy Exp $ ======'
   echo "<NOTE> : Starting at $HOST on `date`"
   if ( $echoOn ) set echo
 
@@ -220,8 +227,6 @@
   set xferRetries = 0
   set saveRetry = 0
   set xferRetry = 0
-
-  set combineMemory = ""
 
   set workDir = ""
   set ptmpDir = ""
@@ -596,23 +601,6 @@
 ################################################################################
 #---------------------- arguments checkup (second part) ------------------------
 ################################################################################
-
-  if ( "$combineMemory" != "" ) then
-    set -r combineMemory = $combineMemory
-    if ( $echoOn ) unset echo
-    echo "<NOTE> : combineMemory = '$combineMemory'"
-    if ( $echoOn ) set echo
-  else if ( $actionCombineToDo ) then
-    if ( $echoOn ) unset echo
-    echo "*ERROR*: The 'combineMemory' argument is not defined"
-    if ( $echoOn ) set echo
-    set exitStatus = 2
-    goto END
-  else
-    if ( $echoOn ) unset echo
-    echo "WARNING: Not Using the 'combineMemory' argument"
-    if ( $echoOn ) set echo
-  endif
 
   if ( "$workDir" != "" ) then
     set -r workDir = $workDir
@@ -1057,12 +1045,10 @@
     set -r hostType = 'c2'
   else if ( $HOST =~ t1-* ) then
     set -r hostType = 't1'
+  else if ( $HOST =~ t3-* ) then
+    set -r hostType = 't3'
   else if ( $HOST =~ gaea-ldtn* ) then
     set -r hostType = 'ldtn'
-  else if ( $HOST =~ ldtn* ) then
-    set -r hostType = 'ldtn'
-  else if ( $HOST =~ dtn* ) then
-    set -r hostType = 'rdtn'
   else if ( $HOST =~ rdtn* ) then
     set -r hostType = 'rdtn'
   else
@@ -1092,11 +1078,11 @@
     set -r patternGrepFail = '\.'$tagFail'$'
 
     if ( $hostType == 'login' || $hostType == 'ldtn' ) then
-      alias mppnccombine `which mppnccombine` -64 -h 16384
+      alias mppnccombine `which mppnccombine` -64 -h 16384 -m
       alias slmnccombine `which combine-ncc`
       alias slmnccompressed `which is-compressed`
-    else if ( $hostType == 'c1' || $hostType == 'c2' || $hostType == 't1' ) then
-      alias mppnccombine aprun -n 1 -N 1 `which mppnccombine` -64 -h 16384
+    else if ( $hostType == 'c1' || $hostType == 'c2' || $hostType == 't1' || $hostType == 't3' ) then
+      alias mppnccombine aprun -n 1 -N 1 `which mppnccombine` -64 -h 16384 -m
       alias slmnccombine aprun -n 1 -N 1 `which combine-ncc`
       alias slmnccompressed `which is-compressed`
     else
@@ -1107,18 +1093,19 @@
       goto END
     endif
 
+    set -r memoryDownscalingFactor = '1.00'
+    set -r memorySpec = ( `free -m | grep '-'` )
+    set -r combineMemory = `echo "$memorySpec[4] * $memoryDownscalingFactor" | bc -l | xargs printf "%.0f"`
+    set -r combinesPerJob = 2
+
     mppnccombine -V >& /dev/null
 
     if ( $status == 0 ) then
       if ( `mppnccombine -V |& head -1 | cut --delimiter=' ' --fields=3 | sed 's/\.//g'` > 220 ) then
         set -r mppnccombineWithBuffering
         set -r buffersNmbMax = 100
-        set -r combinesPerJob = 2
-      else
-        set -r combinesPerJob = 8
       endif
     else
-      set -r combinesPerJob = 8
       rm --force ./-V
     endif
 
@@ -1147,27 +1134,23 @@
 	    if ( $status == 0 ) then
               ( slmnccombine $inputFiles $file && ( echo $inputFiles | xargs rm --force ) || touch $file.$tagFail ) &
             else
-              set inxBeg = `echo $inputFiles[1] | awk --field-separator . '{print $NF}'`
-              set inxEnd = `echo $inputFiles[$#inputFiles] | awk --field-separator . '{print $NF}'`
               if ( $?mppnccombineWithBuffering ) then
-                @ memoryPerOneBuffer = `mppnccombine -x -n $inxBeg -e $inxEnd $file`
+                @ memoryPerOneBuffer = `mppnccombine -x $file $inputFiles`
                 if ( $status == 0 ) then
                   @ buffersNmb = ( $combineMemory / ( $combinesPerJob * $memoryPerOneBuffer ) ) + 1
                   if ( $buffersNmb > $buffersNmbMax ) @ buffersNmb = $buffersNmbMax 
-                  ( mppnccombine -k $buffersNmb -n $inxBeg -e $inxEnd $file && ( echo $inputFiles | xargs rm --force ) || touch $file.$tagFail ) &
+                  ( mppnccombine -k $buffersNmb $file $inputFiles && ( echo $inputFiles | xargs rm --force ) || touch $file.$tagFail ) &
                   unset buffersNmb
                 else
-                  ( mppnccombine -n $inxBeg -e $inxEnd $file && ( echo $inputFiles | xargs rm --force ) || touch $file.$tagFail ) &
+                  ( mppnccombine $file $inputFiles && ( echo $inputFiles | xargs rm --force ) || touch $file.$tagFail ) &
 		  if ( $echoOn ) unset echo
 		  echo "WARNING: Unable to determine a mppnccombine buffer memory"
 		  if ( $echoOn ) set echo
                 endif
                 unset memoryPerOneBuffer
               else
-                ( mppnccombine -n $inxBeg -e $inxEnd $file && ( echo $inputFiles | xargs rm --force ) || touch $file.$tagFail ) &
+                ( mppnccombine $file $inputFiles && ( echo $inputFiles | xargs rm --force ) || touch $file.$tagFail ) &
               endif
-              unset inxEnd
-              unset inxBeg
             endif
             if ( $counter < $combinesPerJob ) then
               @ counter++

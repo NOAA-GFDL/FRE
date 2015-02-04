@@ -103,6 +103,7 @@
       </xs:choice>
       <xs:attribute name="inherit" type="xs:string"/>
       <xs:attribute name="name" use="required" type="xs:string"/>
+      <xs:attribute name="modelClass" use="optional" type="xs:string"/>
     </xs:complexType>
   </xs:element>
   
@@ -209,14 +210,10 @@
             <xs:documentation>The component defines the type of output component (which will be the output directory name that contains the post processed files), the z-interpolation method, the start year (in the event that you wish to account for spin up time), the source component (which should link back to a component defined in the experiment tag, an interpolation method, and finally a cubed-sphere to lat/lon grid conversion factor.</xs:documentation>
           </xs:annotation>
           <xs:complexType>
-            <xs:sequence>
-              <xs:element minOccurs="0" maxOccurs="unbounded" ref="timeSeries">
-                <xs:annotation>
-                  <xs:documentation>This tag defines the frequency in which the original model output data is to be post processed, as well as the "chunk length" or the length of time per output file. </xs:documentation>
-                </xs:annotation>
-              </xs:element>
-              <xs:element minOccurs="0" maxOccurs="unbounded" ref="timeAverage"/>
-            </xs:sequence>
+            <xs:choice minOccurs="0" maxOccurs="unbounded">
+              <xs:element ref="timeSeries"/>
+              <xs:element ref="timeAverage"/>
+            </xs:choice>
             <xs:attribute name="cubicToLatLon" type="xs:string"/>
             <xs:attribute name="interpMethod" type="xs:string"/>
             <xs:attribute name="source" type="xs:string"/>
@@ -365,11 +362,25 @@
     </xs:annotation>
     <xs:complexType>
       <xs:sequence>
-        <xs:element maxOccurs="unbounded" ref="platform"/>
+        <xs:element minOccurs="0" maxOccurs="1" ref="fmsRelease"/>
+        <xs:element minOccurs="0" maxOccurs="1" ref="getFmsData"/>
+        <xs:element minOccurs="1" maxOccurs="unbounded" ref="platform"/>
       </xs:sequence>
     </xs:complexType>
   </xs:element>
   
+  <xs:element name="getFmsData" type="xs:string">
+    <xs:annotation>
+      <xs:documentation>Specifies which fms release was used to generate the data.</xs:documentation>
+    </xs:annotation>
+  </xs:element>
+
+  <xs:element name="fmsRelease" type="xs:string">
+    <xs:annotation>
+      <xs:documentation>Specifies which fms release was used to generate the data.</xs:documentation>
+    </xs:annotation>
+  </xs:element>
+
   <xs:element name="platform">
     <xs:annotation>
       <xs:documentation>The platform tag defines system dependent commands, paths, and substitutions that will be used in the rest of your XML.</xs:documentation>
@@ -547,6 +558,15 @@
     </xs:complexType>
   </xs:element>
   
+  <xs:element name="null">
+    <xs:annotation>
+      <xs:documentation>Placeholder tag that may be replaced by a real tag in some later modification to the experiment XML.</xs:documentation>
+    </xs:annotation>
+    <xs:complexType mixed="true">
+      <xs:attribute ref="xml:base"/>
+    </xs:complexType>
+  </xs:element>
+
   <xs:element name="timeSeries">
     <xs:annotation>
       <xs:documentation>Used in the creation of time series files, it defines the frequency, source of the time series files, and the chunk length. </xs:documentation>
@@ -556,6 +576,7 @@
         <xs:element minOccurs="0" ref="variables"/>
         <xs:element minOccurs="0" maxOccurs="unbounded" ref="analysis"/>
         <xs:element minOccurs="0" ref="xi:include"/>
+        <xs:element minOccurs="0" ref="null"/>
       </xs:sequence>
       <xs:attribute name="chunkLength" use="required" type="xs:string"/>
       <xs:attribute name="cumulative" type="xs:string"/>
@@ -579,6 +600,7 @@
       <xs:choice>
         <xs:element ref="xi:include"/>
         <xs:element minOccurs="0" maxOccurs="unbounded" ref="analysis"/>
+        <xs:element minOccurs="0" ref="null"/>
       </xs:choice>
       <xs:attribute name="calcInterval" type="xs:string"/>
       <xs:attribute name="endYear" type="xs:integer"/>
@@ -597,8 +619,8 @@
         <xs:element ref="codeBase"/>
         <xs:element minOccurs="0" ref="csh"/>
       </xs:sequence>
+      <xs:attribute name="root" type="xs:string"/>
       <xs:attribute name="versionControl" type="xs:string"/>
-      <xs:attribute name="versonControl" type="xs:string"/>
     </xs:complexType>
   </xs:element>
   
@@ -616,17 +638,26 @@
       <xs:documentation>Contains the compiler options tag.</xs:documentation>
     </xs:annotation>
     <xs:complexType>
-      <xs:sequence>
-        <xs:element ref="cppDefs"/>
-        <xs:choice minOccurs="0">
-          <xs:element ref="csh"/>
-          <xs:element ref="makeOverrides"/>
-        </xs:choice>
-      </xs:sequence>
+      <xs:choice>
+        <xs:element ref="srcList"/>
+        <xs:sequence>
+          <xs:element ref="cppDefs"/>
+          <xs:choice minOccurs="0">
+            <xs:element ref="csh"/>
+            <xs:element ref="makeOverrides"/>
+          </xs:choice>
+        </xs:sequence>
+      </xs:choice>
       <xs:attribute name="target" type="xs:string"/>
     </xs:complexType>
   </xs:element>
   
+  <xs:element name="srcList" type="xs:string">
+    <xs:annotation>
+      <xs:documentation>Identifies additional source files for use in FRE.</xs:documentation>
+    </xs:annotation>
+  </xs:element>
+
   <xs:element name="cppDefs" type="xs:string">
     <xs:annotation>
       <xs:documentation>Compiler options are specified in this tag.</xs:documentation>

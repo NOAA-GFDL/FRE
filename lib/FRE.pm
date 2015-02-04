@@ -1,5 +1,5 @@
 #
-# $Id: FRE.pm,v 18.0.2.20 2012/07/27 16:44:16 afy Exp $
+# $Id: FRE.pm,v 18.0.2.21 2013/03/01 18:44:54 afy Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: Main Library Module
 # ------------------------------------------------------------------------------
@@ -43,8 +43,9 @@
 # afy    Ver  19.00  Modify 'propertyParameterized' subroutine      April 12
 # afy    Ver  20.00  Modify 'new' (simplify uniqueness test)        July 12
 # afy    Ver  20.01  Modify 'new' (don't use the FRETrace module)   July 12
+# afy    Ver  21.00  Modify 'propertyParameterized' (add position)  February 13
 # ------------------------------------------------------------------------------
-# Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2000-2012
+# Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2000-2013
 # Designed and written by V. Balaji, Amy Langenhorst and Aleksey Yakovlev
 #
 
@@ -308,7 +309,7 @@ sub new($$%)
 	    if ($o{target})
 	    {
 	      # -------------------------------------- initialize properties object (properties expansion happens here)
-	      my $siteDir = FREPlatforms::siteDir($platformSite); 
+	      my $siteDir = FREPlatforms::siteDir($platformSite);
 	      my $properties = FREProperties->new($rootNode, $siteDir, %o);
 	      if ($properties)
 	      {
@@ -706,10 +707,10 @@ sub propertyParameterized($$;@)
 # ------ return the external property value, where all the '$' are replaced by @values
 {
   my ($fre, $k, @v) = @_;
-  my ($s, $i) = ($fre->placeholdersExpand($fre->{properties}->property($k)), 0);
+  my ($s, $pos, $i) = ($fre->placeholdersExpand($fre->{properties}->property($k)), 0, 0);
   while (1)
   {
-    my $index = index($s, '$');
+    my $index = index($s, '$', $pos);
     if ($index < 0)
     {
       last;
@@ -717,6 +718,7 @@ sub propertyParameterized($$;@)
     elsif (my $value = $v[$i])
     {
       substr($s, $index, 1) = $value;
+      $pos = $index + length($value);
       $i++;
     }
     else

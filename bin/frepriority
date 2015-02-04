@@ -1,7 +1,7 @@
 #!/usr/bin/perl
 # -*- cperl -*-
 
-# $Id: frepriority,v 18.0.2.5 2013/01/12 21:35:22 afy Exp $
+# $Id: frepriority,v 18.0.2.7 2013/03/26 23:14:57 afy Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: Program to Control Experiment Production Runs
 # ------------------------------------------------------------------------------
@@ -50,6 +50,10 @@
 # afy    Ver   4.03  Improve options checkup                        January 13
 # afy    Ver   4.04  Process project/queue value 'default'          January 13
 # afy    Ver   5.00  Fix 'settableResourcesPrint'                   January 13
+# afy    Ver   6.00  Add option --main                              January 13
+# afy    Ver   6.01  Add option --unique                            January 13
+# afy    Ver   6.02  Use table format to print info/activity        January 13
+# afy    Ver   7.00  Use 'FREUtil::listUnique' to remove dupes      March 13   
 # ------------------------------------------------------------------------------
 # Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2000-2013
 # Designed and written by V. Balaji, Amy Langenhorst and Aleksey Yakovlev
@@ -76,15 +80,17 @@ use FREUtil();
 
   package frepriority;
 
-  use constant VERSION => '$Id: frepriority,v 18.0.2.5 2013/01/12 21:35:22 afy Exp $';
+  use constant VERSION => '$Id: frepriority,v 18.0.2.7 2013/03/26 23:14:57 afy Exp $';
 
   use constant OPTLIST =>
   (
     'info|I',
+    'main|m!',
     'project|A=s',
     'queue|q=s',
     'resume|R',
     'suspend|S',
+    'unique|u=s',
     'windfall|W!',
     'help|h',
     'platform|p=s',
@@ -127,11 +133,13 @@ use FREUtil();
       "  Usage: $self [option|experiment] ...\n\n",
       "  Options:\n\n",
       "   -I,        --info                      print information about current state of the job and exit\n",
+      "   -m,        --main                      process or don't process the main run (negatable, default is on)\n",
       "   -A STRING, --project=STRING            set the project name to STRING\n",
       "   -q STRING, --queue=STRING              set the queue name to STRING\n",
       "   -R,        --resume                    resume the job (it will be resubmitted)\n", 
       "   -S,        --suspend                   suspend the job (it won't resubmit itself)\n", 
-      "   -W,        --windfall                  set or unset the windfall flag\n\n", 
+      "   -u STRING, --unique=STRING             process additionally unique runs with numbers from the STRING\n",
+      "   -W,        --windfall                  set or unset the windfall flag (negatable, default is off)\n\n", 
       "   -h,        --help                      print help message and exit\n",
       "   -p STRING, --platform=STRING           hardware and software platform STRING (default is '$pfm')\n", 
       "   -t STRING, --target=STRING             use compilation directives, targeted by STRING (default is '$tgt')\n", 
@@ -153,8 +161,9 @@ use FREUtil();
       "\n",
       "   Synopsis: $self implements job control for FRE production runs.\n",
       "@usage",
-      "   Use --info to get a report about the current state of the simulation.\n",
-      "      This report contains information about the jobs chain and some scheduler resources settings.\n", 
+      "   Use --info to get a table-formatted report about the current state of the simulation.\n",
+      "      This report contains information about the jobs chain and some scheduler resources settings.\n",
+      "      Some table columns meaning: C - 'continueFlag', W - 'windfallFlag'.\n",
       "   Use --project to specify a new project for all the remaining jobs.\n",
       "      Projects are used to control resource allocation between groups of users.\n",
       "      Project value 'default' is a special one - it will rollback the project to the value, set in the runscript.\n",
@@ -163,6 +172,11 @@ use FREUtil();
       "      Queue value 'default' is a special one - it will rollback the queue to the value, set in the runscript.\n",
       "   Use --suspend or --resume to suspend or resume the currently running job and all the remaining jobs.\n",
       "      This flag is checked in the job beginning, the job end and before each segment start.\n",
+      "   Use --main to include the main run into processing or --nomain to exclude it from the processing.\n",
+      "      This option is 'on' by default, so the main run (numbered by zero) will normally be processed.\n",  
+      "   Use --unique to control unique runs with numbers from this option value.\n",
+      "      This option value can contain a list of numbers, separated by comma; ranges are also supported.\n",
+      "      The reserved value 'all' will select all available unique runs, default value is empty set of runs.\n",
       "   Use --windfall or --nowindfall to switch the resource allocation off or on for all the remaining jobs.\n",
       "      Jobs with resource allocation, switched off, might stay in the input queue longer.\n",
       "      This option might not be supported on some sites.\n",
@@ -178,47 +192,99 @@ use FREUtil();
     );
   }
 
-  sub runScriptName($)
-  # ------ arguments: $exp
+  sub runScriptName($$)
+  # ------ arguments: $exp $runNumber
   # ------ return the absolute runscript name
   {
-    my $z = shift;
+    my ($z, $n) = @_;
     my ($expName, $scriptsDir) = ($z->name, $z->scriptsDir());
+    $expName .= "__$n" if $n;
     return "$scriptsDir/run/$expName";
   }
 
-  sub stdoutFileName($$)
-  # ------ arguments: $exp $jobId
+  sub stdoutFileName($$$)
+  # ------ arguments: $exp $runNumber $jobId
   # ------ return the absolute stdout file name
   {
-    my ($z, $j) = @_;
+    my ($z, $n, $j) = @_;
     my ($expName, $stdoutDir) = ($z->name(), $z->stdoutDir());
+    $expName .= "__$n" if $n;
     return "$stdoutDir/run/$expName.o$j";
   }
 
-  sub stdoutTemporaryFileName($$)
-  # ------ arguments: $exp $jobId
+  sub stdoutTmpFileName($$$)
+  # ------ arguments: $exp $runNumber $jobId
   # ------ return the absolute temporary stdout file name if it exists
   {
-    my ($z, $j) = @_;
-    my ($expName, $stdoutDir) = ($z->name(), $z->stdoutTmpDir());
-    return "$stdoutDir/run/$expName.o$j";
+    my ($z, $n, $j) = @_;
+    my ($expName, $stdoutTmpDir) = ($z->name(), $z->stdoutTmpDir());
+    $expName .= "__$n" if $n;
+    return "$stdoutTmpDir/run/$expName.o$j";
   }
 
-  sub queueFileName($)
-  # ------ arguments: $exp
+  sub queueFileName($$)
+  # ------ arguments: $exp $runNumber
   # ------ return the absolute queue file name
   {
-    my $z = shift;
+    my ($z, $n) = @_;
     my ($expName, $stateDir) = ($z->name, $z->stateDir());
+    $stateDir .= "/$n" if $n;
     return "$stateDir/run/" . QUEUE_FILENAME;
   }
 
-  sub schedulerInfo($$)
-  # ------ arguments: $exp $lister
+  sub runsInfoInit($$$)
+  # ------ arguments: $exp $main $unique
   {
-    my ($z, $l) = @_;
+    my ($z, $m, $u) = @_;
+    my %info = ();
+    if ($m)
+    {
+      my $runScriptName = frepriority::runScriptName($z, 0);
+      if (-f $runScriptName && -r $runScriptName)
+      {
+        my %runInfo = ();
+	$runInfo{runScriptName} = $runScriptName;
+	$runInfo{qcName} = frepriority::queueFileName($z, 0);
+	$info{0} = \%runInfo;
+      }
+    }
+    if ($u eq 'all')
+    {
+      my ($expName, $scriptsDir) = ($z->name(), $z->scriptsDir());
+      foreach my $runScriptName (glob "$scriptsDir/run/${expName}__*")
+      {
+        if (-f $runScriptName && -r $runScriptName && $runScriptName =~ m/(\d+)$/)
+	{
+	  my %runInfo = ();
+	  $runInfo{runScriptName} = $runScriptName;
+	  $runInfo{qcName} = frepriority::queueFileName($z, $1);
+	  $info{$1} = \%runInfo;
+	}
+      }
+    }
+    else
+    {
+      foreach my $runNumber (split(',', $u))
+      {
+        my $runScriptName = frepriority::runScriptName($z, $runNumber);
+	if (-f $runScriptName && -r $runScriptName)
+	{
+	  my %runInfo = ();
+	  $runInfo{runScriptName} = $runScriptName;
+	  $runInfo{qcName} = frepriority::queueFileName($z, $runNumber);
+          $info{$runNumber} = \%runInfo;
+	}
+      }
+    }
+    return \%info;
+  }
+
+  sub schedulerInfo($$$$)
+  # ------ arguments: $exp $lister $runNumber $refToRunInfo
+  {
+    my ($z, $l, $n, $r) = @_;
     my ($fre, $expName) = ($z->fre(), $z->name());
+    $expName .= "__$n" if $n;
     chomp(my $lines = qx($l -u $ENV{USER} -n $expName));
     if ($? == 0)
     {
@@ -228,8 +294,8 @@ use FREUtil();
 	$fre->out(FREMsg::NOTE, "There are more than one active job - processing the latest one only") if scalar(@lines) > 1;
 	my @linesSorted = sort {(split(/,/, $a))[4] cmp (split(/,/, $b))[4]} @lines;
 	my @lineLast = split(/,/, @linesSorted[$#linesSorted]);
-	my $jobId = ($lineLast[1]) ? $lineLast[1] : frepriority::NOT_AVAILABLE;
-	return (jobId => $jobId, jobState => $lineLast[3]);
+	$r->{jobId} = ($lineLast[1]) ? ($lineLast[1] =~ m/(^\d+)/)[0] : frepriority::NOT_AVAILABLE;
+	$r->{jobState} = $lineLast[3];
       }
       else
       {
@@ -241,174 +307,201 @@ use FREUtil();
           $fre->out(FREMsg::NOTE, "There are more than one stdout file - processing the latest one only") if scalar(@stdoutNames) > 1;
 	  my @stdoutNamesSorted = sort {stat($a)->mtime() <=> stat($b)->mtime()} @stdoutNames;
 	  my $stdoutNameLast = $stdoutNamesSorted[$#stdoutNamesSorted];
-	  my $jobId = ($stdoutNameLast =~ m/(\d+)$/)[0];
-	  return (jobId => $jobId, jobState => 'completed');
+	  $r->{jobId} = ($stdoutNameLast =~ m/(\d+)$/)[0];
+	  $r->{jobState} = 'completed';
 	}
 	else
 	{
-          return (jobId => frepriority::NOT_AVAILABLE, jobState => frepriority::NOT_AVAILABLE);
+	  $r->{jobId} = frepriority::NOT_AVAILABLE;
+	  $r->{jobState} = frepriority::NOT_AVAILABLE;
 	}
       }
     }
     else
     {
-      return (jobId => frepriority::NOT_AVAILABLE, jobState => frepriority::NOT_AVAILABLE);
+      $r->{jobId} = frepriority::NOT_AVAILABLE;
+      $r->{jobState} = frepriority::NOT_AVAILABLE;
     }
   }
 
-  sub settableResourcesInfo($)
-  # ------ arguments: $exp
+  sub settableResourcesInfo($$$)
+  # ------ arguments: $exp $runNumber $refToRunInfo
   {
-    my $z = shift;
-    my ($fre, $qcName, %info) = ($z->fre(), frepriority::queueFileName($z), ());
-    if (-f $qcName and -r $qcName)
+    my ($z, $n, $r) = @_;
+    my ($fre, $qcName) = ($z->fre(), $r->{qcName});
+    if (-f $qcName && -r $qcName)
     {
       my $extract = sub($) {my $s = shift; chomp(my $l = qx(grep $s $qcName)); return (split(/\s+/, $l))[3]};
-      $info{continueFlag} = $extract->('continueFlag');
-      $info{windfallFlag} = $extract->('windfallFlag') || 0 if $fre->property('FRE.scheduler.windfall.enabled');
-      $info{project} = $extract->('project') || frepriority::DEFAULT;
-      $info{queue} = $extract->('queue') || frepriority::DEFAULT;
+      my ($continueFlag, $windfallFlag) = ($extract->('continueFlag'), $extract->('windfallFlag'));
+      $r->{continueFlag} = defined($continueFlag) ? $continueFlag : 1;
+      $r->{windfallFlag} = defined($windfallFlag) ? $windfallFlag : 0 if $fre->property('FRE.scheduler.windfall.enabled');
+      $r->{project} = $extract->('project') || frepriority::DEFAULT;
+      $r->{queue} = $extract->('queue') || frepriority::DEFAULT;
     }
     else
     {
       $fre->out(FREMsg::NOTE, "The queue file '$qcName' isn't found or not readable - looking into the runscript...");
-      my ($schedulerPrefix, $runScriptName) = ($fre->property('FRE.scheduler.prefix'), frepriority::runScriptName($z));
+      my ($schedulerPrefix, $runScriptName) = ($fre->property('FRE.scheduler.prefix'), $r->{runScriptName});
       open my $handle, '<', $runScriptName; my $runScriptControls = join("", grep(/^$schedulerPrefix/, <$handle>)); close $handle;
       my $extract = sub($) {my $s = $fre->property(shift); $s =~ s/\$/(\\w+)/; return ($runScriptControls =~ m/^$schedulerPrefix\s+$s$/m) ? $1 : ''};
-      $info{continueFlag} = 1;
+      $r->{continueFlag} = 1;
       if ($fre->property('FRE.scheduler.windfall.enabled'))
       {
 	if (my $project = $fre->property('FRE.scheduler.windfall.project.set'))
 	{
-	  $info{windfallFlag} = ($extract->('FRE.scheduler.option.project') eq $project) ? 1 : 0;
+	  $r->{windfallFlag} = ($extract->('FRE.scheduler.option.project') eq $project) ? 1 : 0;
 	}
 	elsif (my $qos = $fre->property('FRE.scheduler.windfall.qos.set'))
 	{
-	  $info{windfallFlag} = ($extract->('FRE.scheduler.option.qos') eq $qos) ? 1 : 0;
+	  $r->{windfallFlag} = ($extract->('FRE.scheduler.option.qos') eq $qos) ? 1 : 0;
 	}
 	else
 	{
-	  $info{windfallFlag} = 0;
+	  $r->{windfallFlag} = 0;
 	}
       }
-      $info{project} = $extract->('FRE.scheduler.option.project');
-      $info{queue} = $extract->('FRE.scheduler.option.queue');
+      $r->{project} = frepriority::DEFAULT;
+      $r->{queue} = frepriority::DEFAULT;
     }
-    return %info;
   }
 
-  sub runningInfoFromStdout($)
-  # ------ arguments: $filename
+  sub runningInfoFromStdout($$)
+  # ------ arguments: $filename $refToRunInfo
   {
-    my $f = shift;
-    my %info = ();
+    my ($f, $r) = @_;
     my $extract = sub($) {my $s = shift; chomp(my $l = qx(grep "^@ $s" $f | tail -1)); return (split(' ', $l))[3]};
-    $info{jobCurrent} = $extract->('ireload') || 1;
-    $info{segCurrent} = $extract->('irun') || 1;
-    return %info;
+    $r->{jobCurrent} = $extract->('ireload') || frepriority::NOT_AVAILABLE;
+    $r->{segCurrent} = $extract->('irun') || frepriority::NOT_AVAILABLE;
   }
 
-  sub runningInfo($$)
-  # ------ arguments: $exp $jobId
+  sub runningInfo($$$)
+  # ------ arguments: $exp $runNumber $refToRunInfo
   {
-    my ($z, $i) = @_;
-    my ($fre, $runScriptName, %info) = ($z->fre(), frepriority::runScriptName($z), ());
-    my $extract = sub($) {my $s = shift; chomp(my $l = qx(grep "set -r $s" $runScriptName)); return (split(' ', $l))[4]};
-    $info{jobsNo} = $extract->('jobsPerSimulation');
-    $info{segsNo} = $extract->('segmentsPerJob');
-    my ($stdoutTemporaryName, $stdoutName) = (frepriority::stdoutTemporaryFileName($z, $i), frepriority::stdoutFileName($z, $i));
-    if (-f $stdoutTemporaryName and -r $stdoutTemporaryName)
+    my ($z, $n, $r) = @_;
+    if (my $prodInfo = $z->extractProductionRunInfo())
     {
-      %info = (%info, frepriority::runningInfoFromStdout($stdoutTemporaryName))
-    }
-    elsif (-f $stdoutName and -r $stdoutName)
-    {
-      %info = (%info, frepriority::runningInfoFromStdout($stdoutName))
-    }
-    return %info;
-  }
-
-  sub jobInfo($$)
-  # ------ arguments: $exp $lister
-  {
-    my ($z, $l) = @_;
-    my ($fre, $runScriptName) = ($z->fre(), frepriority::runScriptName($z));
-    if (-f $runScriptName and -r $runScriptName)
-    {
-      my %info = ();
-      %info = (%info, frepriority::schedulerInfo($z, $l));
-      %info = (%info, frepriority::settableResourcesInfo($z));
-      %info = (%info, frepriority::runningInfo($z, $info{jobId})) if $info{jobId} ne frepriority::NOT_AVAILABLE;
-      if ($info{jobState} =~ m/^(?:blocked|running|waiting)$/o)
-      {
-	$info{simState} = 'running';
-      }
-      elsif (($info{jobState} eq 'completed') and ($info{jobCurrent} > $info{jobsNo}))
-      {
-	$info{simState} = 'completed';
-      }
-      elsif (($info{jobState} eq 'completed') and ($info{jobCurrent} <= $info{jobsNo}) and (!$info{continueFlag}))
-      {
-	$info{simState} = 'suspended';
-      }
-      else
-      {
-	$info{simState} = 'inactive';
-      }
-      return (1, FREDefaults::STATUS_OK, \%info);
+      my ($simTime, $simRunTime) = ($prodInfo->{simTimeMonths}, $prodInfo->{simRunTimeMinutes});
+      my ($segTime, $segRunTime) = ($prodInfo->{segTimeMonths}, $prodInfo->{segRunTimeMinutes});
+      my ($segPerSim, $segPerJob) = (POSIX::ceil($simTime / $segTime), POSIX::floor($simRunTime / $segRunTime));
+      my $jobPerSim = POSIX::ceil($segPerSim / $segPerJob);  
+      $r->{jobsNo} = $jobPerSim;  
+      $r->{segsNo} = $segPerJob;
     }
     else
     {
-      $fre->out(FREMsg::FATAL, "The runscript '$runScriptName' is not found or not readable");
-      return (0, FREDefaults::STATUS_FS_PATH_NOT_EXISTS);
+      $r->{jobsNo} = frepriority::NOT_AVAILABLE;
+      $r->{segsNo} = frepriority::NOT_AVAILABLE;
+    }
+    if ($r->{jobId} ne frepriority::NOT_AVAILABLE)
+    {
+      my ($stdoutTmpName, $stdoutName) = (frepriority::stdoutTmpFileName($z, $n, $r->{jobId}), frepriority::stdoutFileName($z, $n, $r->{jobId}));
+      if (-f $stdoutTmpName && -r $stdoutTmpName)
+      {
+	frepriority::runningInfoFromStdout($stdoutTmpName, $r);
+      }
+      elsif (-f $stdoutName && -r $stdoutName)
+      {
+	frepriority::runningInfoFromStdout($stdoutName, $r);
+      }
     }
   }
 
-  sub jobInfoPrint($$)
-  # ------ arguments: $exp $refToHash
+  sub jobInfo($$$$)
+  # ------ arguments: $exp $lister $main $unique
   {
-    my ($z, $r) = @_;
+    my ($z, $l, $m, $u) = @_;
+    my ($fre, $info) = ($z->fre(), frepriority::runsInfoInit($z, $m, $u));
+    foreach my $runNumber (keys(%{$info}))
+    {
+      my $runInfo = $info->{$runNumber};
+      frepriority::schedulerInfo($z, $l, $runNumber, $runInfo);
+      frepriority::settableResourcesInfo($z, $runNumber, $runInfo);
+      frepriority::runningInfo($z, $runNumber, $runInfo);
+      if ($runInfo->{jobState} =~ m/^(?:blocked|running|waiting)$/o)
+      {
+	$runInfo->{simState} = 'running';
+      }
+      elsif (($runInfo->{jobState} eq 'completed') && ($runInfo->{jobCurrent} > $runInfo->{jobsNo}))
+      {
+	$runInfo->{simState} = 'completed';
+      }
+      elsif (($runInfo->{jobState} eq 'completed') && ($runInfo->{jobCurrent} <= $runInfo->{jobsNo}) && (!$runInfo->{continueFlag}))
+      {
+	$runInfo->{simState} = 'suspended';
+      }
+      else
+      {
+	$runInfo->{simState} = 'inactive';
+      }
+    }
+    return $info;
+  }
+
+  sub jobInfoPrint($$)
+  # ------ arguments: $exp $refToInfoHash
+  {
+    my ($z, $i) = @_;
     my $expName = $z->name();
-    my $currentFlag = ($r->{simState} =~ m/^(?:running|suspended)$/o);
-    print "The 'frepriority' informational report for experiment '$expName'\n";
-    print "--------------------------------------------------------------------------------\n";
-    print "Job id              = $r->{jobId}\n";
-    print "Job state           = $r->{jobState}\n";
-    print "Continue flag       = $r->{continueFlag}\n";
-    print "Windfall flag       = $r->{windfallFlag}\n" if exists($r->{windfallFlag});
-    print "Project             = $r->{project}\n";
-    print "Queue               = $r->{queue}\n";
-    print "Jobs per simulation = $r->{jobsNo}\n";
-    print "Segments per job    = $r->{segsNo}\n";
-    print "Current job         = $r->{jobCurrent}\n" if $currentFlag;
-    print "Current segment     = $r->{segCurrent}\n" if $currentFlag;
-    print "Simulation state    = $r->{simState}\n";
-    print "--------------------------------------------------------------------------------\n";
+    print "\n/// Informational Report for Experiment '$expName'\n";
+    print "/////////////////////////////////////////////////////////////////////////////////////////////////////\n";
+    print "UNI#  PROJECT    QUEUE       C  W  JOBS/SIM SEGS/JOB  SIMSTATE   CURJOB CURSEG  JOBSTATE   JOBID\n";
+    print "-----------------------------------------------------------------------------------------------------\n";
+    foreach my $runNumber (sort({$a <=> $b} keys(%{$i})))
+    {
+      my $runInfo = $i->{$runNumber};
+      printf
+      (
+	"%4d  %-10s %-10s %2s %2s    %6s   %6s  %-10s %6s %6s  %-10s %-12s\n",
+	$runNumber,
+	$runInfo->{project},
+	$runInfo->{queue},
+	$runInfo->{continueFlag},
+	$runInfo->{windfallFlag},
+	$runInfo->{jobsNo},
+	$runInfo->{segsNo},
+	$runInfo->{jobState},
+	$runInfo->{jobCurrent},
+	$runInfo->{segCurrent},
+	$runInfo->{simState},
+	$runInfo->{jobId}
+      );
+    }
+    print "-----------------------------------------------------------------------------------------------------\n";
   }
 
   sub settableResources($$%)
-  # ------ arguments: $exp $refToHash %options
+  # ------ arguments: $exp $refToInfoHash %options
   {
-    my ($z, $r, %o) = @_;
+    my ($z, $i, %o) = @_;
     my ($fre, %resources) = ($z->fre(), ());
-    $resources{continueFlag} = ($o{suspend}) ? 0 : (($o{resume}) ? 1 : $r->{continueFlag});
-    $resources{windfallFlag} = (exists($o{windfall})) ? $o{windfall} : $r->{windfallFlag} if $fre->property('FRE.scheduler.windfall.enabled');
-    $resources{project} = (exists($o{project})) ? $o{project} : $r->{project};
-    $resources{queue} = (exists($o{queue})) ? $o{queue} : $r->{queue};
+    foreach my $runNumber (keys(%{$i}))
+    {
+      my ($runInfo, %runResources) = ($i->{$runNumber}, ());
+      $runResources{continueFlag} = ($o{suspend}) ? 0 : (($o{resume}) ? 1 : $runInfo->{continueFlag});
+      $runResources{windfallFlag} = (exists($o{windfall})) ? $o{windfall} : $runInfo->{windfallFlag} if $fre->property('FRE.scheduler.windfall.enabled');
+      $runResources{project} = (exists($o{project})) ? $o{project} : $runInfo->{project};
+      $runResources{queue} = (exists($o{queue})) ? $o{queue} : $runInfo->{queue};
+      $resources{$runNumber} = \%runResources;
+    }
     return \%resources;
   }
 
-  sub settableResourcesMatch($$%)
-  # ------ arguments: $exp $refToHash %options
+  sub settableResourcesMatch($$)
+  # ------ arguments: $refToResourcesHash $refToInfoHash
   {
-    my ($z, $r, %o) = @_;
-    my ($resources, $match) = (frepriority::settableResources($z, $r, %o), 1);
-    foreach my $key (keys %{$resources}) {$match &&= $resources->{$key} eq $r->{$key}}
+    my ($r, $i) = @_;
+    my $match = 1;
+    foreach my $runNumber (keys(%{$r}))
+    {
+      my ($runResources, $runInfo) = ($r->{$runNumber}, $i->{$runNumber});
+      foreach my $key (keys %{$runResources}) {$match &&= $runResources->{$key} eq $runInfo->{$key}}
+      last unless $match;
+    }
     return $match;
   }
   
   sub settableResourcesAsSchedulerString($$)
-  # ------ arguments: $exp $refToHash
+  # ------ arguments: $exp $refToResourcesHash
   {
     my ($z, $r) = @_;
     my ($fre, @result) = ($z->fre(), ());
@@ -418,58 +511,86 @@ use FREUtil();
     return join(' ', @result);
   }
   
-  sub settableResourcesProcess($$%)
-  # ------ arguments: $exp $refToHash %options
+  sub settableResourcesProcess($$$)
+  # ------ arguments: $exp $refToResourcesHash $refToInfoHash
   {
-    my ($z, $r, %o) = @_;
-    my ($fre, $qcName) = ($z->fre(), frepriority::queueFileName($z));
-    my ($resources, $qcDir) = (frepriority::settableResources($z, $r, %o), File::Basename::dirname($qcName));
-    if (FREUtil::createDir($qcDir))
+    my ($z, $r, $i) = @_;
+    my ($fre, $ok, $status) = ($z->fre(), 1, FREDefaults::STATUS_OK);
+    foreach my $runNumber (keys(%{$r}))
     {
-      if (open my $qcHandle, '>', $qcName)
+      my $runInfo = $i->{$runNumber};
+      my $qcName = $runInfo->{qcName};
+      my $qcDir = File::Basename::dirname($qcName);
+      if (FREUtil::createDir($qcDir))
       {
-	print {$qcHandle} "set continueFlag = $resources->{continueFlag}\n";
-	print {$qcHandle} "set windfallFlag = $resources->{windfallFlag}\n" if $fre->property('FRE.scheduler.windfall.enabled');
-	print {$qcHandle} "set project      = $resources->{project}\n" if $resources->{project} ne frepriority::DEFAULT;
-	print {$qcHandle} "set queue        = $resources->{queue}\n" if $resources->{queue} ne frepriority::DEFAULT;
-	close $qcHandle;
-	$fre->out(FREMsg::NOTE, "The queue file '$qcName' has been rewritten");
-	if ($r->{jobState} =~ m/^(?:completed|failed)$/o and !$r->{continueFlag} and $resources->{continueFlag})
+	if (open my $qcHandle, '>', $qcName)
 	{
-	  my $submitCommand = $fre->property('FRE.scheduler.submit.command');
-	  my $resourcesString = frepriority::settableResourcesAsSchedulerString($z, $resources);
-	  my $runScriptName = frepriority::runScriptName($z);
-	  print qx($submitCommand $resourcesString $runScriptName), "\n";
+          my $runResources = $r->{$runNumber};
+	  print {$qcHandle} "set continueFlag = $runResources->{continueFlag}\n";
+	  print {$qcHandle} "set windfallFlag = $runResources->{windfallFlag}\n" if $fre->property('FRE.scheduler.windfall.enabled');
+	  print {$qcHandle} "set project      = $runResources->{project}\n" if $runResources->{project} ne frepriority::DEFAULT;
+	  print {$qcHandle} "set queue        = $runResources->{queue}\n" if $runResources->{queue} ne frepriority::DEFAULT;
+	  close $qcHandle;
+	  $fre->out(FREMsg::NOTE, "The queue file '$qcName' has been rewritten");
+	  if ($runResources->{continueFlag} && !$runInfo->{continueFlag})
+	  {
+	    if ($runInfo->{jobState} =~ m/^(?:completed|failed)$/o)
+	    {
+	      my $submitCommand = $fre->property('FRE.scheduler.submit.command');
+	      my $resourcesString = frepriority::settableResourcesAsSchedulerString($z, $runResources);
+	      print qx($submitCommand $resourcesString $runInfo->{runScriptName}), "\n";
+	    }
+	    else
+	    {
+	      $fre->out(FREMsg::WARNING, "Unable to submit the job in the '$runInfo->{jobState}' state");
+	    }
+	  }
 	}
-	return (1, FREDefaults::STATUS_OK);
+	else
+	{
+	  $fre->out(FREMsg::FATAL, "Unable to save the queue file '$qcName'");
+	  ($ok, $status) = (0, FREDefaults::STATUS_FS_GENERIC_PROBLEM);
+	  last;
+	}
       }
       else
       {
-	$fre->out(FREMsg::FATAL, "Unable to save the queue file '$qcName'");
-	return (0, FREDefaults::STATUS_FS_GENERIC_PROBLEM);
+	$fre->out(FREMsg::FATAL, "Unable to create the state directory '$qcDir'");
+	($ok, $status) = (0, FREDefaults::STATUS_FS_GENERIC_PROBLEM);
+	last;
       }
     }
-    else
-    {
-      $fre->out(FREMsg::FATAL, "Unable to create the state directory '$qcDir'");
-      return (0, FREDefaults::STATUS_FS_GENERIC_PROBLEM);
-    }
+    return ($ok, $status);
   }
   
-  sub settableResourcesPrint($$%)
-  # ------ arguments: $exp $refToHash %options
+  sub settableResourcesPrint($$$)
+  # ------ arguments: $exp $refToResourcesHash $refToInfoHash
   {
-    my ($z, $r, %o) = @_;
+    my ($z, $r, $i) = @_;
     my $expName = $z->name();
-    my ($resources, %prev) = (frepriority::settableResources($z, $r, %o), ());
-    foreach my $key (keys %{$resources}) {$prev{$key} = ($resources->{$key} ne $r->{$key}) ? "($r->{$key})" : ''}
-    print "The 'frepriority' activity report for experiment '$expName'\n";
-    print "--------------------------------------------------------------------------------\n";
-    print "Continue flag       = $resources->{continueFlag} $prev{continueFlag}\n";
-    print "Windfall flag       = $resources->{windfallFlag} $prev{windfallFlag}\n" if exists($resources->{windfallFlag});
-    print "Project             = $resources->{project} $prev{project}\n";
-    print "Queue               = $resources->{queue} $prev{queue}\n";
-    print "--------------------------------------------------------------------------------\n";
+    print "\n/// Activity Report for Experiment '$expName'\n";
+    print "/////////////////////////////////////////////////////////////////////////////////////////////////////\n";
+    print "UNI#  PROJECT    QUEUE       C  W          (PROJECT)    (QUEUE)      (C) (W)\n";
+    print "-----------------------------------------------------------------------------------------------------\n";
+    foreach my $runNumber (sort({$a <=> $b} keys(%{$i})))
+    {
+      my ($runResources, $runInfo, %prev) = ($r->{$runNumber}, $i->{$runNumber}, ());
+      foreach my $key (keys(%{$runResources})) {$prev{$key} = ($runResources->{$key} ne $runInfo->{$key}) ? "($runInfo->{$key})" : ''}
+      printf
+      (
+	"%4d  %-10s %-10s %2s %2s          %-12s %-12s %3s %3s\n",
+	$runNumber,
+	$runResources->{project},
+	$runResources->{queue},
+	$runResources->{continueFlag},
+	$runResources->{windfallFlag},
+	$prev{project},
+	$prev{queue},
+	$prev{continueFlag},
+	$prev{windfallFlag}
+      );
+    }
+    print "-----------------------------------------------------------------------------------------------------\n";
   }
   
   sub skipExp($)
@@ -490,6 +611,7 @@ use FREUtil();
 
   my %opt =
   (
+    'main'	=> 1,
     'platform'	=> FREDefaults::Platform(),
     'target'	=> FREDefaults::Target(),
     'xmlfile'	=> FREDefaults::XMLFile()
@@ -517,6 +639,22 @@ use FREUtil();
     exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
   }
   
+  if ($opt{unique})
+  {
+    ($opt{unique}, my @messages) = FREUtil::optionIntegersListParse('unique', $opt{unique});
+    if (scalar(@messages) > 0)
+    {
+      FREMsg::out($opt{verbose}, FREMsg::FATAL, @messages);
+      exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
+    }
+  }
+
+  unless ($opt{main} || $opt{unique})
+  {
+    FREMsg::out($opt{verbose}, FREMsg::FATAL, "Options --main and --unique define an empty set of runs to process");
+    exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
+  }
+
   my $fre = FRE->new('frepriority', %opt) or exit FREDefaults::STATUS_FRE_GENERIC_PROBLEM;
   
   unless ($fre->property('FRE.tool.frepriority.enabled'))
@@ -602,7 +740,7 @@ use FREUtil();
   }
 
   my @exps = ();
-  foreach my $expName (@ARGV)
+  foreach my $expName (FREUtil::listUnique(@ARGV))
   {
     my $exp = FREExperiment->new($fre, $expName) or exit FREDefaults::STATUS_FRE_GENERIC_PROBLEM;
     push @exps, $exp;
@@ -613,46 +751,43 @@ use FREUtil();
   foreach my $exp (@exps)
   {
 
-    # ------------------------------------ set the experiment name
-
     my $expName = $exp->name();
     $fre->setCurrentExperimentName($expName);
     
-    # ------------------------------------------------- determine the job state
-
-    (my $rc, $status, my $info) = frepriority::jobInfo($exp, $lister);
-    
-    # ---------------------------------------------------- process the job according to its state
-    
-    if ($rc)
+    my $info = frepriority::jobInfo($exp, $lister, $opt{main}, $opt{unique});
+    if (scalar(keys(%{$info})) > 0)
     {
       if ($opt{info})
       {
         frepriority::jobInfoPrint($exp, $info);
       }
-      elsif (!frepriority::settableResourcesMatch($exp, $info, %opt))
+      else
       {
-	(my $rc, $status) = frepriority::settableResourcesProcess($exp, $info, %opt);
-	if ($rc)
-	{
-	  frepriority::settableResourcesPrint($exp, $info, %opt);
+        my $resources = frepriority::settableResources($exp, $info, %opt);
+	if (!frepriority::settableResourcesMatch($resources, $info))
+        {
+	  (my $rc, $status) = frepriority::settableResourcesProcess($exp, $resources, $info);
+	  if ($rc)
+	  {
+	    frepriority::settableResourcesPrint($exp, $resources, $info);
+	  }
+	  else
+	  {
+            frepriority::skipExp($exp) if scalar(@exps) > 1;
+	  }
 	}
 	else
 	{
-          frepriority::skipExp($exp) if scalar(@exps) > 1;
+	  $fre->out(FREMsg::WARNING, "There is nothing to modify...");
 	}
-      }
-      else
-      {
-	$fre->out(FREMsg::WARNING, "There is nothing to modify...");
       }
     }
     else
     {
+      $fre->out(FREMsg::WARNING, "There are no runs to process...");
       frepriority::skipExp($exp) if scalar(@exps) > 1;
+      $status = FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
     }
-    
-    # ------------------------------------ unset the experiment name
 
     $fre->unsetCurrentExperimentName();
 

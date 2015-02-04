@@ -17,8 +17,10 @@
 #module load gcp
 
 set extraoptions = ""
+set ignore = ""
+@ numignore=0
 set copytool = "gcp"
-set argv = (`getopt qshfgx:v:A:c: $*`)
+set argv = (`getopt qshfgx:v:A:c:I: $*`)
 while ("$argv[1]" != "--")
     switch ($argv[1])
         case -q:
@@ -39,6 +41,12 @@ while ("$argv[1]" != "--")
 	    set extraoptions = "-A $argv[2] $extraoptions"; shift argv; breaksw
         case -c:
             set copytool = "$argv[2]"; shift argv; breaksw
+	case -I:
+            if ( $numignore > 0 ) then
+               set ignore = "${ignore}\|"
+            endif
+            @ numignore++
+            set ignore = "${ignore}$argv[2]"; shift argv; breaksw
     endsw
     shift argv
 end
@@ -78,6 +86,7 @@ Usage:    ls -1 */history/00010101.nc.cpio | ardiff
           -v   Compare variable(s) var1[,...] only
           -x   Exclude variable(s) var1[,...]
           -A   Ignore attribute(s) att1[,...] for all variables
+          -I   Ignore differences for file.  (Repeatable)
 
           You may want more control over the order of the files since
           the first archive file will be compared to all the rest:
@@ -128,7 +137,7 @@ if ( ! -d $ARDIFFTMP ) mkdir -p $ARDIFFTMP
 
 set mktempv = `mktemp -V | head -1 | awk '{print $NF}'`
 set TMP = ''
-echo mktempv $mktempv
+if ( $?DEBUG ) echo mktempv $mktempv
 if ( `echo "$mktempv < 2.0" | bc`) then
    set TMP = `mktemp -d -p $ARDIFFTMP ardiff.$HOST.$$.XXXXXXXXXX`
    set thisstatus = $status
@@ -268,41 +277,57 @@ while ( 1 )
 
   endif
 
+  set echo_style=none
   echo "/// $file1"
-  echo '\\\' $file2
+  echo "\\\ $file2"
+  set echo_style=both
 
   foreach ncfile ( $list ) 
     if ( ! $?quiet ) echo "      Comparing $ncfile..."
+    # Is this file ignored?  expr return 0 if no match.
+    set ignored=`expr "$ncfile" : "$ignore"`
+    # Simple comparison
     cmp ../first/$ncfile ../second/$ncfile >& /dev/null
     set cmpstatus = $status
     set isdistrib = `echo "$ncfile:e" | egrep '^[0-9]+$'`
+
     if ( $cmpstatus == 2 ) then
        if ( "$ncfile:e" == 'nc' || "$ncfile:e" == 'res' || ( "$ncfile:r:e" == 'nc' && $isdistrib ) ) then
+	  if ( $ignored != 0 ) then
+	     echo -n "IGNORED : "
+          else
+             set mystat = 1
+          endif
           echo "DIFFER : FILE NOT FOUND : $ncfile"
-          set mystat = 1
-        else
+       else
           echo "WARNING : NONESSENTIAL FILE NOT FOUND : $ncfile"
-        endif
+       endif
     else if ( $cmpstatus != 0 ) then
        if ( "$ncfile:e" == 'nc' || ( "$ncfile:r:e" == 'nc' && $isdistrib ) ) then
-          if ( $?quiet ) then
-             nccmp -dmq $extraoptions -w format ../first/$ncfile ../second/$ncfile >& /dev/null
-             if ( $status != 0 ) then
+          # Squash output of nccmp for now.  
+          # Using sh to redirect stderr to stdout. Cannot do this with csh
+          set output=`sh -c "nccmp -dmq $extraoptions -w format ../first/$ncfile ../second/$ncfile 2>&1"`
+	  if ( $status != 0 ) then
+             if ( $ignored != 0 ) then
+                echo -n "IGNORED : "
+             else
                 set mystat = 1
-                echo "DIFFER : $ncfile"
              endif
-          else 
-             nccmp -dmq $extraoptions -w format ../first/$ncfile ../second/$ncfile
-             if ( $status == 0 ) then
-                echo "nccmp shows the $ncfile files are equivalent"
-             else 
-                set mystat = 1
+             if ( $?quiet ) then
+                echo "DIFFER : $ncfile"
+             else
+                echo ${output}
              endif
           endif
        else if ( "$ncfile:e" == 'res' ) then
+          if ( $ignored != 0 ) then
+             echo -n "IGNORED : "
+          else
+             set mystat = 1
+          endif
           echo "DIFFER : $ncfile"
-          set mystat = 1
        else 
+          # Files are nonessential
           set ftype = `file ../first/$ncfile | grep text`
           if ( "$ftype" != '' && $?diffall ) then
              echo "WARNING : NONESSENTIAL ASCII FILES DIFFER : $ncfile"
@@ -310,7 +335,6 @@ while ( 1 )
           else
              echo "WARNING : NONESSENTIAL FILES DIFFER : $ncfile"
           endif
-          #set mystat = 1
        endif
     endif
   end

@@ -8,7 +8,8 @@ sub analysis {
 
    my ($ts_av_Node,$expt,$gridspec,$staticfile,$tsORav,$diagfile,$ppRootDir, 
        $component,$dtvars_ref,$analysisdir,$aoutscriptdir,$workdir, 
-       $archivedir,$opt_t,$opt_O,$opt_Y,$opt_Z,$opt_v,$sim0,$opt_R,$opt_s,$hist_dir,$nlat,$nlon,$frexml,$stdoutdir) = @_; 
+       $archivedir,$opt_t,$opt_O,$opt_Y,$opt_Z,$opt_v,$sim0,$opt_R,$opt_s,
+       $hist_dir,$nlat,$nlon,$frexml,$stdoutdir,$opt_P,$opt_T) = @_; 
 
 # exit if no analysis nodes found
    my $anum = &anodenum($ts_av_Node);
@@ -318,7 +319,7 @@ sub analysis {
           $aScriptout = "$aoutscriptdir_final/$afile[$#afile].$availablechunk";
         }
         if ( -e $aScriptout and ! $opt_R ) { print STDERR "ANALYSIS: $aScriptout already exists, SKIP\n"; next;}
-        filltemplate(\@arrayofExptsH,cleanpath($figureDir),$aScript,\@aargu,cleanpath($aScriptout),$iExpt,cleanpath($workdir),$mode,cleanpath($asrcfile),$opt_s,$opt_v,cleanpath($frexml),cleanpath($stdoutdir));
+        filltemplate(\@arrayofExptsH,cleanpath($figureDir),$aScript,\@aargu,cleanpath($aScriptout),$iExpt,cleanpath($workdir),$mode,cleanpath($asrcfile),$opt_s,$opt_v,cleanpath($frexml),cleanpath($stdoutdir),$opt_P,$opt_T);
      #
      } else {
        
@@ -355,9 +356,9 @@ sub analysis {
         #----#---- fill the variables in the template
         #if ($opt_v) {print STDERR "fill these vars: @arrayofExptsH\n,$figureDir\n,$aScript\n,$aScriptout\n,$iExpt\n,$workdir\n,$mode\n"; }
          if ($tsORav eq "timeAverage") { 
-           filltemplate(\@arrayofExptsH,cleanpath($figureDir),$aScript,\@aargu,cleanpath($aScriptout),$iExpt,cleanpath($workdir),$mode,cleanpath($asrcfile),$opt_s,$opt_v,cleanpath($frexml),cleanpath($stdoutdir)); 
+           filltemplate(\@arrayofExptsH,cleanpath($figureDir),$aScript,\@aargu,cleanpath($aScriptout),$iExpt,cleanpath($workdir),$mode,cleanpath($asrcfile),$opt_s,$opt_v,cleanpath($frexml),cleanpath($stdoutdir),$opt_P,$opt_T); 
          } else {
-           filltemplate(\@arrayofExptsH,cleanpath($figureDir),$aScript,\@aargu,cleanpath($aScriptout),$iExpt,cleanpath($workdir),$mode,"",$opt_s,$opt_v,cleanpath($frexml),cleanpath($stdoutdir)); 
+           filltemplate(\@arrayofExptsH,cleanpath($figureDir),$aScript,\@aargu,cleanpath($aScriptout),$iExpt,cleanpath($workdir),$mode,"",$opt_s,$opt_v,cleanpath($frexml),cleanpath($stdoutdir),$opt_P,$opt_T); 
          }
 
        } else { #if ($cumulative 
@@ -393,9 +394,9 @@ sub analysis {
          #----#---- fill the variables in the template
          #if ($opt_v) {print STDERR "fill these vars: @arrayofExptsH\n,$figureDir\n,$aScript\n,$aScriptout\n,$iExpt\n,$workdir\n,$mode\n";}
          if ($tsORav eq "timeAverage") { 
-           filltemplate(\@arrayofExptsH,cleanpath($figureDir),$aScript,\@aargu,cleanpath($aScriptout),$iExpt,cleanpath($workdir),$mode,cleanpath($asrcfile),$opt_s,$opt_v,cleanpath($frexml),cleanpath($stdoutdir)); 
+           filltemplate(\@arrayofExptsH,cleanpath($figureDir),$aScript,\@aargu,cleanpath($aScriptout),$iExpt,cleanpath($workdir),$mode,cleanpath($asrcfile),$opt_s,$opt_v,cleanpath($frexml),cleanpath($stdoutdir),$opt_P,$opt_T); 
          } else {
-           filltemplate(\@arrayofExptsH,cleanpath($figureDir),$aScript,\@aargu,cleanpath($aScriptout),$iExpt,cleanpath($workdir),$mode,"",$opt_s,$opt_v,cleanpath($frexml),cleanpath($stdoutdir)); 
+           filltemplate(\@arrayofExptsH,cleanpath($figureDir),$aScript,\@aargu,cleanpath($aScriptout),$iExpt,cleanpath($workdir),$mode,"",$opt_s,$opt_v,cleanpath($frexml),cleanpath($stdoutdir),$opt_P,$opt_T); 
          }
        }  #for (my $n = 0 ...
      } #if ($cumulative ..
@@ -588,7 +589,7 @@ sub checkmissingchunks {
 sub filltemplate {
 
 # fill the template with the passing variables
-    my ($arrayofExptsH_ref,$figureDir,$aScript,$aargu,$aScriptout,$iExpt,$workdir,$mode,$asrcfile,$opt_s,$opt_v,$frexml,$stdoutdir) = @_; 
+    my ($arrayofExptsH_ref,$figureDir,$aScript,$aargu,$aScriptout,$iExpt,$workdir,$mode,$asrcfile,$opt_s,$opt_v,$frexml,$stdoutdir,$platform,$target) = @_; 
     
     #if ( $opt_v ) {
     #   for(my $j=0; $j<2;$j++) {
@@ -641,6 +642,8 @@ sub filltemplate {
     $tmpsch =~ s/set stdoutdir\s*$/set stdoutdir = $stdoutdir/m;
     $tmpsch =~ s/setenv FREROOT.*/setenv FREROOT $ENV{FREROOT}/m;
     $tmpsch =~ s/set analysis_options\s*$/set analysis_options = $arrayofExptsH_ref->[0]->{options}/m;
+    $tmpsch =~ s/set platform\s*$/set platform = $platform/m;
+    $tmpsch =~ s/set target\s*$/set target = $target/m;
     
     # for addtional experiments
     if ($iExpt >= 1) {

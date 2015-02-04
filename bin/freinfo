@@ -1,7 +1,7 @@
 #!/usr/bin/perl
 # -*- cperl -*-
 
-# $Id: freinfo,v 1.1.2.5.2.1 2013/03/27 18:42:48 afy Exp $
+# $Id: freinfo,v 1.1.2.6 2013/03/27 18:31:51 afy Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: Program to Extract Statistics From Stdouts
 # ------------------------------------------------------------------------------
@@ -19,8 +19,10 @@
 # afy    Ver   5.02  Use new FREExperiment (run as key)             June 12
 # afy    Ver   5.03  Modify outputData (postfix is last)            June 12
 # afy    Ver   5.04  Fix extract*Data (npes => totalNP)             June 12
-# afy -------------- Branch 1.1.2.5.2 ----------------------------- March 13
-# afy    Ver   1.00  Modify analyzeProduction (FIX)                 March 13
+# afy    Ver   6.00  Modify analyzeProduction (add check, FIX)      March 13
+# afy    Ver   6.01  Modify analyzeRegression (add check)           March 13
+# afy    Ver   6.02  Modify outputFilesListing (sorting order)      March 13
+# afy    Ver   6.03  Use new FREExperiment (mpiInfo)                March 13
 # ------------------------------------------------------------------------------
 # Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2000-2013
 # Designed and written by V. Balaji, Amy Langenhorst and Aleksey Yakovlev
@@ -44,7 +46,7 @@ use FREUtil();
 
   package freinfo;
 
-  use constant VERSION => '$Id: freinfo,v 1.1.2.5.2.1 2013/03/27 18:42:48 afy Exp $';
+  use constant VERSION => '$Id: freinfo,v 1.1.2.6 2013/03/27 18:31:51 afy Exp $';
   
   use constant OPTLIST =>
   (
@@ -181,7 +183,7 @@ use FREUtil();
     {
       my ($expName, $stdoutDir) = ($z->name(), $z->stdoutDir());
       my ($counter, %allInfo) = (0, ());
-      foreach my $file (glob("$stdoutDir/run/$expName.o*"))
+      foreach my $file (grep(-f $_ && -r $_, glob("$stdoutDir/run/$expName.o*")))
       {
 	if ($file =~ m/^$stdoutDir\/run\/$expName\.o\d+$/)
 	{
@@ -194,7 +196,7 @@ use FREUtil();
       }
       if ($u eq 'all')
       {
-	foreach my $uniqueFile (glob("$stdoutDir/run/${expName}__*.o*"))
+	foreach my $uniqueFile (grep(-f $_ && -r $_, glob("$stdoutDir/run/${expName}__*.o*")))
 	{
 	  if ($uniqueFile =~ m/^$stdoutDir\/run\/${expName}__(\d+)\.o\d+$/)
 	  {
@@ -210,7 +212,7 @@ use FREUtil();
       {
 	foreach my $n (split(',', $u))
 	{
-	  foreach my $uniqueFile (glob("$stdoutDir/run/${expName}__$n.o*"))
+	  foreach my $uniqueFile (grep(-f $_ && -r $_, glob("$stdoutDir/run/${expName}__$n.o*")))
 	  {
 	    if ($uniqueFile =~ m/^$stdoutDir\/run\/${expName}__$n\.o\d+$/)
 	    {
@@ -245,7 +247,7 @@ use FREUtil();
 	{
 	  my $runInfo = $regInfo->{$runNo};
 	  my $postfix = $runInfo->{postfix};
-          foreach my $file (glob("$stdoutDir/run/${expName}_$postfix.o*"))
+          foreach my $file (grep(-f $_ && -r $_, glob("$stdoutDir/run/${expName}_$postfix.o*")))
 	  {
 	    if ($file =~ m/^$stdoutDir\/run\/${expName}_$postfix\.o\d+$/)
 	    {
@@ -259,7 +261,7 @@ use FREUtil();
 	  }
 	  if ($u eq 'all')
 	  {
-	    foreach my $uniqueFile (glob("$stdoutDir/run/${expName}_${postfix}[0-9]*.o*"))
+	    foreach my $uniqueFile (grep(-f $_ && -r $_, glob("$stdoutDir/run/${expName}_${postfix}[0-9]*.o*")))
 	    {
 	      if ($uniqueFile =~ m/^$stdoutDir\/run\/${expName}_$postfix(\d+)\.o\d+$/)
 	      {
@@ -276,7 +278,7 @@ use FREUtil();
 	  {
 	    foreach my $n (split(',', $u))
 	    {
-	      foreach my $uniqueFile (glob("$stdoutDir/run/${expName}_$postfix$n.o*"))
+	      foreach my $uniqueFile (grep(-f $_ && -r $_, glob("$stdoutDir/run/${expName}_$postfix$n.o*")))
 	      {
 		if ($uniqueFile =~ m/^$stdoutDir\/run\/${expName}_$postfix$n\.o\d+$/)
 		{
@@ -304,8 +306,24 @@ use FREUtil();
   # ------ arguments: $refToInfo $lister 
   {
     my ($r, $l) = @_;
-    my $files = join(' ', sort(map($r->{$_}{file}, keys(%{$r}))));
+    my $files = join(' ', map($r->{$_}{file}, sort(keys(%{$r}))));
     print qx($l $files);
+  }
+  
+  sub totalNP($)
+  # ------ arguments: $refToMPIInfo 
+  {
+    my $r = shift;
+    if ($r->{coupler})
+    {
+      my ($refToNpes, $refToNtds, $size) = ($r->{npesList}, $r->{ntdsList}, 0);
+      for (my $inx = 0; $inx < scalar(@{$refToNpes}); $inx++) {$size += $refToNpes->[$inx] * $refToNtds->[$inx]}
+      return $size;
+    }
+    else
+    {
+      return $r->{npes};
+    }
   }
   
   sub extractProductionData($$)
@@ -333,7 +351,7 @@ use FREUtil();
 	  $dataLine{unique} = $unique;
 	  $dataLine{segment} = $segment;
 	  $dataLine{length} = $length;
-	  $dataLine{totalNP} = $ref->{totalNP};
+	  $dataLine{totalNP} = freinfo::totalNP($ref->{mpiInfo});
 	  $dataLine{runTimeTotal} = $runTimesTotal[$segment];
 	  $dataLine{runTimeMainLoop} = $runTimesMainLoop[$segment];
 	  $dataLine{yearsPerDay} = $yearsPerDay;
@@ -379,7 +397,7 @@ use FREUtil();
 	  $dataLine{unique} = $unique;
 	  $dataLine{segment} = $segment;
 	  $dataLine{length} = $length;
-	  $dataLine{totalNP} = $ref->{totalNP};
+	  $dataLine{totalNP} = freinfo::totalNP($ref->{mpiInfo});
 	  $dataLine{runTimeTotal} = $runTimesTotal[$segment];
 	  $dataLine{runTimeMainLoop} = $runTimesMainLoop[$segment];
 	  $dataLine{yearsPerDay} = $yearsPerDay;

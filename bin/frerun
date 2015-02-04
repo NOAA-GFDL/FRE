@@ -1,7 +1,7 @@
 #!/usr/bin/perl
 # -*- cperl -*-
 #
-# $Id: frerun,v 18.0.2.76 2013/02/01 21:56:50 afy Exp $
+# $Id: frerun,v 18.0.2.81 2013/04/24 17:19:48 afy Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: Program to Create a Script to Run a Model
 # ------------------------------------------------------------------------------
@@ -250,6 +250,11 @@
 # afy    Ver  75.01  Modify init (set windfall-dependent vars)      December 12
 # afy    Ver  75.02  Use new FRETemplate (account, dualFlag)        December 12
 # afy    Ver  76.00  Modify 'outputScriptExecuteOrSubmit'           January 13
+# afy    Ver  77.00  Modify 'setMPI' (generics)                     February 13
+# afy    Ver  78.00  Modify 'setMPI' (fix separator placing)        March 13
+# afy    Ver  79.00  Modify 'init' (redesign ppStarter settings)    March 13
+# afy    Ver  80.00  Modify setMPI (fix couplerless models)         April 12
+# afy    Ver  81.00  Modify setMPI (use new FRETemplate.pm)         April 12
 # ------------------------------------------------------------------------------
 # Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2000-2013
 # Designed and written by V. Balaji, Amy Langenhorst and Aleksey Yakovlev
@@ -282,7 +287,7 @@ use FREUtil();
 
   package frerun;
 
-  use constant VERSION => '$Id: frerun,v 18.0.2.76 2013/02/01 21:56:50 afy Exp $';
+  use constant VERSION => '$Id: frerun,v 18.0.2.81 2013/04/24 17:19:48 afy Exp $';
 
   use constant OPTLIST =>
   (
@@ -840,9 +845,16 @@ use FREUtil();
       FRETemplate::setVariable($fre, \$s, 'finisherRuntime', $fre->property('FRE.scheduler.finisher.runtime') || $fre->property('FRE.scheduler.runtime.max'));
       
       FRETemplate::setVariable($fre, \$s, 'ppStarterPartition', $fre->property('FRE.scheduler.ppStarter.partition'));
-      FRETemplate::setVariable($fre, \$s, 'ppStarterQueue', $fre->property('FRE.scheduler.ppStarter.queue'));
       FRETemplate::setVariable($fre, \$s, 'ppStarterCoreSpec', $fre->property('FRE.scheduler.ppStarter.coreSpec'));
-      FRETemplate::setVariable($fre, \$s, 'ppStarterRuntime', $fre->property('FRE.scheduler.ppStarter.runtime') || $fre->property('FRE.scheduler.runtime.max'));
+      FRETemplate::setVariable($fre, \$s, 'ppStarterCombineOffLargeOffQueue', $fre->property('FRE.scheduler.ppStarter.combineOff.largeOff.queue'));
+      FRETemplate::setVariable($fre, \$s, 'ppStarterCombineOffLargeOffRuntime', $fre->property('FRE.scheduler.ppStarter.combineOff.largeOff.runtime'));
+      FRETemplate::setVariable($fre, \$s, 'ppStarterCombineOffLargeOnQueue', $fre->property('FRE.scheduler.ppStarter.combineOff.largeOn.queue'));
+      FRETemplate::setVariable($fre, \$s, 'ppStarterCombineOffLargeOnRuntime', $fre->property('FRE.scheduler.ppStarter.combineOff.largeOn.runtime'));
+      FRETemplate::setVariable($fre, \$s, 'ppStarterCombineOnLargeOffQueue', $fre->property('FRE.scheduler.ppStarter.combineOn.largeOff.queue'));
+      FRETemplate::setVariable($fre, \$s, 'ppStarterCombineOnLargeOffRuntime', $fre->property('FRE.scheduler.ppStarter.combineOn.largeOff.runtime'));
+      FRETemplate::setVariable($fre, \$s, 'ppStarterCombineOnLargeOnQueue', $fre->property('FRE.scheduler.ppStarter.combineOn.largeOn.queue'));
+      FRETemplate::setVariable($fre, \$s, 'ppStarterCombineOnLargeOnRuntime', $fre->property('FRE.scheduler.ppStarter.combineOn.largeOn.runtime'));
+      FRETemplate::setVariable($fre, \$s, 'ppStarterHistorySizeThreshold', $fre->property('FRE.scheduler.ppStarter.historySize.threshold'));
       
       FRETemplate::setList($fre, \$s, 'windfallOptionsSet', FRETemplate::schedulerAccountAsString($fre, 1));
       FRETemplate::setList($fre, \$s, 'windfallOptionsUnset', FRETemplate::schedulerAccountAsString($fre, 0));
@@ -1264,45 +1276,12 @@ use FREUtil();
   }
 
   sub setMPI($$$)
-  # ------ arguments: $refToScript $exp $refToInfo
+  # ------ arguments: $refToScript $exp $refToMPIInfo
   {
     my ($r, $z, $i) = @_;
-    my $fre = $z->fre();
-    my ($totalNP, $totalCC) = ($i->{totalNP}, $i->{totalCC});
-    my ($atmosNP, $atmosNT) = ($i->{atmosNP}, $i->{atmosNT});
-    my ($oceanNP, $oceanNT) = ($i->{oceanNP}, $i->{oceanNT});
-    FRETemplate::setSchedulerSize($fre, $r, 'run', $totalNP, $totalCC, $atmosNP, $atmosNT, $oceanNP, $oceanNT);
-    FRETemplate::setVariable($fre, $r, 'npes', $totalNP);
-    FRETemplate::setVariable($fre, $r, 'atmos_npes', $atmosNP);
-    FRETemplate::setVariable($fre, $r, 'atmos_nthreads', $atmosNT);
-    FRETemplate::setVariable($fre, $r, 'ocean_npes', $oceanNP);
-    FRETemplate::setVariable($fre, $r, 'ocean_nthreads', $oceanNT);
-    FRETemplate::setVariable($fre, $r, 'max_npes', List::Util::max($atmosNP, $oceanNP));
-    FRETemplate::setVariable($fre, $r, 'max_nthreads', List::Util::max($atmosNT, $oceanNT));
-    my $suffix = undef;
-    if ($atmosNP == 0 && $oceanNP == 0)
-    {
-      $suffix = 'default';
-    }
-    elsif ($atmosNP > 0 && $oceanNP == 0)
-    {
-      $suffix = 'solo.atmos';
-    }
-    elsif ($atmosNP == 0 && $oceanNP > 0)
-    {
-      $suffix = 'solo.ocean';
-    }
-    elsif ($totalCC)
-    {
-      $suffix = 'coupled';
-    }
-    else
-    {
-      $suffix = 'serial';
-    }
-    my $runCommand = $fre->property("FRE.mpi.runCommand.$suffix");
-    $fre->out(FREMsg::NOTE, "Running executable with:", $runCommand);
-    FRETemplate::setAlias($fre, $r, 'runCommand', $runCommand);
+    my ($fre, $coupler, $npes, $refNPes, $refNTds) = ($z->fre(), $i->{coupler}, $i->{npes}, $i->{npesList}, $i->{ntdsList});
+    FRETemplate::setSchedulerSize($fre, $r, 'run', $coupler, $npes, $refNPes, $refNTds);
+    FRETemplate::setRunCommand($fre, $r, $coupler, $npes, $refNPes, $refNTds);
   }
   
   sub outputScriptJobId($$)
@@ -1499,7 +1478,7 @@ use FREUtil();
 	      (my $rc, $status) = frerun::setTables(\$rtScript, $z, $runInfo->{namelists});
 	      if ($rc)
 	      {
-		frerun::setMPI(\$rtScript, $z, $runInfo);
+		frerun::setMPI(\$rtScript, $z, $runInfo->{mpiInfo});
 		frerun::setRegressionTimeStampOptions(\$rtScript, $z, $runInfo);
 		frerun::setRegressionTimingParameters(\$rtScript, $z, $runInfo, $o{partition}, $o{queue}, $o{dual});
 		FRETemplate::setNamelists($fre, \$rtScript, $runInfo->{namelists});
@@ -1590,7 +1569,7 @@ use FREUtil();
             (my $rc, $status) = frerun::setTables(\$runScript, $z, $prdInfo->{namelists});
 	    if ($rc)
 	    {
-	      frerun::setMPI(\$runScript, $z, $prdInfo);
+	      frerun::setMPI(\$runScript, $z, $prdInfo->{mpiInfo});
 	      frerun::setProductionTimeStampOptions(\$runScript, $z, $prdInfo);
 	      frerun::setProductionTimingParameters(\$runScript, $z, $prdInfo, $o{partition}, $o{queue}, $o{dual});
 	      FRETemplate::setNamelists($fre, \$runScript, $prdInfo->{namelists});

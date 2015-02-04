@@ -1,5 +1,5 @@
 #
-# $Id: FREExperiment.pm,v 18.1.2.17.2.1 2012/10/17 14:43:05 Kyle.Olivo Exp $
+# $Id: FREExperiment.pm,v 18.1.2.21 2013/04/24 17:26:30 afy Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: Experiment Management Module
 # ------------------------------------------------------------------------------
@@ -55,8 +55,18 @@
 # afy    Ver  16.00  Modify extractShellCommands (no 'defined')     July 12
 # afy    Ver  16.01  Modify regressionPostfix (add suffuxes)        July 12
 # afy    Ver  17.00  Modify MPISizeParameters (fix concurrent)      August 12
+# afy    Ver  18.00  Merge with 18.1.2.17.2.1                       February 13
+# afy    Ver  19.00  Modify MPISizeParameters (generic version)     February 13
+# afy    Ver  19.01  Modify regressionPostfix (generic version)     February 13
+# afy    Ver  19.02  Modify extract*RunInfo (generic version)       February 13
+# afy    Ver  20.00  Modify MPISizeParameters (compatibility mode)  April 13
+# keo    Ver  20.01  Modify extractCheckoutInfo (/:/)               April 13
+# afy    Ver  21.00  Modify MPISizeCompatible (remove ice/land)     April 13
+# afy    Ver  21.01  Add MPISizeComponentEnabled (subcomponents)    April 13
+# afy    Ver  21.02  Modify MPISizeParametersGeneric (call ^)       April 13
+# afy    Ver  21.03  Modify MPISizeParametersCompatible (serials)   April 13
 # ------------------------------------------------------------------------------
-# Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2009-2012
+# Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2009-2013
 # Designed and written by V. Balaji, Amy Langenhorst and Aleksey Yakovlev
 #
 
@@ -432,7 +442,7 @@ my $overrideRegressionNamelists = sub($$$)
     }
   };
 
-  foreach my $nml (split(/;/, $extractOverrideParams->($r, $h, $n)))
+  foreach my $nml (split(';', $extractOverrideParams->($r, $h, $n)))
   {
     my ($name, $var, $val) = split(/[:=]/, $nml);
     $name =~ s/\s*//g;
@@ -489,39 +499,59 @@ my $overrideProductionNamelists = sub($$)
 
 };
 
-my $MPISizeParameters = sub($$$)
-# ------ arguments: $exp $npes $namelistsHandle
+my $MPISizeCompatible = sub($$)
+# ------ arguments: $fre $namelistsHandle
+{
+  my ($fre, $h) = @_;
+  my $compatible = 1;
+  my @components = split(';', $fre->property('FRE.mpi.component.names'));
+  my @compatibleComponents = ('atmos', 'ocean');
+  foreach my $component (@components)
+  {
+    unless (scalar(grep($_ eq $component, @compatibleComponents)) > 0) 
+    {
+      if (defined(FRENamelists::namelistBooleanGet($h, 'coupler_nml', "do_$component")))
+      {
+	$compatible = 0;
+	last;
+      }
+    }
+  }
+  return $compatible;
+};
+
+my $MPISizeParametersCompatible = sub($$$$)
+# ------ arguments: $exp $npes $namelistsHandle $ensembleSize
 {
 
-  my ($r, $n, $h) = @_;
-  my $fre = $r->fre();
-
-  my $concurrentFlag = $h->namelistBooleanGet('coupler_nml', 'concurrent');
-  my $concurrent = (defined($concurrentFlag)) ? $concurrentFlag : 1;
-
+  my ($r, $n, $h, $s) = @_;
+  
+  my ($fre, $concurrent) = ($r->fre(), $h->namelistBooleanGet('coupler_nml', 'concurrent'));
+  $concurrent = 1 unless defined($concurrent);
+  
   my ($atmosNP, $atmosNT) = ($h->namelistIntegerGet('coupler_nml', 'atmos_npes') || 0, 1);
   my ($oceanNP, $oceanNT) = ($h->namelistIntegerGet('coupler_nml', 'ocean_npes') || 0, 1);
-  
+
   if ($atmosNP < 0)
   {
     $fre->out(FREMsg::FATAL, "Number '$atmosNP' of atmospheric MPI processes must be non-negative");
-    return ();
+    return undef;
   }
   elsif ($atmosNP > $n)
   {
     $fre->out(FREMsg::FATAL, "Number '$atmosNP' of atmospheric MPI processes must be less or equal than a total number '$n' of MPI processes");
-    return ();
+    return undef;
   }
 
   if ($oceanNP < 0)
   {
     $fre->out(FREMsg::FATAL, "Number '$oceanNP' of oceanic MPI processes must be non-negative");
-    return ();
+    return undef;
   }
   elsif ($oceanNP > $n)
   {
     $fre->out(FREMsg::FATAL, "Number '$oceanNP' of oceanic MPI processes must be less or equal than a total number '$n' of MPI processes");
-    return ();
+    return undef;
   }
 
   if (FRETargets::containsOpenMP($fre->target()))
@@ -531,119 +561,287 @@ my $MPISizeParameters = sub($$$)
     if ($atmosNT <= 0)
     {
       $fre->out(FREMsg::FATAL, "Number '$atmosNT' of atmospheric OpenMP threads must be positive");
-      return ();
+      return undef;
     }
     elsif ($atmosNT > $coresPerNode)
     {
       $fre->out(FREMsg::FATAL, "Number '$atmosNT' of atmospheric OpenMP threads must be less or equal than a number '$coresPerNode' of cores per node");
-      return ();
+      return undef;
     }
     $oceanNT = $h->namelistIntegerGet('coupler_nml', 'ocean_nthreads') || 1;
     if ($oceanNT <= 0)
     {
       $fre->out(FREMsg::FATAL, "Number '$oceanNT' of oceanic OpenMP threads must be positive");
-      return ();
+      return undef;
     }
     elsif ($oceanNT > $coresPerNode)
     {
       $fre->out(FREMsg::FATAL, "Number '$oceanNT' of oceanic OpenMP threads must be less or equal than a number '$coresPerNode' of cores per node");
-      return ();
+      return undef;
     }
   }
   
-  my $ensembleSize = $h->namelistIntegerGet('ensemble_nml', 'ensemble_size') || 1;
-  
-  if ($ensembleSize <= 0)
+  if ($atmosNP > 0 || $oceanNP > 0)
   {
-    $fre->out(FREMsg::FATAL, "Ensemble size '$ensembleSize' must be positive");
-    return ();
+    my $ok = 1;
+    my @npes = (); 
+    my @ntds = ($atmosNT, $oceanNT);
+    if ($atmosNP < $n && $oceanNP == 0)
+    {
+      @npes = ($concurrent) ? ($atmosNP * $s, ($n - $atmosNP) * $s) : ($n * $s, 0);
+    }
+    elsif ($atmosNP == 0 && $oceanNP < $n)
+    {
+      @npes = ($concurrent) ? (($n - $oceanNP) * $s, $oceanNP * $s) : ($n * $s, 0); 
+    }
+    elsif ($atmosNP == $n && $oceanNP == 0)
+    {
+      @npes = ($atmosNP * $s, 0); 
+    }
+    elsif ($atmosNP == 0 && $oceanNP == $n)
+    {
+      @npes = (0, $oceanNP * $s); 
+    }
+    elsif ($atmosNP == $n || $oceanNP == $n)
+    {
+      if ($concurrent)
+      {
+	$fre->out(FREMsg::FATAL, "Concurrent run - total number '$n' of MPI processes is equal to '$atmosNP' atmospheric ones OR to '$oceanNP' oceanic ones");
+	$ok = 0;
+      }
+      else
+      {
+        @npes = ($n * $s, 0);
+      }
+    }
+    elsif ($atmosNP + $oceanNP == $n)
+    {
+      @npes = ($atmosNP * $s, $oceanNP * $s); 
+    }
+    else
+    {
+      $fre->out(FREMsg::FATAL, "Total number '$n' of MPI processes isn't equal to the sum of '$atmosNP' atmospheric and '$oceanNP' oceanic ones");
+      $ok = 0;
+    }   
+    return ($ok) ? {npes => $n * $s, coupler => 1, npesList => \@npes, ntdsList => \@ntds} : undef;
   }
+  else
+  {
+    return {npes => $n * $s};
+  }
+  
+};
 
-  if ($atmosNP == 0 && $oceanNP == 0)
+my $MPISizeComponentEnabled = sub($$$)
+# ------ arguments: $exp $namelistsHandle $componentName
+{
+  my ($r, $h, $n) = @_;
+  my ($fre, $result) = ($r->fre(), undef);
+  my @subComponents = split(';', $fre->property("FRE.mpi.$n.subComponents"));
+  foreach my $component ($n, @subComponents)
   {
-    return ($n * $ensembleSize, 0, 0, 1, 0, 1);
-  }
-  elsif ($atmosNP < $n && $oceanNP == 0)
-  {
-    if ($concurrent)
+    my $enabled = $h->namelistBooleanGet('coupler_nml', "do_$component");
+    if (defined($enabled))
     {
-      return ($n * $ensembleSize, 1, $atmosNP * $ensembleSize, $atmosNT, ($n - $atmosNP) * $ensembleSize, $oceanNT);
+      if ($enabled)
+      {
+        $result = 1;
+	last;
+      }
+      elsif (!defined($result))
+      {
+        $result = 0;
+      }
+    }
+  }
+  return $result;
+};
+
+my $MPISizeParametersGeneric = sub($$$$)
+# ------ arguments: $exp $npes $namelistsHandle $ensembleSize
+{
+  my ($r, $n, $h, $s) = @_;
+  my $pairSplit = sub($) {return split('<', shift)};
+  my $pairJoin = sub($$) {return join('<', @_)};
+  my $fre = $r->fre();
+  my %sizes = ();
+  my @enabled = split(';', $fre->property('FRE.mpi.component.enabled'));
+  my @components = split(';', $fre->property('FRE.mpi.component.names'));
+  my $openMPEnabled = FRETargets::containsOpenMP($fre->target());
+  my $coresPerNode = ($openMPEnabled) ? $fre->property('FRE.scheduler.run.coresPerJob.inc') : undef;
+  # ------------------------------------------------------------------------- determine component sizes 
+  for (my $inx = 0; $inx < scalar(@components); $inx++)
+  {
+    my $component = $components[$inx];
+    my $enabled = $MPISizeComponentEnabled->($r, $h, $component);
+    $enabled = $enabled[$inx] unless defined($enabled);
+    if ($enabled)
+    {
+      if (my $npes = $h->namelistIntegerGet('coupler_nml', "${component}_npes"))
+      {
+	$sizes{"${component}_npes"} = $npes * $s; 
+	if ($openMPEnabled)
+	{
+          my $ntds = $h->namelistIntegerGet('coupler_nml', "${component}_nthreads");
+	  unless (defined($ntds))
+	  {
+	    $sizes{"${component}_ntds"} = 1; 
+	  }
+	  elsif (0 < $ntds && $ntds <= $coresPerNode)
+	  {
+	    $sizes{"${component}_ntds"} = $ntds; 
+	  }
+	  elsif ($ntds <= 0)
+	  {
+            $fre->out(FREMsg::FATAL, "The variable 'coupler_nml:${component}_nthreads' must have a positive value");
+	    return undef;
+	  }
+	  else
+	  {
+            $fre->out(FREMsg::FATAL, "The variable 'coupler_nml:${component}_nthreads' value must be less or equal than a number '$coresPerNode' of cores per node");
+	    return undef;
+	  }
+	}
+	else
+	{
+	  $sizes{"${component}_ntds"} = 1; 
+	}
+      }
+      else
+      {
+        $fre->out(FREMsg::FATAL, "The variable 'coupler_nml:${component}_npes' must be defined and have a positive value");
+	return undef;
+      }
     }
     else
     {
-      $fre->out(FREMsg::FATAL, "Solo atmospheric model, serial run - total number '$n' of MPI processes exceeds a number of '$atmosNP' atmospheric ones");
-      return ();
+      $sizes{"${component}_npes"} = 0;
+      $sizes{"${component}_ntds"} = 1;
     }
   }
-  elsif ($atmosNP == 0 && $oceanNP < $n)
+  # --------------------------------------------------- select enabled components (with positive sizes)  
+  if (my @componentsEnabled = grep($sizes{"${_}_npes"} > 0, @components))
   {
-    if ($concurrent)
+    my %pairs = ();
+    my @pairsAllowed = split(';', $fre->property('FRE.mpi.component.serials'));
+    # -------------------------------- determine components pairing (for enabled components only)
+    foreach my $componentL (@componentsEnabled)
     {
-      return ($n * $ensembleSize, 1, ($n - $oceanNP) * $ensembleSize, $atmosNT, $oceanNP * $ensembleSize, $oceanNT);
+      foreach my $componentR (@componentsEnabled)
+      {
+	if ($h->namelistBooleanGet('coupler_nml', "serial_${componentL}_${componentR}"))
+	{
+	  my $pairCurrent = $pairJoin->($componentL, $componentR);
+	  if (grep($_ eq $pairCurrent, @pairsAllowed))
+	  {
+	    my $componentLExtra = undef;
+	    foreach my $pair (keys %pairs)
+	    {
+	      my ($componentLExisting, $componentRExisting) = $pairSplit->($pair);
+	      $componentLExtra = $componentLExisting if $componentRExisting eq $componentR; 
+	    }
+	    unless ($componentLExtra)
+	    {
+	      $pairs{$pairCurrent} = 1;
+	    }
+	    else
+	    {
+              $fre->out(FREMsg::FATAL, "Components '$componentL' and '$componentR' can't be run serially - the '$componentLExtra' and '$componentR' are already configured to run serially");
+	      return undef;
+	    }
+	  }
+	  else
+	  {
+            $fre->out(FREMsg::FATAL, "Components '$componentL' and '$componentR' aren't allowed to run serially");
+	    return undef;
+	  }
+	} 
+      }
+    }
+    # ----------------------------------------------- modify component sizes according to their pairing
+    while (my @pairs = keys %pairs)
+    {
+      my @pairComponentsL = map(($pairSplit->($_))[0], @pairs);
+      foreach my $pair (@pairs)
+      {
+	my ($componentL, $componentR) = $pairSplit->($pair);
+	unless (grep($_ eq $componentR, @pairComponentsL))
+	{
+	  $sizes{"${componentL}_npes"} = List::Util::max($sizes{"${componentL}_npes"}, $sizes{"${componentR}_npes"});
+	  $sizes{"${componentL}_ntds"} = List::Util::max($sizes{"${componentL}_ntds"}, $sizes{"${componentR}_ntds"});
+	  $sizes{"${componentR}_npes"} = 0;
+	  delete $pairs{$pair};
+	}
+      }
+    }
+    # ----------------------------------------------- normal return
+    my @npes = map($sizes{"${_}_npes"}, @components); 
+    my @ntds = map($sizes{"${_}_ntds"}, @components); 
+    return {npes => $n * $s, coupler => 1, npesList => \@npes, ntdsList => \@ntds};
+  }
+  else
+  {
+    my $componentsForOut = join(', ', @components);
+    $fre->out(FREMsg::FATAL, "At least one of the components '$componentsForOut' must be configured to run");
+    return undef;
+  }
+};
+
+my $MPISizeParameters = sub($$$)
+# ------ arguments: $exp $npes $namelistsHandle
+{
+
+  my ($r, $n, $h) = @_;
+  my $fre = $r->fre();
+
+  my $ensembleSize = $h->namelistIntegerGet('ensemble_nml', 'ensemble_size');
+  $ensembleSize = 1 unless defined($ensembleSize);
+  
+  if ($ensembleSize > 0)
+  {
+    if ($h->namelistExists('coupler_nml'))
+    {
+      my $func = ($MPISizeCompatible->($fre, $h)) ? $MPISizeParametersCompatible : $MPISizeParametersGeneric;
+      return $func->($r, $n, $h, $ensembleSize);
+    }
+    elsif ($n > 0)
+    {
+      return {npes => $n * $ensembleSize};
     }
     else
     {
-      $fre->out(FREMsg::FATAL, "Solo oceanic model, serial run - total number '$n' of MPI processes exceeds a number of '$oceanNP' oceanic ones");
-      return ();
-    }
-  }
-  elsif ($atmosNP == $n && $oceanNP == 0)
-  {
-    return ($n * $ensembleSize, 0, $atmosNP * $ensembleSize, $atmosNT, 0, 1);
-  }
-  elsif ($atmosNP == 0 && $oceanNP == $n)
-  {
-    return ($n * $ensembleSize, 0, 0, 1, $oceanNP * $ensembleSize, $oceanNT);
-  }
-  elsif ($concurrent)
-  {
-    if ($atmosNP + $oceanNP == $n)
-    {
-      return ($n * $ensembleSize, 1, $atmosNP * $ensembleSize, $atmosNT, $oceanNP * $ensembleSize, $oceanNT);
-    }
-    else
-    {
-      $fre->out(FREMsg::FATAL, "Concurrent run - total number '$n' of MPI processes isn't equal to the sum of '$atmosNP' atmospheric and '$oceanNP' ocean ones");
-      return ();
+      $fre->out(FREMsg::FATAL, "The <production> or <regression/run> attribute 'npes' must be defined and have a positive value");
+      return undef;
     }
   }
   else
   {
-    if ($atmosNP == $n || $oceanNP == $n)
-    {
-      return ($n * $ensembleSize, 0, $atmosNP * $ensembleSize, $atmosNT, $oceanNP * $ensembleSize, $oceanNT);
-    }
-    else
-    {
-      $fre->out(FREMsg::FATAL, "Serial run - total number '$n' of MPI processes is less than any of '$atmosNP' atmospheric or '$oceanNP' ocean ones");
-      return ();
-    }
-  }  
+    $fre->out(FREMsg::FATAL, "The variable 'ensemble_nml:ensemble_size' must have a positive value");
+    return undef;
+  }
 
 };
 
-my $regressionPostfix = sub($$$$$$$$$$$$)
-# ------ arguments: $label $runNo $hoursFlag $segmentsNmb $monthsNmb $daysNmb $hoursNmb $totalNP $atmosNP $atmosNT $oceanNP $oceanNT 
+my $regressionPostfix = sub($$$$$$$$$)
+# ------ arguments: $exp $label $runNo $hoursFlag $segmentsNmb $monthsNmb $daysNmb $hoursNmb $mpiInfo 
 {
-  my ($l, $i, $hf, $sn, $mn, $dn, $hn, $tn, $an, $at, $on, $ot) = @_;
-  my ($timing, $size) = (($hf) ? "${sn}x${mn}m${dn}d${hn}h" : "${sn}x${mn}m${dn}d", '');
-  if ($an == 0 && $on == 0)
+  my ($r, $l, $i, $hf, $sn, $mn, $dn, $hn, $h) = @_;
+  my ($fre, $timing, $size) = ($r->fre(), $sn . 'x' . $mn . 'm' . $dn . 'd', '');
+  $timing .= $hn . 'h' if $hf;
+  if ($h->{coupler})
   {
-    $size = "${tn}pe";
-  }
-  elsif ($on == 0)
-  {
-    $size = "${an}x${at}a";
-  }
-  elsif ($an == 0)
-  {
-    $size = "${on}x${ot}o";
+    my ($refNPes, $refNTds) = ($h->{npesList}, $h->{ntdsList});
+    my @suffixes = split(';', $fre->property('FRE.mpi.component.suffixes'));
+    for (my $inx = 0; $inx < scalar(@{$refNPes}); $inx++)
+    {
+      $size .= '_' . $refNPes->[$inx] . 'x' . $refNTds->[$inx] . $suffixes[$inx] if $refNPes->[$inx] > 0; 
+    }
   }
   else
   {
-    $size = "${an}x${at}a_${on}x${ot}o"; 
+    $size = '_' . $h->{npes} . 'pe';
   }
-  return $timing . '_' . $size;
+  return $timing . $size;
 };
 
 # //////////////////////////////////////////////////////////////////////////////
@@ -1671,63 +1869,50 @@ sub extractRegressionRunInfo($$)
 	  my $dsl = $r->nodeValue($runNodes[$i], '@days');
 	  my $hsl = $r->nodeValue($runNodes[$i], '@hours');
 	  my $srt = $r->nodeValue($runNodes[$i], '@runTimePerJob');
-	  if ($nps > 0)
+	  my $patternRunTime = qr/^\d?\d:\d\d:\d\d$/;
+	  if ($srt =~ m/$patternRunTime/)
 	  {
-	    my $patternRunTime = qr/^\d?\d:\d\d:\d\d$/;
-	    if ($srt =~ m/$patternRunTime/)
+	    if ($msl or $dsl or $hsl)
 	    {
-	      if ($msl or $dsl or $hsl)
+	      my @msa = split(' ', $msl);
+	      my @dsa = split(' ', $dsl);
+	      my @hsa = split(' ', $hsl);
+	      my $spj = List::Util::max(scalar(@msa), scalar(@dsa), scalar(@hsa));
+	      while (scalar(@msa) < $spj) {push(@msa, '0');}
+	      while (scalar(@dsa) < $spj) {push(@dsa, '0');}
+	      while (scalar(@hsa) < $spj) {push(@hsa, '0');}
+	      my $nmlsOverridden = $overrideRegressionNamelists->($r, $nmls->copy(), $runNodes[$i]);
+	      if (my $mpiInfo = $MPISizeParameters->($r, $nps, $nmlsOverridden))
 	      {
-		my @msa = split(' ', $msl);
-		my @dsa = split(' ', $dsl);
-		my @hsa = split(' ', $hsl);
-		my $spj = List::Util::max(scalar(@msa), scalar(@dsa), scalar(@hsa));
-		while (scalar(@msa) < $spj) {push(@msa, '0');}
-		while (scalar(@dsa) < $spj) {push(@dsa, '0');}
-		while (scalar(@hsa) < $spj) {push(@hsa, '0');}
-		my $nmlsOverridden = $overrideRegressionNamelists->($r, $nmls->copy(), $runNodes[$i]);
-		if (my ($totalNP, $totalCC, $atmosNP, $atmosNT, $oceanNP, $oceanNT) = $MPISizeParameters->($r, $nps, $nmlsOverridden))
-		{
-        	  my %run = ();
-		  $run{label} = $l;
-		  $run{number} = $i;
-		  $run{postfix} = $regressionPostfix->($l, $i, $hsl, $spj, $msa[0], $dsa[0], $hsa[0], $totalNP, $atmosNP, $atmosNT, $oceanNP, $oceanNT);
-		  $run{totalNP} = $totalNP;
-		  $run{totalCC} = $totalCC;
-		  $run{atmosNP} = $atmosNP;
-		  $run{atmosNT} = $atmosNT;
-		  $run{oceanNP} = $oceanNP;
-		  $run{oceanNT} = $oceanNT;
-		  $run{months} = join(' ', @msa);
-		  $run{days} = join(' ', @dsa);
-		  $run{hours} = join(' ', @hsa);
-		  $run{hoursDefined} = ($hsl ne "");
- 		  $run{runTimeMinutes} = FREUtil::makeminutes($srt);
-		  $run{namelists} = $nmlsOverridden;
-		  $runs{$i} = \%run;
-                }
-		else
-		{
-        	  $fre->out(FREMsg::FATAL, "The experiment '$expName', the regression test '$l', run '$i' - model size parameters are invalid");
-		  $ok = 0; 
-		}
-	      }
+        	my %run = ();
+		$run{label} = $l;
+		$run{number} = $i;
+		$run{postfix} = $regressionPostfix->($r, $l, $i, $hsl, $spj, $msa[0], $dsa[0], $hsa[0], $mpiInfo);
+		$run{mpiInfo} = $mpiInfo;
+		$run{months} = join(' ', @msa);
+		$run{days} = join(' ', @dsa);
+		$run{hours} = join(' ', @hsa);
+		$run{hoursDefined} = ($hsl ne "");
+ 		$run{runTimeMinutes} = FREUtil::makeminutes($srt);
+		$run{namelists} = $nmlsOverridden;
+		$runs{$i} = \%run;
+              }
 	      else
 	      {
-        	$fre->out(FREMsg::FATAL, "The experiment '$expName', the regression test '$l', run '$i' - timing parameters must be defined");
+        	$fre->out(FREMsg::FATAL, "The experiment '$expName', the regression test '$l', run '$i' - model size parameters are invalid");
 		$ok = 0; 
 	      }
 	    }
 	    else
 	    {
-              $fre->out(FREMsg::FATAL, "The experiment '$expName', the regression test '$l', run '$i' - the running time '$srt' must be nonempty and have the HH:MM:SS format");
+              $fre->out(FREMsg::FATAL, "The experiment '$expName', the regression test '$l', run '$i' - timing parameters must be defined");
 	      $ok = 0; 
 	    }
 	  }
 	  else
 	  {
-	    $fre->out(FREMsg::FATAL, "The experiment '$expName', the regression test '$l', run '$i' - a positive number of cores to run on must be defined");
-	    $ok = 0;
+            $fre->out(FREMsg::FATAL, "The experiment '$expName', the regression test '$l', run '$i' - the running time '$srt' must be nonempty and have the HH:MM:SS format");
+	    $ok = 0; 
 	  }
 	}
 	return ($ok) ? \%runs : 0;
@@ -1769,88 +1954,75 @@ sub extractProductionRunInfo($)
       my $gmt = $r->nodeValue($prdNode, 'segment/@simTime');
       my $gmu = $r->nodeValue($prdNode, 'segment/@units');
       my $grt = $r->nodeValue($prdNode, 'segment/@runTime');
-      if ($nps > 0)
+      my $patternUnits = qr/^(?:years|year|months|month)$/;
+      if (($smt > 0) and ($smu =~ m/$patternUnits/))
       {
-	my $patternUnits = qr/^(?:years|year|months|month)$/;
-	if (($smt > 0) and ($smu =~ m/$patternUnits/))
+        if (($gmt > 0) and ($gmu =~ m/$patternUnits/))
 	{
-          if (($gmt > 0) and ($gmu =~ m/$patternUnits/))
+	  my $patternYears = qr/^(?:years|year)$/;
+	  $smt *= 12 if $smu =~ m/$patternYears/;
+	  $gmt *= 12 if $gmu =~ m/$patternYears/;
+	  if ($gmt <= $smt)
 	  {
-	    my $patternYears = qr/^(?:years|year)$/;
-	    $smt *= 12 if $smu =~ m/$patternYears/;
-	    $gmt *= 12 if $gmu =~ m/$patternYears/;
-	    if ($gmt <= $smt)
+	    my $patternRunTime = qr/^\d?\d:\d\d:\d\d$/;
+	    if ($srt =~ m/$patternRunTime/)
 	    {
-	      my $patternRunTime = qr/^\d?\d:\d\d:\d\d$/;
-	      if ($srt =~ m/$patternRunTime/)
+	      if ($grt =~ m/$patternRunTime/)
 	      {
-		if ($grt =~ m/$patternRunTime/)
+		my ($srtMinutes, $grtMinutes) = (FREUtil::makeminutes($srt), FREUtil::makeminutes($grt));
+		if ($grtMinutes <= $srtMinutes)
 		{
-		  my ($srtMinutes, $grtMinutes) = (FREUtil::makeminutes($srt), FREUtil::makeminutes($grt));
-		  if ($grtMinutes <= $srtMinutes)
+		  my $nmlsOverridden = $overrideProductionNamelists->($r, $nmls->copy());
+		  if (my $mpiInfo = $MPISizeParameters->($r, $nps, $nmlsOverridden))
 		  {
-		    my $nmlsOverridden = $overrideProductionNamelists->($r, $nmls->copy());
-		    if (my ($totalNP, $totalCC, $atmosNP, $atmosNT, $oceanNP, $oceanNT) = $MPISizeParameters->($r, $nps, $nmlsOverridden))
-		    {
-		      my %run = ();
-		      $run{totalNP} = $totalNP;
-		      $run{totalCC} = $totalCC;
-		      $run{atmosNP} = $atmosNP;
-		      $run{atmosNT} = $atmosNT;
-		      $run{oceanNP} = $oceanNP;
-		      $run{oceanNT} = $oceanNT;
-		      $run{simTimeMonths} = $smt;
-		      $run{simRunTimeMinutes} = $srtMinutes;
-		      $run{segTimeMonths} = $gmt;
-		      $run{segRunTimeMinutes} = $grtMinutes;
-		      $run{namelists} = $nmlsOverridden;
-		      return \%run;
-                    }
-		    else
-		    {
-		      $fre->out(FREMsg::FATAL, "The experiment '$expName' - model size parameters are invalid");
-		      return 0; 
-		    }
-		  }
+		    my %run = ();
+		    $run{mpiInfo} = $mpiInfo;
+		    $run{simTimeMonths} = $smt;
+		    $run{simRunTimeMinutes} = $srtMinutes;
+		    $run{segTimeMonths} = $gmt;
+		    $run{segRunTimeMinutes} = $grtMinutes;
+		    $run{namelists} = $nmlsOverridden;
+		    return \%run;
+                  }
 		  else
 		  {
-		    $fre->out(FREMsg::FATAL, "The experiment '$expName' - the segment running time '$grtMinutes' must not exceed the maximum job running time allowed '$srtMinutes'");
+		    $fre->out(FREMsg::FATAL, "The experiment '$expName' - model size parameters are invalid");
 		    return 0; 
 		  }
 		}
 		else
 		{
-        	  $fre->out(FREMsg::FATAL, "The experiment '$expName' - the segment running time '$grt' must be nonempty and have the HH:MM:SS format");
+		  $fre->out(FREMsg::FATAL, "The experiment '$expName' - the segment running time '$grtMinutes' must not exceed the maximum job running time allowed '$srtMinutes'");
 		  return 0; 
 		}
 	      }
 	      else
 	      {
-        	$fre->out(FREMsg::FATAL, "The experiment '$expName' - the simulation running time '$srt' must be nonempty and have the HH:MM:SS format");
+        	$fre->out(FREMsg::FATAL, "The experiment '$expName' - the segment running time '$grt' must be nonempty and have the HH:MM:SS format");
 		return 0; 
 	      }
 	    }
 	    else
 	    {
-	      $fre->out(FREMsg::FATAL, "The experiment '$expName' - the segment model time '$gmt' must not exceed the simulation model time '$smt'");
+              $fre->out(FREMsg::FATAL, "The experiment '$expName' - the simulation running time '$srt' must be nonempty and have the HH:MM:SS format");
 	      return 0; 
 	    }
 	  }
 	  else
 	  {
-            $fre->out(FREMsg::FATAL, "The experiment '$expName' - the segment model time '$gmt' must be nonempty and have one of (years|year|months|month) units defined");
+	    $fre->out(FREMsg::FATAL, "The experiment '$expName' - the segment model time '$gmt' must not exceed the simulation model time '$smt'");
 	    return 0; 
 	  }
 	}
 	else
 	{
-          $fre->out(FREMsg::FATAL, "The experiment '$expName' - the simulation model time '$smt' must be nonempty and have one of (years|year|months|month) units defined");
+          $fre->out(FREMsg::FATAL, "The experiment '$expName' - the segment model time '$gmt' must be nonempty and have one of (years|year|months|month) units defined");
 	  return 0; 
 	}
       }
       else
       {
-	$fre->out(FREMsg::FATAL, "The experiment '$expName' - a positive number of cores to run on must be defined");
+        $fre->out(FREMsg::FATAL, "The experiment '$expName' - the simulation model time '$smt' must be nonempty and have one of (years|year|months|month) units defined");
 	return 0; 
       }
     }

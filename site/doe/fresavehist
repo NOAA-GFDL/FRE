@@ -1,0 +1,130 @@
+#PBS -j oe
+#PBS -A CLI029
+
+# combines multiprocessor history file output and sends to GFDL
+# usage : combine_hist $datedir $project
+#         or
+#         qsub combine_hist -v datedir=$datedir,project=$project
+
+# data must be of this form: $tmpbase/$USER/subdirs/expt/history/datedir/histfiles
+# ie, datedir = /lustre/scratch/alangenh/cubed_sphere/history/19811001
+
+  unalias *
+  set beginruntime = `date "+%s"`
+
+  if ( ! $?datedir ) then
+    set datedir = ""
+    if ( $?1 ) then
+      set datedir = $1
+    endif
+  endif
+  if ( ! $?project ) then
+    set project = ""
+    if ( $?2 ) then
+      set project = "-A $2"
+    endif
+  else
+    set project = "-A $project"
+  endif
+
+  source $FRE_ORNL_HOME/bin/align_usernames.csh
+
+########################################################################
+#------------------------ default variables ----------------------------
+########################################################################
+#for combine of restart files
+  set mppnccombine = "$FRE_NCTOOLS_HOME/bin/mppnccombine_mpi -64 -h 16384"
+#send file
+  set send_file = "$FRE_ORNL_HOME/bin/send_file"
+#fix for occasional missing dirs in $path
+  alias qsub /opt/torque/default/bin/qsub
+  alias hsi /opt/public/bin/hsi
+
+########################################################################
+#---------- only highly premeditated user changes below here -----------
+########################################################################
+if ( ! -d "$datedir" ) then
+   echo "ERROR: datedir '$datedir' is not a directory"
+   echo "ERROR: Please provide datedir as a command line argument"
+   exit 1
+endif
+set begindate = $datedir:t
+set name = `echo $datedir | tr '/' '\t' | cut -f 5`
+echo HOST $HOST $HOSTNAME
+echo datedir=$datedir
+echo name=$name
+cd $datedir
+set time=2
+if ( $?PBS_JOBID ) then
+ chmod 644 $PBS_O_WORKDIR/$PBS_JOBID.OU
+endif
+
+#COMBINE HISTORY FILES
+foreach diagoutput (`ls -1 | egrep ".nc.[0-9][0-9][0-9][0-9]" | sed 's/\.[0-9][0-9][0-9][0-9]//g' | sort -u`)
+  sleep 1
+  set first = `ls -1 | egrep "$diagoutput.[0-9][0-9][0-9][0-9]" | head -1 | awk -F . '{print $NF}' `
+  sleep 1
+  set last = `ls -1 | egrep "$diagoutput.[0-9][0-9][0-9][0-9]" | tail -1 | awk -F . '{print $NF}' `
+  echo aprun -n 1 -N 1 $mppnccombine -r -n $first -e $last $diagoutput
+  aprun -n 1 -N 1 $mppnccombine -r -n $first -e $last $diagoutput &
+end
+
+wait
+
+#MAKE SURE THEY ARE ALL COMBINED
+set numpefiles = `ls -1 | egrep ".nc.[0-9][0-9][0-9][0-9]" | wc -l`
+if ( $numpefiles != 0 ) then
+  echo ERROR: mppnccombine failed, there are still uncombined files
+  exit 1
+endif
+
+#ADD DATE STAMP
+unset echo
+foreach file ( `ls -1 | egrep ".nc"'$'` )
+   mv $file $begindate.$file
+end
+set echo
+
+#CREATE TAR ARCHIVE
+set files = ( `ls -1 | egrep ".nc"'$'` )
+if ( $#files > 0 ) then
+   set arfile = $begindate.nc.tar
+   echo $files | tr ' ' '\n' > ./tarinput
+   tar -b 1000 -cf $arfile -T tarinput
+   rm tarinput
+   if ( -s $arfile ) then
+     find $datedir -type f -maxdepth 1 -regex '.*.nc' -exec rm {} \;
+   else
+     echo ERROR: tar file does not exist or has zero size: $arfile
+     exit 1
+   endif
+else
+   echo ERROR: no history files after combine step
+   exit 1
+endif
+
+mv $arfile ..
+cd ..
+rmdir $datedir
+
+#SEND FILE TO GFDL
+
+cd $PBS_O_WORKDIR
+qsub $project -v file=$datedir:h/$arfile $send_file
+
+#SEND FILE TO HSI
+cd $datedir:h
+set outpath = `echo $datedir:h/$arfile | perl -pe "s/.*?$USER\///" | perl -pe '/\// ? s/(.*)\/.*/$1/ : s/.*/./'`
+echo outpath is $outpath
+hsi "mkdir -p $outpath ; cd $outpath ; put $arfile"
+if ( $status != 0 ) then
+  echo "ERROR: in hsi"
+endif
+
+unset echo
+set endruntime = `date "+%s"`
+set ttlruntime = `echo "$endruntime - $beginruntime" | bc -l`
+echo "beginruntime $beginruntime endruntime $endruntime ttlruntime $ttlruntime"
+echo end_of_run
+echo "NOTE: Natural end-of-script for combine_$begindate."
+

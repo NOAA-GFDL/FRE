@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 # -*- cperl -*-
-# $Id: freppcheck,v 18.0.4.5.2.10 2012/02/23 16:56:13 Amy.Langenhorst Exp $
+# $Id: freppcheck,v 18.0.4.5.2.10.4.2 2013/05/02 22:15:39 arl Exp $
 # ------------------------------------------------------------------------------
 # freppcheck: report missing post processing files for FRE experiments
 # ------------------------------------------------------------------------------
@@ -80,6 +80,7 @@ sub reporting {
    } else {
        print  "\n # No files missing in $self->{asrcdir}\n";
    }
+   return scalar(@$missingfiles);
 }
 sub lookup_ssn {
    my $self = shift;
@@ -205,6 +206,7 @@ sub reporting_size {
    my $self = shift;
    my $ref = $_[0];
    my %infiles = %$ref;
+   my $missingstatus=0;
 
    print  "\n # files in $self->{asrcdir}\n";
    for my $f (sort {third_field($a) cmp third_field($b)} (sort keys %infiles)) {
@@ -212,8 +214,10 @@ sub reporting_size {
         print  "   size = $infiles{$f}{size}       for $f\n";
      } else {
         print  "   ### missing $f    \n";
+        $missingstatus++;
      }
    }
+   return $missingstatus;
 }
 
 sub third_field {
@@ -286,6 +290,7 @@ sub reporting {
          }
       }
    }
+   return scalar (@missingfiles);
 
 }
 
@@ -346,7 +351,7 @@ sub lookup_chunk{
 { #begin package freppcheck
    package freppcheck;
 
-   use constant VERSION => '$Id: freppcheck,v 18.0.4.5.2.10 2012/02/23 16:56:13 Amy.Langenhorst Exp $';
+   use constant VERSION => '$Id: freppcheck,v 18.0.4.5.2.10.4.2 2013/05/02 22:15:39 arl Exp $';
 
    use constant OPTLIST =>
    (
@@ -356,7 +361,7 @@ sub lookup_chunk{
       'Freq|F=s',      
       'generate',      
       'All|A',      
-      'AllTS|a',      
+      'AllTS|allTS|a',      
       'Variables|V=s',      
       'requirecpio|M',      
       'filesize|L',      
@@ -397,16 +402,16 @@ Usage:    freppcheck [ options ] experiment [ experiment2 ... ]
           -M           = requires cpio files, does not require individual files
           -L           = print the file size, which can provide a clue to the correct number of 
                          time steps in the TS variable files
-          -p platform  = platform (default on PP/AN: gfdl.default)
-          -t target    = target (default on PP/AN: prod)
           -c component = check only the specified component
           -d histdir   = override path to history directory (only used to get avail year range)
           -D ppdir     = override path to pp directory to check someone else's files
           -b beginyear = first year to check.  If omitted, freppcheck will prompt you for it
           -e endyear   = last year to check.  If omitted, freppcheck will prompt you for it
-          -g           = generate state files
+          -g           = generate state files containing "OK" for the years being checked
           -h           = show this help message, then exit
           -v           = verbose flag                                                   
+          -p platform  = platform (default on PP/AN: gfdl.default)
+          -t target    = target (default on PP/AN: prod)
           -x xmlfile   = specify xml file (default: ./rts.xml)
           experiment   = experiment to create scripts for, must be found in xml file 
 
@@ -471,6 +476,7 @@ sub parse_av_nodes {
 
 sub check_ppnodes {
    my ($e,$p,$opt) = @_;
+   my $checkstatus=0;
 
    (my $beg_his_yr, my $end_his_yr) = get_start_end_yr($e->{archivedir});
    my $firstyr_user = $opt->{beginyear} || ask_user_for_year($beg_his_yr,'first');
@@ -537,7 +543,8 @@ sub check_ppnodes {
 
              my $avnoderef = AVnodes->new($freq,$interval,$firstyr,$lastyr,$asrcdir,$c);
              my $missingfiles = $avnoderef->checking;
-             $avnoderef->reporting($missingfiles);
+             my $missingstatus = $avnoderef->reporting($missingfiles);
+             if ($missingstatus > 0) { $checkstatus+=$missingstatus; }
          }
       }
       #check timeseries
@@ -589,9 +596,11 @@ sub check_ppnodes {
 
            my $allfiles = $tsnoderef->list_all_files;
            if ($opt->{filesize}) {
-               $tsnoderef->reporting_size($allfiles);
+               my $missingstatus = $tsnoderef->reporting_size($allfiles);
+               if ($missingstatus > 0) { $checkstatus+=$missingstatus; }
            } else { 
-               $tsnoderef->reporting($allfiles,\@checkvars);
+               my $missingstatus = $tsnoderef->reporting($allfiles,\@checkvars);
+               if ($missingstatus > 0) { $checkstatus+=$missingstatus; }
            }
 
          }
@@ -609,7 +618,7 @@ sub check_ppnodes {
       }
    }
    print " =====\n";
-   return ( $firstyr_user,$lastyr_user );
+   return ( $firstyr_user,$lastyr_user,$checkstatus );
 
 } #end subroutine check_ppnodes
 
@@ -697,6 +706,7 @@ my %opt =
 
    if( $opt{help} or "$#ARGV" eq "-1" ) {freppcheck::usage();}
    if( $opt{All} ) {$opt{requirecpio} = 1; $opt{AllTS} = 1;}
+   my $checkstatus=0;
 
    my $fre = FRE->new('freppcheck', %opt) or exit(1);
 
@@ -797,7 +807,8 @@ my %opt =
     }
     my $pp_ref = \%comps_rec;
 
-    (my $beg, my $end) = freppcheck::check_ppnodes($expt_ref,$pp_ref,\%opt);
+    (my $beg, my $end, my $missingstatus) = freppcheck::check_ppnodes($expt_ref,$pp_ref,\%opt);
+    $checkstatus+=$missingstatus;
 
     if( $opt{generate} ) {
       if (! -d $statedir) { mkpath($statedir) || print $!; }
@@ -815,7 +826,7 @@ my %opt =
     }
 
    } #end loop over experiments
-   exit(1);
+   exit $checkstatus;
 
 } #end main program
 

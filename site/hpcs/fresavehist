@@ -1,0 +1,1518 @@
+#!/usr/bin/perl -w
+#
+# frusavehist	mppnccombine and save history files to /archive for FRE
+#
+# 080103 bhs	preliminary version
+# 080207 bhs	1.0.0 initial release
+# 080207 bhs	1.0.1 fix missing ParentId; fix logging
+# 080211 bhs	1.0.2 in w2log, die_hard -> die (avoid infinite recursion)
+# 080211 bhs	1.0.2 move first m2log 2 lines down (post-"must_be_dir $Qsync")
+# 080211 bhs	1.0.3 die_hard -> die_msg, then die at correct location
+# 080211 bhs	1.0.3 better error messages when x command is missing or not -x
+# 080227 bhs	1.0.4 prevent dual qsub of stage job
+# 080227 bhs	1.0.4 fix cpio2archive for repair
+# 080227 bhs	1.0.4 make stage output file names more descriptive
+# 080312 bhs	1.0.4 add post-processing sequencing: -u, pp_* subroutines
+# 080312 bhs	1.0.4 add -u option to request no PP sequencing enforcement
+# 080312 bhs	1.0.4 always make target output cpioname $begindate.nc.cpio
+# 080312 bhs	1.0.4 add -O option, which reverts to old naming conventions
+# 080313 bhs	1.0.5 use "x" to create, delete *.jids (for tracking)
+# 080313 bhs	1.0.5 update code header documentation
+# 080314 bhs	1.0.6 add pp_only
+# 081009 bhs	1.0.7 insure /vftmp/stage{"",/dualrun} are world writable dirs
+# 090226 bhs	1.0.8 correct mailmsg concat error in repair_job_ng
+# 090227 bhs	1.0.8 add ForceErr and AbortIfErr
+# 090227 bhs	1.0.8 use ForceErr for mppncc and cpio{Append,Create}
+# 090227 bhs	1.0.8 send mail if cpio fails; abort if AbortIfErr ~ cpio_err
+# 090227 bhs	1.0.8 correct sequence: must_be_dir $Qsync #1 post-arg-decode
+# 090227 bhs	1.0.8 pass FREROOT to submitted jobs
+# 090609 bhs	1.0.8d increase h_cpu limit to 2 hours
+# 090405 bhs	1.1.0 correct errors in comments added at 1.0.8
+# 090405 bhs	1.1.0 "must_be_dir /vftmp/stage/dualrun" only for dualrun job
+# 090405 bhs	1.1.0 add restart flag files: major steps and in combine & cpio
+# 091021 bhs	1.1.0 add function cpio_abend_rm; nix repairs on cpioCreate
+# 091021 bhs	1.1.0 modify pp_execute_next to enable frepp -p <years>
+# 091021 bhs	1.1.0 move repair_file_pattern
+# 091024 bhs	1.1.0 add copy2ptmp
+# 091030 bhs	1.1.0 add program notes
+# 091031 bhs	1.1.0 fix hsmput code
+# 091101 bhs	1.1.0 add -e xyz (enable selected flags)
+# 091101 bhs	1.1.0 put timestamp and jids in stdout as well as log
+# 091107 bhs	1101 MultYearPP -> ExtraYearsPP (extra years of post-processing)
+# 091107 bhs	1101 change versioning to avoid confusion with CVS
+# 091114 bhs	1102 look for loaded modules
+# 091114 bhs	1102 fix PPname formula, given pp job file is long line w/ ";"
+# 091116 arl	1103 fix "module load" instead of "load module"
+# 091116 bhs	1104 add "module use /home/fms/local/modulefiles" to all jobs
+# 091130 arl	1105 HsmPut: /home/fru/bin/hsmput -> $FREROOT/bin/hsmput
+# 091130 arl	1105 HsmPut=/home/fru/bin/hsmput if FREROOT not defined
+# 091204 bhs	1105 define HsmPut after FREROOT
+# 091205 bhs	1105 clean up (remove) -C, -d and -H in argument processing
+# 091205 bhs	1106 change -ec and -eh to be separate standalone switches
+# 091209 arl	1107 "source /opt/modules/default/init/tcsh" needed for modules
+# 091209 bhs	1107 PP job line executes in "sh" (for FREROOT, modules stuff)
+# 091210 bhs	1107 add fs_init() and fs_space()
+# 100125 bhs	1109 correct hsmput path to include /history
+# 100816 afy    1110 replace FREROOT by FRE_TRANSFER_HOME
+# 100816 afy    1110 add "module use --append" lines based on MODULEPATH
+# 100816 afy    1110 replace "/opt/modules/default" by $MODULESHOME
+
+###############################################################################
+#				Program Notes
+#
+# A. Modes of operation
+#    1. This utility is initially called, in "queuing" mode, from a FRE script
+#       to queue a staging job to the batch scheduler.
+#    2. Within the stage job it is called with a "-s" parameter ("saving mode")
+#       to orchestrate the steps involved in aggregating the data and saving it
+#       to /archive and /ptmp.
+# B. Concept of operation
+#    1. Per-cpu variable files are output from the model as, e.g., ice.nc.nnnn.
+#       They are renamed to yyyymmdd.ice.nc.nnnn and linked to $vftmp_save_dir,
+#       at which point frusavehist -q queues the stage job for execution.  The
+#       date yyyymmdd is the beginning date of the model run segment.
+#    2. On execution, the stage job links all yyyymmdd.xxxx.nc.nnnn files from
+#       $vftmp_save_dir back to $FTMPDIR.
+#    3. It then mppnccombines them into global nc files yyyymmdd.xxxx.nc.
+#    4. The global files are cpio'ed into /archive as yyyymmdd.nc.cpio.
+#    5. If the "-eh" or "-ec" option is selected, the global nc files are also
+#	copied to ptmp directory /ptmp/$USER/<dir-for-cpio>/<cpio-file-name>,
+#	where <dir-for-cpio> is the directory in archive for the cpio file,
+#	and <cpio-file-name> is the cpio file name, with the ".cpio" removed.
+#	The "-eh" uses hsmput to do the copy; "-ec" uses an internal
+#	frusavehist simulation of hsmput, a deprecated feature.
+#    6. If the "-p <PPcommand>" parameter is specified, <PPcommand> is
+#       queued (frusavehist internal queue, managed as a list of files in
+#       the user's home) for execution.
+#    7. The post-processing at the top of the list of waiting PP jobs is then
+#       executed.
+# C. General comments
+#    1. The /vftmp/stage directory ($vftmp_save_dir) is used only to hold files.
+#       All processing occurs in $FTMPDIR after linking the files back there.
+#       Only files (1) produced by the original model or (2) generated with
+#       normal completion by earlier staging steps are found in /vftmp/stage.
+#    2. Staging also maintains a set of directories in the user's home space
+#       at $HOME/qinfo4fre, with a path relative to that which corresponds to
+#       the /archive and /ptmp paths of the experiments in question.  In this
+#       directory may be found logs and the stage and post-processing job
+#       files currently queued.
+###############################################################################
+
+use Config;
+# use strict "refs" not desired
+use strict "subs";
+use strict "vars";
+use File::Spec;
+#use File::stat;		# use Perl stat instead
+use File::Basename;
+use Getopt::Std;
+#use Date::Manip;		# missing in Perl on Irix
+
+# global static variables
+use vars qw($Cname $FRUdir $Log4all $Version);
+use vars qw($CMD $CmdPath $RealCmd $RealName);
+use vars qw($FastCopy $HsmPut);
+use vars qw(%FSpct %FSmnt %FScrit %FSfull %FSwarn $FSlevels);
+
+# static environment variables
+use vars qw($USER $ARCHIVE $FTMPDIR $JOB_ID $JOB_NAME $PTMPDIR);
+use vars qw($FRE_TRANSFER_HOME $MODULEPATH $LOADEDMODULES);
+use vars qw($AbortIfErr $ForceErr $HsmGetPut);
+
+# arguments and switches
+use vars qw($opt_a $opt_A $opt_b $opt_c $opt_D $opt_e $opt_E);
+use vars qw($opt_g $opt_G $opt_h $opt_I $opt_j $opt_K);
+use vars qw($opt_l $opt_L $opt_m $opt_M $opt_n $opt_N $opt_o $opt_O);
+use vars qw($opt_p $opt_P $opt_q $opt_r $opt_R $opt_s $opt_T);
+use vars qw($opt_u $opt_U $opt_V $opt_v $opt_W);
+use vars qw($AltArch $AbortIfErr $AutoRepair $CombinedArchive);
+use vars qw($Debug $Enable $GateJob);
+use vars qw($Jobnum $Keep $Limits $Logname $Mppnccombine);
+use vars qw($ExtraYearsPP $Ncpus $NoQsub $OldFilePat $Postp_command);
+use vars qw($Queue $Queuing $Repair $Saving $TestMode $Unitary);
+use vars qw($UnSyncPP $Vdefault $Verbose $Workstation);
+use vars qw($begindate);
+
+# static secondary globals determined by above
+# for the fuction pp_only, they are not static
+use vars qw($PPCfile $PPonly);
+use vars qw($RepairCmd $RepairDir $RepairJob $hist2fixDir);
+use vars qw($JobFile $Logfile $ParentId $vftmp_save_dir);
+use vars qw($Qinfo $outputDir $outputDirSave $ptmpPdir $HomeOut $Qsync);
+use vars qw($BdateList $ExistingArchive $FirstDate @SaveArgs);
+use vars qw($Copy2ptmp $Copy4hsm $HsmGetPut $CheckSums $Timers);
+use vars qw($Do_dmput $Do_dmget $DoneFlag);
+
+# global variables to save and pass back command results from sub x
+use vars qw($x_cmdout $x_return_code);
+
+####################### Set Version Information ########################
+my @Fstat = stat $0; my $TSfmt="%4d-%02d%02d %02d:%02d:%02d";
+my @Tim = localtime $Fstat[9]; $Tim[5] += 1900; $Tim[4] += 1;
+my $TS = sprintf $TSfmt,$Tim[5],$Tim[4],$Tim[3],$Tim[2],$Tim[1],$Tim[0];
+$Version = "1110, $TS";
+########################################################################
+
+# define command name, fru directory and global log
+$Cname="frusavehist";
+$FRUdir = "/home/fms/fru";
+$Log4all = "$FRUdir/log/$Cname.log.".`date +%y%m%d`; chomp $Log4all;
+$FSlevels = "$FRUdir/bin/frusavehist.fslevels";
+
+# compute requested command path
+my $PWD=`pwd`; chomp $PWD;
+$CMD = basename $0; $CmdPath = $0;
+$CmdPath =~ s/^\./$PWD/ if (substr($0,0,1) eq ".");
+$CmdPath = "$PWD/$0" if (substr($CmdPath,0,1) ne "/");
+
+##########################################################################
+##########################################################################
+# subroutines
+##########################################################################
+##########################################################################
+
+#######################
+# declarations
+#######################
+    sub msg2le($$;$); sub sendmail($;$); sub w2log($;$); sub x($;$);
+    sub cpio_abend_rm($);
+#######################
+#   utility subroutines
+#######################
+    sub alert($){
+	my ($msg,$cmd) = @_;
+	$cmd="ssh ac-arch /usr/local/bin/msg2ops if (! $cmd)"
+	x "$cmd \"$msg\"";
+    }
+    sub dbgmsg($$;$){
+	my ($level,$message,$nl) = @_;
+	return if ($Debug < $level);
+	$message .= "\n" if  (! $nl);
+	print STDERR "$message";
+    }
+    sub die_msg($;$){
+	my ($abtmsg,$early) = @_;
+	die $abtmsg if ($early);
+	my $msg = "$CMD: FATAL: $abtmsg";
+	msg2le 1,$msg;
+	return if ($JOB_NAME eq "QRLOGIN");
+        my $msg2mail = "$msg";
+	$msg = "To resubmit the job, after the problem is corrected:";
+	msg2le 1,$msg;
+        $msg2mail .= "\n$msg";
+        $msg = "    qsub $HomeOut/$JOB_NAME";
+	msg2le 1,$msg;
+        $msg2mail .= "\n$msg";
+	sendmail "$msg2mail";
+    }
+    sub dmget($){
+	my ($files) = @_;
+	x "dmget $files" if ($Do_dmget);
+    }
+    sub dmput($){
+	my ($files) = @_;
+	x "dmput $files" if ($Do_dmput);
+    }
+    sub errmsg($$;$){
+	my ($level,$message,$nl) = @_;
+	return if ($Verbose < $level);
+	$message .= "\n" if  (! $nl);
+	print STDERR "$message";
+    }
+    sub error($){
+	print STDERR "@_\n";
+    }
+    sub f4log($){
+	my ($msg) = @_;
+	my $ts=`date +%y%m%d.%H%M%S`; chomp $ts;
+	my $logline = sprintf "%s %s %s %s",$ts,$ParentId,$JOB_ID,$msg;
+	return $logline;
+    }
+    sub fs_levels_init(){
+	%FScrit = ('ARCHIVE',99,'FTMPDIR',80,'PTMPDIR',90);
+	%FSfull = ('ARCHIVE',95,'FTMPDIR',70,'PTMPDIR',80);
+	%FSwarn = ('ARCHIVE',90,'FTMPDIR',60,'PTMPDIR',70);
+	my ($line,$name,$warn,$full,$crit);
+	if (open(FSLEVELS,"<$FSlevels")) {
+	    while (<FSLEVELS>) {
+		($name,$warn,$full,$crit) = split;
+		$FScrit{$name} = $crit;
+		$FSfull{$name} = $full;
+		$FSwarn{$name} = $warn;
+	    }
+	    close FSLEVELS;
+	}
+    }
+    sub fs_space(){
+        my @DFinfo = `df -hP | sed 's/%//'`;
+	my @fnList = ("ARCHIVE","PTMPDIR","FTMPDIR");
+	foreach my $fn (@fnList) {
+	    my $fs =$$fn;
+	    $fs = $ENV{$fn} if ($ENV{$fn});
+	    next if (! -d $fs);
+	    my $realdir = `cd $fs; /bin/csh -c pwd`;
+	    chomp $realdir;
+	    my $MountMatch=0;
+	    my $MountPoint="";
+	    my $MountSpace=99;
+	    foreach my $DF_fs (@DFinfo) {
+		chomp $DF_fs;
+		my @DF_fs_fields = split /\s+/,$DF_fs;
+		if (index($realdir,$DF_fs_fields[5]) == 0) {
+		    if (length($DF_fs_fields[5]) > $MountMatch) {
+			$MountMatch = length($DF_fs_fields[5]);
+			$MountPoint = $DF_fs_fields[5];
+			$MountSpace = $DF_fs_fields[4];
+		    }
+		}
+	    }
+	    $FSpct{$fn} = $MountSpace;
+	    $FSmnt{$fn} = $MountPoint;
+	}
+    }
+    sub glog(){
+	my $ts=`date +%y%m%d.%H%M%S`; chomp $ts;
+	my $logline = "$ts $USER $RealCmd @SaveArgs";
+	`touch $Log4all; chmod 666 $Log4all` if (! -e $Log4all);
+        w2log($logline,$Log4all);
+    }
+    sub help(){
+	my $P="frepp_cmd"; my $C="combine_list"; my $M="mppnccombine_cmd";
+	error "Usage: $Cname -b begindate -o outputDir -c \"$C\" [-l limits]";
+	error "\t[-m \"$M\"] [-n ncpus] [-p \"$P\"] [-q pe]";
+	error "\t[-h|P|R|r|u|v] [-e <c,g,h,p,s,t (one or more)>] [-D#] [-V#]\t";
+	error "\n    Version $Version, $RealCmd";
+	return if ($Verbose < $Vdefault+1);
+	error "\n    Required arguments:";
+	error "\t-b begindate	\thistory file beginning date";
+	error "\t-c combine_list	\tlist of history segments combined";
+	error "\t-o outputDir	\texperiment directory (in /archive)";
+	error "    Optional arguments:";
+	error "\t-a [cpio,...]	\tabort stage job on errors in [cpio,...]";
+	error "\t-e[c,g,h,p,s,t]\t\tenable: g=dmgets, p=dmputs";
+	error "\t-e[c,g,h,p,s,t]\t\tenable: h=hsmput, s=hsmcksums t=hsmtimers";
+	error "\t-e[c,g,h,p,s,t]\t\tenable: c=copy-for-hsm";
+	error "\t-E extra-years	\tmaximum extra years of post-processing";
+	error "\t-g gate_job	\tgating job";
+	error "\t-h		\thelp (flag); use -hv for verbose help";
+	error "\t-l limits	\tpass-through to SGE, used to limit cpu time";
+	error "\t-m combine-cmd	\tmppnccombine command to execute";
+	error "\t-n cpus	\t\tnumber of cpus to request for stage job";
+	error "\t-p PPcmd	\tfrepp (post-processing) command to execute";
+	error "\t-P		\tpost-processing only (flag)";
+	error "\t-q queue	\tqueue to submit to -- default is ic.stage";
+	error "\t-r		\trepair mode (flag)";
+	error "\t-R		\tauto-repair (flag)";
+	error "\t-s		\tsaving mode (flag)";
+	error "\t-u		\tunsynchronized post-processing (flag)";
+	error "\t-v		\tverbose (flag)";
+	error "\t-V level	\tverbosity level";
+	error "    Environment variables which override arguments:";
+	error "\tSAVEHIST_AbortIfErr\t(-a cpio) abort stage job if err in cpio";
+	error "\tSAVEHIST_AutoRepair\t(-R) enable autorepair (on=1, off=0)";
+	error "\tSAVEHIST_Copy2ptmp\t(-ec) copy files to /ptmp (1 or 0)";
+	error "\tSAVEHIST_CheckSums\t(-es) enable checksums (1 or 0)";
+	error "\tSAVEHIST_HsmGetPut\t(-eh) use hsmput for /ptmp copy (1 or 0)";
+	error "\tSAVEHIST_ExtraYearsPP\t(-E extra) max extra years of post-p";
+	return if ($Verbose < $Vdefault+2);
+	error "    Internal and debugging arguments:";
+	error "\t-A altarch	\talternate archive directory";
+	error "\t-D level	\tdebugging level";
+	error "\t-I qinfo	\talternate qinfo";
+	error "\t-j jobid	\tSGE JOB_ID of parent";
+	error "\t-K		\tkeep (flag)";
+	error "\t-L logname	\tname of file for stage log";
+	error "\t-N		\tno qsub (flag)";
+	error "\t-O		\told history file-name-pattern (flag)";
+	error "\t-T		\ttest mode (flag)";
+	error "\t-U		\tunitary mode (flag)";
+	error "\t-W		\tnon-HPC (workstation) test mode (flag)";
+	error "    Environment variables which turn on debug options:";
+	error "\tSAVEHIST_ForceErr\tforce error";
+    }
+    sub m2log($;$){
+	my ($msg,$log) = @_;
+        $log = $Logfile if (! $log);
+	my $msg4log = f4log $msg;
+	w2log($msg4log,$log);
+    }
+    sub msg2le($$;$){
+	my ($level,$message,$nl) = @_;
+	return if ($Verbose < $level);
+	my $msg4log = f4log $message;
+	w2log($msg4log);
+	$msg4log .= "\n" if  (! $nl);
+	print STDERR "$msg4log";
+    }
+    sub must_be_dir($){
+	my ($target) = @_;
+	x "mkdir -p $target" if (not -d $target);
+	if (not -e $target) {
+	    msg2le 1,"$CMD: ERROR: directory $target could not be created";
+	    exit 11;
+	} elsif (not -d $target) {
+	    msg2le 1,"$CMD: ERROR: $target exists, but is not a directory.";
+	    exit 12;
+	} elsif (not -w $target) {
+	    msg2le 1,"$CMD: ERROR: directory $target is not writable";
+	    exit 13;
+	}
+    }
+    sub must_be_wdir($){
+	my ($target) = @_;
+	if (not -d $target) {
+	    x "mkdir -p $target";
+	    x "chmod a+rwxt $target";
+	}
+	if (not -e $target) {
+	    msg2le 1,"$CMD: ERROR: directory $target could not be created";
+	    exit 11;
+	} elsif (not -d $target) {
+	    msg2le 1,"$CMD: ERROR: $target exists, but is not a directory.";
+	    exit 12;
+	} elsif (not -w $target) {
+	    msg2le 1,"$CMD: ERROR: directory $target is not writable";
+	    exit 13;
+	}
+    }
+    sub sendmail($;$){
+	my ($msg,$hdr) = @_;
+	my $ts=`date +%Y-%m%d-%H:%M:%S`; chomp $ts;
+	$hdr="problem in SGE job $JOB_ID at $ts" if (! $hdr);
+	my $line1 = f4log("message from SGE job $JOB_NAME:");
+#	x "echo \"$line1\n$msg\""|mailx -s \"$hdr\" $USER";
+	`echo "$line1\n$msg"|mailx -s "$hdr" $USER`;
+    }
+    sub w2log($;$){
+	my ($msg,$log2use) = @_;
+        my $log = $log2use ? $log2use : $Logfile;
+	open(LOGFILE,">>$log") || die "open $log failed: $!";
+	print LOGFILE "$msg\n";
+	close LOGFILE;
+#	`echo "$logline" >>$Logfile`
+    }
+    sub x($;$){
+	my ($cmdline,$raw) = @_;
+	my ($cmd2log,$cmdout,$HeadTail);
+	$raw = "no" if (! $raw);
+	$cmd2log = f4log "x $cmdline";
+	errmsg 3,"$cmd2log";	# not msg2le
+	if ($raw eq "out") {
+	    w2log $cmd2log;	# log immediately as stderr does not wait
+	    $HeadTail = "STDOUT";
+	    $x_cmdout=`$cmdline`; $x_return_code=$?;
+	} else {
+	    $HeadTail = "OUTPUT";
+ 	    $x_cmdout=`$cmdline 2>&1`; $x_return_code=$?;
+	    w2log $cmd2log;	# log when output logs to show elapsed time
+	}
+	$cmdout=$x_cmdout; chomp $cmdout if ($cmdout);
+	my @cmd = split /\s+/,$cmdline;
+	if ($x_return_code == -1) {
+	    if (! -e $cmd[0]) {
+		w2log $cmd2log;	# log command before abort message
+		die_msg "file \"$cmd[0]\" not found"; die;
+	    } elsif (! -x $cmd[0]) {
+		w2log $cmd2log;	# log command before abort message
+		die_msg "command \"$cmd[0]\" not executable"; die;
+	    }
+	}
+	$cmdout =~ s#\n#\\; #g if ($raw eq "no");
+	my $rc = $x_return_code >> 8;
+	my $FailMsg = "FAILED, RC=$rc,$x_return_code" if ($x_return_code != 0);
+	if ($cmdout && $raw ne "no") {
+	    my $cmdbase = $cmd[0]; $cmdbase =~ s#.*/##;
+	    $HeadTail = "RETURNED_$HeadTail from $cmdbase";
+	    if ($x_return_code != 0) {
+		msg2le 1,"--$FailMsg, $HeadTail:\n$cmdout\n--END_$HeadTail";
+	    } else {
+		msg2le 3,"--$HeadTail:\n$cmdout\n--END_$HeadTail";
+	    }
+	} elsif ($x_return_code != 0) {
+	    if ($cmdout) {
+		msg2le 1,"  $FailMsg, RETURNED: $cmdout";
+	    } else {
+		msg2le 1,"  $FailMsg";
+	    }
+	} elsif ($cmdout) {
+	    msg2le 3,"  RETURNED: $cmdout";
+	}
+	return $x_return_code;
+    }
+################################
+#   minor functional subroutines
+################################
+    sub link_all_from(){
+#       odd fact: cd without the null command returns -1
+	x "cd $vftmp_save_dir; :";	# make sure we can cd there
+	x "cd $vftmp_save_dir; ln $begindate* $FTMPDIR";
+    }
+    sub link_all_to(){
+	must_be_dir "$vftmp_save_dir";
+	x "ln $begindate* $vftmp_save_dir";
+    }
+    sub link_to($){
+	my ($files) = @_;
+	must_be_dir "$vftmp_save_dir";
+	x "ln $files $vftmp_save_dir";
+    }
+    sub links_rm(){
+	must_be_dir "$vftmp_save_dir";
+	x "cd $vftmp_save_dir; rm -f $begindate*";
+	x "cd $vftmp_save_dir; rm -f $DoneFlag*";
+    }
+    sub mv_files(){
+	msg2le 3,"moving each history file <file> to $begindate.<file>";
+	foreach my $suffix ('nc', 'data') {
+	    foreach my $file ( <*.$suffix *.$suffix.????> ) {
+		system("mv $file $begindate.$file");
+		msg2le 1,"mv $file $begindate.$file failed" if ($? != 0);
+	    }
+	}
+	my $reloutDir=`echo $outputDir|sed 's#^/arch[^/]*/##'`;
+	chomp $reloutDir;
+	dbgmsg 2,"relative output dir is $reloutDir";
+    }
+    sub qinfo_init(){
+	if (-e $Qinfo && ! -d $Qinfo) {
+	    my $n=0;
+	    my $QinfoBase=$Qinfo;
+	    while (-e $Qinfo && ! -d $Qinfo) {
+		$n++;
+		$Qinfo="$QinfoBase$n";
+	    }
+	}
+	$HomeOut = $outputDirSave;
+	$HomeOut =~ s#^$ARCHIVE#$Qinfo#;
+	$HomeOut =~ s#^/archive/dualrun/$USER#$Qinfo/dualrun#;
+	$Logfile = $HomeOut . "/" . $Logname;
+	$Qsync="$HomeOut/qsync";
+    }
+    sub pp_cmd_save(){
+#   NOTE: pp job file is ONE LONG LINE with ";" separated commands
+	if (! open(JOB,">$PPCfile") ) {
+	    die_msg "open $PPCfile failed: $!"; die;
+	}
+#       import environment parameters which affect job execution
+	print JOB "FRE_TRANSFER_HOME=$FRE_TRANSFER_HOME; export FRE_TRANSFER_HOME; " if ($FRE_TRANSFER_HOME);
+	print JOB ". \$MODULESHOME/init/sh; ";
+	if ($MODULEPATH) {
+	    my @ModulePathsToAppend = split /:/, $MODULEPATH;
+	    foreach my $ModulePath (@ModulePathsToAppend) {
+	        print JOB "module use --append $ModulePath\n"
+	    }
+	}
+	if ($LOADEDMODULES) {
+	    my @ModulesToLoad = split /:/, $LOADEDMODULES;
+	    foreach my $Module (@ModulesToLoad) {
+		print JOB "module load $Module\n"
+	    }
+	}
+#       write out specified post-processing command
+	print JOB "$Postp_command\n";
+	close(JOB);
+    }
+    sub pp_check_jids(){
+#	if not yet ready to execute another pp command, return 1
+	my @PPJfiles = <$Qsync/pp*.jids>;
+	my $all_done = 1;
+	foreach my $jf (@PPJfiles) {
+	    my $all_gone = 1;
+	    my @PPjids=`cat $jf`; chomp @PPjids;
+	    foreach my $j (@PPjids) {
+		my $found = `qstat -j $j 2>&1 | grep "job_number"`;
+		$all_gone = 0 if ($found);
+	    }
+	    x "rm $jf" if ($all_gone);
+	    $all_done = 0 if (! $all_gone);
+	}
+	return 1 if (! $all_done);
+	my @PPJleft = <$Qsync/pp*.jids>;
+	return 1 if (@PPJleft);			# duplicates all_done test
+#	normal return (= false) means no jid files left
+#	return value is not currently used anywhere
+    }
+    sub pp_execute($$;$){
+	my ($ppcommand,$ppfile,$ppflag) = @_;
+	if ($ppfile ne $PPCfile) {
+	    my $ppf = basename $ppfile;
+	    my $PoundSigns = "##########################################";
+	    $PoundSigns .= "#################################";
+	    my $mesg = "Executing prior postprocessing command saved in $ppf";
+	    $mesg = "Executing $ppfile" if ($ppflag);
+	    msg2le 1,$PoundSigns;
+	    msg2le 1,"# => $mesg";
+	    msg2le 1,$PoundSigns;
+        }
+	x("$ppcommand","raw");
+	my $grep4 = '^Your job .* has been submitted\$';
+	my $ppJobIds = `echo "$x_cmdout"|grep '$grep4'|awk '{print \$3}'`;
+	chomp $ppJobIds;
+	x "echo \"$ppJobIds\" > $ppfile.jids" if ($ppJobIds);
+	x "rm -f $ppfile";		# -f in case there is no file
+	pp_check_jids();		# clean up jid files for UnSyncPP
+    }
+    sub pp_execute_next_old(;$){
+	my ($flag) = @_;
+#	if there are pp files present, execute the oldest-dated command
+	pp_check_jids();
+	my @ppc_files = <$Qsync/pp*>;
+	return if (! $ppc_files[0]);		# if no files, just return
+#	NOTE: the following also catches .jids files
+	return if (! -x $ppc_files[0]);		# means not ready to run
+	my $pp_command = `cat $ppc_files[0]`; chomp $pp_command;
+	pp_execute("$pp_command","$ppc_files[0]",$flag);
+    }
+    sub pp_execute_next(;$){
+	my ($flag) = @_;
+#	if there are pp files present, execute the oldest-dated command
+	pp_check_jids();
+	my @ppc_files = <$Qsync/pp*>;
+	return if (! $ppc_files[0]);		# if no files, just return
+	my $ppextra = -1;
+	my $pp_rm_list = "";
+	my $ppfile2run = "";
+	foreach my $ppcfile (@ppc_files) {
+	    next if ($ppcfile =~ /.jids$/);
+	    last if (! -x $ppcfile);
+	    $ppextra += 1;
+	    $ppfile2run = $ppcfile if ($ppextra == 0);
+	    last if (! $ExtraYearsPP);		# not actually needed
+	    $pp_rm_list .= "$ppcfile " if ($ppextra > 0);
+	    last if ($ppextra >= $ExtraYearsPP);
+	}
+	return if ($ppextra == -1);		# means not ready to run
+	my $pp_command = `cat $ppfile2run`; chomp $pp_command;
+	if ($ppextra > 0){
+#       pp job file is ONE LONG LINE with ";" separated commands
+	    my $PPname = `echo "$pp_command"|sed 's/.*;//'|awk '{print \$1}'`;
+	    chomp $PPname;
+	    $pp_command =~ s/$PPname/$PPname -p $ppextra/;
+	    x "echo $pp_command > $ppfile2run";
+	    x "rm $pp_rm_list";
+	}
+	pp_execute("$pp_command","$ppfile2run",$flag);
+    }
+    sub pp_only(){
+	qinfo_init();
+	my @qsync_list=`find $Qinfo -name qsync -print`; chomp @qsync_list;
+	foreach my $q (@qsync_list) {
+	    $outputDirSave = dirname $q;
+	    qinfo_init();
+	    print "checking $Qsync ...\n" if ($Verbose - $Vdefault > 0);
+	    pp_execute_next("pp_only");
+	}
+    }
+    sub repair_job_make(){
+	my $hostname=`uname -n`; chomp $hostname;
+	if (! open(JOB,">$RepairJob") ) {
+	    die_msg "open $RepairJob failed: $!"; die;
+	}
+	print JOB "#!/bin/csh -fx\n";
+	print JOB "#\$ -l $Limits\n";
+	print JOB "#\$ -pe $Queue $Ncpus\n";
+	print JOB "#\$ -o $HomeOut/r$begindate.\$JOB_ID\n";
+	print JOB "cat $RepairJob\n" if ($Verbose >= 3);
+#       import environment parameters which affect job execution
+	print JOB "setenv FRE_TRANSFER_HOME $FRE_TRANSFER_HOME\n" if ($FRE_TRANSFER_HOME);
+	print JOB "source \$MODULESHOME/init/tcsh\n";
+	if ($MODULEPATH) {
+	    my @ModulePathsToAppend = split /:/, $MODULEPATH;
+	    foreach my $ModulePath (@ModulePathsToAppend) {
+	        print JOB "module use --append $ModulePath\n"
+	    }
+	}
+	if ($LOADEDMODULES) {
+	    my @ModulesToLoad = split /:/, $LOADEDMODULES;
+	    foreach my $Module (@ModulesToLoad) {
+		print JOB "module load $Module\n"
+	    }
+	}
+#       specify work directory and frusavehist command
+	print JOB "cd \$FTMPDIR\n";
+	print JOB "$RepairCmd\n";
+	close(JOB);
+	`chmod +x $RepairJob`;
+    }
+    sub repair_job_ng(){
+	my $msgline = "multiple incompletely combined history files found";
+	msg2le 1,"===> $msgline";
+	my $mailmsg = "$msgline\n";
+	$msgline = "history file repair job submission failed";
+	msg2le 1,"===> $msgline";
+	$mailmsg .= "$msgline\n";
+	$msgline = "please correct error and resubmit $RepairJob";
+	msg2le 1,"===> $msgline";
+	$mailmsg .= "$msgline";
+	sendmail $mailmsg;
+    }
+    sub repair_job_ok($){
+	my ($RepairInfo) = @_;
+	my $msgline = "multiple incompletely combined history files found";
+	msg2le 1,"===> $msgline";
+	my $mailmsg = "$msgline\n";
+	msg2le 1,"===> $RepairInfo";
+	$mailmsg .= "$RepairInfo\n";
+	$msgline = "post-processing will be submitted after the repair";
+	msg2le 1,"===> $msgline";
+	$mailmsg .= "$msgline";
+	sendmail $mailmsg;
+    }
+    sub repair_job_queue(){
+	repair_job_make();
+	my $cmdout="";	# must be done here for errmsg to see NoQsub setting
+	if ($NoQsub) {
+	    repair_job_ok("executing history file repair script $RepairJob");
+	    x("$RepairJob","out");
+	} else {
+	    msg2le 3,"queueing history file repair job $RepairJob ...";
+	    $cmdout=`qsub $RepairJob`; chomp $cmdout;
+	    if ($? == 0) {
+		$Jobnum = `echo "$cmdout"|grep '^Your j'|awk '{print \$3}'`;
+		chomp $Jobnum;
+		repair_job_ok("history file repair job $Jobnum submitted");
+	    } else {
+		repair_job_ng();
+		exit 21
+	    }
+	}
+    }
+    sub stage_job_make(){
+	my @successor=`ls $Qsync/s*_$begindate* 2>/dev/null`;
+	if ("@successor") {
+	    msg2le 1,"successor stage job(s) found, should not be -- removing";
+	    for (my $i=0; $i<=$#successor; $i++) {
+	exit;
+		chomp $successor[$i];
+		x "rm $successor[$i]";
+	    }
+	}
+	my $hostname=`uname -n`; chomp $hostname;
+	if (! open(JOB,">$JobFile") ) {
+	    die_msg "open $JobFile failed: $!"; die;
+	}
+	print JOB "#!/bin/csh -fx\n";
+	print JOB "#\$ -l $Limits\n";
+	print JOB "#\$ -l $hostname\n";
+	print JOB "#\$ -pe $Queue $Ncpus\n";
+	print JOB "#\$ -o $HomeOut/s$begindate.\$JOB_ID\n";
+	print JOB "cat $JobFile\n" if ($Verbose >= 3);
+#       import environment parameters which affect job execution
+	print JOB "setenv FRE_TRANSFER_HOME $FRE_TRANSFER_HOME\n" if ($FRE_TRANSFER_HOME);
+	print JOB "source \$MODULESHOME/init/tcsh\n";
+	if ($MODULEPATH) {
+	    my @ModulePathsToAppend = split /:/, $MODULEPATH;
+	    foreach my $ModulePath (@ModulePathsToAppend) {
+	        print JOB "module use --append $ModulePath\n"
+	    }
+	}
+	if ($LOADEDMODULES) {
+	    my @ModulesToLoad = split /:/, $LOADEDMODULES;
+	    foreach my $Module (@ModulesToLoad) {
+		print JOB "module load $Module\n"
+	    }
+	}
+#       specify work directory and frusavehist command
+	print JOB "cd \$FTMPDIR\n";
+	print JOB "$RealCmd -s -b $begindate -o $outputDirSave -j $JOB_ID";
+	print JOB " -K" if ($Keep);
+	print JOB " -R" if ($AutoRepair);
+	print JOB " -N" if ($AutoRepair && $NoQsub);
+	print JOB " -a$AbortIfErr" if ($AbortIfErr);
+	print JOB " -e$Enable" if ($Enable);
+	print JOB " -E$ExtraYearsPP" if ($ExtraYearsPP);
+	print JOB " -V$Verbose" if ($Verbose != $Vdefault);
+	print JOB " -m \"$Mppnccombine\"";
+	print JOB " -g \"$GateJob\"" if ($GateJob);
+	print JOB " -c \"$CombinedArchive\"" if ($CombinedArchive);
+	print JOB " -p \"$Postp_command\"" if ($Postp_command);
+	print JOB "\n";
+	close(JOB);
+	return "$JobFile";
+    }
+    sub stage_job_queue() {
+	my $stage_job=stage_job_make();
+	my @predecessor = "";
+	if ($GateJob) {
+	    @predecessor = <$Qsync/s$GateJob*>;
+	    chomp $predecessor[0] if ($predecessor[0]);
+	}
+	my $cmdout="";	# must be done here for errmsg to see NoQsub setting
+	if ($NoQsub) {
+	    msg2le 1,"executing stage $stage_job as script ...";
+	    `chmod +x $JobFile`;	# turn x-bit on to execute as script
+	    x("$stage_job","out");
+	} elsif (! $predecessor[0]) {
+	    msg2le 1,"queueing stage job $stage_job ...";
+	    $cmdout=`qsub $stage_job`; chomp $cmdout;
+	    if ($? == 0) {
+		$Jobnum = `echo "$cmdout"|grep '^Your j'|awk '{print \$3}'`;
+		chomp $Jobnum;
+		msg2le 1,"qsub $stage_job, job_id=$Jobnum";
+	    } else {
+		msg2le 1,"qsub $stage_job failed -- aborting";
+		exit 21
+	    }
+	} else {
+	    `chmod +x $JobFile`;	# execute bit set => linked stage job
+	    msg2le 1,"$stage_job will be queued when $predecessor[0] completes";
+	    return
+	}
+	msg2le 3,"$cmdout" if ($cmdout);
+    }
+    sub stage_job_rel(){
+	my @successor = <$Qsync/s*_$begindate*>;
+	if ("@successor") {
+	    sleep 2;	# time to finish writing file(s) and chmod +x
+	    for (my $i=0; $i<=$#successor; $i++) {
+		chomp $successor[$i];
+		my $x_on=`ls -l $successor[$i]|awk '{print \$1}'|grep x`;
+		x "qsub $successor[$i]" if ($x_on);
+            }
+	}
+    }
+#################################
+#    major functional subroutines
+#################################
+
+#------------------------------------------------------------------
+#   --- anticipate additions to combine_list
+#------------------------------------------------------------------
+    sub print_new_combine_list(){
+#   this is the only write to stdout in the entire script
+        my $NextCombinedArchive=$CombinedArchive;
+        foreach my $suffix ('nc', 'data') {
+            my @files = <*.$suffix *.$suffix.????>;
+            if ("@files") {
+                dbgmsg 2,"$suffix found, rc is $?";
+                if ($NextCombinedArchive) {
+                    $NextCombinedArchive .= " $begindate.$suffix.cpio";
+                } else {
+                    $NextCombinedArchive = "$begindate.$suffix.cpio";
+                }
+            } else {
+                dbgmsg 2,"return code $? for $suffix";
+            }
+        }
+        print "$NextCombinedArchive";
+    }
+#------------------------------------------------------------------
+#   --- combine per-cpu history files in parallel in the background
+#------------------------------------------------------------------
+    sub mpp_nc_c($){
+	my ($diagoutput) = @_;
+	my $errhdr = "ERROR: savehist::mpp_nc_c: mppnccombine failed";
+	my $rc = 0;
+	my $tries = 0; my $maxtries = 2;
+	if (! -e "$DoneFlag:combine_hist") {
+	    $rc = x "$Mppnccombine $diagoutput $diagoutput.*";
+	    $tries += 1;
+	}
+#	if mppnccombine fails (swapkiller?), give it one more chance
+	while ($rc != 0) {
+	    x "rm $diagoutput";
+            $rc = x "$Mppnccombine $diagoutput $diagoutput.*";
+	    $tries += 1;
+	    last if ($tries >= $maxtries);
+	}
+	$rc = 90 if ($ForceErr =~ /(^|,)mppncc_1(,|$)/);
+	$rc = 91 if ($ForceErr =~ /(^|,)mppncc_2(,|$)/);
+	if ($rc == 0 && -s $diagoutput) {
+	    link_to $diagoutput if (! -s "$vftmp_save_dir/$diagoutput");
+            x "rm $diagoutput.*";
+	} elsif (-f $diagoutput) {
+            x "rm $diagoutput";
+            msg2le 1,"$CMD: ERROR: mppnccombine $diagoutput -- file removed\n";
+	} else {
+            msg2le 1,"$CMD: ERROR: mppnccombine $diagoutput\n";
+	}
+	if ($rc != 0) {
+	    my $mailmsg = "===> $errhdr for $diagoutput";
+	    if ($AbortIfErr =~ /(^|,)mppncc*(,|$)/) {
+		$mailmsg .= "\n===> job abort specified by -a argument";
+		sendmail $mailmsg;
+		die_msg "$errhdr\n"; die;
+	    } else {
+		sendmail $mailmsg;
+	    }
+	}
+
+    }
+    sub mpp_nc_c_show_files() {
+	foreach my $suffix ('nc', 'data') {
+	    my $files = `ls -1 $begindate.*.$suffix 2>/dev/null`;
+	    if ($? ==0) {
+		$files =~ s/\n/ /g;
+		dbgmsg 2,"$files";
+	    } else {
+		dbgmsg 2,"no $suffix files";
+	    }
+	}
+    }
+    sub combine_hist(){
+	foreach my $suffix ('nc', 'data') {
+	    my $per_cpu = `ls -1 *.$suffix.???? 2>/dev/null` || next; chomp $per_cpu;
+	    my $diagoutline = `echo "$per_cpu" | sed 's/\\.[0-9][0-9][0-9][0-9]//g' | sort -u`;
+	    chomp $diagoutline;
+	    my @diagoutlist = split(/\n/,$diagoutline);
+	    foreach my $diagoutput ( @diagoutlist ) {
+		chomp $diagoutput;
+		my $retcode=fork;
+		if ( $retcode == 0 ) {			# child
+		    mpp_nc_c $diagoutput;
+		    exit;
+		} elsif ( defined $retcode ) {		# parent
+		    sleep 1;
+		    next;
+		} else {				# fork error
+		    die_msg "fork error: $!\n"; die;
+		}
+	    }
+	}
+    
+#       --- wait for the mppnccombine processes to complete
+	msg2le 3,"waiting for children to complete ...";
+	my $child_done_pid=0;
+	while ($child_done_pid != -1) {
+	    $child_done_pid=wait;	# next child complete
+	}
+	msg2le 3,"children done";
+	mpp_nc_c_show_files if ($Verbose > 2);
+    }
+#---------------------------------------------------------------
+#   --- copy history and/or data files to /ptmp
+#   --- cpio mppnccombine'd history and/or data files to archive
+#---------------------------------------------------------------
+    sub copy2ptmp($$$){
+	my ($arfile,$files,$ts) = @_;
+	my $errh_c = "ERROR: savehist::copy2ptmp: cxfscp failed";
+	my $errh_h = "ERROR: savehist::copy2ptmp: hsmput failed";
+	my $errhdr = ""; my $msglineX = "";
+	my $subdir = basename $arfile;
+	$subdir =~ s/\.cpio$//;
+	my $ptmpSub = "$ptmpPdir/$subdir";
+	x "mkdir -p $ptmpSub" if (! -d $ptmpSub);
+	my $rc = 0;
+	if ($HsmGetPut) {
+	    $errhdr = $errh_h;
+	    x "mkdir $subdir";
+	    x "mv $files $subdir";
+	    my $HsmPutCmd = "$HsmPut";
+	    $HsmPutCmd = "$HsmPutCmd -c" if ($CheckSums);
+	    $HsmPutCmd = "$HsmPutCmd -t" if ($Timers);
+	    $rc = x "$HsmPutCmd -w $FTMPDIR -p $ptmpPdir $subdir";
+	    $msglineX = "hsmput return code $rc" if ($rc != 0);
+	} else {
+	    $errhdr = $errh_c;
+	    x "mkdir $subdir";
+	    x "mv $files $subdir";
+	    $rc = x "$FastCopy $subdir/* $ptmpSub";
+	    if ($rc == 0 && $CheckSums) {
+		x "cd $ptmpSub; md5sum ./* >$ptmpSub.ok";
+		x "cd $subdir; md5sum ./* >../$subdir.ok";
+		$rc = x "diff $ptmpSub.ok $subdir.ok >/dev/null";
+		if ($rc != 0) {
+		    $msglineX = "md5sum mismatch";
+		    x "cp -p $subdir.ok $ptmpSub/ftmpdir_$subdir.ok";
+		}
+	    } elsif ($rc == 0) {
+		`touch $ptmpSub.ok`
+	    } else {
+		$msglineX = "cxfscp return code $rc";
+	    }
+	}
+	if ($rc != 0) {
+	    my $msgline = "===> $errhdr";
+	    $msgline .= " to directory $ptmpSub -- $msglineX";
+	    msg2le 1,"$msgline";
+	    my $mailmsg = "$msgline\n";
+	    sendmail $mailmsg;
+	    if ($msglineX eq "md5sum mismatch") {
+		die_msg "$mailmsg"; die;
+	    }
+	}
+    }
+    sub cpioAppend($$$){
+	my ($arfile,$files,$ts) = @_;
+	my $errhdr = "ERROR: savehist::cpioAppend: cpio failed";
+	dmget $arfile;
+	my $artemp = $arfile . $ts;
+	x "mv $arfile $artemp";
+	my $rc = x "ls -1 $files | cpio -C 524288 -oKvAO $artemp";
+	$rc = 99 if ($ForceErr =~ /(^|,)cpioAppend(,|$)/);
+	if ($rc == 0) {
+	    x "mv $artemp $arfile";
+	} else {
+	    my $msgline = "===> $errhdr";
+	    $msgline .= ", left $artemp" if (-e "$artemp");
+	    msg2le 1,"$msgline";
+	    my $mailmsg = "$msgline\n";
+	    $msgline = "===> you will probably have to regenerate $arfile";
+	    msg2le 1,"$msgline";
+	    $mailmsg .= "$msgline";
+	    if ($AbortIfErr =~ /(^|,)cpio*(,|$)/) {
+	        $mailmsg .= "\n===> job aborted";
+		sendmail $mailmsg;
+		die_msg "$errhdr\n"; die;
+	    } else {
+		sendmail $mailmsg;
+	    }
+	}
+    }
+    sub cpioCreate($$$){
+	my ($arfile,$files,$ts) = @_;
+	my $errhdr = "ERROR: savehist::cpioCreate: cpio failed";
+	cpio_abend_rm $arfile;
+	my $artemp = $arfile . $ts;
+	my $rc = x "ls -1 $files | cpio -C 524288 -oKvO $artemp";
+	$rc = 99 if ($ForceErr =~ /(^|,)cpioCreate(,|$)/);
+	if ($rc == 0) {
+	    x "mv $artemp $arfile";
+	} else {
+	    my $msgline = "===> $errhdr";
+	    $msgline .= ", left $artemp" if (-e "$artemp");
+	    msg2le 1,"$msgline";
+	    my $mailmsg = "$msgline\n";
+	    $msgline = "===> you will probably have to regenerate $arfile";
+	    msg2le 1,"$msgline";
+	    $mailmsg .= "$msgline";
+#	    if ($AbortIfErr =~ /(^|,)cpio_err[ors]*(,|$)/) {
+	    if ($AbortIfErr =~ /(^|,)cpio*(,|$)/) {
+	        $mailmsg .= "\n===> job aborted";
+		sendmail $mailmsg;
+		die_msg "$errhdr\n"; die;
+	    } else {
+		sendmail $mailmsg;
+	    }
+	}
+    }
+    sub cpio_abend_rm($){
+	my ($arfile) = @_;
+	my $Orphans = "$outputDir/history/orphans";
+	my $found = 0;
+	foreach my $orphan (<${arfile}_??????_*>) {
+	    must_be_dir $Orphans if (! $found);
+	    x "mv $orphan $Orphans";
+	    $found += 1;
+	}
+	if ($found) {
+	    my $mailmsg = "NOTE: $found cpio file(s) moved to $Orphans";
+	    msg2le 1,"===> $mailmsg";
+	    sendmail $mailmsg;
+	}
+    }
+    sub cpio_and_copy(){
+	my $ERRHDR="ERROR: in savehist::cpio_and_copy";
+	my ($arfile,$bdates2ls,$date4cpio,$files);
+	my $ts=`date +_%y%m%d_%H%M%S`; chomp $ts;
+	$date4cpio = $CombinedArchive ? $FirstDate : $begindate;
+	$bdates2ls = $Repair && $CombinedArchive ? "{$BdateList}" : $begindate;
+	foreach my $suffix qw(nc data) {
+	    my $cpio_done = "$DoneFlag:cpio:$suffix";
+	    my $cpio_orphans_done = "$DoneFlag:cpio_orphans:$suffix";
+	    my $copy_done = "$DoneFlag:copy:$suffix";
+	    my $copy_orphans_done = "$DoneFlag:copy_orphans:$suffix";
+	    $arfile = "$outputDir/history/$date4cpio.$suffix.cpio";
+	    $files = `ls -1 $bdates2ls.*.$suffix 2>/dev/null`;
+	    if ($files && ! -e $cpio_done) {
+		$files =~ s/\n/ /g;
+		dbgmsg 2,"$files";
+		if (-e "$arfile" && $CombinedArchive && ! $Repair) {
+		    cpioAppend($arfile,$files,$ts);
+		} elsif (-e "$arfile") {
+		    my $ErrMsg = "$ERRHDR: $arfile should not exist ";
+		    if ($Repair) {
+			$ErrMsg .= "for repair option";
+		    } else {
+			$ErrMsg .= "if -c \"file_list\" not specified"
+		    }
+		    die_msg "$ErrMsg"; die;
+		} else {
+		    if ($CombinedArchive && ! $Repair) {
+			msg2le 1,"$ERRHDR: $arfile does not exist"
+		    }
+		    cpioCreate($arfile,$files,$ts);
+		}
+		`touch $cpio_done`;
+	    }
+	    if ($files && $Copy2ptmp && ! -e $copy_done) {
+		copy2ptmp($arfile,$files,$ts);
+		`touch $copy_done`;
+	    }
+	    if ($files) {
+		dmput $arfile;
+		x "rm -f $files";
+	    } else {
+		dbgmsg 2,"no $suffix files";
+	    }
+	    $arfile = "$outputDir/history/$date4cpio.$suffix.0000.cpio";
+	    $files = `ls $bdates2ls.*.$suffix.???? 2>/dev/null`;
+	    if ($files && ! -e $cpio_orphans_done) {
+		$files =~ s/\n/ /g;
+		msg2le 1,"$files";
+		msg2le 1,"$ERRHDR: individual output files copied to $arfile";
+		if ( -e $arfile ) {
+		    cpioAppend($arfile,$files,$ts);
+		} else {
+		    cpioCreate($arfile,$files,$ts);
+		}
+		`touch $cpio_orphans_done`;
+	    }
+	    if ($files && $Copy2ptmp && ! -e $copy_orphans_done) {
+		copy2ptmp($arfile,$files,$ts);
+		`touch $copy_orphans_done`;
+	    }
+	    if ($files) {
+		dmput $arfile;
+		x "rm -f $files";
+	    }
+	}
+    }
+    sub repair_file_pattern(){
+	if ($OldFilePat) {
+            my $year = `echo $begindate|cut -c1-4`; chomp $year;
+            return $year . "[0-9][0-9][0-9][0-9].*.cpio";
+	} else {
+            my $date4cpio = $CombinedArchive ? $FirstDate : $begindate;
+            return "$date4cpio.*.cpio";
+	}
+    }
+    sub repair_if_needed(){
+	my $file_pat = repair_file_pattern();
+	my $nfiles = `cd $outputDir/history; ls -1 $file_pat*|wc -l`;
+	if ($nfiles == 1) {
+	    return;
+	} elsif ($nfiles == 0) {
+	    my $mailmsg = "no $file_pat* files found to post-process";
+	    msg2le 1,"===> $mailmsg";
+	    sendmail $mailmsg;
+	    return "no_files";
+# get past here in this subroutine when nfiles > 1, i.e., a repair is needed
+	} elsif ($AutoRepair) {
+	    if ($Unitary) {
+		repair_job_ok("executing repair command in Unitary mode");
+		x("$RepairCmd","out");
+		return "unitary repair";
+	    }
+	    repair_job_queue();
+	    return "queued_repair";
+	} else {
+	    my $mailmsg = "history file repairs needed -- ";
+	    $mailmsg .= "post-processing not submitted";
+	    msg2le 1,"===> $mailmsg\n";
+	    sendmail $mailmsg;
+	    return "repair_needed";
+	}
+    }
+#------------------------------------------------------------------
+#   --- two subroutines for repairing history files
+#------------------------------------------------------------------
+    sub mv_hist2fix(){
+	my $file_pat = repair_file_pattern();
+	my $histDir = "$outputDir/history";
+	my @found2mv = <$histDir/$file_pat*>;
+	my @moved2fix = <$hist2fixDir/$file_pat*>;
+	if ("@found2mv") {
+	    if (! "@moved2fix") {
+		must_be_dir "$hist2fixDir";
+		x "mv $outputDir/history/$file_pat* $hist2fixDir";
+	    } else {
+		die_msg "$file_pat* files in $hist2fixDir AND $histDir";
+		die;
+	    }
+	}
+	my @found2fix = <$hist2fixDir/$file_pat*>;
+	if (! "@found2fix") {
+	    die_msg "no $file_pat* files found to fix"; die;
+	}
+    }
+    sub uncpio_hist(){
+	my $file_pat = repair_file_pattern();
+	dmget "$hist2fixDir/$file_pat*";
+	x "cp -p $hist2fixDir/$file_pat* .";
+# Note that "foreach $file (<$file_pat>)" fails, error message: 
+# "readline() on unopened filehandle 0003[0-9][0-9][0-9][0-9].* at $CMD line x"
+	foreach my $file (<./${file_pat}_??????_??????>) {
+#	    NOTE: bad retcodes expected for *.cpio_yymmdd_HHMMSS
+#		  => remove file even if retcode is non-zero
+	    my $retcode = x "cpio -iuv < $file";
+	    x "rm $file";
+	}
+#	NOTE: no-suffix cpio files go last
+	foreach my $file (<./$file_pat>) {
+	    my $retcode = x "cpio -iuv < $file";
+	    if ($retcode == 0) {
+		x "rm $file";
+	    } else {
+		my $mailmsg = "\"cpio -iuv <$file\" return code was $retcode";
+	        $mailmsg .= " -- abort";
+		msg2le 1,"===> $mailmsg\n";
+		sendmail $mailmsg;
+		die_msg "history file repair failed"; die;
+	    }
+	}
+    }
+###############################################################################
+###############################################################################
+# executable code starts here
+###############################################################################
+###############################################################################
+#   argument decoding section
+#
+#   WARNING:
+#	In this section, DO NOT attempt to record errors in the experiment
+#	staging log (/home/<user>/qinfo4fre/<experiment>/qstage.log), as it
+#	may not yet be initialized, and the qinfo4fre directory may not
+#	even exist.  Thus, for example, do not use msg2le "message to log
+#	and standard error" or m2log "message to log".  Use such functions
+#	as dbgmsg, errmsg and error, which report only to standard error.
+###############################################################################
+# get environment variables needed
+$USER = $ENV{USER};
+$ARCHIVE = $ENV{ARCHIVE}; $ARCHIVE="/archive/$USER" if (! $ARCHIVE);
+$FTMPDIR = $ENV{FTMPDIR};
+$JOB_ID = $ENV{JOB_ID};
+$JOB_NAME = $ENV{JOB_NAME}; $JOB_NAME = $0 if (! $JOB_NAME);
+$FRE_TRANSFER_HOME = $ENV{FRE_TRANSFER_HOME};
+$MODULEPATH = $ENV{MODULEPATH};
+$LOADEDMODULES = $ENV{LOADEDMODULES};
+$PTMPDIR = $ENV{PTMPDIR}; $PTMPDIR="/ptmp/$USER" if (! $PTMPDIR);
+# import frusavehist override variables
+$AbortIfErr = $ENV{SAVEHIST_AbortIfErr};
+$AutoRepair = $ENV{SAVEHIST_AutoRepair};
+$Copy4hsm = $ENV{SAVEHIST_Copy4hsm};
+$CheckSums = $ENV{SAVEHIST_CheckSums};
+$HsmGetPut = $ENV{SAVEHIST_HsmGetPut};
+$ExtraYearsPP = $ENV{SAVEHIST_ExtraYearsPP};
+$Timers = $ENV{SAVEHIST_Timers};
+# import frusavehist debugging control variables
+$ForceErr = $ENV{SAVEHIST_ForceErr}; $ForceErr = "No" if (! $ForceErr);
+# derived
+$Qinfo = "$ENV{HOME}/qinfo4fre";
+
+# commands for copying to /ptmp
+# cxfscp: t=threads, b=buffers, s=KB, u=update, p=permissions, r=recursive
+$FastCopy = "cxfscp -t 1 -b 8 -s 65000 -up";
+if ($FRE_TRANSFER_HOME) {
+    $HsmPut = "$FRE_TRANSFER_HOME/bin/hsmput -m $FRE_TRANSFER_HOME/site/hpcs/hsmput.mk";
+} else {
+    $HsmPut = "$FRUdir/bin/hsmput";
+}
+
+@SaveArgs = @ARGV;
+if ( !getopts('A:a:b:c:D:E:e:g:hI:j:KL:l:m:Nn:Oo:Pp:q:RrsTUuV:vW') ) {
+    $RealCmd = $CmdPath;	# so it's not undefined
+    help;
+    error "\n$CMD: FATAL: error in arguments";
+    exit 1
+}
+
+# set defaults
+$Queuing = 1;
+$Vdefault = 3;
+
+# set defaults for arguments not supplied
+$AbortIfErr = $opt_a ? $opt_a : "No" if (! $AbortIfErr);
+$AltArch = $opt_A ? $opt_A : 0;
+$CombinedArchive = $opt_c ? $opt_c : "";
+$Debug = $opt_D ? $opt_D: 0;
+$Enable = $opt_e ? $opt_e : "";
+$ExtraYearsPP = $opt_E ? $opt_E : 0 if (! $ExtraYearsPP);
+$GateJob = $opt_g ? $opt_g : "";
+$Qinfo = $opt_I if ($opt_I);
+$ParentId = $opt_j ? $opt_j : "------";		# SGE JOB_ID of parent
+$Keep = $opt_K ? $opt_K : 0;
+$Logname = $opt_L ? $opt_L : "qstage.log";
+$Limits = $opt_l ? $opt_l : "h_cpu=02:00:00";
+$Mppnccombine = $opt_m ? $opt_m : "mppnccombine";
+$Ncpus = $opt_n ? $opt_n : 2;
+$NoQsub = $opt_N ? $opt_N : 0;
+$OldFilePat = $opt_O ? $opt_O : 0;
+$Postp_command = $opt_p ? $opt_p : "";
+$PPonly = 1 if ($opt_P);
+$Queue = $opt_q ? $opt_q : "ic.stage";
+$AutoRepair = $opt_R ? $opt_R : 0 if (! $AutoRepair);
+$Repair = $opt_r ? $opt_r : 0;
+$Saving = $opt_s ? $opt_s : 0;
+$TestMode = $opt_T ? $opt_T : 0;
+$Unitary = $opt_U ? $opt_U : 0;
+$UnSyncPP = $opt_u ? $opt_u : 0;
+$Verbose = $Vdefault + 1 if ($opt_v);
+$Verbose = $opt_V ? $opt_V : $Vdefault if (! $opt_v);
+$Workstation = $opt_W ? $opt_W : 0;
+
+# flags derived from $Enable
+$Do_dmget = 0; $Do_dmget = 1 if ($Enable =~ /g/);
+$Do_dmput = 0; $Do_dmput = 1 if ($Enable =~ /p/);
+$Copy4hsm = 0; $Copy4hsm = 1 if ($Enable =~ /c/ && ! $Copy4hsm);
+$HsmGetPut = 0; $HsmGetPut = 1 if ($Enable =~ /h/ && ! $HsmGetPut);
+$ExtraYearsPP = 0; $ExtraYearsPP = 1 if ($Enable =~ /m/ && ! $ExtraYearsPP);
+$CheckSums = 0; $CheckSums = 1 if ($Enable =~ /s/ && ! $CheckSums);
+$Timers = 0; $Timers = 1 if ($Enable =~ /t/ && ! $Timers);
+
+$Copy2ptmp = 0; $Copy2ptmp = 1 if ($HsmGetPut || $Copy4hsm);
+
+# mandatory arguments
+$begindate = $opt_b;
+$outputDir = $opt_o;
+
+# derived variables
+if ($opt_c) {
+    my @CombineList = split /\s+/,$CombinedArchive;
+    $ExistingArchive = $CombineList[0];
+    $BdateList = "$CombinedArchive $begindate";
+    $BdateList =~ s/\.[^.]*\.cpio /,/g;
+    $FirstDate = $BdateList;
+    $FirstDate =~ s/,.*$//;
+}
+if ($opt_P) {
+   $begindate = "00000000";
+   $outputDir = "$ARCHIVE/garbage";
+}
+if ($opt_T) {
+   $begindate = "19900101";
+   $outputDir = "$ARCHIVE/garbage";
+}
+$Queuing = 0 if ($opt_s || $opt_U);
+$Do_dmput = 1 if ($Postp_command || $Repair);
+
+$JOB_ID=4444 if ($Queuing && ! $JOB_ID);
+$JOB_ID=8888 if (! $JOB_ID);
+
+# compute real command path
+dbgmsg 1,"CmdPath=$CmdPath";
+$RealCmd = $0; my ($Link2Cmd, $RealDir);
+dbgmsg 1,"Tracing links: \$0=$0" if (-l $0);
+while (-l $RealCmd) {
+    $Link2Cmd = readlink $RealCmd;
+    if (substr($Link2Cmd,0,1) eq "/") {
+	$RealCmd = $Link2Cmd;
+    } else {
+	$RealDir = dirname $RealCmd;
+	$RealCmd = "$RealDir/" . $Link2Cmd;
+	dbgmsg 1,"Tracing links: RealCmd=$RealCmd";
+    }
+}
+dbgmsg 1,"" if (-l $0);
+$RealDir = `cd \`dirname $RealCmd\`; /bin/csh -c pwd`; chomp $RealDir;      
+$RealCmd = "$RealDir/" . basename $RealCmd;            
+
+if ($opt_h) {
+    help();
+    exit;
+}
+
+errmsg 1,"$RealCmd, Version = $Version";
+my $ArgErrors=0;
+foreach my $arg ("begindate","outputDir","Qinfo","JOB_ID") {
+    if (! $$arg) {
+	$ArgErrors=1;
+	error "$CMD: internal error: \$$arg undefined";
+    } else {
+	dbgmsg 1,"\$$arg = $$arg";
+    }
+}
+if ($ArgErrors && $Debug < 9) {
+    error "$CMD: FATAL: argument error(s) -- abort\n";
+    help();
+    exit 1;
+}
+
+# the following must come after the argument checks
+$outputDirSave = $outputDir;
+if ($Workstation) {
+    $outputDir =~ s#^$ARCHIVE#$ENV{HOME}/archlocal#;
+    $outputDir =~ s#^/archive/dualrun/$USER#$ENV{HOME}/archlocal/dualrun#;
+} elsif ($AltArch) {
+    $outputDir =~ s#^$ARCHIVE#$AltArch#;
+    $outputDir =~ s#^/archive/dualrun/$USER#$AltArch/dualrun#;
+}
+my $arch_rel_path = $outputDirSave;
+$arch_rel_path =~ s#^/arch[^/]*/##;
+$vftmp_save_dir="/vftmp/stage/$arch_rel_path";
+$DoneFlag="$vftmp_save_dir/fsh:done:$begindate";
+$hist2fixDir="$outputDir/hist2fix";
+$ptmpPdir="/ptmp/$USER" . "$outputDirSave/history";
+
+qinfo_init;
+my $Experiment = basename $outputDir;
+$JobFile = "$Qsync/s$begindate";
+$JobFile .= "_$GateJob" if ($GateJob);
+$JobFile .= "_$Experiment";
+
+$PPCfile = "$Qsync/pp$begindate";	# both a flag file and a saved command
+
+$RepairJob = $JobFile . "_repair";
+$RepairCmd = "$0 -r -s -b $begindate -o $outputDirSave -j $JOB_ID";
+$RepairCmd .= " -c \"$CombinedArchive\"" if ($CombinedArchive);
+$RepairCmd .= " -v$Verbose" if ($Verbose != $Vdefault);
+$RepairCmd .= " -a$AbortIfErr" if ($AbortIfErr);
+$RepairCmd .= " -e$Enable" if ($Enable);
+$RepairCmd .= " -E$ExtraYearsPP" if ($ExtraYearsPP);
+$RepairCmd .= " -K" if ($Keep);
+$RepairCmd .= " -O" if ($OldFilePat);
+$RepairCmd .= " -U" if ($Unitary);
+$RepairCmd .= " -u" if ($UnSyncPP);
+$RepairCmd .= " -m \"$Mppnccombine\"" if ($Mppnccombine);
+$RepairCmd .= " -p \"$Postp_command\"" if ($Postp_command);
+$RepairDir = "";
+
+my @ArgList = ("0","CMD","CmdPath","RealCmd","SaveArgs","AltArch",
+	"Debug","Verbose","Vdefault","NoQsub","Saving","Queuing","Unitary",
+	"Do_dmget","Do_dmput","ARCHIVE","FTMPDIR","USER","JOB_ID","JOB_NAME",
+	"Experiment","JobFile","Logfile","Qinfo","HomeOut","Qsync",
+	"AutoRepair","Repair","RepairCmd","RepairDir","RepairJob",
+	"begindate","outputDir","outputDirSave","hist2fixDIr","vftmp_save_dir",
+	"CombinedArchive","ExistingArchive","Postp_command","CheckSums",
+	"AbortIfErr","ForceErr","HsmGetPut","Copy2ptmp","ExtraYearsPP");
+foreach my $arg (sort @ArgList) {
+    if ($arg eq "SaveArgs"){
+	dbgmsg 1,"\$$arg=@$arg" if(@$arg);
+    } else {
+	dbgmsg 1,"\$$arg=$$arg" if($$arg);
+    }
+}
+exit if ($Debug > 3);
+
+###############################################################################
+#   argument decoding complete
+###############################################################################
+#   do required mkdir's, and immediately abort stage job if they fail
+###############################################################################
+
+#======================================================
+#   The statement "must_be_dir $Qsync;" should be the
+#   first after argument decoding.  It -MUST- precede
+#   any attempt to write to the experiment staging log.
+#======================================================
+    must_be_dir $Qsync;			# also creates $Qinfo and $HomeOut
+    must_be_dir "$outputDir/history";
+
+#   --- /vftmp/stage & /vftmp/stage/dualrun must be world writable directories
+    must_be_wdir "/vftmp/stage";
+#?# if ($outputDirSave =~ m#^/archive/dualrun/$USER#) {
+	must_be_wdir "/vftmp/stage/dualrun";
+#?# }
+
+###############################################################################
+#   make initial log entries
+###############################################################################
+#   --- make global log entry
+    glog();
+#   --- write version line to user log
+    m2log "$RealCmd, Version = $Version";
+
+###############################################################################
+#   Is this unitary execution mode, queuing mode, or saving mode?
+#
+#   The script has three "modes"
+#   - Unitary mode, a debugging feature, converts staging to synchronous
+#     serial execution, more or less as before staging was written
+#   - Queuing mode is called by user jobs to submit a staging job to SGE
+#   - Saving mode is called only by staging jobs, to do the actual staging
+###############################################################################
+    if ($PPonly) {
+	pp_only();
+	exit;
+    } elsif ($Repair && $Queuing) {
+	repair_job_queue();
+	exit;
+    } elsif ($Repair) {
+	mv_hist2fix();
+	$RepairDir = "Repair_".`date +%y%m%d_%H%M%S`; chomp $RepairDir;
+	x "mkdir $RepairDir";
+	msg2le 1,"chdir $RepairDir";
+	chdir "$RepairDir";
+	uncpio_hist();
+    } elsif ($Queuing) {
+#	in case later staging jobs get way ahead, save any post-processing
+#	command to a file before returning control to the production job
+	pp_cmd_save() if ("$Postp_command");
+	mv_files();
+	print_new_combine_list();
+	links_rm();
+	link_all_to();		# link files from $FTMPDIR to /vftmp save dir
+	x "rm -f $begindate*";	# done with the originals
+	stage_job_queue();
+	exit;			# <<<=== savehist in queuing mode exits here
+    } elsif ($Unitary) {
+ 	my @flagfiles = <$DoneFlag*>;
+	if (! $flagfiles[0]) {
+	    pp_cmd_save() if ("$Postp_command");
+	    mv_files();
+	    print_new_combine_list();
+	    links_rm();
+	    link_all_to();
+	    x "rm -f $begindate*";
+	}
+	link_all_from();
+    } elsif ($Saving) {
+	link_all_from();	# link files from /vftmp save dir to $FTMPDIR
+    } else {
+	msg2le 1,"$0: internal error: unrecognized mode -- abort";
+	exit 2;
+    }
+
+# Saving and Unitary modes continue
+# Queuing mode exits above
+
+###############################################################################
+# the following is the "saving task" done by the stage_job
+###############################################################################
+#   execute waiting post-processing -- if nothing is ready, this is a no-op
+    pp_execute_next();
+
+#   --- mppnccombine per-cpu history files (online) in parallel in background
+    if (-e "$DoneFlag:combine_hist") {
+	msg2le 3,"combine_hist already done -- deleting per-cpu files";
+    } else {
+	msg2le 3,"executing combine_hist";
+    }
+#   combine_hist done flag controls whether mpppnccombine is executed inside
+#   combine_hist, but in any case the per-cpu files are deleted in $FTMPDIR
+    combine_hist();
+    `touch "$DoneFlag:combine_hist"`;
+
+#   --- cpio netcdf and data files to archive and copy them to /ptmp
+    if (-e "$DoneFlag:cpio_and_copy") {
+	msg2le 3,"cpio_and_copy already complete -- skipping";
+    } else {
+	msg2le 3,"executing cpio_and_copy";
+	cpio_and_copy();
+	`touch "$DoneFlag:cpio_and_copy"`;
+    }
+
+#   --- is this the repair option?
+    if ($Repair) {
+	msg2le 1,"chdir $FTMPDIR";
+	chdir "$FTMPDIR";
+	x "rm -rf $RepairDir";
+	if ($Postp_command) {
+	    `chmod +x $PPCfile`;		# mark PP "ready to go"
+	    pp_execute($Postp_command,$PPCfile) if ($UnSyncPP);
+	}
+	pp_execute_next();
+	x "rm $RepairJob" if (! $Unitary);	# unlink the staging script
+	exit;
+    }
+
+#   --- check whether a repair is needed
+    if ("$Postp_command") {
+	my $DoRepairCheck = 1;
+	my $RepairNeeded = repair_if_needed();
+	if (! $RepairNeeded) {
+	    `chmod +x $PPCfile`;		# mark PP "ready to go"
+    	    pp_execute($Postp_command,$PPCfile) if ($UnSyncPP);
+	}
+    }
+#   --- submit post-processing command if it was supplied
+    pp_execute_next();
+
+#   --- clean up
+    if (! $Unitary and ! $Keep) {
+	x "rm $JobFile";	# unlink the staging script
+	links_rm();		# remove links in /vftmp/stage
+	stage_job_rel;		# release the next stage job (no-op if $NoQsub)
+    } elsif ($Unitary and ! $Keep) {
+	links_rm();		# remove links in /vftmp/stage
+    }
