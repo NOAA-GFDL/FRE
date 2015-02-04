@@ -1,7 +1,7 @@
 #!/bin/csh -fx
 #FRE scheduler-options
 # 
-# $Id: runscript.template.main,v 1.1.2.14.2.4 2013/03/20 14:40:55 afy Exp $
+# $Id: runscript.template.main,v 1.1.2.21.2.4 2013/03/20 14:36:00 afy Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: Runscript Template - NESCC Version
 # ------------------------------------------------------------------------------
@@ -47,9 +47,29 @@
 # afy    Ver  12.00  Add 'freNCToolsModuleName' argument            July 12
 # afy    Ver  13.00  Add settable variables 'max_npes/max_nthreads' August 12
 # afy    Ver  14.00  Don't use any memory options in submissions    September 12
-# afy -------------- Branch 1.1.2.14.2 ---------------------------- March 13
+# afy    Ver  15.00  Add settable constant 'projectInit'            November 12
+# afy    Ver  15.01  Add settable constants 'outputStager*Retries'  November 12
+# afy    Ver  15.02  Rationalize the 'queue_commands' handling      November 12
+# afy    Ver  15.03  Refactor the work directory cleaning           November 12
+# afy    Ver  15.04  Add 'action*|*Retry' arguments into argfiles   November 12
+# sdu    Ver  15.05  Init only 'continueFlag' in 'queue_commands'   November 12
+# sdu    Ver  15.06  Use 'project'/'queue' from #PBS as defaults    November 12
+# afy    Ver  15.07  Use 'projectInit' in all the service jobs      November 12
+# afy    Ver  15.08  Move 'submitOptions(Project|Queue)' down       November 12
+# afy    Ver  16.00  Recognize the 'hsm' module                     November 12
+# afy    Ver  16.01  Add settable flag 'flagVerbosity'              November 12
+# afy    Ver  16.02  Add data transfer checkpointing                November 12
+# afy    Ver  17.00  Add 'gcp' locating/passing to the outstager    December 12
+# afy    Ver  17.01  Modify submission stdout umask (026 => 022)    December 12
+# afy    Ver  18.00  Add 'actionRetryOn' argument (history only)    December 12
+# afy    Ver  19.00  Add 'raw' into uncombined history name         January 13
+# afy    Ver  20.00  Add 'ww3' into restart/history output          February 13
+# afy    Ver  21.00  Modify '*GrepAscii' (add 'log')                February 13
+# afy    Ver  21.01  Modify '*GrepRestartNextMove' (add 'ww3$')     February 13
+# afy -------------- Branch 1.1.2.21.2 ---------------------------- March 13
 # afy    Ver   1.00  Use new utility 'memory_limit.csh'             March 13
 # afy    Ver   2.00  Don't estimate memory to combine               March 13
+# afy    Ver   2.01  Check for 'hsm' module, exit if not available  March 13
 # afy    Ver   3.00  Save 'saveJobIds/argFiles' between segments    March 13
 # afy    Ver   4.00  Always save 'saveJobIds/argFiles'              March 13
 # ------------------------------------------------------------------------------
@@ -66,7 +86,7 @@
   set -r runtimeBeg = `date "+%s"`
 
   if ( $echoOn ) unset echo
-  echo '<NOTE> : ====== FRE RUNSCRIPT $Id: runscript.template.main,v 1.1.2.14.2.4 2013/03/20 14:40:55 afy Exp $ ======'
+  echo '<NOTE> : ====== FRE RUNSCRIPT $Id: runscript.template.main,v 1.1.2.21.2.4 2013/03/20 14:36:00 afy Exp $ ======'
   echo "<NOTE> : Starting at $HOST on `date`"
   if ( $echoOn ) set echo
 
@@ -87,15 +107,12 @@
   if ( $?PBS_ENVIRONMENT ) then
     if ( $PBS_ENVIRONMENT == 'PBS_BATCH' ) then
       set -r FRE_JOBID = $PBS_JOBNAME:t.o`echo $PBS_JOBID | sed -r 's/^([0-9]+).*$/\1/'`
-      set -r queueInit = $PBS_QUEUE
       set -r batch 
     else
       set -r FRE_JOBID = $0:t.o`date +%s`
-      set -r queueInit = $PBS_QUEUE
     endif 
   else
     set -r FRE_JOBID = $0:t.o`date +%s`
-    set -r queueInit = 'batch'
   endif
 
   # ---------------- print starting banner
@@ -108,6 +125,8 @@
 
   #FRE const(freCommandsModuleFilesDir)
   #FRE const(freCommandsVersion)
+
+  #FRE const(projectInit)
 
   #FRE const(platform)
   #FRE const(target)
@@ -145,12 +164,14 @@
   #FRE const(outputStagerSaveRuntimeAscii)
   #FRE const(outputStagerSaveRuntimeRestart)
   #FRE const(outputStagerSaveRuntimeHistory)
+  #FRE const(outputStagerSaveRetries)
 
   #FRE const(outputStagerXferQueue)
   #FRE const(outputStagerXferCoreSpec)
   #FRE const(outputStagerXferRuntimeAscii)
   #FRE const(outputStagerXferRuntimeRestart)
   #FRE const(outputStagerXferRuntimeHistory)
+  #FRE const(outputStagerXferRetries)
 
   #FRE const(workDirCleanerQueue)
   #FRE const(workDirCleanerCoreSpec)
@@ -175,6 +196,7 @@
   #FRE flag(flagOutputPostProcess)
   #FRE flag(flagOutputXfer)
   #FRE flag(flagOutputCheck)
+  #FRE flag(flagVerbosity)
 
   #FRE var(npes)
   #FRE var(atmos_npes)
@@ -187,7 +209,6 @@
   #FRE var(outputDir)
   #FRE var(gridSpec)
   #FRE var(initCond)
-  #FRE var(project)
 
   #FRE alias(runCommand)
 
@@ -207,14 +228,14 @@
       if ( $echoOn ) set echo
     else
       if ( $echoOn ) unset echo
-      echo "*ERROR*: The fre-commands modulefile '$freCommandsModuleFile' doesn't exist or not readable"
+      echo "*ERROR*: The 'fre-commands' modulefile '$freCommandsModuleFile' doesn't exist or not readable"
       if ( $echoOn ) set echo
       exit 1
     endif
     unset freCommandsModuleFile
   else
     if ( $echoOn ) unset echo
-    echo "*ERROR*: The fre-commands modulefiles directory '$freCommandsModuleFilesDir' doesn't exist or not readable"
+    echo "*ERROR*: The 'fre-commands' modulefiles directory '$freCommandsModuleFilesDir' doesn't exist or not readable"
     if ( $echoOn ) set echo
     exit 1
   endif
@@ -235,6 +256,10 @@
 
   set -r tmpOutputDir = $workDir/output.stager
 
+  # ---------------- checkpointing directory
+
+  set -r checkPointDir = /contrib/gfdl/tools
+
   # ---------------- file to save shell plus environment variables
 
   set -r envFile = /tmp/shell.variables.$FRE_JOBID
@@ -242,12 +267,11 @@
 
   # ---------------- selection patterns for grep
 
-  set -r patternGrepTail = '\.[0-9]{4}$'
-  set -r patternGrepAscii = '\<out\>|\<results\>|\<timestats\>|\<velocity_truncations\>'
-  set -r patternGrepRestart = '\<res\>|\<nc\>|\.input.\tgz$'
+  set -r patternGrepAscii = '\<out\>|\<results\>|\<log\>|\<timestats\>|\<velocity_truncations\>'
+  set -r patternGrepRestart = '\<res\>|\<nc\>|\.input.\tgz$|\.ww3$'
   set -r patternGrepRestartNextDrop = '\<res\>'
-  set -r patternGrepRestartNextMove = '\<res\>|\<nc\>'
-  set -r patternGrepHistory = '\<nc\>'
+  set -r patternGrepRestartNextMove = '\<res\>|\<nc\>|\.ww3$'
+  set -r patternGrepHistory = '\<nc\>|\.ww3$'
   set -r patternGrepRegion = '^rregion'
 
   # ---------------- search and replacement patterns for sed
@@ -262,20 +286,15 @@
 
   # ---------------- batch scheduler output staging options
 
-  set -r submitOptionsCommon = ( -m $mailMode -j oe -r y -W umask=026 -S /bin/tcsh )
-  set -r submitOptionsOutputStagerSave = ( $submitOptionsCommon -d $stdoutDir -o $stdoutDir/ -q $outputStagerSaveQueue )
-  set -r submitOptionsOutputStagerXfer = ( $submitOptionsCommon -d $stdoutDir -o $stdoutDir/ -q $outputStagerXferQueue )
-  set -r submitOptionsWorkDirCleaner = ( $submitOptionsCommon -d $stdoutDir -o $stdoutDir/ -q $workDirCleanerQueue )
+  set -r submitOptionsCommon = ( -m $mailMode -j oe -r y -W umask=022 -S /bin/tcsh )
+  set -r submitOptionsOutputStagerSave = ( $submitOptionsCommon -d $stdoutDir -o $stdoutDir/ -q $outputStagerSaveQueue -A $projectInit )
+  set -r submitOptionsOutputStagerXfer = ( $submitOptionsCommon -d $stdoutDir -o $stdoutDir/ -q $outputStagerXferQueue -A $projectInit )
+  set -r submitOptionsWorkDirCleaner = ( $submitOptionsCommon -d $stdoutDir -o $stdoutDir/ -q $workDirCleanerQueue -A $projectInit )
   set -r submitOptionsPPStarter = ( $submitOptionsCommon -q $ppStarterQueue )
 
   # ---------------- output staging type as a string
 
   set -r outputStagingType = `set -r | grep '^flagOutputStagingType' | sed 's/flagOutputStagingType//'`
-
-  # ---------------- FRE data copying between work directory and archive directory via ptmp directory
-
-  alias hsmget `which hsmget` --quiet --time --workroot=$hsmDir --ptmproot=$ptmpDir --archroot=//
-  alias hsmput `which hsmput` --quiet --time --workroot=$tmpOutputDir --ptmproot=$ptmpDir --archroot=//
 
   # ---------------- FRE runscript site-independent helper scripts
 
@@ -325,14 +344,14 @@
       if ( $echoOn ) set echo
     else
       if ( $echoOn ) unset echo
-      echo "*ERROR*: The fre-commands modulefile '$freCommandsModuleFile' doesn't exist or not readable"
+      echo "*ERROR*: The 'fre-commands' modulefile '$freCommandsModuleFile' doesn't exist or not readable"
       if ( $echoOn ) set echo
       exit 1
     endif
     unset freCommandsModuleFile
   else
     if ( $echoOn ) unset echo
-    echo "*ERROR*: The fre-commands modulefiles directory '$freCommandsModuleFilesDir' doesn't exist or not readable"
+    echo "*ERROR*: The 'fre-commands' modulefiles directory '$freCommandsModuleFilesDir' doesn't exist or not readable"
     if ( $echoOn ) set echo
     exit 1
   endif
@@ -356,6 +375,38 @@
   endif
 
   unset freNCToolsInfo
+
+  # ---------------- determine the HSM module info, exit if no HSM available
+
+  set hsmInfo = ( `findModuleInfo 'hsm'` )
+
+  if ( $status == 0 ) then
+    set -r hsmModuleFilesDir = $hsmInfo[1]
+    set -r hsmVersion = $hsmInfo[3]
+    if ( $echoOn ) unset echo
+    echo "<NOTE> : Using the 'hsm' modulefiles directory '$hsmModuleFilesDir' and version '$hsmVersion'..."
+    if ( $echoOn ) set echo
+  else
+    if ( $echoOn ) unset echo
+    echo "*ERROR*: The script '$scriptName' must load an 'hsm' module"
+    if ( $echoOn ) set echo
+    exit 1
+  endif
+
+  unset hsmInfo
+
+  # ---------------- setup the HSM
+
+  alias hsmget `which hsmget` --time --workroot=$hsmDir --ptmproot=$ptmpDir --archroot=//
+  alias hsmput `which hsmput` --time --workroot=$tmpOutputDir --ptmproot=$ptmpDir --archroot=//
+
+  if ( $?flagVerbosityOn ) then
+    alias hsmget `alias hsmget` --verbose
+    alias hsmput `alias hsmput` --verbose
+  else
+    alias hsmget `alias hsmget` --quiet
+    alias hsmput `alias hsmput` --quiet
+  endif
 
   # ---------------- some global configuration
 
@@ -384,6 +435,25 @@
     if ( $echoOn ) set echo
     exit 1
   endif
+
+  # ---------------- determine the gcp info, exit if no gcp available
+
+  set gcpInfo = ( `findModuleInfo 'gcp'` )
+
+  if ( $status == 0 ) then
+    set -r xferToolModuleFilesDir = $gcpInfo[1]
+    set -r xferToolVersion = $gcpInfo[3]
+    if ( $echoOn ) unset echo
+    echo "<NOTE> : Using the 'gcp' modulefiles directory '$xferToolModuleFilesDir' and version '$xferToolVersion'..."
+    if ( $echoOn ) set echo
+  else
+    if ( $echoOn ) unset echo
+    echo "*ERROR*: The script '$scriptName' must load a 'gcp' module"
+    if ( $echoOn ) set echo
+    exit 1
+  endif
+
+  unset gcpInfo
 
   # ---------------- determine the list of xml files, exit if not all of them available
 
@@ -419,8 +489,10 @@
 ################################################################################
 
   set continueFlag = 1
-  set queue = $queueInit
- 
+
+  set submitOptionsProject = ( )
+  set submitOptionsQueue = ( )
+
   set combineList = ( )
   set saveJobIds = ( )
   set argFiles = ( )
@@ -472,6 +544,20 @@
         if ( $echoOn ) set echo
 	exit 1
       endif
+    else
+      touch $queue_file
+      if ( $status == 0 ) then
+	if ( $echoOn ) unset echo
+	echo "<NOTE> : Writing queue information to the queue file '$queue_file' at `date +%s`"
+	if ( $echoOn ) set echo
+        echo "set continueFlag = $continueFlag" >> $queue_file
+        chmod 644 $queue_file
+      else
+	if ( $echoOn ) unset echo
+	echo "*ERROR*: The queue file '$queue_file' can't be saved"
+        if ( $echoOn ) set echo
+        exit 1
+      endif
     endif
 
     if ( ! $continueFlag ) then
@@ -481,14 +567,18 @@
       exit 0
     endif
 
-  endif
+    if ( $?project ) then
+      if ( "$project" != "" ) then
+	set submitOptionsProject = ( -A $project )
+      endif
+    endif
 
-  # ---------------- reassign the batch scheduler project option 
+    if ( $?queue ) then
+      if ( "$queue" != "" ) then
+	set submitOptionsQueue = ( -q $queue )
+      endif
+    endif
 
-  if ( "$project" != "" ) then
-    set submitOptionsProject = ( -A $project )
-  else
-    set submitOptionsProject = ( )
   endif
 
   # ---------------- absolute segment number
@@ -754,6 +844,26 @@
 	exit 0
       endif
 
+      if ( $?project ) then
+	if ( "$project" != "" ) then
+	  set submitOptionsProject = ( -A $project )
+	else
+	  set submitOptionsProject = ( )
+	endif
+      else
+	set submitOptionsProject = ( )
+      endif
+
+      if ( $?queue ) then
+	if ( "$queue" != "" ) then
+	  set submitOptionsQueue = ( -q $queue )
+	else
+	  set submitOptionsQueue = ( )
+	endif
+      else
+	set submitOptionsQueue = ( )
+      endif
+
     endif
 
     # ---------------- commands, copied from XML (experiment/input/csh[@type="always" or @type="postInit"])
@@ -944,31 +1054,62 @@
       set asciiJobName = $FRE_JOBID.output.stager.$begindate.A
       set asciiArgFile = $stateDir/$asciiJobName.args
 
-      set asciiSaveOptions = ( $submitOptionsProject $submitOptionsOutputStagerSave )
+      set asciiSaveOptions = ( $submitOptionsOutputStagerSave $submitOptionsProject )
       set asciiSaveOptions = ( $asciiSaveOptions -N ${asciiJobName}S )
       set asciiSaveOptions = ( $asciiSaveOptions -l walltime=$outputStagerSaveRuntimeAscii,$outputStagerSaveCoreSpec )
 
-      set asciiXferOptions = ( $submitOptionsProject $submitOptionsOutputStagerXfer )
+      set asciiXferOptions = ( $submitOptionsOutputStagerXfer $submitOptionsProject )
       set asciiXferOptions = ( $asciiXferOptions -N ${asciiJobName}T )
       set asciiXferOptions = ( $asciiXferOptions -l walltime=$outputStagerXferRuntimeAscii,$outputStagerXferCoreSpec )
+
+      if ( $actionXferOn ) then
+	if ( -e $checkPointDir/transfers.paused.all ) then
+          if ( $echoOn ) unset echo
+          echo "WARNING: The global 'transfers.paused.all' condition is on - ascii data transfer job will be on hold"
+          if ( $echoOn ) set echo
+          set asciiXferOptions = ( $asciiXferOptions -h )
+	else if ( -e $checkPointDir/transfers.paused.$USER ) then
+          if ( $echoOn ) unset echo
+          echo "WARNING: The global 'transfers.paused.$USER' condition is on - ascii data transfer job will be on hold"
+          if ( $echoOn ) set echo
+          set asciiXferOptions = ( $asciiXferOptions -h )
+	else if ( -e $HOME/.fre/transfers.paused.all ) then
+          if ( $echoOn ) unset echo
+          echo "WARNING: The user 'transfers.paused.all' condition is on - ascii data transfer job will be on hold"
+          if ( $echoOn ) set echo
+          set asciiXferOptions = ( $asciiXferOptions -h )
+	endif
+      endif
 
       echo "set expName				=   $name"			 > $asciiArgFile
       echo "set type				=   ascii"			>> $asciiArgFile
       echo "set stagingType			=   $outputStagingType"		>> $asciiArgFile
+      echo "set actionCombineOn			=   0"				>> $asciiArgFile
+      echo "set actionCheckOn			=   0"				>> $asciiArgFile
       echo "set actionSaveOn			=   $actionSaveOn"		>> $asciiArgFile
       echo "set actionXferOn			=   $actionXferOn"		>> $asciiArgFile
+      echo "set actionPPStartOn			=   0"				>> $asciiArgFile
       echo "set paramArchiveOn			=   $paramArchiveOn"		>> $asciiArgFile
       echo "set paramPtmpOn			=   $paramPtmpOn"		>> $asciiArgFile
       echo "set paramCheckSumOn			=   $paramCheckSumOn"		>> $asciiArgFile
       echo "set paramCompressOn			=   $paramCompressOn"		>> $asciiArgFile
+      echo "set paramVerbosityOn		=   $?flagVerbosityOn"		>> $asciiArgFile
       echo "set workDir				=   $tmpOutputDir"		>> $asciiArgFile
       echo "set ptmpDir				=   $ptmpDir"			>> $asciiArgFile
       echo "set archDir				=   $asciiArchDir"		>> $asciiArgFile
       echo "set outputDirRemote			=   $asciiOutputDirRemote"	>> $asciiArgFile
       echo "set saveOptions			= ( $asciiSaveOptions )"	>> $asciiArgFile
       echo "set xferOptions			= ( $asciiXferOptions )"	>> $asciiArgFile
+      echo "set saveRetries			=   $outputStagerSaveRetries"	>> $asciiArgFile 
+      echo "set xferRetries			=   $outputStagerXferRetries"	>> $asciiArgFile 
+      echo "set saveRetry			=   0"				>> $asciiArgFile 
+      echo "set xferRetry			=   0"				>> $asciiArgFile 
       echo "set freCommandsModuleFilesDir       =   $freCommandsModuleFilesDir"	>> $asciiArgFile
       echo "set freCommandsVersion		=   $freCommandsVersion"	>> $asciiArgFile
+      echo "set hsmModuleFilesDir		=   $hsmModuleFilesDir"		>> $asciiArgFile
+      echo "set hsmVersion			=   $hsmVersion"		>> $asciiArgFile
+      echo "set xferToolModuleFilesDir		=   $xferToolModuleFilesDir"	>> $asciiArgFile
+      echo "set xferToolVersion			=   $xferToolVersion"		>> $asciiArgFile
       echo "set modulesHomeDir			=   $modulesHomeDir"		>> $asciiArgFile
 
       if ( $?flagOutputStagingTypeOnline ) then
@@ -1120,7 +1261,7 @@
 
 	if ( $currentSeg < $segmentsPerSimulation ) then
 
-	  if ( $irun < $segmentsPerJob ) then
+          if ( $irun < $segmentsPerJob ) then
 
             find $workDir/INPUT   -maxdepth 1 -type f | egrep "$patternGrepRestartNextDrop" | xargs --no-run-if-empty rm --force
             find $workDir/RESTART -maxdepth 1 -type f | egrep "$patternGrepRestartNextMove" | xargs --no-run-if-empty mv --force --target-directory ../INPUT
@@ -1192,13 +1333,32 @@
       set restartJobName = $FRE_JOBID.output.stager.$enddate.R
       set restartArgFile = $stateDir/$restartJobName.args
 
-      set restartSaveOptions = ( $submitOptionsProject $submitOptionsOutputStagerSave )
+      set restartSaveOptions = ( $submitOptionsOutputStagerSave $submitOptionsProject )
       set restartSaveOptions = ( $restartSaveOptions -N ${restartJobName}S )
       set restartSaveOptions = ( $restartSaveOptions -l walltime=$outputStagerSaveRuntimeRestart,$outputStagerSaveCoreSpec )
 
-      set restartXferOptions = ( $submitOptionsProject $submitOptionsOutputStagerXfer )
+      set restartXferOptions = ( $submitOptionsOutputStagerXfer $submitOptionsProject )
       set restartXferOptions = ( $restartXferOptions -N ${restartJobName}T )
       set restartXferOptions = ( $restartXferOptions -l walltime=$outputStagerXferRuntimeRestart,$outputStagerXferCoreSpec )
+
+      if ( $actionXferOn ) then
+	if ( -e $checkPointDir/transfers.paused.all ) then
+          if ( $echoOn ) unset echo
+          echo "WARNING: The global 'transfers.paused.all' condition is on - restart data transfer job will be on hold"
+          if ( $echoOn ) set echo
+          set restartXferOptions = ( $restartXferOptions -h )
+	else if ( -e $checkPointDir/transfers.paused.$USER ) then
+          if ( $echoOn ) unset echo
+          echo "WARNING: The global 'transfers.paused.$USER' condition is on - restart data transfer job will be on hold"
+          if ( $echoOn ) set echo
+          set restartXferOptions = ( $restartXferOptions -h )
+	else if ( -e $HOME/.fre/transfers.paused.all ) then
+          if ( $echoOn ) unset echo
+          echo "WARNING: The user 'transfers.paused.all' condition is on - restart data transfer job will be on hold"
+          if ( $echoOn ) set echo
+          set restartXferOptions = ( $restartXferOptions -h )
+	endif
+      endif
 
       echo "set expName				=   $name"			 > $restartArgFile 
       echo "set type				=   restart"			>> $restartArgFile 
@@ -1207,21 +1367,31 @@
       echo "set actionCheckOn			=   $actionCheckOn"		>> $restartArgFile
       echo "set actionSaveOn			=   $actionSaveOn"		>> $restartArgFile 
       echo "set actionXferOn			=   $actionXferOn"		>> $restartArgFile
+      echo "set actionPPStartOn			=   0"				>> $restartArgFile
       echo "set paramArchiveOn			=   $paramArchiveOn"		>> $restartArgFile
       echo "set paramPtmpOn			=   $paramPtmpOn"		>> $restartArgFile 
       echo "set paramCheckSumOn			=   $paramCheckSumOn"		>> $restartArgFile
       echo "set paramCompressOn			=   $paramCompressOn"		>> $restartArgFile
+      echo "set paramVerbosityOn		=   $?flagVerbosityOn"		>> $restartArgFile
       echo "set workDir				=   $tmpOutputDir"		>> $restartArgFile 
       echo "set ptmpDir				=   $ptmpDir"			>> $restartArgFile 
       echo "set archDir				=   $restartArchDir"		>> $restartArgFile 
       echo "set outputDirRemote			=   $restartOutputDirRemote"	>> $restartArgFile
       echo "set saveOptions			= ( $restartSaveOptions )"	>> $restartArgFile
       echo "set xferOptions			= ( $restartXferOptions )"	>> $restartArgFile
+      echo "set saveRetries			=   $outputStagerSaveRetries"	>> $restartArgFile 
+      echo "set xferRetries			=   $outputStagerXferRetries"	>> $restartArgFile 
+      echo "set saveRetry			=   0"				>> $restartArgFile 
+      echo "set xferRetry			=   0"				>> $restartArgFile 
       echo "set freCommandsModuleFilesDir       =   $freCommandsModuleFilesDir"	>> $restartArgFile
       echo "set freCommandsVersion		=   $freCommandsVersion"	>> $restartArgFile
       echo "set freNCToolsModuleFilesDir	=   $freNCToolsModuleFilesDir"	>> $restartArgFile
       echo "set freNCToolsModuleName		=   $freNCToolsModuleName"	>> $restartArgFile
       echo "set freNCToolsVersion		=   $freNCToolsVersion"		>> $restartArgFile
+      echo "set hsmModuleFilesDir		=   $hsmModuleFilesDir"		>> $restartArgFile
+      echo "set hsmVersion			=   $hsmVersion"		>> $restartArgFile
+      echo "set xferToolModuleFilesDir		=   $xferToolModuleFilesDir"	>> $restartArgFile
+      echo "set xferToolVersion			=   $xferToolVersion"		>> $restartArgFile
       echo "set modulesHomeDir			=   $modulesHomeDir"		>> $restartArgFile
 
       if ( $?flagOutputStagingTypeOnline ) then
@@ -1361,7 +1531,12 @@
 
     if ( $#historyFiles > 0 ) then
 
-      set historySuffix = history/$begindate.nc
+      if ( $?flagOutputCombineHistoryOn ) then
+        set historySuffix = history/$begindate.nc
+      else
+        set historySuffix = history/$begindate.raw.nc
+      endif
+
       set historyArchDir = $outputDir/$historySuffix
       set historyWorkDir = $tmpOutputDir$historyArchDir
 
@@ -1406,6 +1581,7 @@
           set ppStarterOptions = ( )
 	endif
 
+        set actionRetryOn	= 1
         set paramArchiveOn	= $?flagOutputArchiveOn
         @   paramPtmpOn		= ! $?flagOutputArchiveOn
         set paramCheckSumOn	= $?flagCheckSumOn
@@ -1422,6 +1598,7 @@
         set actionSaveOn	= 1
         set actionXferOn	= 0
         set actionPPStartOn	= 0
+        set actionRetryOn	= 0
         set ppStarterOptions	= ( )
         set paramArchiveOn	= 1
         set paramPtmpOn		= 0
@@ -1433,13 +1610,32 @@
       set historyJobName = $FRE_JOBID.output.stager.$begindate.H
       set historyArgFile = $stateDir/$historyJobName.args
 
-      set historySaveOptions = ( $submitOptionsProject $submitOptionsOutputStagerSave )
+      set historySaveOptions = ( $submitOptionsOutputStagerSave $submitOptionsProject )
       set historySaveOptions = ( $historySaveOptions -N ${historyJobName}S )
       set historySaveOptions = ( $historySaveOptions -l walltime=$outputStagerSaveRuntimeHistory,$outputStagerSaveCoreSpec )
 
-      set historyXferOptions = ( $submitOptionsProject $submitOptionsOutputStagerXfer )
+      set historyXferOptions = ( $submitOptionsOutputStagerXfer $submitOptionsProject )
       set historyXferOptions = ( $historyXferOptions -N ${historyJobName}T )
       set historyXferOptions = ( $historyXferOptions -l walltime=$outputStagerXferRuntimeHistory,$outputStagerXferCoreSpec )
+
+      if ( $actionXferOn ) then
+	if ( -e $checkPointDir/transfers.paused.all ) then
+          if ( $echoOn ) unset echo
+          echo "WARNING: The global 'transfers.paused.all' condition is on - history data transfer job will be on hold"
+          if ( $echoOn ) set echo
+          set historyXferOptions = ( $historyXferOptions -h )
+	else if ( -e $checkPointDir/transfers.paused.$USER ) then
+          if ( $echoOn ) unset echo
+          echo "WARNING: The global 'transfers.paused.$USER' condition is on - history data transfer job will be on hold"
+          if ( $echoOn ) set echo
+          set historyXferOptions = ( $historyXferOptions -h )
+	else if ( -e $HOME/.fre/transfers.paused.all ) then
+          if ( $echoOn ) unset echo
+          echo "WARNING: The user 'transfers.paused.all' condition is on - history data transfer job will be on hold"
+          if ( $echoOn ) set echo
+          set historyXferOptions = ( $historyXferOptions -h )
+	endif
+      endif
 
       echo "set expName				=   $name"				 > $historyArgFile
       echo "set type				=   history"				>> $historyArgFile
@@ -1449,16 +1645,22 @@
       echo "set actionSaveOn			=   $actionSaveOn"			>> $historyArgFile
       echo "set actionXferOn			=   $actionXferOn"			>> $historyArgFile
       echo "set actionPPStartOn			=   $actionPPStartOn"			>> $historyArgFile
+      echo "set actionRetryOn			=   $actionRetryOn"			>> $historyArgFile
       echo "set paramArchiveOn			=   $paramArchiveOn"			>> $historyArgFile
       echo "set paramPtmpOn			=   $paramPtmpOn"			>> $historyArgFile
       echo "set paramCheckSumOn			=   $paramCheckSumOn"			>> $historyArgFile
       echo "set paramCompressOn			=   $paramCompressOn"			>> $historyArgFile
+      echo "set paramVerbosityOn		=   $?flagVerbosityOn"			>> $historyArgFile
       echo "set workDir				=   $tmpOutputDir"			>> $historyArgFile
       echo "set ptmpDir				=   $ptmpDir"				>> $historyArgFile
       echo "set archDir				=   $historyArchDir"			>> $historyArgFile
       echo "set outputDirRemote			=   $historyOutputDirRemote"		>> $historyArgFile
       echo "set saveOptions			= ( $historySaveOptions )"		>> $historyArgFile
       echo "set xferOptions			= ( $historyXferOptions )"		>> $historyArgFile
+      echo "set saveRetries			=   $outputStagerSaveRetries"		>> $historyArgFile 
+      echo "set xferRetries			=   $outputStagerXferRetries"		>> $historyArgFile 
+      echo "set saveRetry			=   0"					>> $historyArgFile 
+      echo "set xferRetry			=   0"					>> $historyArgFile 
       echo "set xmlFiles			= ( $xmlFiles )"			>> $historyArgFile
       echo "set xmlFilesRemote			= ( $xmlFilesRemote )"			>> $historyArgFile
       echo "set ppStarterOptions		= ( $ppStarterOptions )"		>> $historyArgFile
@@ -1470,6 +1672,10 @@
       echo "set freNCToolsModuleFilesDir	=   $freNCToolsModuleFilesDir"		>> $historyArgFile
       echo "set freNCToolsModuleName		=   $freNCToolsModuleName"		>> $historyArgFile
       echo "set freNCToolsVersion		=   $freNCToolsVersion"			>> $historyArgFile
+      echo "set hsmModuleFilesDir		=   $hsmModuleFilesDir"			>> $historyArgFile
+      echo "set hsmVersion			=   $hsmVersion"			>> $historyArgFile
+      echo "set xferToolModuleFilesDir		=   $xferToolModuleFilesDir"		>> $historyArgFile
+      echo "set xferToolVersion			=   $xferToolVersion"			>> $historyArgFile
       echo "set modulesHomeDir			=   $modulesHomeDir"			>> $historyArgFile
 
       if ( $?flagOutputStagingTypeOnline ) then
@@ -1635,7 +1841,7 @@
 	echo "<NOTE> : Writing reload information to the reload file '$reload_file' at `date +%s`"
 	if ( $echoOn ) set echo
 	echo "@ ireload       =   $ireload"			>> $reload_file
-	echo "@ irun          =   $irunNext"			>> $reload_file
+	echo "@ irun          =   $irunNext"	 		>> $reload_file
 	echo "set initCond    =   $restartArchDir.$archExt"	>> $reload_file
 	echo "set combineList = ( $combineList )"		>> $reload_file
 	echo "set saveJobIds  = ( $saveJobIds )"		>> $reload_file
@@ -1695,9 +1901,29 @@
 	exit 0
       endif
 
+      if ( $?project ) then
+	if ( "$project" != "" ) then
+	  set submitOptionsProject = ( -A $project )
+	else
+	  set submitOptionsProject = ( )
+	endif
+      else
+	set submitOptionsProject = ( )
+      endif
+
+      if ( $?queue ) then
+	if ( "$queue" != "" ) then
+	  set submitOptionsQueue = ( -q $queue )
+	else
+	  set submitOptionsQueue = ( )
+	endif
+      else
+	set submitOptionsQueue = ( )
+      endif
+
       if ( -f $scriptName ) then
         if ( -r $scriptName ) then
-          set nextOptions = ( $submitOptionsProject -q $queue )
+          set nextOptions = ( $submitOptionsProject $submitOptionsQueue )
           set result = `submit $nextOptions $scriptName`
 	  if ( $status == 0 ) then
             if ( $echoOn ) unset echo
@@ -1720,24 +1946,6 @@
 	if ( $echoOn ) unset echo
 	echo "WARNING: The script '$scriptName' does not exist (run $ireload, loop $irun) - it can't be resubmitted"
         if ( $echoOn ) set echo
-      endif
-
-      if ( -f $queue_file ) mv -f $queue_file ${queue_file}_prev
-      touch $queue_file
-
-      if ( $status == 0 ) then
-	if ( $echoOn ) unset echo
-	echo "<NOTE> : Writing queue information to the queue file '$queue_file' at `date +%s`"
-	if ( $echoOn ) set echo
-        echo "set continueFlag = $continueFlag" >> $queue_file
-        echo "set project      = $project"      >> $queue_file
-        echo "set queue        = $queue"        >> $queue_file
-        chmod 644 $queue_file
-      else
-	if ( $echoOn ) unset echo
-	echo "*ERROR*: The queue file '$queue_file' can't be saved"
-        if ( $echoOn ) set echo
-        exit 1
       endif
 
     endif
@@ -1764,32 +1972,31 @@
 
     else if ( $?flagOutputStagingTypeStaged || $?flagOutputStagingTypeChained ) then
 
-      set workDirCleanerOptions = ( $submitOptionsProject $submitOptionsWorkDirCleaner )
-      set workDirCleanerOptions = ( $workDirCleanerOptions -N $FRE_JOBID.workDir.cleaner )
-      set workDirCleanerOptions = ( $workDirCleanerOptions -l walltime=$workDirCleanerRuntime -l $workDirCleanerCoreSpec )
-      set workDirCleanerOptions = ( $workDirCleanerOptions -v dir=$workDir )
+      @ inx = 1
+      set saveJobList = ( )
 
-      if ( $#argFiles > 0 ) then
-        @ inx = 1
-        set saveJobList = ( )
-        while ( $inx <= $#argFiles )
-          set argFile = $stateDir/$argFiles[$inx]
-          if ( -f $argFile ) then
-            if ( `grep --count --fixed-strings 'set actionSaveOk = 1' $argFile` == 0 ) then
-              set saveJobList = ( $saveJobList $saveJobIds[$inx] )
-            endif
+      while ( $inx <= $#argFiles )
+        set argFile = $stateDir/$argFiles[$inx]
+        if ( -f $argFile ) then
+          if ( `grep --count --fixed-strings 'set actionSaveOk = 1' $argFile` == 0 ) then
+            set saveJobList = ( $saveJobList $saveJobIds[$inx] )
           endif
-          unset argFile
-          @ inx++
-        end
-	set saveJobListAsString = `echo $saveJobList | tr ' ' ':'`
-	set workDirCleanerOptions = ( $workDirCleanerOptions -W depend=afterok:$saveJobListAsString )
+        endif
+        unset argFile
+        @ inx++
+      end
+
+      set workDirCleanerOptions = ( $submitOptionsWorkDirCleaner $submitOptionsProject )
+      set workDirCleanerOptions = ( $workDirCleanerOptions -N $FRE_JOBID.workDir.cleaner )
+      set workDirCleanerOptions = ( $workDirCleanerOptions -l walltime=$workDirCleanerRuntime,$workDirCleanerCoreSpec )
+
+      if ( $#saveJobList > 0 ) then
+        set saveJobListAsString = `echo $saveJobList | tr ' ' ':'`
+        set workDirCleanerOptions = ( $workDirCleanerOptions -W depend=afterok:$saveJobListAsString )
         unset saveJobListAsString
-	unset saveJobList
-        unset inx
       endif
 
-      set workDirCleanerResult = `submit $workDirCleanerOptions $workDirCleaner`
+      set workDirCleanerResult = `submit $workDirCleanerOptions -v dir=$workDir $workDirCleaner`
 
       if ( $status == 0 ) then
 	if ( $echoOn ) unset echo
@@ -1803,6 +2010,8 @@
 
       unset workDirCleanerResult
       unset workDirCleanerOptions
+      unset saveJobList
+      unset inx
 
     endif
 

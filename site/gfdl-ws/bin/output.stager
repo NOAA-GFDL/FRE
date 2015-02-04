@@ -1,6 +1,6 @@
 #!/bin/csh -fx
 # 
-# $Id: output.stager,v 1.1.2.5 2012/09/27 23:35:09 afy Exp $
+# $Id: output.stager,v 1.1.2.10 2013/02/06 16:13:28 afy Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: Output Stager - GFDL Workstations Version
 # ------------------------------------------------------------------------------
@@ -9,8 +9,18 @@
 # afy    Ver   3.00  Add 'freNCToolsModuleName' argument            July 12
 # afy    Ver   4.00  Modify 'patternSedRegression'                  July 12
 # afy    Ver   5.00  Modify saving (hsmput with split makefile)     September 12
+# afy    Ver   6.00  Add 'paramOverrideOn' argument                 November 12
+# afy    Ver   6.01  Add 'hsmModuleFilesDir/hsmVersion' arguments   November 12
+# afy    Ver   6.02  Conditionally load 'hsm' module                November 12
+# afy    Ver   6.03  Add 'paramVerbosityOn' argument                November 12
+# afy    Ver   6.04  Remove all modules loading                     November 12
+# afy    Ver   7.00  Add 'exitStatus' variable                      December 12
+# afy    Ver   7.01  Don't exit in the middle of the script         December 12
+# afy    Ver   8.00  Modify checking patterns (uncombined history)  January 13
+# afy    Ver   9.00  Combine files with 4+ digits extension         February 13
+# afy    Ver  10.00  Combine compressed history files               February 13
 # ------------------------------------------------------------------------------
-# Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2000-2012
+# Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2000-2013
 # Designed and written by V. Balaji, Amy Langenhorst and Aleksey Yakovlev
 #
 
@@ -18,15 +28,17 @@
   set -r runtimeBeg = `date "+%s"`
 
   if ( $echoOn ) unset echo
-  echo '<NOTE> : ====== FRE OUTPUT STAGER $Id: output.stager,v 1.1.2.5 2012/09/27 23:35:09 afy Exp $ ======'
+  echo '<NOTE> : ====== FRE OUTPUT STAGER $Id: output.stager,v 1.1.2.10 2013/02/06 16:13:28 afy Exp $ ======'
   echo "<NOTE> : Starting at $HOST on `date`"
   if ( $echoOn ) set echo
 
   unalias *
 
 ################################################################################
-#------------------------- arguments initialization ----------------------------
+#---------------- exit status and arguments initialization ---------------------
 ################################################################################
+
+  set exitStatus = 0
 
   set expName = ""
   set type = ""
@@ -43,21 +55,14 @@
   set paramPtmpOn = 0
   set paramCheckSumOn = 0
   set paramCompressOn = 0
+  set paramOverrideOn = 0
+  set paramVerbosityOn = 0
 
   set combineMemory = ""
 
   set workDir = ""
   set ptmpDir = ""
   set archDir = ""
-
-  set freCommandsModuleFilesDir = ""
-  set freCommandsVersion = ""
-
-  set freNCToolsModuleFilesDir = ""
-  set freNCToolsModuleName = 'fre-nctools'
-  set freNCToolsVersion = ""
-
-  set modulesHomeDir = ""
 
 ################################################################################
 #-------------------- argument file checkup and sourcing -----------------------
@@ -83,14 +88,28 @@
     exit 1
   endif
 
-  if ( -f "$argFile" && -r "$argFile" ) then
-    if ( $echoOn ) unset echo
-    echo "<NOTE> : Using the argFile '$argFile'..."
-    if ( $echoOn ) set echo
-    source $argFile
+  if ( -e "$argFile" ) then
+    if ( -f "$argFile" ) then
+      if ( -r "$argFile" && -w "$argFile" ) then
+	if ( $echoOn ) unset echo
+	echo "<NOTE> : Using the argFile '$argFile'..."
+	if ( $echoOn ) set echo
+	source $argFile
+      else
+	if ( $echoOn ) unset echo
+	echo "*ERROR*: The argFile '$argFile' must be readable and writable"
+	if ( $echoOn ) set echo
+	exit 1
+      endif
+    else
+      if ( $echoOn ) unset echo
+      echo "*ERROR*: The pathname '$argFile' exists, but it's not a file"
+      if ( $echoOn ) set echo
+      exit 1
+    endif
   else
     if ( $echoOn ) unset echo
-    echo "*ERROR*: The argFile '$argFile' doesn't exist or not readable"
+    echo "*ERROR*: The pathname '$argFile' doesn't exist"
     if ( $echoOn ) set echo
     exit 1
   endif
@@ -119,7 +138,8 @@
     if ( $echoOn ) unset echo
     echo "*ERROR*: The argument 'type' value must be one of 'ascii', 'history' or 'restart'"
     if ( $echoOn ) set echo
-    exit 1
+    set exitStatus = 2
+    goto END
   endif
 
   if ( $actionCombineOn == 0 || $actionCombineOn == 1 ) then
@@ -131,7 +151,8 @@
     if ( $echoOn ) unset echo
     echo "*ERROR*: The argument 'actionCombineOn' value must be '0' or '1'"
     if ( $echoOn ) set echo
-    exit 1
+    set exitStatus = 2
+    goto END
   endif
 
   if ( $actionCheckOn == 0 || $actionCheckOn == 1 ) then
@@ -143,7 +164,8 @@
     if ( $echoOn ) unset echo
     echo "*ERROR*: The argument 'actionCheckOn' value must be '0' or '1'"
     if ( $echoOn ) set echo
-    exit 1
+    set exitStatus = 2
+    goto END
   endif
 
   if ( $actionSaveOn == 0 || $actionSaveOn == 1 ) then
@@ -155,7 +177,8 @@
     if ( $echoOn ) unset echo
     echo "*ERROR*: The argument 'actionSaveOn' value must be '0' or '1'"
     if ( $echoOn ) set echo
-    exit 1
+    set exitStatus = 2
+    goto END
   endif
 
   if ( $paramArchiveOn == 0 || $paramArchiveOn == 1 ) then
@@ -167,7 +190,8 @@
     if ( $echoOn ) unset echo
     echo "*ERROR*: The argument 'paramArchiveOn' value must be '0' or '1'"
     if ( $echoOn ) set echo
-    exit 1
+    set exitStatus = 2
+    goto END
   endif
 
   if ( $paramPtmpOn == 0 || $paramPtmpOn == 1 ) then
@@ -179,7 +203,8 @@
     if ( $echoOn ) unset echo
     echo "*ERROR*: The argument 'paramPtmpOn' value must be '0' or '1'"
     if ( $echoOn ) set echo
-    exit 1
+    set exitStatus = 2
+    goto END
   endif
 
   if ( $paramCheckSumOn == 0 || $paramCheckSumOn == 1 ) then
@@ -191,7 +216,8 @@
     if ( $echoOn ) unset echo
     echo "*ERROR*: The argument 'paramCheckSumOn' value must be '0' or '1'"
     if ( $echoOn ) set echo
-    exit 1
+    set exitStatus = 2
+    goto END
   endif
 
   if ( $paramCompressOn == 0 || $paramCompressOn == 1 ) then
@@ -203,19 +229,43 @@
     if ( $echoOn ) unset echo
     echo "*ERROR*: The argument 'paramCompressOn' value must be '0' or '1'"
     if ( $echoOn ) set echo
-    exit 1
+    set exitStatus = 2
+    goto END
+  endif
+
+  if ( $paramOverrideOn == 0 || $paramOverrideOn == 1 ) then
+    set -r paramOverrideOn = $paramOverrideOn
+    if ( $echoOn ) unset echo
+    echo "<NOTE> : paramOverrideOn = '$paramOverrideOn'"
+    if ( $echoOn ) set echo
+  else
+    if ( $echoOn ) unset echo
+    echo "*ERROR*: The argument 'paramOverrideOn' value must be '0' or '1'"
+    if ( $echoOn ) set echo
+    set exitStatus = 2
+    goto END
+  endif
+
+  if ( $paramVerbosityOn == 0 || $paramVerbosityOn == 1 ) then
+    set -r paramVerbosityOn = $paramVerbosityOn
+    if ( $echoOn ) unset echo
+    echo "<NOTE> : paramVerbosityOn = '$paramVerbosityOn'"
+    if ( $echoOn ) set echo
+  else
+    if ( $echoOn ) unset echo
+    echo "*ERROR*: The argument 'paramVerbosityOn' value must be '0' or '1'"
+    if ( $echoOn ) set echo
+    set exitStatus = 2
+    goto END
   endif
 
 ################################################################################
 #------------------------------- derived flags ---------------------------------
 ################################################################################
 
-  @ actionCombineToDo       = ( $actionCombineOn * ! $actionCombineOk )
-  @ actionCheckToDo         = ( $actionCheckOn * ! $actionCheckOk )
-  @ actionSaveToDo          = ( $actionSaveOn * ( $paramArchiveOn || $paramPtmpOn ) * ! $actionSaveOk )
-
-  @ freCommandsToLoad       = ( $actionCheckToDo || $actionSaveToDo )
-  @ freNCToolsToLoad        = ( $actionCombineToDo )
+  @ actionCombineToDo	= ( $actionCombineOn * ! $actionCombineOk )
+  @ actionCheckToDo	= ( $actionCheckOn * ! $actionCheckOk )
+  @ actionSaveToDo	= ( $actionSaveOn * ( $paramArchiveOn || $paramPtmpOn ) * ! $actionSaveOk )
 
 ################################################################################
 #---------------------- arguments checkup (second part) ------------------------
@@ -230,7 +280,8 @@
     if ( $echoOn ) unset echo
     echo "*ERROR*: The 'combineMemory' argument is not defined"
     if ( $echoOn ) set echo
-    exit 1
+    set exitStatus = 2
+    goto END
   else
     if ( $echoOn ) unset echo
     echo "WARNING: Not Using the 'combineMemory' argument"
@@ -270,167 +321,6 @@
     if ( $echoOn ) set echo
   endif
 
-  if ( "$freCommandsModuleFilesDir" != "" ) then
-    set -r freCommandsModuleFilesDir = $freCommandsModuleFilesDir
-    if ( $echoOn ) unset echo
-    echo "<NOTE> : freCommandsModuleFilesDir = '$freCommandsModuleFilesDir'"
-    if ( $echoOn ) set echo
-  else if ( $freCommandsToLoad ) then
-    if ( $echoOn ) unset echo
-    echo "*ERROR*: The 'freCommandsModuleFilesDir' argument is not defined"
-    if ( $echoOn ) set echo
-    exit 1
-  else
-    if ( $echoOn ) unset echo
-    echo "WARNING: Not using the 'freCommandsModuleFilesDir' argument"
-    if ( $echoOn ) set echo
-  endif
-
-  if ( "$freCommandsVersion" != "" ) then
-    set -r freCommandsVersion = $freCommandsVersion
-    if ( $echoOn ) unset echo
-    echo "<NOTE> : freCommandsVersion = '$freCommandsVersion'"
-    if ( $echoOn ) set echo
-  else if ( $freCommandsToLoad ) then
-    if ( $echoOn ) unset echo
-    echo "*ERROR*: The 'freCommandsVersion' argument is not defined"
-    if ( $echoOn ) set echo
-    exit 1
-  else
-    if ( $echoOn ) unset echo
-    echo "WARNING: Not using the 'freCommandsVersion' argument"
-    if ( $echoOn ) set echo
-  endif
-
-  if ( "$freNCToolsModuleFilesDir" != "" ) then
-    set -r freNCToolsModuleFilesDir = $freNCToolsModuleFilesDir
-    if ( $echoOn ) unset echo
-    echo "<NOTE> : freNCToolsModuleFilesDir = '$freNCToolsModuleFilesDir'"
-    if ( $echoOn ) set echo
-  else if ( $freNCToolsToLoad ) then
-    if ( $echoOn ) unset echo
-    echo "*ERROR*: The 'freNCToolsModuleFilesDir' argument is not defined"
-    if ( $echoOn ) set echo
-    exit 1
-  else
-    if ( $echoOn ) unset echo
-    echo "WARNING: Not using the 'freNCToolsModuleFilesDir' argument"
-    if ( $echoOn ) set echo
-  endif
-
-  if ( "$freNCToolsModuleName" != "" ) then
-    set -r freNCToolsModuleName = $freNCToolsModuleName
-    if ( $echoOn ) unset echo
-    echo "<NOTE> : freNCToolsModuleName = '$freNCToolsModuleName'"
-    if ( $echoOn ) set echo
-  else if ( $freNCToolsToLoad ) then
-    if ( $echoOn ) unset echo
-    echo "*ERROR*: The 'freNCToolsModuleName' argument is not defined"
-    if ( $echoOn ) set echo
-    exit 1
-  else
-    if ( $echoOn ) unset echo
-    echo "WARNING: Not using the 'freNCToolsModuleName' argument"
-    if ( $echoOn ) set echo
-  endif
-
-  if ( "$freNCToolsVersion" != "" ) then
-    set -r freNCToolsVersion = $freNCToolsVersion
-    if ( $echoOn ) unset echo
-    echo "<NOTE> : freNCToolsVersion = '$freNCToolsVersion'"
-    if ( $echoOn ) set echo
-  else if ( $freNCToolsToLoad ) then
-    if ( $echoOn ) unset echo
-    echo "*ERROR*: The 'freNCToolsVersion' argument is not defined"
-    if ( $echoOn ) set echo
-    exit 1
-  else
-    if ( $echoOn ) unset echo
-    echo "WARNING: Not using the 'freNCToolsVersion' argument"
-    if ( $echoOn ) set echo
-  endif
-
-  if ( "$modulesHomeDir" != "" ) then
-    set -r modulesHomeDir  = $modulesHomeDir
-    if ( $echoOn ) unset echo
-    echo "<NOTE> : modulesHomeDir = '$modulesHomeDir'"
-    if ( $echoOn ) set echo
-  else
-    if ( $echoOn ) unset echo
-    echo "WARNING: Not using the 'modulesHomeDir' argument"
-    if ( $echoOn ) set echo
-  endif
-
-################################################################################
-#-------------- environment modules initialization and loading -----------------
-################################################################################
-
-  if ( -f $modulesHomeDir/init/tcsh && -r $modulesHomeDir/init/tcsh ) then
-    if ( $echoOn ) unset echo
-    source $modulesHomeDir/init/tcsh
-    if ( $echoOn ) set echo
-  else if ( $?MODULESHOME ) then
-    if ( -f $MODULESHOME/init/tcsh && -r $MODULESHOME/init/tcsh ) then
-      if ( $echoOn ) unset echo
-      source $MODULESHOME/init/tcsh
-      if ( $echoOn ) set echo
-    else
-      if ( $echoOn ) unset echo
-      echo "*ERROR*: The 'MODULESHOME' variable isn't defined => can't initialize environment modules"
-      if ( $echoOn ) set echo
-      exit 1
-    endif
-  else
-    if ( $echoOn ) unset echo
-    echo "*ERROR*: Can't initialize environment modules"
-    if ( $echoOn ) set echo
-    exit 1
-  endif
-
-  if ( $freCommandsToLoad ) then
-    if ( -d $freCommandsModuleFilesDir && -r $freCommandsModuleFilesDir ) then
-      set freCommandsModuleFile = $freCommandsModuleFilesDir/fre-commands/$freCommandsVersion
-      if ( -f $freCommandsModuleFile && -r $freCommandsModuleFile ) then
-	module use $freCommandsModuleFilesDir
-        module unload fre-commands
-	module load fre-commands/$freCommandsVersion
-      else
-	if ( $echoOn ) unset echo
-	echo "*ERROR*: The fre-commands modulefile '$freCommandsModuleFile' doesn't exist or not readable"
-	if ( $echoOn ) set echo
-	exit 1
-      endif
-      unset freCommandsModuleFile
-    else
-      if ( $echoOn ) unset echo
-      echo "*ERROR*: The fre-commands modulefiles directory '$freCommandsModuleFilesDir' doesn't exist or not readable"
-      if ( $echoOn ) set echo
-      exit 1
-    endif
-  endif
-
-  if ( $freNCToolsToLoad ) then
-    if ( -d $freNCToolsModuleFilesDir && -r $freNCToolsModuleFilesDir ) then
-      set freNCToolsModuleFile = $freNCToolsModuleFilesDir/$freNCToolsModuleName/$freNCToolsVersion
-      if ( -f $freNCToolsModuleFile && -r $freNCToolsModuleFile ) then
-	module use $freNCToolsModuleFilesDir
-        module unload $freNCToolsModuleName
-	module load $freNCToolsModuleName/$freNCToolsVersion
-      else
-	if ( $echoOn ) unset echo
-	echo "*ERROR*: The modulefile '$freNCToolsModuleFile' doesn't exist or not readable"
-	if ( $echoOn ) set echo
-	exit 1
-      endif
-      unset freNCToolsModuleFile
-    else
-      if ( $echoOn ) unset echo
-      echo "*ERROR*: The modulefiles directory '$freNCToolsModuleFilesDir' doesn't exist or not readable"
-      if ( $echoOn ) set echo
-      exit 1
-    endif
-  endif
-
 ################################################################################
 #------------------------ global constants and aliases -------------------------
 ################################################################################
@@ -443,7 +333,7 @@
 
   if ( $actionCombineToDo ) then
 
-    set -r patternGrepTail = '\.[0-9]{4}$'
+    set -r patternGrepTail = '\.[0-9]{4,}$'
     set -r patternGrepRestart = '\<res\>|\<nc\>'
     set -r patternGrepHistory = '\<nc\>'
 
@@ -490,33 +380,9 @@
           set inputFiles = ( `ls -1 | egrep "^$file$patternGrepTail"` )
           if ( $#inputFiles > 1 ) then
             rm --force $file
-            if ( $type == 'restart' ) then
-	      slmnccompressed $inputFiles[1]
-	      if ( $status == 0 ) then
-        	( slmnccombine $inputFiles $file && ( echo $inputFiles | xargs rm --force ) || touch $file.$tagFail ) &
-              else
-                set inxBeg = `echo $inputFiles[1] | awk --field-separator . '{print $NF}'`
-                set inxEnd = `echo $inputFiles[$#inputFiles] | awk --field-separator . '{print $NF}'`
-        	if ( $?mppnccombineWithBuffering ) then
-                  @ memoryPerOneBuffer = `mppnccombine -x -n $inxBeg -e $inxEnd $file`
-                  if ( $status == 0 ) then
-                    @ buffersNmb = ( $combineMemory / ( $combinesPerJob * $memoryPerOneBuffer ) ) + 1
-                    if ( $buffersNmb > $buffersNmbMax ) @ buffersNmb = $buffersNmbMax 
-                    ( mppnccombine -k $buffersNmb -n $inxBeg -e $inxEnd $file && ( echo $inputFiles | xargs rm --force ) || touch $file.$tagFail ) &
-                    unset buffersNmb
-                  else
-                    ( mppnccombine -n $inxBeg -e $inxEnd $file && ( echo $inputFiles | xargs rm --force ) || touch $file.$tagFail ) &
-		    if ( $echoOn ) unset echo
-		    echo "WARNING: Unable to determine a mppnccombine buffer memory"
-		    if ( $echoOn ) set echo
-                  endif
-                  unset memoryPerOneBuffer
-        	else
-                  ( mppnccombine -n $inxBeg -e $inxEnd $file && ( echo $inputFiles | xargs rm --force ) || touch $file.$tagFail ) &
-        	endif
-                unset inxEnd
-                unset inxBeg
-              endif
+	    slmnccompressed $inputFiles[1]
+	    if ( $status == 0 ) then
+              ( slmnccombine $inputFiles $file && ( echo $inputFiles | xargs rm --force ) || touch $file.$tagFail ) &
             else
               set inxBeg = `echo $inputFiles[1] | awk --field-separator . '{print $NF}'`
               set inxEnd = `echo $inputFiles[$#inputFiles] | awk --field-separator . '{print $NF}'`
@@ -560,14 +426,17 @@
       set filesNotOK = ( `ls -1 | egrep "$patternGrepFail"` )
 
       if ( $#filesNotOK > 0 ) then
-	if ( $echoOn ) unset echo
 	foreach file ( $filesNotOK )
+	  if ( $echoOn ) unset echo
 	  echo "*ERROR*: A problem during combining the $type file '$file:r'"
+	  if ( $echoOn ) set echo
           rm -f $file
 	end
-	echo "*ERROR*: Failed to combine $type files"
+	if ( $echoOn ) unset echo
+	echo "-ERROR-: Failed to combine $type files"
 	if ( $echoOn ) set echo
-	exit 1
+	set exitStatus = 3
+	goto END
       else if ( $?combineTimeBeg ) then
 	set -r combineTimeEnd = `date "+%s"`
 	set -r combineTime = `echo "$combineTimeEnd - $combineTimeBeg" | bc -l`
@@ -590,7 +459,8 @@
       if ( $echoOn ) unset echo
       echo "*ERROR*: The directory '$srcDir' doesn't exist or not readable/writable"
       if ( $echoOn ) set echo
-      exit 1
+      set exitStatus = 2
+      goto END
 
     endif
 
@@ -611,8 +481,8 @@
     set -r checkRetriesNmb = 60
     set -r checkRetryDelay = 30
 
-    set -r patternSedProduction = 's/\/[0-9]+(\/(restart|history)\/[0-9]+(\.nc)*$)/\1/'
-    set -r patternSedRegression = 's/(pe|a|o)[0-9]+(\/(restart|history)\/[0-9]+(\.nc)*$)/\1\2/'
+    set -r patternSedProduction = 's/\/[0-9]+(\/'$type'\/[0-9]+((\.raw)?\.nc)*$)/\1/'
+    set -r patternSedRegression = 's/(pe|a|o)[0-9]+(\/'$type'\/[0-9]+((\.raw)?\.nc)*$)/\1\2/'
 
     alias ardiff `which ardiff` -c cp
 
@@ -801,9 +671,10 @@
       else
 
 	if ( $echoOn ) unset echo
-	echo "*ERROR*: The $type directory '$archDir' isn't a dual one"
+	echo "*ERROR*: The string '$archDir' doesn't conform to the unique $type directory pattern"
 	if ( $echoOn ) set echo
-	exit 1
+	set exitStatus = 2
+	goto END
 
       endif
 
@@ -815,7 +686,8 @@
       if ( $echoOn ) unset echo
       echo "*ERROR*: The directory '$srcDir' doesn't exist or not readable/writable"
       if ( $echoOn ) set echo
-      exit 1
+      set exitStatus = 2
+      goto END
 
     endif
 
@@ -833,7 +705,7 @@
 
   if ( $actionSaveToDo ) then
 
-    alias hsmput `which hsmput` --quiet --time --workroot=$workDir --archroot=//
+    alias hsmput `which hsmput` --time --workroot=$workDir --archroot=//
     
     if ( $paramCheckSumOn ) alias hsmput `alias hsmput` --checksum
     if ( $paramCompressOn ) alias hsmput `alias hsmput` --zip
@@ -844,6 +716,12 @@
       alias hsmput `alias hsmput` --ptmproot=$workDir --store=$archExt
     else if ( $paramPtmpOn ) then
       alias hsmput `alias hsmput` --ptmproot=$ptmpDir
+    endif
+
+    if ( $paramVerbosityOn ) then
+      alias hsmput `alias hsmput` --verbose
+    else
+      alias hsmput `alias hsmput` --quiet
     endif
 
     hsmput $archDir:s+/++
@@ -858,7 +736,8 @@
           if ( $echoOn ) unset echo
           echo "*ERROR*: System error during saving $type archive '$archDir.$archExt'"
           if ( $echoOn ) set echo
-          exit 1
+	  set exitStatus = 2
+	  goto END
         endif
       endif
       if ( $paramPtmpOn ) then
@@ -870,14 +749,16 @@
           if ( $echoOn ) unset echo
           echo "*ERROR*: System error during saving $type directory '$ptmpDir$archDir'"
           if ( $echoOn ) set echo
-          exit 1
+	  set exitStatus = 2
+	  goto END
 	endif
       endif
     else
       if ( $echoOn ) unset echo
-      echo "*ERROR*: Can't save the $type directory '$archDir'"
+      echo "-ERROR-: Can't save the $type directory '$archDir'"
       if ( $echoOn ) set echo
-      exit 1
+      set exitStatus = 3
+      goto END
     endif
 
     if ( ! $paramPtmpOn && $paramArchiveOn ) then
@@ -903,8 +784,10 @@
   unset action*Done
 
 ################################################################################
-#----------------------------- normal end of script ----------------------------
+#--------------------------------- end of script -------------------------------
 ################################################################################
+
+END:
 
   set -r runtimeEnd = `date "+%s"`
   set -r runtime = `echo "$runtimeEnd - $runtimeBeg" | bc -l`
@@ -912,7 +795,16 @@
   if ( $echoOn ) unset echo
   echo "<NOTE> : Finishing on `date`"
   echo "<NOTE> : Runtime = '$runtime' (seconds)"
-  echo "<NOTE> : Natural end of output stager script for '$expName'"
   if ( $echoOn ) set echo
 
-  exit 0
+  if ( $exitStatus == 0 ) then
+    if ( $echoOn ) unset echo
+    echo "<NOTE> : Natural end of output stager script for '$expName'"
+    if ( $echoOn ) set echo
+  else
+    if ( $echoOn ) unset echo
+    echo "<NOTE> : The output stager script for '$expName' failed with exit status = '$exitStatus'"
+    if ( $echoOn ) set echo
+  endif
+
+  exit $exitStatus

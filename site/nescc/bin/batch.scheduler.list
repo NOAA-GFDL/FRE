@@ -1,27 +1,11 @@
 #!/usr/bin/perl
 # -*- cperl -*-
-
-# $Id: batch.scheduler.list,v 1.1.2.9 2012/10/02 19:51:03 afy Exp $
+#
+# $Id: batch.scheduler.list,v 1.1.2.1 2012/12/10 19:23:31 afy Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: Program to List Batch Scheduler Jobs in a Uniform Format
 # ------------------------------------------------------------------------------
-# afy    Ver   1.00  Initial version                                February 11
-# afy    Ver   2.00  Add option --partition                         June 11
-# afy    Ver   2.01  Add option --queue                             June 11
-# afy    Ver   2.02  Analyze status after the 'showq' call          June 11
-# afy    Ver   2.03  Parse the 'showq --xml' output                 June 11
-# afy    Ver   2.04  Return both job ids                            June 11
-# afy    Ver   3.00  Add options --retries-number/retry-delay       June 11
-# afy    Ver   3.01  Add check for extra arguments                  June 11
-# afy    Ver   4.00  Add option --verbose                           June 11
-# afy    Ver   5.00  Downgrade the XML::LibXML parser call          July 11
-# afy    Ver   6.00  Add option --running                           October 11
-# afy    Ver   6.01  Add user name to the output                    October 11
-# afy    Ver   7.00  Add option --noblock to the 'showq' call       March 12
-# afy    Ver   8.00  Add more verbose output                        August 12
-# afy    Ver   8.01  Modify RETRIES_NUMBER (8 => 60)                August 12
-# afy    Ver   8.02  Modify RETRY_DELAY (15 => 60)                  August 12
-# afy    Ver   9.00  Add option --block, make it default            October 12
+# afy    Ver   1.00  Initial version                                December 12
 # ------------------------------------------------------------------------------
 # Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2000-2012
 # Designed and written by V. Balaji, Amy Langenhorst and Aleksey Yakovlev
@@ -37,14 +21,12 @@ use XML::LibXML();
 
   package batch_scheduler_list;
 
-  use constant VERSION => '$Id: batch.scheduler.list,v 1.1.2.9 2012/10/02 19:51:03 afy Exp $';
+  use constant VERSION => '$Id: batch.scheduler.list,v 1.1.2.1 2012/12/10 19:23:31 afy Exp $';
 
   use constant OPTLIST =>
   (
-    'block|B!',
     'help|h',
     'name|n=s',
-    'partition|P=s',
     'queue|q=s',
     'retries-number|N=i',
     'retry-delay|D=i',
@@ -70,13 +52,11 @@ use XML::LibXML();
       "  Usage: $self [option] ...\n\n",
       "  Options:\n\n",
       "   -n STRING, --name=STRING          list jobs with name STRING\n",
-      "   -P STRING, --partition=STRING     list jobs in the partition STRING\n",
       "   -q STRING, --queue=STRING         list jibs in the queue STRING\n",
       "   -u STRING, --user=STRING          list jobs owned by a user STRING\n",
       "   -R,        --running              list jobs in the running state only\n\n",
       "   -N NUM,    --retries-number=NUM   a number NUM of retries (default is '$rtn')\n", 
       "   -D NUM,    --retry-delay=NUM      a delay NUM between retries (default is '$rtd'), in seconds\n",
-      "   -B,        --block                block scheduler queue before the listing request (negatable, default is on)\n\n",
       "   -h,        --help                 print the help message and exit\n",
       "   -V,        --version              print the tool version and exit\n",
       "   -v         --verbose              increase verbosity\n\n"
@@ -134,7 +114,6 @@ use XML::LibXML();
 
   my %opt =
   (
-    'block'		=> 1,
     'retries-number'	=> batch_scheduler_list::RETRIES_NUMBER,
     'retry-delay'	=> batch_scheduler_list::RETRY_DELAY
   );
@@ -146,8 +125,6 @@ use XML::LibXML();
   if (scalar(@ARGV) == 0)
   {
     my $showqCall = 'showq --xml';
-    $showqCall .= " --noblock" unless $opt{block};
-    $showqCall .= " -p $opt{partition}" if $opt{partition};
     $showqCall .= " -w class=$opt{queue}" if $opt{queue};
     $showqCall .= " -u $opt{user}" if $opt{user};
     $showqCall .= " -r" if $opt{running};
@@ -164,7 +141,7 @@ use XML::LibXML();
 	my $xpath = ($opt{name}) ? '/Data/queue/job[@JobName="' . $opt{name} . '"]' : '/Data/queue/job';
 	foreach my $job ($root->findnodes($xpath))
 	{
-	  my $gid = $job->getAttribute('GJID');
+	  my $gid = $job->getAttribute('GJID') || 'NA';
 	  my $id = $job->getAttribute('DRMJID');
 	  my $name = $job->getAttribute('JobName');
 	  my $state = batch_scheduler_list::State($job->getAttribute('State'));

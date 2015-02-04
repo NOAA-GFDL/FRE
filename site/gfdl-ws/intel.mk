@@ -1,4 +1,4 @@
-# $Id: intel.mk,v 1.1.2.1.2.1.2.1 2012/03/07 15:08:54 sdu Exp $
+# $Id: intel.mk,v 1.1.2.1.2.1.2.2.2.1 2012/11/30 16:53:18 Seth.Underwood Exp $
 # template for the Intel fortran compiler
 # typical use with mkmf
 # mkmf -t template.ifc -c"-Duse_libMPI -Duse_netCDF" path_names /usr/local/include
@@ -7,6 +7,7 @@
 ############
 FC = ifort
 CC = icc
+CXX = icpc
 LD = ifort
 #########
 # flags #
@@ -20,7 +21,7 @@ MAKEFLAGS += --jobs=$(shell grep '^processor' /proc/cpuinfo | wc -l)
 
 FPPFLAGS := -fpp -Wp,-w
 
-FFLAGS := -fno-alias -stack_temps -safe_cray_ptr -ftz -i_dynamic -assume byterecl -i4 -r8 -nowarn -g
+FFLAGS := -fno-alias -stack_temps -safe_cray_ptr -ftz -i_dynamic -assume byterecl -i4 -r8 -nowarn -g -sox
 FFLAGS_OPT = -O2
 FFLAGS_REPRO = -fltconsistency
 FFLAGS_DEBUG = -O0 -check -check noarg_temp_created -check nopointer -warn -warn noerrors -debug variable_locations -fpe0 -traceback -ftrapuv
@@ -28,7 +29,7 @@ FFLAGS_OPENMP = -openmp
 FFLAGS_VERBOSE = -v -V -what
 
 
-CFLAGS := -D__IFC 
+CFLAGS := -D__IFC -sox
 CFLAGS_OPT = -O2
 CFLAGS_OPENMP = -openmp
 CFLAGS_DEBUG = -O0 -g -ftrapuv -traceback

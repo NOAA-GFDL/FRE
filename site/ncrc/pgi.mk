@@ -6,6 +6,7 @@
 ############
 FC = ftn
 CC = cc
+CXX = CC
 LD = ftn
 #########
 # flags #

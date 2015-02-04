@@ -1,7 +1,7 @@
 #!/bin/csh -f
 #FRE scheduler-options
 # 
-# $Id: runscript.template.main,v 1.1.2.16 2012/09/20 20:58:58 afy Exp $
+# $Id: runscript.template.main,v 1.1.2.19 2013/02/05 22:57:13 afy Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: Runscript Template - GFDL Workstations Version
 # ------------------------------------------------------------------------------
@@ -60,8 +60,14 @@
 # afy    Ver  14.00  Support 64-bit architecture                    August 12
 # afy    Ver  15.00  Add settable variables 'max_npes/max_nthreads' August 12
 # afy    Ver  16.00  Initialize the 'memoryDefault' variable        September 12
+# afy    Ver  17.00  Rationalize the 'queue_commands' handling      November 12
+# afy    Ver  17.01  Recognize the 'hsm' module                     November 12
+# afy    Ver  17.02  Add settable flag 'flagVerbosity'              November 12
+# afy    Ver  17.03  Don't pass modules info to output stager       November 12
+# afy    Ver  18.00  Add 'raw' into uncombined history name         January 13
+# afy    Ver  19.00  Add 'ww3' into restart/history output          February 13
 # ------------------------------------------------------------------------------
-# Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2000-2012
+# Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2000-2013
 # Designed and written by V. Balaji, Amy Langenhorst and Aleksey Yakovlev
 #
 
@@ -73,7 +79,7 @@
   set -r runtimeBeg = `date "+%s"`
 
   if ( $echoOn ) unset echo
-  echo '<NOTE> : ====== FRE RUNSCRIPT $Id: runscript.template.main,v 1.1.2.16 2012/09/20 20:58:58 afy Exp $ ======'
+  echo '<NOTE> : ====== FRE RUNSCRIPT $Id: runscript.template.main,v 1.1.2.19 2013/02/05 22:57:13 afy Exp $ ======'
   echo "<NOTE> : Starting at $HOST on `date`"
   if ( $echoOn ) set echo
 
@@ -134,6 +140,7 @@
   #FRE flag(flagOutputCompressHistory)
   #FRE flag(flagOutputArchive)
   #FRE flag(flagOutputCheck)
+  #FRE flag(flagVerbosity)
 
   #FRE var(npes)
   #FRE var(atmos_npes)
@@ -165,14 +172,14 @@
       if ( $echoOn ) set echo
     else
       if ( $echoOn ) unset echo
-      echo "*ERROR*: The fre-commands modulefile '$freCommandsModuleFile' doesn't exist or not readable"
+      echo "*ERROR*: The 'fre-commands' modulefile '$freCommandsModuleFile' doesn't exist or not readable"
       if ( $echoOn ) set echo
       exit 1
     endif
     unset freCommandsModuleFile
   else
     if ( $echoOn ) unset echo
-    echo "*ERROR*: The fre-commands modulefiles directory '$freCommandsModuleFilesDir' doesn't exist or not readable"
+    echo "*ERROR*: The 'fre-commands' modulefiles directory '$freCommandsModuleFilesDir' doesn't exist or not readable"
     if ( $echoOn ) set echo
     exit 1
   endif
@@ -201,12 +208,11 @@
 
   # ---------------- selection patterns for grep
 
-  set -r patternGrepTail = '\.[0-9]{4}$'
   set -r patternGrepAscii = '\<out\>|\<results\>|\<timestats\>|\<velocity_truncations\>'
-  set -r patternGrepRestart = '\<res\>|\<nc\>|\.input.\tgz$'
+  set -r patternGrepRestart = '\<res\>|\<nc\>|\.input.\tgz$|\.ww3$'
   set -r patternGrepRestartNextDrop = '\<res\>'
   set -r patternGrepRestartNextMove = '\<res\>|\<nc\>'
-  set -r patternGrepHistory = '\<nc\>'
+  set -r patternGrepHistory = '\<nc\>|\.ww3$'
   set -r patternGrepRegion = '^rregion'
 
   # ---------------- archive extension
@@ -216,10 +222,6 @@
   # ---------------- default memory to be used by combiners (in mb)
 
   set -r memoryDefault = 16
-
-  # ---------------- FRE data copying between work directory and archive directory via ptmp directory
-
-  alias hsmget `which hsmget` --quiet --time --workroot=$hsmDir --ptmproot=$ptmpDir --archroot=//
 
   # ---------------- FRE runscript site-independent helper scripts
 
@@ -257,14 +259,14 @@
       if ( $echoOn ) set echo
     else
       if ( $echoOn ) unset echo
-      echo "*ERROR*: The fre-commands modulefile '$freCommandsModuleFile' doesn't exist or not readable"
+      echo "*ERROR*: The 'fre-commands' modulefile '$freCommandsModuleFile' doesn't exist or not readable"
       if ( $echoOn ) set echo
       exit 1
     endif
     unset freCommandsModuleFile
   else
     if ( $echoOn ) unset echo
-    echo "*ERROR*: The fre-commands modulefiles directory '$freCommandsModuleFilesDir' doesn't exist or not readable"
+    echo "*ERROR*: The 'fre-commands' modulefiles directory '$freCommandsModuleFilesDir' doesn't exist or not readable"
     if ( $echoOn ) set echo
     exit 1
   endif
@@ -288,6 +290,61 @@
   endif
 
   unset freNCToolsInfo
+
+  # ---------------- determine the HSM module info
+
+  set hsmInfo = ( `findModuleInfo 'hsm'` )
+
+  if ( $status == 0 ) then
+    set -r hsmOverridden = 1
+    set -r hsmModuleFilesDir = $hsmInfo[1]
+    set -r hsmVersion = $hsmInfo[3]
+    if ( $echoOn ) unset echo
+    echo "<NOTE> : Using the 'hsm' modulefiles directory '$hsmModuleFilesDir' and version '$hsmVersion'..."
+    if ( $echoOn ) set echo
+  else
+    set -r hsmOverridden = 0
+    set -r hsmModuleFilesDir = ""
+    set -r hsmVersion = ""
+  endif
+
+  unset hsmInfo
+
+  # ---------------- postload the HSM module to be sure it'll be used
+
+  if ( $hsmOverridden ) then
+    if ( -d $hsmModuleFilesDir && -r $hsmModuleFilesDir ) then
+      set hsmModuleFile = $hsmModuleFilesDir/hsm/$hsmVersion
+      if ( -f $hsmModuleFile && -r $hsmModuleFile ) then
+	if ( $echoOn ) unset echo
+	module use $hsmModuleFilesDir
+	module unload hsm
+	module load hsm/$hsmVersion
+	if ( $echoOn ) set echo
+      else
+	if ( $echoOn ) unset echo
+	echo "*ERROR*: The 'hsm' modulefile '$hsmModuleFile' doesn't exist or not readable"
+	if ( $echoOn ) set echo
+	exit 1
+      endif
+      unset hsmModuleFile
+    else
+      if ( $echoOn ) unset echo
+      echo "*ERROR*: The 'hsm' modulefiles directory '$hsmModuleFilesDir' doesn't exist or not readable"
+      if ( $echoOn ) set echo
+      exit 1
+    endif
+  endif
+
+  # ---------------- setup the HSM
+
+  alias hsmget `which hsmget` --time --workroot=$hsmDir --ptmproot=$ptmpDir --archroot=//
+
+  if ( $?flagVerbosityOn ) then
+    alias hsmget `alias hsmget` --verbose
+  else
+    alias hsmget `alias hsmget` --quiet
+  endif
 
   # ---------------- some global configuration
 
@@ -377,6 +434,20 @@
 	echo "*ERROR*: The queue file '$queue_file' is not readable"
         if ( $echoOn ) set echo
 	exit 1
+      endif
+    else
+      touch $queue_file
+      if ( $status == 0 ) then
+	if ( $echoOn ) unset echo
+	echo "<NOTE> : Writing queue information to the queue file '$queue_file' at `date +%s`"
+	if ( $echoOn ) set echo
+        echo "set continueFlag = $continueFlag" >> $queue_file
+        chmod 644 $queue_file
+      else
+	if ( $echoOn ) unset echo
+	echo "*ERROR*: The queue file '$queue_file' can't be saved"
+        if ( $echoOn ) set echo
+        exit 1
       endif
     endif
 
@@ -761,7 +832,7 @@
       set asciiArchDir = $outputDir/$asciiSuffix
       set asciiWorkDir = $tmpOutputDir$asciiArchDir
 
-      prepareDir $asciiWorkDir 'clean' || exit 1 
+      prepareDir $asciiWorkDir 'clean' || exit 1
 
       if ( ! $?MPI_FAIL ) then
 
@@ -789,17 +860,18 @@
 
       echo "set expName				=   $name"			 > $asciiArgFile
       echo "set type				=   ascii"			>> $asciiArgFile
+      echo "set actionCombineOn			=   0"				>> $asciiArgFile
+      echo "set actionCheckOn			=   0"				>> $asciiArgFile
       echo "set actionSaveOn			=   $actionSaveOn"		>> $asciiArgFile
       echo "set paramArchiveOn			=   $paramArchiveOn"		>> $asciiArgFile
       echo "set paramPtmpOn			=   $paramPtmpOn"		>> $asciiArgFile
       echo "set paramCheckSumOn			=   $paramCheckSumOn"		>> $asciiArgFile
       echo "set paramCompressOn			=   $paramCompressOn"		>> $asciiArgFile
+      echo "set paramOverrideOn			=   $hsmOverridden"		>> $asciiArgFile
+      echo "set paramVerbosityOn		=   $?flagVerbosityOn"		>> $asciiArgFile
       echo "set workDir				=   $tmpOutputDir"		>> $asciiArgFile
       echo "set ptmpDir				=   $ptmpDir"			>> $asciiArgFile
       echo "set archDir				=   $asciiArchDir"		>> $asciiArgFile
-      echo "set freCommandsModuleFilesDir       =   $freCommandsModuleFilesDir"	>> $asciiArgFile
-      echo "set freCommandsVersion		=   $freCommandsVersion"	>> $asciiArgFile
-      echo "set modulesHomeDir			=   $modulesHomeDir"		>> $asciiArgFile
 
       if ( $?MPICH_RANK_REORDER_METHOD ) then
         set mpiRankReorderMethod = $MPICH_RANK_REORDER_METHOD
@@ -852,7 +924,7 @@
       set restartArchDir = $outputDir/$restartSuffix
       set restartWorkDir = $tmpOutputDir$restartArchDir
 
-      prepareDir $restartWorkDir 'clean' || exit 1 
+      prepareDir $restartWorkDir 'clean' || exit 1
 
       ls -1 | egrep "$patternGrepRestart" | xargs ln --force --target-directory=$restartWorkDir
 
@@ -921,16 +993,12 @@
       echo "set paramPtmpOn			=   $paramPtmpOn"		>> $restartArgFile 
       echo "set paramCheckSumOn			=   $paramCheckSumOn"		>> $restartArgFile
       echo "set paramCompressOn			=   $paramCompressOn"		>> $restartArgFile
+      echo "set paramOverrideOn			=   $hsmOverridden"		>> $restartArgFile
+      echo "set paramVerbosityOn		=   $?flagVerbosityOn"		>> $restartArgFile
       echo "set combineMemory			=   $combineMemory"		>> $restartArgFile
       echo "set workDir				=   $tmpOutputDir"		>> $restartArgFile 
       echo "set ptmpDir				=   $ptmpDir"			>> $restartArgFile 
       echo "set archDir				=   $restartArchDir"		>> $restartArgFile 
-      echo "set freCommandsModuleFilesDir       =   $freCommandsModuleFilesDir"	>> $restartArgFile
-      echo "set freCommandsVersion		=   $freCommandsVersion"	>> $restartArgFile
-      echo "set freNCToolsModuleFilesDir	=   $freNCToolsModuleFilesDir"	>> $restartArgFile
-      echo "set freNCToolsModuleName		=   $freNCToolsModuleName"	>> $restartArgFile
-      echo "set freNCToolsVersion		=   $freNCToolsVersion"		>> $restartArgFile
-      echo "set modulesHomeDir			=   $modulesHomeDir"		>> $restartArgFile
 
       if ( $?MPICH_RANK_REORDER_METHOD ) then
         set mpiRankReorderMethod = $MPICH_RANK_REORDER_METHOD
@@ -980,9 +1048,9 @@
     if ( $#regionHistoryFiles > 0 ) then
 
       if ( ! $?MPI_FAIL ) then
-        foreach file ( $regionHistoryFiles )
+	foreach file ( $regionHistoryFiles )
           mv -f $file `echo $file | sed -r "s/$patternGrepRegion//"`
-        end
+	end
       endif
 
     endif
@@ -995,7 +1063,12 @@
 
     if ( $#historyFiles > 0 ) then
 
-      set historySuffix = history/$begindate.nc
+      if ( $?flagOutputCombineHistoryOn ) then
+        set historySuffix = history/$begindate.nc
+      else
+        set historySuffix = history/$begindate.raw.nc
+      endif
+
       set historyArchDir = $outputDir/$historySuffix
       set historyWorkDir = $tmpOutputDir$historyArchDir
 
@@ -1003,7 +1076,7 @@
 
       if ( ! $?MPI_FAIL ) then
 
-        ls -1 | egrep "$patternGrepHistory" | xargs -I'{}' mv --force '{}' $historyWorkDir/$begindate.'{}'
+	ls -1 | egrep "$patternGrepHistory" | xargs -I'{}' mv --force '{}' $historyWorkDir/$begindate.'{}'
 
         set actionCombineOn	= $?flagOutputCombineHistoryOn
         set actionCheckOn	= $?flagOutputCheckOn
@@ -1015,7 +1088,7 @@
 
       else
 
-        ls -1 | egrep "$patternGrepHistory" | xargs -I'{}' ln --force '{}' $historyWorkDir/$begindate.'{}'
+	ls -1 | egrep "$patternGrepHistory" | xargs -I'{}' ln --force '{}' $historyWorkDir/$begindate.'{}'
 
         set actionCombineOn	= 0
         set actionCheckOn	= 0
@@ -1044,16 +1117,12 @@
       echo "set paramPtmpOn			=   $paramPtmpOn"		>> $historyArgFile
       echo "set paramCheckSumOn			=   $paramCheckSumOn"		>> $historyArgFile
       echo "set paramCompressOn			=   $paramCompressOn"		>> $historyArgFile
+      echo "set paramOverrideOn			=   $hsmOverridden"		>> $historyArgFile
+      echo "set paramVerbosityOn		=   $?flagVerbosityOn"		>> $historyArgFile
       echo "set combineMemory			=   $combineMemory"		>> $historyArgFile
       echo "set workDir				=   $tmpOutputDir"		>> $historyArgFile
       echo "set ptmpDir				=   $ptmpDir"			>> $historyArgFile
       echo "set archDir				=   $historyArchDir"		>> $historyArgFile
-      echo "set freCommandsModuleFilesDir       =   $freCommandsModuleFilesDir"	>> $historyArgFile
-      echo "set freCommandsVersion		=   $freCommandsVersion"	>> $historyArgFile
-      echo "set freNCToolsModuleFilesDir	=   $freNCToolsModuleFilesDir"	>> $historyArgFile
-      echo "set freNCToolsModuleName		=   $freNCToolsModuleName"	>> $historyArgFile
-      echo "set freNCToolsVersion		=   $freNCToolsVersion"		>> $historyArgFile
-      echo "set modulesHomeDir			=   $modulesHomeDir"		>> $historyArgFile
 
       if ( $?MPICH_RANK_REORDER_METHOD ) then
         set mpiRankReorderMethod = $MPICH_RANK_REORDER_METHOD
@@ -1205,22 +1274,6 @@
 	if ( $echoOn ) unset echo
 	echo "WARNING: The script '$scriptName' does not exist (run $ireload, loop $irun) - it can't be resubmitted"
         if ( $echoOn ) set echo
-      endif
-
-      if ( -f $queue_file ) mv -f $queue_file ${queue_file}_prev
-      touch $queue_file
-
-      if ( $status == 0 ) then
-	if ( $echoOn ) unset echo
-	echo "<NOTE> : Writing queue information to the queue file '$queue_file' at `date +%s`"
-	if ( $echoOn ) set echo
-        echo "set continueFlag = $continueFlag" >> $queue_file
-        chmod 644 $queue_file
-      else
-	if ( $echoOn ) unset echo
-	echo "*ERROR*: The queue file '$queue_file' can't be saved"
-        if ( $echoOn ) set echo
-        exit 1
       endif
 
     endif

@@ -275,15 +275,16 @@ while ( 1 )
     if ( ! $?quiet ) echo "      Comparing $ncfile..."
     cmp ../first/$ncfile ../second/$ncfile >& /dev/null
     set cmpstatus = $status
+    set isdistrib = `echo "$ncfile:e" | egrep '^[0-9]+$'`
     if ( $cmpstatus == 2 ) then
-       if ( "$ncfile:e" == 'nc' || "$ncfile:e" == 'res' ) then
+       if ( "$ncfile:e" == 'nc' || "$ncfile:e" == 'res' || ( "$ncfile:r:e" == 'nc' && $isdistrib ) ) then
           echo "DIFFER : FILE NOT FOUND : $ncfile"
           set mystat = 1
         else
           echo "WARNING : NONESSENTIAL FILE NOT FOUND : $ncfile"
         endif
     else if ( $cmpstatus != 0 ) then
-       if ( "$ncfile:e" == 'nc' ) then
+       if ( "$ncfile:e" == 'nc' || ( "$ncfile:r:e" == 'nc' && $isdistrib ) ) then
           if ( $?quiet ) then
              nccmp -dmq $extraoptions -w format ../first/$ncfile ../second/$ncfile >& /dev/null
              if ( $status != 0 ) then

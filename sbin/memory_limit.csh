@@ -1,13 +1,15 @@
 #!/bin/csh -f
 # 
-# $Id: memory_limit.csh,v 1.1.2.2 2012/02/08 15:40:26 afy Exp $
+# $Id: memory_limit.csh,v 1.1.2.4 2013/03/12 22:20:57 afy Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: Script to Define Memory Limit Depending on Model Size 
 # ------------------------------------------------------------------------------
 # afy    Ver   1.00  Initial version                                February 12
 # afy    Ver   2.00  Apply max limitation after the loop end        February 12
+# afy    Ver   3.00  Don't apply max limitation                     March 13
+# afy    Ver   4.00  Add scaling factor                             March 13
 # ------------------------------------------------------------------------------
-# Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2000-2012
+# Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2000-2013
 # Designed and written by V. Balaji, Amy Langenhorst and Aleksey Yakovlev
 # 
 
@@ -27,15 +29,13 @@ else
   exit 1
 endif
 
-@ memMin = 1
-@ memMax = 8 * 1024
-
 set -r patternGrepTail = '\.[0-9]{4}$'
+set -r factor = '1.25'
 
 if ( -e $dir ) then
   if ( -d $dir ) then
     pushd $dir
-    @ mem = $memMin
+    @ mem = 0
     set filesToCombine = ( `ls -1 | egrep ".*$patternGrepTail" | sed -r "s/$patternGrepTail//g" | sort -u` )
     if ( $#filesToCombine > 0 ) then
       foreach file ( $filesToCombine )
@@ -45,9 +45,8 @@ if ( -e $dir ) then
       end
     endif
     unset filesToCombine
-    if ( $mem > $memMax ) @ mem = $memMax 
     popd
-    echo $mem
+    printf %.0f `echo "$mem * $factor" | bc -l`
     exit 0
   else
     if ( $echoOn ) unset echo
