@@ -1,8 +1,8 @@
 #!/bin/csh -f
-# 
-# $Id: output.retry,v 1.1.2.6 2013/01/30 20:13:37 afy Exp $
+#
+# $Id: output.retry,v 1.1.2.6.4.2 2014/03/10 19:48:58 Seth.Underwood Exp $
 # ------------------------------------------------------------------------------
-# FMS/FRE Project: Script to Retry Output Staging Jobs 
+# FMS/FRE Project: Script to Retry Output Staging Jobs
 # ------------------------------------------------------------------------------
 # afy    Ver   1.00  Initial version                                October 12
 # afy    Ver   2.00  Fixes in messages                              November 12
@@ -19,7 +19,7 @@
 set -r echoOn = $?echo
 
 if ( $echoOn ) unset echo
-echo '<NOTE> : ====== FRE OUTPUT RETRYER $Id: output.retry,v 1.1.2.6 2013/01/30 20:13:37 afy Exp $ ======'
+echo '<NOTE> : ====== FRE OUTPUT RETRYER $Id: output.retry,v 1.1.2.6.4.2 2014/03/10 19:48:58 Seth.Underwood Exp $ ======'
 echo "<NOTE> : Starting at $HOST on `date`"
 if ( $echoOn ) set echo
 
@@ -53,7 +53,7 @@ else
   echo "  of regression and unique directories, named by regression prefixes and integer numbers."
   echo "  These unique and regression directories also normally contain 'run' subdirectory."
   echo "  Any of these 'run' directories can serve as an argument for this tool."
-  echo "  The optional 'FRE_JOBID' argument consists of experiment name and PBS job number" 
+  echo "  The optional 'FRE_JOBID' argument consists of experiment name and PBS job number"
   if ( $echoOn ) set echo
   exit 1
 endif
@@ -85,275 +85,291 @@ if ( $listStatus == 0 && $submitStatus == 0 && $outputStagerStatus == 0 ) then
 
       if ( -r $dir && -w $dir && -x $dir ) then
 
-        set -r outputStager = `alias outputStager`
-        set -r argFiles = ( `find $dir -maxdepth 1 -type f -name "$job.output.stager.[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9].[ARH].args"` )
+	set -r outputStager = `alias outputStager`
+	set -r argFiles = ( `find $dir -maxdepth 1 -type f -name "$job.output.stager.[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9].[ARH].args"` )
 
-        if ( $#argFiles > 0 ) then
+	if ( $#argFiles > 0 ) then
 
           foreach argFile ( $argFiles )
+	    # Force the following variables to be unset.  If one of these are not set, then the args file was incomplete.
+	    # The variable modulesHomeDir is one of the last variables in each type of args file to be listed.  Unsetting this,
+	    # and then checking for it's existance is a stop-gap method to determine if the args file was complete.
+	    unset actionCombineOn
+	    unset actionCheckOn
+	    unset actionSaveOn
+	    unset actionXferOn
+	    unset actionPPStartOn
+	    unset modulesHomeDir
+
+	    # These variables need to be unset between each argFile, but are not always in the argFile
+	    unset actionCombineOk
+	    unset actionCheckOk
+	    unset actionSaveOk
+	    unset actionXferOk
+	    unset actionPPStartOk
 
 	    if ( $echoOn ) unset echo
 	    echo "<NOTE> : <<< $argFile:t >>> Beginning"
 	    if ( $echoOn ) set echo
 
 	    if ( $?lockingIsPresent ) then
-              set argFileLock = $argFile.lock
-              lock $argFileLock
+	      set argFileLock = $argFile.lock
+	      lock $argFileLock
 	      if ( $status == 0 ) then
-        	source $argFile
+		source $argFile
 	      else
 		if ( $echoOn ) unset echo
 		echo "*ERROR*: The argument file is locked by another process - skipping ..."
 		if ( $echoOn ) set echo
 		continue
 	      endif
-            else
-              source $argFile
-            endif
+	    else
+	      source $argFile
+	    endif
 
-            if ( $status == 0 ) then
+	    if ( $status == 0 ) then
 
-              set jobName = $argFile:t:r
+	      set jobName = $argFile:t:r
 
-              if ( $stagingType == 'Staged' || $stagingType == 'Chained' ) then
+	      if ( $stagingType == 'Staged' || $stagingType == 'Chained' ) then
 
-                if ( ${jobName}S != $callerJobName ) then
-                  set saveJobInfo = ( `list --user=$USER --name=${jobName}S | sed 's/,,/,NA,/g' | tr ',' ' '` )
-                else
-                  set saveJobInfo = ( )
-                endif
+		if ( ${jobName}S != $callerJobName ) then
+		  set saveJobInfo = ( `list --user=$USER --name=${jobName}S | sed 's/,,/,NA,/g' | tr ',' ' '` )
+		else
+		  set saveJobInfo = ( )
+		endif
 
-                if ( $status == 0 ) then
+		if ( $status == 0 ) then
 
-                  if ( $#saveJobInfo > 0 ) then
+		  if ( $#saveJobInfo > 0 ) then
 
 		    if ( $echoOn ) unset echo
 		    echo "WARNING: Save job '$saveJobInfo[1]' in the '$saveJobInfo[4]' state is found - skipping ..."
 		    if ( $echoOn ) set echo
 
-                  else
+		  else
 
 		    @ actionCombineDone = ( $actionCombineOn * $?actionCombineOk || ! $actionCombineOn )
 		    @ actionCheckDone   = ( $actionCheckOn   * $?actionCheckOk   || ! $actionCheckOn   )
 		    @ actionSaveDone    = ( $actionSaveOn    * $?actionSaveOk    || ! $actionSaveOn    )
 
-                    if ( $actionCombineDone && $actionCheckDone && $actionSaveDone ) then
+		    if ( $actionCombineDone && $actionCheckDone && $actionSaveDone ) then
 
-                      if ( ${jobName}T != $callerJobName ) then
-                        set xferJobInfo = ( `list --user=$USER --name=${jobName}T | sed 's/,,/,NA,/g' | tr ',' ' '` )
-                      else
-                        set xferJobInfo = ( )
-                      endif
+		      if ( ${jobName}T != $callerJobName ) then
+			set xferJobInfo = ( `list --user=$USER --name=${jobName}T | sed 's/,,/,NA,/g' | tr ',' ' '` )
+		      else
+			set xferJobInfo = ( )
+		      endif
 
-                      if ( $status == 0 ) then
+		      if ( $status == 0 ) then
 
-                        if ( $#xferJobInfo > 0 ) then
+			if ( $#xferJobInfo > 0 ) then
 
 			  if ( $echoOn ) unset echo
 			  echo "WARNING: Xfer job '$xferJobInfo[1]' in the '$xferJobInfo[4]' state is found - skipping ..."
 			  if ( $echoOn ) set echo
 
-                        else
+			else
 
 			  @ actionXferDone    = ( $actionXferOn    * $?actionXferOk    || ! $actionXferOn    )
 			  @ actionPPStartDone = ( $actionPPStartOn * $?actionPPStartOk || ! $actionPPStartOn )
 
-                          if ( $actionXferDone && $actionPPStartDone ) then
+			  if ( $actionXferDone && $actionPPStartDone ) then
 
 			    if ( $echoOn ) unset echo
 			    echo "<NOTE> : The argument file shows that the output staging has completed successfully - removing it ..."
 			    if ( $echoOn ) set echo
 
-                            rm -f $argFile
+			    rm -f $argFile
 
-                          else if ( $xferRetry >= 0 ) then
+			  else if ( $xferRetry >= 0 ) then
 
-                            if ( $xferRetry <= $xferRetries ) then
+			    if ( $xferRetry <= $xferRetries ) then
 
-                              set xferResult = `submit -O "$xferOptions -v argFile=$argFile" $outputStager`
+			      set xferResult = `submit -O "$xferOptions -v argFile=$argFile" $outputStager`
 
-                              if ( $status == 0 ) then
+			      if ( $status == 0 ) then
 				if ( $echoOn ) unset echo
 				echo "<NOTE> : Xfer job '$xferResult' to process the argument file has been submitted successfully"
 				if ( $echoOn ) set echo
-                              else
+			      else
 				if ( $echoOn ) unset echo
 				echo "WARNING: Can't submit xfer output stager job - skipping ..."
 				if ( $echoOn ) set echo
-                              endif
+			      endif
 
-                              unset xferResult
+			      unset xferResult
 
-                            else
+			    else
 
 			      if ( $echoOn ) unset echo
 			      echo "WARNING: No more xfer output stager retries - skipping ..."
 			      if ( $echoOn ) set echo
 
-                            endif
+			    endif
 
-                          else
+			  else
 
 			    if ( $echoOn ) unset echo
 			    echo "WARNING: This error condition can't be resolved by resubmission - skipping ..."
 			    echo "WARNING: Manual user intervention is needed"
 			    if ( $echoOn ) set echo
 
-                          endif
+			  endif
 
 			  unset actionPPStartDone
-                          unset actionXferDone
+			  unset actionXferDone
 
-                        endif
+			endif
 
-                      else
+		      else
 
 			if ( $echoOn ) unset echo
 			echo "WARNING: Can't get a job list from the batch scheduler - skipping ..."
 			if ( $echoOn ) set echo
 
-                      endif
+		      endif
 
-                      unset xferJobInfo
+		      unset xferJobInfo
 
-                    else if ( $saveRetry >= 0 ) then
+		    else if ( $saveRetry >= 0 ) then
 
-                      if ( $saveRetry <= $saveRetries ) then
+		      if ( $saveRetry <= $saveRetries ) then
 
-                        set saveResult = `submit -O "$saveOptions -v argFile=$argFile" $outputStager`
+			set saveResult = `submit -O "$saveOptions -v argFile=$argFile" $outputStager`
 
-                        if ( $status == 0 ) then
+			if ( $status == 0 ) then
 
 			  if ( $echoOn ) unset echo
 			  echo "<NOTE> : Save job '$saveResult' to process the argument file has been submitted successfully"
 			  if ( $echoOn ) set echo
 
-                          if ( $stagingType == 'Staged' ) then
+			  if ( $stagingType == 'Staged' ) then
 
-                            set xferJobInfo = ( `list --user=$USER --name=${jobName}T | sed 's/,,/,NA,/g' | tr ',' ' '` )
+			    set xferJobInfo = ( `list --user=$USER --name=${jobName}T | sed 's/,,/,NA,/g' | tr ',' ' '` )
 
-                            if ( $status == 0 ) then
+			    if ( $status == 0 ) then
 
-                              set inx = 1
+			      set inx = 1
 
-                              while ( $inx <= $#xferJobInfo )
-                                set xferJobId = $xferJobInfo[$inx]
+			      while ( $inx <= $#xferJobInfo )
+				set xferJobId = $xferJobInfo[$inx]
 				if ( $echoOn ) unset echo
 				echo "<NOTE> : Xfer job '$xferJobId', depending on a failed save job, has been found - cancelling it ..."
 				if ( $echoOn ) set echo
-                        	canceljob $xferJobId >& /dev/null
-                                unset xferJobId
-                                @ inx += 6
-                              end
+				canceljob $xferJobId >& /dev/null
+				unset xferJobId
+				@ inx += 6
+			      end
 
-                              set xferResult = `submit -O "$xferOptions -v argFile=$argFile -l depend=afterok:$saveResult" $outputStager`
+			      set xferResult = `submit -O "$xferOptions -v argFile=$argFile -l depend=afterok:$saveResult" $outputStager`
 
-                              if ( $status == 0 ) then
+			      if ( $status == 0 ) then
 				if ( $echoOn ) unset echo
 				echo "<NOTE> : Xfer job '$xferResult' to process the argument file has been submitted successfully"
 				if ( $echoOn ) set echo
-                              else
+			      else
 				if ( $echoOn ) unset echo
 				echo "WARNING: Can't submit xfer output stager job - skipping ..."
 				if ( $echoOn ) set echo
-                              endif
+			      endif
 
-                              unset xferResult
-                              unset inx
+			      unset xferResult
+			      unset inx
 
-                            else
+			    else
 
 			      if ( $echoOn ) unset echo
 			      echo "WARNING: Can't get a job list from the batch scheduler - skipping ..."
 			      if ( $echoOn ) set echo
 
-                            endif
+			    endif
 
-                            unset xferJobInfo
+			    unset xferJobInfo
 
-                          endif
+			  endif
 
-                        else
+			else
 
 			  if ( $echoOn ) unset echo
 			  echo "WARNING: Can't submit save output stager job - skipping ..."
 			  if ( $echoOn ) set echo
 
-                        endif
+			endif
 
-                        unset saveResult
+			unset saveResult
 
-                      else
+		      else
 
 			if ( $echoOn ) unset echo
 			echo "WARNING: No more save output stager retries - skipping ..."
 			if ( $echoOn ) set echo
 
-                      endif
+		      endif
 
-                    else
+		    else
 
 		      if ( $echoOn ) unset echo
 		      echo "WARNING: The error condition can't be resolved by resubmission - skipping ..."
 		      echo "WARNING: Manual user intervention is needed"
 		      if ( $echoOn ) set echo
 
-                    endif
+		    endif
 
-                    unset actionSaveDone
-                    unset actionCheckDone
-                    unset actionCombineDone
+		    unset actionSaveDone
+		    unset actionCheckDone
+		    unset actionCombineDone
 
-                  endif
+		  endif
 
-                else
+		else
 
 		  if ( $echoOn ) unset echo
 		  echo "WARNING: Can't get a job list from the batch scheduler - skipping ..."
 		  if ( $echoOn ) set echo
 
-                endif
+		endif
 
-                unset saveJobInfo
+		unset saveJobInfo
 
-              else
+	      else
 
 		if ( $echoOn ) unset echo
 		echo "WARNING: Staging type '$stagingType' is not supported - skipping ..."
 		if ( $echoOn ) set echo
 
-              endif
+	      endif
 
-              unset jobName
+	      unset jobName
 
-            else
+	    else
 
 	      if ( $echoOn ) unset echo
 	      echo "WARNING: Can't load the argument file - skipping ..."
 	      if ( $echoOn ) set echo
 
-            endif
+	    endif
 
-            if ( $?lockingIsPresent ) then
-              rm -f $argFileLock
-              unset argFileLock
-            endif
+	    if ( $?lockingIsPresent ) then
+	      rm -f $argFileLock
+	      unset argFileLock
+	    endif
 
 	    if ( $echoOn ) unset echo
 	    echo "<NOTE> : <<< $argFile:t >>> End"
 	    if ( $echoOn ) set echo
 
-          end
+	  end
 
-        else
+	else
 
 	  if ( $echoOn ) unset echo
 	  echo "<NOTE> : The directory '$dir' doesn't contain any argument files"
 	  if ( $echoOn ) set echo
 
-        endif
+	endif
 
-        exit 0
+	exit 0
 
       else
 

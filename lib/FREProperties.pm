@@ -1,5 +1,5 @@
 #
-# $Id: FREProperties.pm,v 18.0.2.19 2012/08/06 22:48:35 afy Exp $
+# $Id: FREProperties.pm,v 18.0.2.19.4.1 2013/12/03 16:37:58 Amy.Langenhorst Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: Properties Management Module
 # ------------------------------------------------------------------------------
@@ -104,7 +104,7 @@ my $environmentVariablesExpand = sub($$)
 # ------ expand environment variables in the given $string
 {
   my ($r, $s) = @_;
-  foreach my $k ('ARCHIVE', 'HOME', 'USER')
+  foreach my $k ('ARCHIVE', 'HOME', 'USER', 'CTMP', 'CPERM', 'CDATA', 'CHOME')
   {
     last if $s !~ m/\$/;
     my $v = '';

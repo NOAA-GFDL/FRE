@@ -8,7 +8,7 @@ sub analysis {
 
    my ($ts_av_Node,$expt,$gridspec,$staticfile,$tsORav,$diagfile,$ppRootDir, 
        $component,$dtvars_ref,$analysisdir,$aoutscriptdir,$workdir, 
-       $archivedir,$opt_t,$opt_O,$opt_Y,$opt_Z,$opt_v,$sim0,$opt_R,$opt_s,
+       $archivedir,$opt_t,$opt_O,$opt_Y,$opt_Z,$opt_v,$opt_u,$sim0,$opt_R,$opt_s,
        $hist_dir,$nlat,$nlon,$frexml,$stdoutdir,$opt_P,$opt_T) = @_; 
 
 # exit if no analysis nodes found
@@ -255,6 +255,7 @@ sub analysis {
      my @aargu = split('\ ',$aScript);
      $aScript = shift @aargu;
      $aScript =~ s/"//g;
+     $aScript =~ s/\$\(name\)/$expt/g;
      my @afile = split('\/',$aScript);
      if ( $opt_v ) {
         print  STDERR "###analysis script $aScript\n";
@@ -308,18 +309,21 @@ sub analysis {
 
      my $aScriptout; # the script to submit for each analysis
 
+     my $unique = '';
+     if ( $opt_u ) { $unique = ".$opt_u" };
+
      #### 
      # if specify1year is found
      if ($arrayofExptsH[0]{specify1year}) {
         my $availablechunk = $arrayofExptsH[0]{specify1year};
         my $asrcfile = "$component.$availablechunk.$ssn.nc";
         if ($cksumCRC[0] gt 0) {
-          $aScriptout = "$aoutscriptdir_final/$afile[$#afile].$availablechunk.$cksumCRC[0]";
+          $aScriptout = "$aoutscriptdir_final/$afile[$#afile].$availablechunk$unique.$cksumCRC[0]";
         } else {
-          $aScriptout = "$aoutscriptdir_final/$afile[$#afile].$availablechunk";
+          $aScriptout = "$aoutscriptdir_final/$afile[$#afile].$availablechunk$unique";
         }
         if ( -e $aScriptout and ! $opt_R ) { print STDERR "ANALYSIS: $aScriptout already exists, SKIP\n"; next;}
-        filltemplate(\@arrayofExptsH,cleanpath($figureDir),$aScript,\@aargu,cleanpath($aScriptout),$iExpt,cleanpath($workdir),$mode,cleanpath($asrcfile),$opt_s,$opt_v,cleanpath($frexml),cleanpath($stdoutdir),$opt_P,$opt_T);
+        filltemplate(\@arrayofExptsH,cleanpath($figureDir),$aScript,\@aargu,cleanpath($aScriptout),$iExpt,cleanpath($workdir),$mode,cleanpath($asrcfile),$opt_s,$opt_u,$opt_v,cleanpath($frexml),cleanpath($stdoutdir),$opt_P,$opt_T);
      #
      } else {
        
@@ -333,9 +337,9 @@ sub analysis {
          my $availablechunk = "$arrayofExptsH[0]{astartYear}-$arrayofExptsH[0]{aendYear}";
          if ($arrayofExptsH[0]{specify1year}) {$availablechunk = $arrayofExptsH[0]{specify1year};}
          if ($cksumCRC[0] gt 0) {
-           $aScriptout = "$aoutscriptdir_final/$afile[$#afile].$availablechunk.$cksumCRC[0]";
+           $aScriptout = "$aoutscriptdir_final/$afile[$#afile].$availablechunk$unique.$cksumCRC[0]";
             } else {
-           $aScriptout = "$aoutscriptdir_final/$afile[$#afile].$availablechunk";
+           $aScriptout = "$aoutscriptdir_final/$afile[$#afile].$availablechunk$unique";
             }
          if ( -e $aScriptout and ! $opt_R ) { print STDERR "ANALYSIS: $aScriptout already exists, SKIP\n"; next;}
 
@@ -356,9 +360,9 @@ sub analysis {
         #----#---- fill the variables in the template
         #if ($opt_v) {print STDERR "fill these vars: @arrayofExptsH\n,$figureDir\n,$aScript\n,$aScriptout\n,$iExpt\n,$workdir\n,$mode\n"; }
          if ($tsORav eq "timeAverage") { 
-           filltemplate(\@arrayofExptsH,cleanpath($figureDir),$aScript,\@aargu,cleanpath($aScriptout),$iExpt,cleanpath($workdir),$mode,cleanpath($asrcfile),$opt_s,$opt_v,cleanpath($frexml),cleanpath($stdoutdir),$opt_P,$opt_T); 
+           filltemplate(\@arrayofExptsH,cleanpath($figureDir),$aScript,\@aargu,cleanpath($aScriptout),$iExpt,cleanpath($workdir),$mode,cleanpath($asrcfile),$opt_s,$opt_u,$opt_v,cleanpath($frexml),cleanpath($stdoutdir),$opt_P,$opt_T); 
          } else {
-           filltemplate(\@arrayofExptsH,cleanpath($figureDir),$aScript,\@aargu,cleanpath($aScriptout),$iExpt,cleanpath($workdir),$mode,"",$opt_s,$opt_v,cleanpath($frexml),cleanpath($stdoutdir),$opt_P,$opt_T); 
+           filltemplate(\@arrayofExptsH,cleanpath($figureDir),$aScript,\@aargu,cleanpath($aScriptout),$iExpt,cleanpath($workdir),$mode,"",$opt_s,$opt_u,$opt_v,cleanpath($frexml),cleanpath($stdoutdir),$opt_P,$opt_T); 
          }
 
        } else { #if ($cumulative 
@@ -377,9 +381,9 @@ sub analysis {
 
          my $asrcfile = "$component.$availablechunk.$ssn.nc";
          if ($cksumCRC[0] gt 0) {
-           $aScriptout = "$aoutscriptdir_final/$afile[$#afile].$availablechunk.$cksumCRC[0]";
+           $aScriptout = "$aoutscriptdir_final/$afile[$#afile].$availablechunk$unique.$cksumCRC[0]";
            } else {
-           $aScriptout = "$aoutscriptdir_final/$afile[$#afile].$availablechunk";
+           $aScriptout = "$aoutscriptdir_final/$afile[$#afile].$availablechunk$unique";
            }
          if ( -e $aScriptout and ! $opt_R ) { print STDERR "ANALYSIS: $aScriptout already exists, SKIP\n"; next;}
 
@@ -394,9 +398,9 @@ sub analysis {
          #----#---- fill the variables in the template
          #if ($opt_v) {print STDERR "fill these vars: @arrayofExptsH\n,$figureDir\n,$aScript\n,$aScriptout\n,$iExpt\n,$workdir\n,$mode\n";}
          if ($tsORav eq "timeAverage") { 
-           filltemplate(\@arrayofExptsH,cleanpath($figureDir),$aScript,\@aargu,cleanpath($aScriptout),$iExpt,cleanpath($workdir),$mode,cleanpath($asrcfile),$opt_s,$opt_v,cleanpath($frexml),cleanpath($stdoutdir),$opt_P,$opt_T); 
+           filltemplate(\@arrayofExptsH,cleanpath($figureDir),$aScript,\@aargu,cleanpath($aScriptout),$iExpt,cleanpath($workdir),$mode,cleanpath($asrcfile),$opt_s,$opt_u,$opt_v,cleanpath($frexml),cleanpath($stdoutdir),$opt_P,$opt_T); 
          } else {
-           filltemplate(\@arrayofExptsH,cleanpath($figureDir),$aScript,\@aargu,cleanpath($aScriptout),$iExpt,cleanpath($workdir),$mode,"",$opt_s,$opt_v,cleanpath($frexml),cleanpath($stdoutdir),$opt_P,$opt_T); 
+           filltemplate(\@arrayofExptsH,cleanpath($figureDir),$aScript,\@aargu,cleanpath($aScriptout),$iExpt,cleanpath($workdir),$mode,"",$opt_s,$opt_u,$opt_v,cleanpath($frexml),cleanpath($stdoutdir),$opt_P,$opt_T); 
          }
        }  #for (my $n = 0 ...
      } #if ($cumulative ..
@@ -563,6 +567,9 @@ sub availablechunks {
      if (substr($last,0,4) - substr($first,0,4) == $clnumber - 1) {
        @availablechunksfirst = (@availablechunksfirst, substr($first,0,4));
        @availablechunkslast = (@availablechunkslast, substr($last,0,4));
+     } elsif ((substr($last,0,6) - substr($first,0,6)) %100 == 99 ) {
+       @availablechunksfirst = (@availablechunksfirst, substr($first,0,6));
+       @availablechunkslast = (@availablechunkslast, substr($last,0,6));
      }
    } 
 
@@ -576,20 +583,25 @@ sub checkmissingchunks {
 
    my @themissing=();
    my $count = $pt;
+   my $month = substr($chunks[$pt],4,2);
+   #print "CHECKMISSINGCHUNKS: databegyr=$databegyr,dataendyr=$dataendyr,clnumber=$clnumber,month='$month',pt=$pt,chunks=$chunks\n";
+
    for (my $check = $databegyr; $check <= $dataendyr ;$check += $clnumber) {
-     
-     if (padzeros($check) != substr($chunks[$count],0,4)) { 
+     #print "CHECKMISSINGCHUNKS: $check"."$month ne ".substr($chunks[$count],0,6)."\n";
+     if ( padzeros($check).$month != substr($chunks[$count],0,6) ) { 
        @themissing = (@themissing,$check);
-       }
-       $count++;
+     }
+     if ( "$month" eq '' and $count >= @chunks ) { last; }   #works for models starting in Jan
+     $count++;
+     if ( "$month" ne '' and $count >= @chunks ) { last; }   #works for models NOT starting in Jan
    }
-     return @themissing;
+   return @themissing;
 }
 
 sub filltemplate {
 
 # fill the template with the passing variables
-    my ($arrayofExptsH_ref,$figureDir,$aScript,$aargu,$aScriptout,$iExpt,$workdir,$mode,$asrcfile,$opt_s,$opt_v,$frexml,$stdoutdir,$platform,$target) = @_; 
+    my ($arrayofExptsH_ref,$figureDir,$aScript,$aargu,$aScriptout,$iExpt,$workdir,$mode,$asrcfile,$opt_s,$opt_u,$opt_v,$frexml,$stdoutdir,$platform,$target) = @_; 
     
     #if ( $opt_v ) {
     #   for(my $j=0; $j<2;$j++) {
@@ -650,7 +662,8 @@ sub filltemplate {
     $tmpsch =~ s/set analysis_options\s*$/set analysis_options = $arrayofExptsH_ref->[0]->{options}/m;
     $tmpsch =~ s/set platform\s*$/set platform = $platform/m;
     $tmpsch =~ s/set target\s*$/set target = $target/m;
-    
+    $tmpsch =~ s/set unique\s*$/set unique = $opt_u/m;
+
     # for addtional experiments
     if ($iExpt >= 1) {
      for my $i (1 .. $iExpt) {

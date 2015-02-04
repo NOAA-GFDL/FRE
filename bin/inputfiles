@@ -1,0 +1,60 @@
+#!/usr/bin/env bash
+
+usage() {
+    echo "inputfiles [-h] -p <platform> -x <xml>"
+    echo "This script will print all input dataFiles from the XML in sorted order."
+    echo "You can further restrict your results by using 'grep' or grep -v': inputfiles ... | grep '/ltfs'."
+    echo "-h: prints this usage screen"
+#    echo "-e: limits the listed files to the experiment provided"
+    echo "-p: specifies the platform to use"
+    echo "-x: specifies the xml to use"
+}
+
+XPATH="//input/dataFile|//*[@file]/@file"
+
+while getopts ":he:p:x:" opt; do
+    case $opt in
+	h)
+	    usage
+	    exit 0
+	    ;;
+#	e)
+#	    EXPERIMENT=${OPTARG}
+#	    ;;
+	p)
+	    PLATFORM=${OPTARG}
+	    ;;
+	x)
+	    XML=${OPTARG}
+	    ;;
+	\?)
+	    echo "Invalid option: -${OPTARG} (see -h for help)" >&2
+	    exit 1
+	    ;;
+	:)
+	    echo "Option -${OPTARG} requires an argument." >&2
+	    exit 1
+	    ;;
+    esac
+done
+
+if [[ -z ${PLATFORM} ]]; then
+    echo "Error: You must provide a platform (see -h for help)."
+    exit 2
+fi
+
+if [[ -z ${XML} ]]; then
+    echo "Error: You must provide an XML (see -h for help)."
+    exit 2
+fi
+
+# get a single experiment name, frelist will still print all the
+# datafiles in the entire XML, but with an experiment name give, each
+# will only be printed once.
+exp_name=$( frelist -p "${PLATFORM}" -x "${XML}" --no-inherit | head -n 1 )
+
+#if [[ -n ${EXPERIMENT} ]]; then
+#    XPATH="//experiment[@name='${EXPERIMENT}']/input/dataFile"
+#fi
+
+frelist -p "${PLATFORM}" -e "${XPATH}" -x "${XML}" ${exp_name} | sed -e 's/\s\+/\n/g' | awk '{print $1}' | grep '^/' | sort | uniq

@@ -11,10 +11,10 @@ set CMDLOGS = $AUTORTSDIR/go_rts_batch.logs
 set target_list = "prod,openmp"
 set platform_list = "ncrc.intel"
 set xml_list = ()
-set xinclude_list = ()
 set xml_dir = ""
 set xml_list = "mom4p1_cpld.xml"
 set help = 0
+set interactive = 0
 set EXPLIST = ()
 set myrelease = ""
 set myfrestem = ""
@@ -22,19 +22,18 @@ set myfreversion = ""
 set mydebuglevel = ""
 set mom_rts_tag = ""
 set mom_cvs_tag = ""
+set mom_git_tag = ""
 set preprocess_xml = ""
 set GO_OPS = ""
 set AUTOLOG = 1 
 
-set argv = (`getopt -u -o hrd:x:p:t: -l frerts_ops: -l release:  -l fre_stem: -l fre_version: -l debuglevel: -l mom_rts_tag: -l mom_cvs_tag: -l preprocess_xml: -l xinclude --  $*`)
+set argv = (`getopt -u -o hd:x:p:t: -l frerts_ops: -l release:  -l fre_stem: -l fre_version: -l debuglevel: -l mom_rts_tag: -l mom_cvs_tag: -l mom_git_tag: -l preprocess_xml: -l interactive --  $*`)
 
 
 while ("$argv[1]" != "--")
     switch ($argv[1])
         case -h:
             set help   = 1;  breaksw
-        case -r:
-            set refresh   = 1;  breaksw
         case -d:
             set xml_dir   = $argv[2]; shift argv; breaksw
 	case -x:
@@ -61,14 +60,14 @@ while ("$argv[1]" != "--")
             set mom_rts_tag = $argv[2]; shift argv; breaksw
         case --mom_cvs_tag:
             set mom_cvs_tag = $argv[2]; shift argv; breaksw
+        case --mom_git_tag:
+            set mom_git_tag = $argv[2]; shift argv; breaksw
         case --preprocess_xml:
             set preprocess_xml = $argv[2]; shift argv; breaksw
         case --frerts_ops:
             set GO_OPS = $argv[2]; shift argv; breaksw
-	case --xinclude:
-	    set xinclude_list =  $argv[2]; shift argv
-	    set xinclude_list =  `echo $xinclude_list | awk  '{gsub(/,/," ");print}'`
-            breaksw
+	case --interactive:
+            set interactive   = 1;  breaksw
     endsw
     shift argv
 end
@@ -79,7 +78,6 @@ foreach EXP ( $argv )
     set EXPLIST = ($EXPLIST $EXP)
 end
 
-   
 if ( $help ) then
 HELP:
 cat << EOF
@@ -88,12 +86,21 @@ Name:      frerts_batch.csh
 Synopsis:  Creates and runs frerts scripts for a list of xmls, platforms, targets, experiments
 
 Usage:     frerts_batch.csh  
-	   -d the path to directory that contains the xmls. Defaults to "." if not given
            -x "comma_separated_list_of_xmls" 
            -p "comma_separated_list_of_platforms"
            -t "comma_separated_list_of_targets" 
            --frerts_ops "comma_separated_list_of_options_for_frerts_engine" 
            space_separated_list_of_experiments	  
+
+           list of optional arguments:
+           -d the path to directory that contains the xmls. Defaults to "." if not given
+           --release  RELEASE   specify and override the release tag in the xmls
+           --fre_stem STEM      specify and override the frestem in the xmls
+           --fre_version FREV   specify and override the fre version in the xmls. Note that / has to be triply escaped like --fre_version 'fre\\\/test'
+           --debuglevel _A      use the same executable as before but append a string to the output directories (to facilitate testing a change in the xml)
+           --mom_cvs_tag SOMETAG specify and override the cvs tag for MOM5 in the xmls (keep all the rest of components at RELEASE tag)
+           --mom_git_tag SOMETAG specify and override the git tag for MOM6 in the xmls (keep all the rest of components at RELEASE tag)
+           --interactive [no arg] print out the stdout in the command shell (to facilitate using jenkins)
 
 Examples:
 
@@ -198,10 +205,13 @@ if( $myrelease != "" ) then
     sed 's/<property name.*"RELEASE.*value.*\/>/  <property name=\"RELEASE\"  value=\"somethingnoonewouldthinkofever\"\/>/g' -i $xmlfile
     sed  "s/somethingnoonewouldthinkofever/$myrelease/g" -i $xmlfile
 endif    
+
 if( $myfrestem != "" ) then
-    sed 's/<property name.*FRE_STEM.*value.*\/>/  <property name=\"FRE_STEM\"  value=\"\somethingnoonewouldthinkofever\"\/>/g' -i $xmlfile
+    set myfrestem  = `echo $myfrestem  | awk  '{gsub(/\//,"\\\/");print}'` #sed does not like / in a var 
+    sed 's/<property name.*FRE_STEM.*value.*\/>/  <property name=\"FRE_STEM\"  value=\"somethingnoonewouldthinkofever\"\/>/g' -i $xmlfile
     sed  "s/somethingnoonewouldthinkofever/$myfrestem/g" -i $xmlfile
 endif    
+
 if( $myfreversion != "" ) then
     sed 's/<property name.*FRE_VERSION.*value.*\/>/  <property name=\"FRE_VERSION\"  value=\"somethingnoonewouldthinkofever\"\/>/g' -i $xmlfile
     sed  "s/somethingnoonewouldthinkofever/$myfreversion/g" -i $xmlfile
@@ -230,6 +240,13 @@ if( $mom_cvs_tag != "" ) then
     sed 's/<property name.*MOM_CVS_TAG.*value.*\/>/  <property name=\"MOM_CVS_TAG\"  value=\"somethingnoonewouldthinkofever\"\/>/g' -i $xmlfile
     sed  "s/somethingnoonewouldthinkofever/$mom_cvs_tag/g" -i $xmlfile
 endif
+
+if( $mom_git_tag != "" ) then
+    sed 's/<property name.*MOM6_GIT_TAG.*value.*\/>/  <property name=\"MOM6_GIT_TAG\"  value=\"somethingnoonewouldthinkofever\"\/>/g' -i $xmlfile
+    sed  "s/somethingnoonewouldthinkofever/$mom_git_tag/g" -i $xmlfile
+endif
+
+
 
 if( $preprocess_xml != "" ) then
 $preprocess_xml $xmlfile
@@ -292,8 +309,11 @@ set LOGS = "$LOGS $TODAY </br> $CMD_IN </br>"
 	set LOGS = "$LOGS </br> (<a href=file://$RTSTOOL>$RTSTOOL</a> -x <a href=file://$xmlfile>$xmlfile</a>  -p $platform -t $target $GO_OPS  --stdout $STDOUTDATE --stderr $STDERRDATE $EXPLIST >> <a href=file://$STDOUTDATE>$STDOUTDATE</a> & ) >> & <a href=file://$STDERRDATE>$STDERRDATE</a></br></br>" 
 
  	echo $DATE > $STDOUTDATE
-	( $RTSTOOL -x $xmlfile -p $platform -t $target $GO_OPS --stdout $STDOUTDATE --stderr $STDERRDATE $EXPLIST >> $STDOUTDATE & ) >> & $STDERRDATE 
-
+        if( $interactive ) then
+            $RTSTOOL -x $xmlfile -p $platform -t $target $GO_OPS --stdout $STDOUTDATE --stderr $STDERRDATE $EXPLIST |& tee $STDOUTDATE
+        else
+            ( $RTSTOOL -x $xmlfile -p $platform -t $target $GO_OPS --stdout $STDOUTDATE --stderr $STDERRDATE $EXPLIST >> $STDOUTDATE & ) >> & $STDERRDATE
+        endif
 #       Delay so that the CVS check-out to the same directory won't happen 
 	echo
 #	echo "I did: $CMD"
