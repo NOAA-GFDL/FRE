@@ -1,8 +1,77 @@
 #!/bin/csh -fx
 #
-# $Id: output.stager,v 1.1.2.21.4.1.2.1 2014/01/17 15:15:15 Seth.Underwood Exp $
+# $Id: output.stager,v 1.1.2.1 2014/09/18 15:16:14 sdu Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: Output Stager - NESCC Version
+# ------------------------------------------------------------------------------
+# afy    Ver   1.00  Initial version                                April 12
+# afy    Ver   2.00  Add double-quotes into string comparisons      May 12
+# afy    Ver   2.01  Load 'File-NFSLock' (for the hsmput)           May 12
+# afy    Ver   2.02  Set FRE modulefiles directory only once        May 12
+# afy    Ver   2.03  Remove "size=1" from PBS options               May 12
+# afy    Ver   2.04  Fix checking in case PTMP exists, but empty    May 12
+# afy    Ver   3.00  Add arguments 'stagingType'/'outputDirRemote'  May 12
+# afy    Ver   3.01  Add arguments 'actionXfer*'                    May 12
+# afy    Ver   3.02  Add arguments 'action*Force'                   May 12
+# afy    Ver   3.03  Add arguments '*Options'                       May 12
+# afy    Ver   3.04  Add GridFTP setup & checkup                    May 12
+# afy    Ver   3.05  Add transfer/chaining steps                    May 12
+# afy    Ver   4.00  Set 'anyerror' variable (thanks to Seth)       May 12
+# afy    Ver   4.01  Set 'GLOBUS_TCP_PORT_RANGE' envvar             May 12
+# afy    Ver   4.02  Set 'GLOBUS_TCP_SOURCE_RANGE' envvar           May 12
+# afy    Ver   5.00  Remove argument 'freModuleFilesDir'            June 12
+# afy    Ver   5.01  Remove argument 'freCommandsHomeDir'           June 12
+# afy    Ver   5.02  Remove argument 'freNCToolsHomeDir'            June 12
+# afy    Ver   5.03  Remove argument 'freTempDir'                   June 12
+# afy    Ver   5.04  Add arguments 'freCommands(Module*|Version)*'  June 12
+# afy    Ver   5.05  Add arguments 'freNCTools(Module*|Version)'    June 12
+# afy    Ver   5.06  Add arguments 'actionPPStart*'                 June 12
+# afy    Ver   5.07  Add arguments 'xmlFiles*'                      June 12
+# afy    Ver   5.08  Add argument 'ppStarterOptions'                June 12
+# afy    Ver   5.09  Add argument 'stdoutDirRemote'                 June 12
+# afy    Ver   5.10  Set environment via modules only               June 12
+# afy    Ver   5.11  Use 'which' to locate executables              June 12
+# afy    Ver   5.12  Add post-processing preparations/starting      June 12
+# afy    Ver   6.00  Use 'moab-zeus-submit' to submit pp.starter    June 12
+# afy    Ver   7.00  Add derived flags to simplify conditions       June 12
+# afy    Ver   8.00  Cosmetics in messages                          June 12
+# afy    Ver   9.00  Modify gfdlDTN (dtn.* => rdtn.*)               June 12
+# afy    Ver  10.00  Unload 'fre-commands' before its loading       July 12
+# afy    Ver  10.01  Add 'freNCToolsModuleName' argument            July 12
+# afy    Ver  11.00  Modify 'patternSedRegression'                  July 12
+# afy    Ver  12.00  Don't setenv 'GLOBUS_LOCATION'                 November 12
+# afy    Ver  12.01  Don't call 'globus-user-env.csh' script        November 12
+# afy    Ver  13.00  Add 'paramOverrideOn' argument                 November 12
+# afy    Ver  13.01  Add 'hsmModuleFilesDir/hsmVersion' arguments   November 12
+# afy    Ver  13.02  Conditionally load 'hsm' module                November 12
+# afy    Ver  13.03  Add 'paramVerbosityOn' argument                November 12
+# afy    Ver  14.00  Add arguments '(save|xfer)Retr(ies|y)'         December 12
+# afy    Ver  14.01  Add argument file locking (by 'lockfile')      December 12
+# afy    Ver  14.02  Add aliases 'inc(Save|Xfer)Retry'              December 12
+# afy    Ver  14.03  Add alias 'noRetries'                          December 12
+# afy    Ver  14.04  Modify messages for 'inc*Retry' exits          December 12
+# afy    Ver  14.05  Replace GridFTP by 'gcp'                       December 12
+# afy    Ver  14.06  Restrict processing by host type               December 12
+# afy    Ver  14.07  Modify mppnccombine call (no -r)               December 12
+# afy    Ver  14.08  Directly create remote stdout directory        December 12
+# afy    Ver  15.00  Add 'exitStatus' variable                      December 12
+# afy    Ver  15.01  Add 'actionRetryOn' argument                   December 12
+# afy    Ver  15.02  Don't exit in the middle of the script         December 12
+# afy    Ver  15.03  Call the 'output.retry' script                 December 12
+# afy    Ver  15.04  Retry output in xfer jobs                      December 12
+# afy    Ver  16.00  Modify checking patterns (uncombined history)  January 13
+# afy    Ver  17.00  Modify umask (026 => 022)                      January 13
+# afy    Ver  18.00  Combine files with 4+ digits extension         February 13
+# afy    Ver  18.01  Remove all the PBS options                     February 13
+# afy    Ver  19.00  Combine compressed history files               March 13
+# afy    Ver  19.01  Remove argument 'combineMemory'                March 13
+# afy    Ver  19.02  Dynamically estimate memory to combine         March 13
+# afy    Ver  19.03  Increase combining concurrency                 March 13
+# afy    Ver  19.04  Allow combining on login nodes                 March 13
+# afy    Ver  19.05  Call 'mppnccombine' without options -n/-e      March 13
+# afy    Ver  19.06  Remove 'paramOverrideOn' argument              March 13
+# afy    Ver  20.00  Call 'mppnccombine' with option -m             March 13
+# afy    Ver  21.00  Modify 'combineMemory' estimation              April 13
 # ------------------------------------------------------------------------------
 # Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2000-2013
 # Designed and written by V. Balaji, Amy Langenhorst and Aleksey Yakovlev
@@ -13,7 +82,7 @@
   set -r runtimeBeg = `date "+%s"`
 
   if ( $echoOn ) unset echo
-  echo '<NOTE> : ====== FRE OUTPUT STAGER $Id: output.stager,v 1.1.2.21.4.1.2.1 2014/01/17 15:15:15 Seth.Underwood Exp $ ======'
+  echo '<NOTE> : ====== FRE OUTPUT STAGER $Id: output.stager,v 1.1.2.1 2014/09/18 15:16:14 sdu Exp $ ======'
   echo "<NOTE> : Starting at $HOST on `date`"
   if ( $echoOn ) set echo
 
@@ -136,6 +205,11 @@
     exit 1
   endif
 
+  # This is a temporary fix to include a PATH that has lockfile.
+  # But it should get a system installed version prior to the FRE
+  # installed version, if available.
+  setenv PATH ${PATH}:/lustre/atlas/proj-shared/cli061/opt/fre-commands/bronx-7/site/olcf/bin
+  setenv LD_LIBRARY_PATH ${LD_LIBRARY_PATH}:/lustre/atlas/proj-shared/cli061/opt/fre-commands/bronx-7/site/olcf/bin
   alias lock `which lockfile` -60 -r 10 -l 86400
 
   if ( $status == 0 ) then
@@ -885,7 +959,8 @@
       set xferToolModuleFile = $xferToolModuleFilesDir/gcp/$xferToolVersion
       if ( -f $xferToolModuleFile && -r $xferToolModuleFile ) then
         module use $xferToolModuleFilesDir
-        module unload gcp
+        module unload gcp globus
+        module load globus
 	module load gcp/$xferToolVersion
 	set -r xferSrcPrefix = ""
 	set -r xferDstPrefix = "gfdl:"
@@ -916,8 +991,12 @@
 #------------------------ global constants and aliases -------------------------
 ################################################################################
 
-  if ( $HOST =~ fe[1-8] ) then
+  if ( $HOST =~ titan-ext[1-8]\..* ) then
     set -r hostType = 'login'
+  else if ( $HOST =~ titan-batch[1-8] ) then
+    set -r hostType = 'batch' )
+  else if ( $HOST =~ dtn-sch0[1-9]\.ccs\.ornl\.gov || $HOST =~ dtn-sch1[1-2]\.ccs\.ornl\.gov ) then
+    set -r hostType = 'dtn'
   else
     set -r hostType = 'other'
   endif  
@@ -932,17 +1011,6 @@
 ################################################################################
 
   if ( $actionCombineToDo ) then
-
-    #last character of jobname == 'T' for transfer jobs
-    set jobtype = `echo -n $PBS_JOBNAME | tail -c -1`
-    if ( $jobtype == 'T' ) then
-      #rm lockfile and exit
-      if ( $echoOn ) unset echo
-      echo "*ERROR*: Cannot do a combine within a transfer job, exiting"
-      if ( $echoOn ) set echo
-      set exitStatus = 3
-      goto END
-    endif
 
     set -r patternGrepTail = '\.[0-9]{4,}$'
     set -r patternGrepRestart = '\<res\>|\<nc\>'
@@ -1387,7 +1455,7 @@
 
     if ( $actionXferToPerform ) then
 
-      if ( $hostType == 'login' ) then
+      if ( $hostType != 'other' ) then
 
 	if ( -f $archDir.$archExt && -r $archDir.$archExt ) then
 
@@ -1463,7 +1531,7 @@
 
     if ( $actionPPStartToPerform ) then
 
-      if ( $hostType == 'login' ) then
+      if ( $hostType == 'login' || $hostType == 'dtn' ) then
 
 	# ---------------- copy XML files to GFDL
 

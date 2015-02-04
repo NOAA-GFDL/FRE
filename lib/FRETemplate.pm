@@ -1,5 +1,5 @@
 #
-# $Id: FRETemplate.pm,v 18.0.2.28.2.2 2013/08/23 15:27:22 Seth.Underwood Exp $
+# $Id: FRETemplate.pm,v 18.0.2.28.2.2.4.1 2014/09/18 15:16:12 sdu Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: Template Management Module
 # ------------------------------------------------------------------------------
@@ -186,6 +186,11 @@ my $schedulerSize = sub($$$$$$)
       my $procsM = POSIX::floor($coresPerJobInc / $nt);
       my $nodesM = POSIX::ceil($np / $procsM);
 
+      if ($fre->property("FRE.scheduler.option.reqNodes"))
+      {
+         # Return the number of nodes if using nodes for the size instead of number of cores
+         return $nodesM
+      }
       # $totProcs :: Total number of processors needed for reservation
       my $totProcs = $nodesM * $coresPerJobInc;
 

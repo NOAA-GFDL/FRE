@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 # -*- cperl -*-
-# $Id: refrepp,v 18.0.8.12 2012/02/01 21:32:30 Amy.Langenhorst Exp $
+# $Id: refrepp,v 18.0.8.14 2014/11/19 17:58:32 arl Exp $
 # ------------------------------------------------------------------------------
 # refrepp: submit FRE postprocessing jobs to fill in holes
 # ------------------------------------------------------------------------------
@@ -102,7 +102,7 @@ undef my %years;
 foreach ( @files ) {
    next if /\.o\d+$/;           # eliminate output files
    print "file=$_ " if $verbose and $ENV{'DEBUG'};
-   if( /$expt\_(\w*)_(\d\d\d\d).*/ ) {
+   if( /\Q$expt\E\_(\w*)_(\d\d\d\d).*/ ) {
       print "comp=$1 year=$2\n" if $verbose and $ENV{'DEBUG'};
       $years{$1} .= $2 . ' ' unless $years{$1} =~ /\b$2\b/; # remove last trailing space later
    }
@@ -250,7 +250,7 @@ foreach my $c ( keys %years ) {
          $cmd = "$frepp -t $y -c $c -P $opt{platform} -T $opt{target} -d $hdir -x $xmlfile $expt 2>&1";
          $cmdout = qx/$cmd/;
 #get the jobscript name
-         $cmdout =~ /\nTO SUBMIT: msub -d \$HOME.* (\S+)/m;
+         $cmdout =~ /\nTO SUBMIT: msub -d $ENV{'HOME'}.* (\S+)/m;
          $script = $1;
          if ( $cmdout =~ /ERROR:/ ) {
             print "cmd=$cmd\n$cmdout\n";

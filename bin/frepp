@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 # -*- cperl -*-
-# $Id: frepp,v 18.0.2.52.2.1.2.89.2.60.2.1.2.1 2014/06/06 14:42:18 sdu Exp $
+# $Id: frepp,v 18.0.2.52.2.1.2.89.2.71 2014/11/13 20:06:19 arl Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: History/diagnostics post-processing
 # ------------------------------------------------------------------------------
@@ -37,13 +37,14 @@ use vars qw( $do_static $segTime $segUnits $caltype);
 use vars qw( $analysisdir $absfrepp $relfrepp $perlerrors );
 use vars qw( $archivedir $rootdir $workdir $tempCache $rtsVersion $platform $versionId $batchSubmit );
 use vars qw( $maxyrs $maxdisk $cubic $nlat $nlon $interpMethod $getgridspec $basenpes $call_fregrid );
-use vars qw( $checktransfer $statefile $state $writestate $didsomething $userstartmo );
+use vars qw( $checktransfer $statefile $state $writestate $didsomething $userstartmo $call_tile_fregrid );
+use vars qw( $mosaic_type $sourceGrid $xyInterp );
 
 {
 
   package frepp;
 
-  use constant VERSION => '$Id: frepp,v 18.0.2.52.2.1.2.89.2.60.2.1.2.1 2014/06/06 14:42:18 sdu Exp $';
+  use constant VERSION => '$Id: frepp,v 18.0.2.52.2.1.2.89.2.71 2014/11/13 20:06:19 arl Exp $';
 
 #Usage:    $relfrepp [ -AB:C:O:RY:Z:c:d:f:hlmMp:oqr:S:st:u:vx:z ] experiment [ experiment2 ... ]                 
   use constant OPTLIST =>
@@ -214,8 +215,6 @@ EOF
 #setting this option inside script for now
 #          -z           = insert timing calls
 
-$cubic = 0;
-$interpMethod = '';
 chomp( my $beginTime = `date +\%s` );
 
 $opt_x = 'rts.xml' unless $opt_x; #set default filename for experiments xml file
@@ -240,7 +239,7 @@ unless ( $opt_c ) {
    $opt_c = 'split';
 }
 
-$versionId = ' $Id: frepp,v 18.0.2.52.2.1.2.89.2.60.2.1.2.1 2014/06/06 14:42:18 sdu Exp $';
+$versionId = ' $Id: frepp,v 18.0.2.52.2.1.2.89.2.71 2014/11/13 20:06:19 arl Exp $';
 
 $perlerrors = "";
 $component = "";
@@ -721,10 +720,18 @@ EOF
    }
    print "basedate = $basedate\n" if $opt_v;
 
+   my $gridspec = $exp->extractVariableFile('gridSpec');
+   if ( "$gridspec" eq '' ) {
+      die "ERROR: gridSpec for platform $opt_P was not found in $opt_x.\n";
+   } elsif (! -e $gridspec) {
+      die "ERROR: gridSpec file does not exist: $gridspec\n"; 
+   } else {
+      print STDERR "NOTE: Using gridSpec $gridspec\n" if $opt_v;
+   }
+
    #if refineDiag run, insert refineDiag csh here
    if ( $opt_D ) {
-      #$cshscripttmpl .= refineDiag($tmphistdir,$stdoutdir,$ptmpDir,&FREUtil::parseFortranDate($basedate));
-      $cshscripttmpl .= refineDiag($tmphistdir,$stdoutdir,$ptmpDir,$basedate,$refinedir);
+      $cshscripttmpl .= refineDiag($tmphistdir,$stdoutdir,$ptmpDir,$basedate,$refinedir,$gridspec);
    }
 
    if ( $opt_f or $opt_D ) {
@@ -858,14 +865,6 @@ EOF
 #endif
 #EOF
 
-      my $gridspec = $exp->extractVariableFile('gridSpec');
-      if ( "$gridspec" eq '' ) {
-         die "ERROR: gridSpec for platform $opt_P was not found in $opt_x.\n";
-      } elsif (! -e $gridspec) {
-         die "ERROR: gridSpec file does not exist: $gridspec\n"; 
-      } else {
-         print STDERR "NOTE: Using gridSpec $gridspec\n" if $opt_v;
-      }
       $getgridspec = "cd \$work; dmget $gridspec\n";
       if ( $gridspec =~ /cpio$/ ) {
          $getgridspec .= <<EOF;
@@ -888,7 +887,7 @@ endif
 EOF
       }
 
-      $call_fregrid = $getgridspec . <<EOF;
+      $call_tile_fregrid = $getgridspec . <<EOF;
 set remap_dir = \$fregrid_remap_file:h
 set remap_file = \$fregrid_remap_file:t
 if ( -e \$fregrid_remap_file ) then
@@ -900,13 +899,11 @@ if ( -e \$fregrid_remap_file ) then
    endif
 endif
 EOF
-      $call_fregrid .= <<'EOF';
+      $call_tile_fregrid .= <<'EOF';
 if ( -e mosaic.nc ) then
-   set input_mosaic = `ncks -H -v atm_mosaic_file mosaic.nc | sed 's/.*="//;s/"//'`
+   set input_mosaic = `ncks -H -v $mosaic_type mosaic.nc | sed 's/.*="//;s/"//'`
 else if ( -e grid_spec.nc ) then
-   set input_mosaic = `ncks -H -v atm_mosaic_file grid_spec.nc | sed 's/.*="//;s/"//'`
-else if ( -e atmos_mosaic.nc ) then
-   set input_mosaic = atmos_mosaic.nc
+   set input_mosaic = `ncks -H -v $mosaic_type grid_spec.nc | sed 's/.*="//;s/"//'`
 else
    echo ERROR: Cannot locate atm_mosaic_file
    exit 1
@@ -924,12 +921,12 @@ set order1 = ( precip prec_ls snow_ls prec_conv snow_conv uw_precip prec_uwc sno
 set attCmds = ()
 unset echo
 EOF
-      $call_fregrid .= <<EOF;
+      $call_tile_fregrid .= <<EOF;
 if ( -e $ppRootDir/.non_default_interp_method ) then
   source $ppRootDir/.non_default_interp_method
 endif
 EOF
-      $call_fregrid .= <<'EOF';
+      $call_tile_fregrid .= <<'EOF';
 foreach order1var ( $order1 )
   foreach modelvar ( `echo $interpvars | sed -e "s/,/ /g"` )
     if ( $modelvar == $order1var ) then
@@ -943,7 +940,36 @@ foreach order1var ( $order1 )
 end
 set echo
 EOF
+
+      $call_fregrid = $call_tile_fregrid;
+      $call_fregrid =~ s/tile1.//g;
+
       $call_fregrid .= <<EOF;
+if (\$#attCmds > 0) then
+   $time_ncatted ncatted -h -O \$attCmds \$fregrid_in.nc
+   #check_ncatted
+endif
+
+if ( "\$fregrid_wt" != '' ) then
+   set fregrid_yr = `echo \$fregrid_in_date | cut -c 1-4`
+   foreach fregridwtfile ( `ls $opt_d/\${fregrid_yr}????.nc.*` )
+      set fregridwtfile = \$fregridwtfile:t:r
+      $time_hsmget \$hsmget -a $opt_d -p $ptmpDir/history -w $tmphistdir \$fregridwtfile/\\*land_static\\*
+      if ( \$status ) then
+         echo "WARNING: hsmget reported failure, retrying..."
+         $time_hsmget \$hsmget -a $opt_d -p $ptmpDir/history -w $tmphistdir \$fregridwtfile/\\*land_static\\*
+         $checktransfer
+      endif
+   end
+   ln -s \$histDir/\${fregrid_yr}????.nc/*land_static* .
+      foreach fregrid_mo ( 02 03 04 05 06 07 08 09 10 11 12 )
+        if ( ! -e \${fregrid_yr}\${fregrid_mo}01.land_static.nc ) then
+           ln -s \${fregrid_yr}0101.land_static.nc \${fregrid_yr}\${fregrid_mo}01.land_static.nc
+        endif
+      end
+endif
+EOF
+      $call_tile_fregrid .= <<EOF;
 if (\$#attCmds > 0) then
    $time_ncatted ncatted -h -O \$attCmds \$fregrid_in.tile1.nc
    $time_ncatted ncatted -h -O \$attCmds \$fregrid_in.tile2.nc
@@ -976,34 +1002,23 @@ if ( "\$fregrid_wt" != '' ) then
 endif
 EOF
       if ( $basenpes == 1 ) {
-         $call_fregrid .= <<EOF;
-$time_fregrid fregrid --input_mosaic \$input_mosaic --input_file \$fregrid_in --interp_method \$interp_method --remap_file \$remap_file --nlon \$nlon --nlat \$nlat --scalar_field \$interpvars \$fregrid_wt
+         my $exec_fregrid .= <<EOF;
+$time_fregrid fregrid --standard_dimension --input_mosaic \$input_mosaic --input_file \$fregrid_in --interp_method \$interp_method --remap_file \$remap_file --nlon \$nlon --nlat \$nlat --scalar_field \$interpvars \$fregrid_wt --output_file out.nc
+mv out.nc \$fregrid_in.nc
 EOF
+         $call_tile_fregrid .= $exec_fregrid;
+         $call_fregrid .= $exec_fregrid;
       } else {
-         $call_fregrid .= <<EOF;
-$time_fregrid mpirun -np $basenpes fregrid_parallel --input_mosaic \$input_mosaic --input_file \$fregrid_in --interp_method \$interp_method --remap_file \$remap_file --nlon \$nlon --nlat \$nlat --scalar_field \$interpvars \$fregrid_wt
+         my $exec_fregrid .= <<EOF;
+$time_fregrid mpirun -np $basenpes fregrid_parallel --standard_dimension --input_mosaic \$input_mosaic --input_file \$fregrid_in --interp_method \$interp_method --remap_file \$remap_file --nlon \$nlon --nlat \$nlat --scalar_field \$interpvars \$fregrid_wt --output_file out.nc
+mv out.nc \$fregrid_in.nc
 EOF
+         $call_tile_fregrid .= $exec_fregrid;
+         $call_fregrid .= $exec_fregrid;
       }
-      $call_fregrid .= <<EOF;
+
+   my $rename_regridded = <<EOF;
 #check_fregrid
-$time_rm rm \$fregrid_in.tile?.nc
-$time_rm rm *.grid_spec.tile*.nc
-set renamevars = ( -h -d grid_xt,lon -d grid_yt,lat -v grid_xt,lon -v grid_yt,lat )
-set renameatts = ( -h -a long_name,lon,m,c,"longitude" -a long_name,lat,m,c,"latitude" -a bounds,lon,m,c,"lon_bnds" -a bounds,lat,m,c,"lat_bnds" )
-if (`ncdump -h \$fregrid_in.nc | grep -c ":coordinates = "`) then
-   set renameatts = ( \$renameatts -a coordinates,,d,, )
-endif 
-if (`ncexists -f \$fregrid_in.nc -v grid_xt_bnds`) then
-   $time_ncrename ncrename \$renamevars -v grid_xt_bnds,lon_bnds -v grid_yt_bnds,lat_bnds \$fregrid_in.nc
-   #check_ncrename
-   $time_ncatted ncatted \$renameatts -a long_name,lon_bnds,m,c,"longitude bounds" -a long_name,lat_bnds,m,c,"latitude bounds" \$fregrid_in.nc
-   #check_ncatted
-else
-   $time_ncrename ncrename \$renamevars \$fregrid_in.nc
-   #check_ncrename
-   $time_ncatted ncatted \$renameatts \$fregrid_in.nc
-   #check_ncatted
-endif
 
 if ( ! -e \$fregrid_remap_file ) then
    ls -l \$remap_file*
@@ -1015,6 +1030,13 @@ if ( ! -e \$fregrid_remap_file ) then
    endif
 endif
 
+EOF
+      $call_tile_fregrid .= $rename_regridded;
+      $call_fregrid .= $rename_regridded;
+
+      $call_tile_fregrid .= <<EOF;
+$time_rm rm \$fregrid_in.tile?.nc
+$time_rm rm *.grid_spec.tile*.nc
 EOF
 
    if ( $opt_A) {print STDERR "\n ANALYSIS ONLY mode, pp/ files will not be generated\n";}
@@ -1122,28 +1144,74 @@ EOF
          }
 
       }
+      #initialize per component
+      $cubic = 0;
+      $sourceGrid = '';
+      $xyInterp = '';
+      $interpMethod = '';
+      #xyInterp
+      my $sourceGridAtt = $ppcNode->findvalue('@sourceGrid');
+
+      #backwards reproducibility
+      my $c2l = $ppcNode->findvalue('@cubicToLatLon');
+      
+      if ( "$c2l" eq 'none' ) { #leave data on cubed sphere grid
+         $sourceGrid = 'cubedsphere';
+         $xyInterp = '';
+         $mosaic_type = "atm_mosaic_file";
+      } elsif ( "$c2l" ne '' ) { #convert to lat lon grid
+         $sourceGrid = 'cubedsphere';
+         $xyInterp = $c2l;
+         $mosaic_type = "atm_mosaic_file";
+      } else { #latlon grid
+         if ( "$sourceGridAtt" eq '' ) {
+            $sourceGrid = 'latlon';
+            $xyInterp = '';
+            $mosaic_type = "atm_mosaic_file";
+         }
+      }
 
       #check if need to convert cube sphere grid to lat lon
-      my $c2l = $ppcNode->findvalue('@cubicToLatLon');
-      $nlat = 0; #is zero okay for default value?
-      $nlon = 0;
-      if ( "$c2l" eq 'none' ) { #leave data on cubed sphere grid
-         $cubic = 1;
-         print STDERR "Data will be left on cubed sphere grid\n" if $opt_v;
-         $cshscript .= "#Grid type: cubed sphere\n";
-      } elsif ( "$c2l" ne '' ) { #convert to lat lon grid
-         $cubic = 2;
-         ($nlat,$nlon) = split(',',$c2l);
-         print STDERR "Cubed sphere data will be converted to (nlat,nlon)=($nlat,$nlon)\n" if $opt_v;
-         $cshscript .= "#Grid type: cubed sphere will be converted to latlon\n";
+      my @gridstrings = split(/-/, $sourceGridAtt);
+      if ( "$gridstrings[0]" eq "atmos" ) {
+         $mosaic_type = "atm_mosaic_file";
+      } elsif ( "$gridstrings[0]" eq "ocean" ) {
+         $mosaic_type = "ocn_mosaic_file";
+      } elsif ( "$gridstrings[0]" eq "land" ) {
+         $mosaic_type = "lnd_mosaic_file";
+      } elsif ( "$gridstrings[0]" eq "none" ) {
+         $mosaic_type = "none";
       } else {
-         $cubic = 0;
-         $cshscript .= "#Grid type: latlon\n";
+         die "sourceGrid mosaic type '$gridstrings[0]' not supported. sourceGrid string must be 'none' or of the form: {atmos,ocean,land}-{latlon,cubedsphere,tripolar}\n" if "$mosaic_type" eq '';
       }
-      print STDERR "cubic option is $cubic\n" if $opt_V;
-      
+      $cshscript .= "set mosaic_type = $mosaic_type\n"; #this will be wrong for ocean, but not used.
+      if ( "$sourceGridAtt" eq 'none' ) {
+         $sourceGrid = 'none' if "$sourceGrid" eq '';
+      } else {
+         $sourceGrid = $gridstrings[1] if "$sourceGrid" eq '';
+      }
+      $xyInterp = $ppcNode->findvalue('@xyInterp') if "$xyInterp" eq '';
+      if ( "$sourceGrid" eq '' ) {
+         die "ERROR: Must specify postprocessing component 'sourceGrid' attribute of the form: '{atmos,ocean,land}-{latlon,cubedsphere,tripolar}' or 'none'\n";
+      } elsif ( "$sourceGrid" !~ /(cubedsphere|latlon|tripolar|none)/ ) {
+         die "ERROR: sourceGrid must be 'none' or '{atmos,ocean,land}-{cubedsphere,latlon,tripolar}'\n";
+      }
+      $nlat = 0; 
+      $nlon = 0;
+      if ( "$xyInterp" eq '' ) {
+         print STDERR "Data will be left on $sourceGrid grid\n" if $opt_v;
+         $cshscript .= "#Grid type: $sourceGrid\n";
+      } elsif ( "$xyInterp" =~ /\d+,\d+/ ) {
+         ($nlat,$nlon) = split(',',$xyInterp);
+         print STDERR "$sourceGrid data will be converted to (nlat,nlon)=($nlat,$nlon)\n" if $opt_v;
+         $cshscript .= "#Grid type: $sourceGrid will be converted to latlon (nlat,nlon)=($nlat,$nlon)\n";
+      } else {
+         die "ERROR: xyInterp must specify a 'lat,lon' for regridding\n";
+      }
+      $interpMethod = 'conserve_order1';
+      $interpMethod = 'conserve_order2' if "$sourceGrid" eq "cubedsphere";
+
       #check if non-default interpMethod specified
-      $interpMethod = 'conserve_order2';
       my $componentIM = $ppcNode->findvalue('@interpMethod');
       if ( "$componentIM" ne "" ) { $interpMethod = $componentIM; }
 
@@ -1193,6 +1261,7 @@ EOF
       if ( "$startdate" ne "" ) {
          $startdate = FREUtil::padzeros($startdate);
          $sim0 = &ParseDate($startdate);
+         if ( "$startdate" eq '0001' ) {$sim0='0001010100:00:00';}
          if ( "$sim0" ne "" and &Date_Cmp($run0,$sim0) == 1 ) {
             mailuser("the $component postprocessing start attribute ($sim0) must be equal to or later than the start of the run ($run0). The default value of the start attribute is the start of the run.  Setting the start attribute to a later date provides the ability to skip years of data at the beginning of a run.  Please check the start attribute of all postprocessing components.");
             print STDERR "WARNING: the $component postprocessing start attribute ($sim0) must be equal to or later than the start of the run ($run0).  The default value of the start attribute is the start of the run.  Setting the start attribute to a later date provides the ability to skip years of data at the beginning of a run.  Please check the start attribute of all postprocessing components.";
@@ -1219,7 +1288,7 @@ EOF
       } elsif( $startflag eq 1 ) {
          print "NOTE: t0 > sim0 for $component\n" if $opt_v;
       } else {
-         print "WARNING: having trouble comparing t0 to sim0 for $component\n" if $opt_v;
+         print "WARNING: having trouble comparing t0 to sim0 ($t0,$sim0) for $component\n" if $opt_v;
       }
       print "      sim0 is $sim0 (from basedate or start attribute)\n" if $opt_v;
       #get simulation end date from production xml -> simEND
@@ -2573,14 +2642,14 @@ sub convertSegments {
    my $cubicLoopStart = "";
    my $cubicLoopEnd = "";
    my $cubicLinkGridSpec = "";
-   if ( $cubic ) {
+   if ( "$sourceGrid" eq 'cubedsphere' ) {
       $cubicLoopStart = "set i = 1\nwhile ( \$i <= 6 )";
       $cubicLoopEnd = "@ i ++\nend";
       $diag_source = "$diag_source.tile\$i";
    }
 
    if ( $segTime == 6 ) {
-      if ($cubic) {
+      if ("$sourceGrid" eq 'cubedsphere') {
       $cubicLinkGridSpec = <<EOF;
    ln -s \${hDate}0101.grid_spec.tile\$i.nc \${hDate}0201.grid_spec.tile\$i.nc
    ln -s \${hDate}0101.grid_spec.tile\$i.nc \${hDate}0301.grid_spec.tile\$i.nc
@@ -2620,7 +2689,7 @@ EOF
    $time_ncks ncks \$ncksopt -d \$timename,6,6 \${prevyear}0701.$diag_source.nc \${prevyear}1201.$diag_source.nc > ncks.out
 EOF
    } elsif ( $segTime == 2 ) {
-      if ($cubic) {
+      if ("$sourceGrid" eq 'cubedsphere') {
       $cubicLinkGridSpec = <<EOF;
    ln -s \${hDate}0101.grid_spec.tile\$i.nc \${hDate}0201.grid_spec.tile\$i.nc
    ln -s \${hDate}0101.grid_spec.tile\$i.nc \${hDate}0401.grid_spec.tile\$i.nc
@@ -2664,7 +2733,7 @@ EOF
    $time_ncks ncks \$ncksopt -d \$timename,2,2 \${prevyear}1101.$diag_source.nc \${prevyear}1201.$diag_source.nc > ncks.out
 EOF
    } elsif ( $segTime == 3 ) {
-      if ($cubic) {
+      if ("$sourceGrid" eq 'cubedsphere') {
       $cubicLinkGridSpec = <<EOF;
    ln -s \${hDate}0101.grid_spec.tile\$i.nc \${hDate}0201.grid_spec.tile\$i.nc
    ln -s \${hDate}0101.grid_spec.tile\$i.nc \${hDate}0301.grid_spec.tile\$i.nc
@@ -2706,7 +2775,7 @@ EOF
    $time_ncks ncks \$ncksopt -d \$timename,3,3 \${prevyear}1001.$diag_source.nc \${prevyear}1201.$diag_source.nc > ncks.out
 EOF
    } elsif ( $segTime == 4 ) {
-      if ($cubic) {
+      if ("$sourceGrid" eq 'cubedsphere') {
       $cubicLinkGridSpec = <<EOF;
    ln -s \${hDate}0101.grid_spec.tile\$i.nc \${hDate}0201.grid_spec.tile\$i.nc
    ln -s \${hDate}0101.grid_spec.tile\$i.nc \${hDate}0301.grid_spec.tile\$i.nc
@@ -2747,7 +2816,7 @@ EOF
    $time_ncks ncks \$ncksopt -d \$timename,4,4 \${prevyear}0901.$diag_source.nc \${prevyear}1201.$diag_source.nc > ncks.out
 EOF
    } elsif (($segTime == 1 and "$segUnits" eq "years") or ($segTime==12 and "$segUnits" eq "months")) {
-      if ($cubic) {
+      if ("$sourceGrid" eq 'cubedsphere') {
       $cubicLinkGridSpec = <<EOF;
    ln -s \${hDate}0101.grid_spec.tile\$i.nc \${hDate}0201.grid_spec.tile\$i.nc
    ln -s \${hDate}0101.grid_spec.tile\$i.nc \${hDate}0301.grid_spec.tile\$i.nc
@@ -3258,7 +3327,7 @@ sub seasonalTS {
    my $outdir = "$ppRootDir/$outdirpath";
 
       #check if need to convert cube sphere grid to lat lon
-      if ( $cubic ) {
+      if ( "$sourceGrid" eq 'cubedsphere' ) {
          print STDERR "WARNING: Calculating seasonal timeseries from cubed sphere data is not supported in this version of frepp.  Skipping.  To avoid this error message, edit your xml to remove the request for seasonal timeseries for cubed sphere components.\n";
          mailuser("WARNING: Calculating seasonal timeseries from cubed sphere data is not supported in this version of frepp.  Skipping.  To avoid this error message, edit your xml to remove the request for seasonal timeseries for cubed sphere components.");
          return "";
@@ -3664,7 +3733,7 @@ set outdir = $outdir
 if ( ! -e \$outdir ) mkdir -p \$outdir
 EOF
    if ($opt_z) { $csh .= begin_systime(); }
-   if ($cubic) { #IF CUBIC
+   if ( "$sourceGrid" eq 'cubedsphere' ) { #IF CUBIC
       my $tile = '.tile$i';
 
       $csh .= <<EOF;
@@ -3703,7 +3772,7 @@ EOF
 EOF
       $csh .= zInterpolate($zInterp,'modellevels.nc',"$hDates[0]\${histmonth}01.$diag_source$tile.nc",$caltype,$variables);
 
-   } else {
+   } else { #no zinterp
       $csh .= <<EOF;
       $time_timavg \$TIMAVG -o $hDates[0]\${histmonth}01.$diag_source$tile.nc month.nc
       $retry_timavg
@@ -3713,14 +3782,14 @@ EOF
 EOF
    }
 
-   if ($cubic == 2) { #CUBIC to LATLON
+   if ( "$xyInterp" ne '' ) { #CUBIC to LATLON
 
    my $fregrid_wt = '';
    if ( $component =~/land/ and $dtvars{all_land_static} =~/\bland_frac\b/ ) {
       print "       land_frac found, weighting exchange grid cell with $hDates[0]\${histmonth}01.land_static\n" if $opt_v;
       $fregrid_wt = "--weight_file $hDates[0]\${histmonth}01.land_static --weight_field land_frac";
    }
-   my $call_and_check_fregrid = $call_fregrid;
+   my $call_and_check_fregrid = $call_tile_fregrid;
    $call_and_check_fregrid =~ s/#check_fregrid/$check_fregrid/;
    $call_and_check_fregrid =~ s/#check_ncrename/$check_ncrename/g;
    $call_and_check_fregrid =~ s/#check_ncatted/$check_ncatted/g;
@@ -3814,6 +3883,31 @@ EOF
 EOF
       }
 
+      # convert latlon/tripolar to latlon
+      if ( "$xyInterp" ne '' ) {
+            my $fregrid_wt = '';
+            if ( $component =~/land/ and $dtvars{all_land_static} =~/\bland_frac\b/ ) {
+               print "       land_frac found, weighting exchange grid cell with $hDates[0]\${histmonth}01.land_static\n" if $opt_v;
+               $fregrid_wt = "--weight_file $hDates[0]\${histmonth}01.land_static --weight_field land_frac";
+            }
+            my $call_and_check_fregrid = $call_fregrid;
+            $call_and_check_fregrid =~ s/#check_fregrid/$check_fregrid/;
+            $call_and_check_fregrid =~ s/#check_ncrename/$check_ncrename/g;
+            $call_and_check_fregrid =~ s/#check_ncatted/$check_ncatted/g;
+            $csh .= <<EOF;
+    set fregrid_wt = "$fregrid_wt"
+    set fregrid_in_date = $hDates[0]\${histmonth}01
+    set fregrid_in = "$component.$range.\$monthf"
+    set nlat = $nlat ; set nlon = $nlon
+    set interp_method = $interpMethod
+    set ncvars_arg = -st23
+    set variables = ( $variables )
+    set fregrid_remap_file = $ppRootDir/$component/.fregrid_remap_file_\${nlon}_by_\${nlat}
+    $call_and_check_fregrid
+
+EOF
+      }
+
       $csh .= <<EOF;
    $time_ncatted ncatted -h -O -a filename,global,m,c,"$component.$range.\$monthf.nc" $component.$range.\$monthf.nc
    $check_ncatted
@@ -3860,6 +3954,8 @@ sub annualAV1yrfromhist {
    my $t0f = FREUtil::graindate($yr2do0,$src);
    my $yr2doEND = FREUtil::modifydate($yr2do0,'+1 year -1 sec');
    my $tENDf = FREUtil::graindate($yr2doEND,$src);
+   if ( "$yr2do" eq "00010101" ) { $tENDf = "0001" }
+#print "annualAV1yrfromhist yr2do $yr2do yr2do0 $yr2do0 yr2doEND $yr2doEND tENDf $tENDf\n";
    my $hDateyr = substr($yr2do,0,4);
 
    my $diag_source = $_[0]->findvalue('@diagSource');
@@ -3911,7 +4007,7 @@ find \$work/* -maxdepth 1 -exec rm -rf {} \\;
 EOF
    if ($opt_z) { $csh .= begin_systime(); }
 
-   if ($cubic) { #IF CUBIC
+   if ( "$sourceGrid" eq "cubedsphere" ) { #IF CUBIC
    my $tile = '.tile$i';
    $csh .= <<EOF;
 foreach file ( `ls \$histDir/$hDateyr*/*.$diag_source.tile*nc`)
@@ -3948,14 +4044,14 @@ $time_rm rm -f annual$tile.nc
 EOF
    }
 
-if ($cubic == 2) { #CUBIC to LATLON
+if ( "$xyInterp" ne '' ) { #CUBIC to LATLON
 
    my $fregrid_wt = '';
    if ( $component =~/land/ and $dtvars{all_land_static} =~/\bland_frac\b/ ) {
       print "       land_frac found, weighting exchange grid cell with $yr2do.land_static\n" if $opt_v;
       $fregrid_wt = "--weight_file $yr2do.land_static --weight_field land_frac";
    }
-   my $call_and_check_fregrid = $call_fregrid;
+   my $call_and_check_fregrid = $call_tile_fregrid;
    $call_and_check_fregrid =~ s/#check_fregrid/$check_fregrid/;
    $call_and_check_fregrid =~ s/#check_ncrename/$check_ncrename/g;
    $call_and_check_fregrid =~ s/#check_ncatted/$check_ncatted/g;
@@ -4042,6 +4138,31 @@ $check_timavg
    
 EOF
    }
+
+      # convert latlon/tripolar to latlon
+      if ( "$xyInterp" ne '' ) {
+            my $fregrid_wt = '';
+            if ( $component =~/land/ and $dtvars{all_land_static} =~/\bland_frac\b/ ) {
+               print "       land_frac found, weighting exchange grid cell with $yr2do.land_static\n" if $opt_v;
+               $fregrid_wt = "--weight_file $yr2do.land_static --weight_field land_frac";
+            }
+            my $call_and_check_fregrid = $call_fregrid;
+            $call_and_check_fregrid =~ s/#check_fregrid/$check_fregrid/;
+            $call_and_check_fregrid =~ s/#check_ncrename/$check_ncrename/g;
+            $call_and_check_fregrid =~ s/#check_ncatted/$check_ncatted/g;
+            $csh .= <<EOF;
+    set fregrid_wt = "$fregrid_wt"
+    set fregrid_in_date = $yr2do
+    set fregrid_in = annual
+    set nlat = $nlat ; set nlon = $nlon
+    set interp_method = $interpMethod
+    set ncvars_arg = -st23
+    set variables = ( $variables )
+    set fregrid_remap_file = $ppRootDir/$component/.fregrid_remap_file_\${nlon}_by_\${nlat}
+    $call_and_check_fregrid
+
+EOF
+      }
 
    $csh .= <<EOF;
 $time_ncatted ncatted -h -O -a filename,global,m,c,"$component.$tENDf.ann.nc" $component.$tENDf.ann.nc
@@ -4142,14 +4263,14 @@ EOF
       my $getlist = "";
       foreach my $year ($first .. $endinterval) {
          $year=FREUtil::padzeros($year);
-         if ($cubic != 1) { # LATLON
-            $filelist .= "\$anndir/$component.$year.ann.nc ";
-            $getlist .= "$component.$year.ann.nc ";
-         } else { # CUBIC
+         if ( "$sourceGrid" eq 'cubedsphere' and "$xyInterp" eq '' ) { # CUBIC
             foreach my $i (1 .. 6) {
                $filelist .= "\$anndir/$component.$year.ann.tile$i.nc ";
                $getlist .= "$component.$year.ann.tile$i.nc ";
             }
+         } else { # LATLON
+            $filelist .= "\$anndir/$component.$year.ann.nc ";
+            $getlist .= "$component.$year.ann.nc ";
          }
       }
       my $check_ncrcat = errorstr("NCRCAT ($component $src $interval averages)");
@@ -4158,38 +4279,7 @@ EOF
       my $check_ncatted = errorstr("NCATTED ($component $src $interval averages)");
       my $check_dmget = errorstr("DMGET ($component $src $interval averages)");
 
-   if ($cubic != 1) { # LATLON
-
-      $csh .= <<EOF;
-foreach file ($filelist)
-   set f = \$file:t
-   if ( ! -f \$f ) then
-      $time_cp $cp \$file .
-      if ( \$status ) then
-         echo "WARNING: data transfer failure, retrying..."
-         $time_cp $cp \$file .
-         $checktransfer
-      endif
-   endif
-end
-if ( -e xyears.nc ) rm -f xyears.nc
-$time_ncrcat ncrcat \$ncrcatopt $getlist \$work/xyears.nc
-$check_ncrcat
-$time_timavg \$TIMAVG -o \$tempCache/$outdirpath/$component.$first-$endinterval.ann.nc \$work/xyears.nc
-$retry_timavg
-   $time_timavg \$TIMAVG -o \$tempCache/$outdirpath/$component.$first-$endinterval.ann.nc \$work/xyears.nc
-$check_timavg
-$time_ncatted ncatted -h -O -a filename,global,m,c,"$component.$first-$endinterval.ann.nc" \$tempCache/$outdirpath/$component.$first-$endinterval.ann.nc
-$check_ncatted
-$time_mv $mvfile \$tempCache/$outdirpath/$component.$first-$endinterval.ann.nc \$outdir/$component.$first-$endinterval.ann.nc
-if ( \$status ) then
-   echo "WARNING: data transfer failure, retrying..."
-   $time_mv $mvfile \$tempCache/$outdirpath/$component.$first-$endinterval.ann.nc \$outdir/$component.$first-$endinterval.ann.nc
-   $checktransfer
-endif
-$time_rm rm -f \$work/xyears.nc
-EOF
-   } else { # CUBIC
+   if ("$sourceGrid" eq 'cubedsphere' and "$xyInterp" eq '') { # CUBIC
       my $tile = '.tile$i';
       $csh .= <<EOF;
 foreach file ($filelist)
@@ -4227,6 +4317,37 @@ while ( \$i <= 6 )
    $time_rm rm -f xyears.nc
    @ i++
 end
+EOF
+
+   } else { # LATLON
+      $csh .= <<EOF;
+foreach file ($filelist)
+   set f = \$file:t
+   if ( ! -f \$f ) then
+      $time_cp $cp \$file .
+      if ( \$status ) then
+         echo "WARNING: data transfer failure, retrying..."
+         $time_cp $cp \$file .
+         $checktransfer
+      endif
+   endif
+end
+if ( -e xyears.nc ) rm -f xyears.nc
+$time_ncrcat ncrcat \$ncrcatopt $getlist \$work/xyears.nc
+$check_ncrcat
+$time_timavg \$TIMAVG -o \$tempCache/$outdirpath/$component.$first-$endinterval.ann.nc \$work/xyears.nc
+$retry_timavg
+   $time_timavg \$TIMAVG -o \$tempCache/$outdirpath/$component.$first-$endinterval.ann.nc \$work/xyears.nc
+$check_timavg
+$time_ncatted ncatted -h -O -a filename,global,m,c,"$component.$first-$endinterval.ann.nc" \$tempCache/$outdirpath/$component.$first-$endinterval.ann.nc
+$check_ncatted
+$time_mv $mvfile \$tempCache/$outdirpath/$component.$first-$endinterval.ann.nc \$outdir/$component.$first-$endinterval.ann.nc
+if ( \$status ) then
+   echo "WARNING: data transfer failure, retrying..."
+   $time_mv $mvfile \$tempCache/$outdirpath/$component.$first-$endinterval.ann.nc \$outdir/$component.$first-$endinterval.ann.nc
+   $checktransfer
+endif
+$time_rm rm -f \$work/xyears.nc
 EOF
    }
 
@@ -4430,6 +4551,9 @@ sub directTS{
    $chunkLength =~ s/mo//;
 
    my $yrsSoFar=&Delta_Format( &DateCalc($sim0,$t0,\$err,1) ,0,"%yd");
+#print "yrsSoFar=$yrsSoFar, chunkLength=$chunkLength, err=$err\n";
+   $yrsSoFar=&Delta_Format( FREUtil::cmpdate($sim0,$t0) ,0,"%yd");
+#print "yrsSoFar=$yrsSoFar, chunkLength=$chunkLength, err=$err\n";
    my $mod = ($yrsSoFar+1) % $chunkLength;
    if( $mod != 0 and "$iunit" eq "years") { return ""; } #don't do any calculations until a chunk is ready to go.
    $mkdircommand .= "$outdir ";
@@ -4516,7 +4640,7 @@ EOF
 
    my $tmp_month = '01';
    my $tmpsrcstr = "$source.nc";
-   if ($cubic) { $tmpsrcstr = "$source.tile*.nc"; }
+   if ( "$sourceGrid" eq 'cubedsphere' ) { $tmpsrcstr = "$source.tile*.nc"; }
 
    $csh .= <<EOF;
    foreach hDate ( @hDates )
@@ -4536,7 +4660,7 @@ EOF
 EOF
 
    if ( $do_zInterp ) {
-      if ( $cubic ) {
+      if ( "$sourceGrid" eq 'cubedsphere' ) {
          # cat, call plevel, on tiles
          $csh .= <<EOF;
 if ( -e modellevels.nc ) rm -f modellevels*.nc
@@ -4551,14 +4675,14 @@ EOF
             $csh .= zInterpolate($zInterp,"$hDate.modellevels.tile$i.nc","$hDate.$source.tile$i.nc",$caltype,$variables);
          }
          # convert tiles to latlon
-         if ( $cubic == 2 ) {
+         if ( "$xyInterp" ne '' ) {
 
             my $fregrid_wt = '';
             if ( $component =~/land/ and $dtvars{all_land_static} =~/\bland_frac\b/ ) {
                print "       land_frac found, weighting exchange grid cell with $hDate.land_static\n" if $opt_v;
                $fregrid_wt = "--weight_file $hDate.land_static --weight_field land_frac";
             }
-            my $call_and_check_fregrid = $call_fregrid;
+            my $call_and_check_fregrid = $call_tile_fregrid;
             $call_and_check_fregrid =~ s/#check_fregrid/$check_fregrid/;
             $call_and_check_fregrid =~ s/#check_ncrename/$check_ncrename/g;
             $call_and_check_fregrid =~ s/#check_ncatted/$check_ncatted/g;
@@ -4586,9 +4710,34 @@ $check_ncrcat
 $time_rm rm -f *.$source.nc
 EOF
       $csh .= zInterpolate($zInterp,'modellevels.nc','all.nc',$caltype,$variables);
+
+      # convert latlon/tripolar to latlon
+      if ( "$xyInterp" ne '' ) {
+            my $fregrid_wt = '';
+            if ( $component =~/land/ and $dtvars{all_land_static} =~/\bland_frac\b/ ) {
+               print "       land_frac found, weighting exchange grid cell with $hDate.land_static\n" if $opt_v;
+               $fregrid_wt = "--weight_file $hDate.land_static --weight_field land_frac";
+            }
+            my $call_and_check_fregrid = $call_fregrid;
+            $call_and_check_fregrid =~ s/#check_fregrid/$check_fregrid/;
+            $call_and_check_fregrid =~ s/#check_ncrename/$check_ncrename/g;
+            $call_and_check_fregrid =~ s/#check_ncatted/$check_ncatted/g;
+            $csh .= <<EOF;
+    set fregrid_wt = "$fregrid_wt"
+    set fregrid_in_date = $hDate
+    set fregrid_in = 'all'
+    set nlat = $nlat ; set nlon = $nlon
+    set interp_method = $interpMethod
+    set ncvars_arg = -st23
+    set variables = ( $variables )
+    set fregrid_remap_file = $ppRootDir/$component/.fregrid_remap_file_\${nlon}_by_\${nlat}
+    $call_and_check_fregrid
+
+EOF
+         }
       }
    } else { # no zInterpolation
-      if ( $cubic ) {
+      if ( "$sourceGrid" eq 'cubedsphere' ) {
          $csh .= <<EOF;
 #if ( -e all.nc ) rm -f all.nc
 set i = 1
@@ -4599,14 +4748,14 @@ $check_ncrcat
 end
 EOF
          # convert tiles to latlon
-         if ( $cubic == 2 ) {
+         if ( "$xyInterp" ne '' ) {
 
             my $fregrid_wt = '';
             if ( $component =~/land/ and $dtvars{all_land_static} =~/\bland_frac\b/ ) {
                print "       land_frac found, weighting exchange grid cell with $hDate.land_static\n" if $opt_v;
                $fregrid_wt = "--weight_file $hDate.land_static --weight_field land_frac";
             }
-            my $call_and_check_fregrid = $call_fregrid;
+            my $call_and_check_fregrid = $call_tile_fregrid;
             $call_and_check_fregrid =~ s/#check_fregrid/$check_fregrid/;
             $call_and_check_fregrid =~ s/#check_ncrename/$check_ncrename/g;
             $call_and_check_fregrid =~ s/#check_ncatted/$check_ncatted/g;
@@ -4633,9 +4782,34 @@ $check_ncrcat
 $time_rm rm -f *.$source.nc
 
 EOF
+         # convert latlon/tripolar to latlon
+         if ( "$xyInterp" ne '' ) {
+
+            my $fregrid_wt = '';
+            if ( $component =~/land/ and $dtvars{all_land_static} =~/\bland_frac\b/ ) {
+               print "       land_frac found, weighting exchange grid cell with $hDate.land_static\n" if $opt_v;
+               $fregrid_wt = "--weight_file $hDate.land_static --weight_field land_frac";
+            }
+            my $call_and_check_fregrid = $call_fregrid;
+            $call_and_check_fregrid =~ s/#check_fregrid/$check_fregrid/;
+            $call_and_check_fregrid =~ s/#check_ncrename/$check_ncrename/g;
+            $call_and_check_fregrid =~ s/#check_ncatted/$check_ncatted/g;
+            $csh .= <<EOF;
+    set fregrid_wt = "$fregrid_wt"
+    set fregrid_in_date = $hDate
+    set fregrid_in = 'all'
+    set nlat = $nlat ; set nlon = $nlon
+    set interp_method = $interpMethod
+    set ncvars_arg = -st23
+    set variables = ( $variables )
+    set fregrid_remap_file = $ppRootDir/$component/.fregrid_remap_file_\${nlon}_by_\${nlat}
+    $call_and_check_fregrid
+
+EOF
+         }
       }
    }
-   if ( $cubic == 1 ) {
+   if ( "$sourceGrid" eq 'cubedsphere' and "$xyInterp" eq '' ) {
       $csh .= "set filestosplit = ( `ls -1 | egrep \"$hDate.$source.tile..nc\"` )\n";
    } else {
       $csh .= "set filestosplit = ( all.nc )\n";
@@ -4693,7 +4867,7 @@ EOF
    if ( $aggregateTS ) {
       my $abbrev = FREUtil::timeabbrev($freq);
       my $cpioTS = '';
-      if ( $cubic == 1 ) {
+      if ( "$sourceGrid" eq 'cubedsphere' and "$xyInterp" ne '' ) {
          $cpioTS = createcpio( "\$tempCache/$outdirpath",$outdir,"$component.$start-$tENDf.tile?",$abbrev,1);
       } else {
          $cpioTS = createcpio( "\$tempCache/$outdirpath",$outdir,"$component.$start-$tENDf",$abbrev,1);
@@ -4748,6 +4922,7 @@ sub monthlyAVfromav {
    my $t0f = FREUtil::graindate($t0,$src);
    my $tENDf = FREUtil::graindate($tEND,$src);
    my $end = FREUtil::graindate($tEND,'year');
+   if ( $end < $int ) { return ""; } #nothing to do yet
    my $start = FREUtil::padzeros($end-$int+1);
 
    my $substart = $start;
@@ -4765,7 +4940,7 @@ sub monthlyAVfromav {
 #   print "getlist is $getlist\n";
    my $tilestart = "set tile = ''";
    my $tileend = '';
-   if ( $cubic == 1 ) {
+   if ( "$sourceGrid" eq 'cubedsphere' and "$xyInterp" eq '' ) {
       $tilestart = "set tileN=1\nwhile (\$tileN <= 6)\nset tile = .tile\$tileN";
       $tileend = "@ tileN++\nend";
    }
@@ -4896,7 +5071,7 @@ EOF
 
       my $tilestart = "set tile = ''";
       my $tileend = '';
-      if ( $cubic == 1 ) {
+      if ( "$sourceGrid" eq 'cubedsphere' and "$xyInterp" eq '' ) {
          $tilestart = "set tileN=1\nwhile (\$tileN <= 6)\nset tile = .tile\$tileN";
          $tileend = "@ tileN++\nend";
       }
@@ -4996,7 +5171,7 @@ if ( ! -e $ppRootDir/$component/$component.static.nc ) then
 EOF
 
 
-   if ( $cubic == 1 ) { 
+   if ( "$sourceGrid" eq 'cubedsphere' and "$xyInterp" eq '' ) { 
       #DATA LEFT ON CUBED SPHERE GRID
       $csh = setcheckpt('staticvars');
       $csh .= <<EOF;
@@ -5042,7 +5217,7 @@ EOF
       return $csh;
 
 
-   } elsif ( $cubic == 2 ) {
+   } elsif ( "$sourceGrid" eq 'cubedsphere' and "$xyInterp" ne '' ) {
       #DATA CONVERTED FROM CUBED SPHERE TO LATLON
 
       my $fregrid_wt = '';
@@ -5050,11 +5225,11 @@ EOF
          print "       land_frac found, weighting exchange grid cell with $hDate.land_static\n" if $opt_v;
          $fregrid_wt = "--weight_file $hDate.land_static --weight_field land_frac";
       }
-      my $call_and_check_fregrid = $call_fregrid;
+      my $call_and_check_fregrid = $call_tile_fregrid;
       $call_and_check_fregrid =~ s/#check_fregrid/$check_fregrid/;
       $call_and_check_fregrid =~ s/#check_ncrename/$check_ncrename/g;
       $call_and_check_fregrid =~ s/#check_ncatted/$check_ncatted/g;
-      $call_and_check_fregrid =~ s/set order1/if ( "\$interpvars" != "" ) then\nset order1/;
+      $call_and_check_fregrid =~ s/set order1/if ( "\$interpvars" != "" ) then\n set order1/;
       my $cubiccsh = <<EOF;
 
    set output_files = ( )
@@ -5090,15 +5265,52 @@ EOF
 
         set output_files = (\$output_files \$fregrid_in.nc)
      
+     end
      endif
-   end
 EOF
       $csh .= $cubiccsh;
-   } elsif ( $cubic == 0 ) {
+   } else {
       #DATA ALREADY LATLON
+
+      # convert latlon/tripolar to latlon
+      if ( "$xyInterp" ne '' ) {
+
+         my $fregrid_wt = '';
+         if ( $component =~/land/ and $dtvars{all_land_static} =~/\bland_frac\b/ ) {
+            print "       land_frac found, weighting exchange grid cell with $hDate.land_static\n" if $opt_v;
+            $fregrid_wt = "--weight_file $hDate.land_static --weight_field land_frac";
+         }
+         my $call_and_check_fregrid = $call_fregrid;
+         $call_and_check_fregrid =~ s/#check_fregrid/$check_fregrid/;
+         $call_and_check_fregrid =~ s/#check_ncrename/$check_ncrename/g;
+         $call_and_check_fregrid =~ s/#check_ncatted/$check_ncatted/g;
+         $call_and_check_fregrid =~ s/set order1/if ( "\$interpvars" != "" ) then\n set order1/;
+         $csh .= <<EOF;
+         set output_files = ( )
+         set files = (`ls $hDate.$diag_source*.nc | grep -v grid_spec`)
+         foreach file ( \$files ) 
+           set fregrid_wt = "$fregrid_wt"
+           set fregrid_in_date = $hDate
+           set fregrid_in = \$file:r
+           set nlat = $nlat ; set nlon = $nlon
+           set interp_method = $interpMethod
+           set ncvars_arg = -s2
+           set variables = ( )
+           set fregrid_remap_file = $ppRootDir/$component/.fregrid_remap_file_\${nlon}_by_\${nlat}
+
+           $call_and_check_fregrid
+
+           set output_files = (\$output_files \$fregrid_in.nc)
+         end
+         endif
+
+EOF
+      } else {
+
       $csh .= <<EOF;
    set output_files = (`ls $hDate.$diag_source*.nc | grep -v grid_spec`)
 EOF
+      }
    }
    # process latlon files for static variables
    $csh .= <<EOF;
@@ -5160,9 +5372,11 @@ sub TSfromts {
 
    my $tENDf = FREUtil::graindate( $tEND, $freq );
    my $start = FREUtil::modifydate($tEND,"-$cl years +1 sec");
+   if ( "$start" eq "0001010300:00:00" ) { $start = "0001010100:00:00"; }  #omg, hack, date::manip bugs
    my $end = FREUtil::modifydate($start, "+$subchunk years -1 sec");
    my $startf = FREUtil::graindate( $start, $freq );
    my $endf = FREUtil::graindate( $end, $freq );
+#print "TSfromts tEND $tEND cl $cl subchunk $subchunk start $start startf $startf end $end endf $endf\n";
 
    my $filelist = "";
    my $getlist = "";
@@ -5572,7 +5786,7 @@ EOF
 
 
 
-   if ($cubic) { #IF CUBIC
+   if ( "$sourceGrid" eq 'cubedsphere' ) { #IF CUBIC
 
       my $tmpsrcstr = "$diag_source.tile*.nc";
       $csh .= <<EOF;
@@ -5740,7 +5954,7 @@ EOF
             print "       land_frac found, weighting exchange grid cell with $hDate.land_static\n" if $opt_v;
             $fregrid_wt = "--weight_file $hDate.land_static --weight_field land_frac";
          }
-         my $call_and_check_fregrid = $call_fregrid;
+         my $call_and_check_fregrid = $call_tile_fregrid;
          $call_and_check_fregrid =~ s/#check_fregrid/$check_fregrid/;
          $call_and_check_fregrid =~ s/#check_ncrename/$check_ncrename/g;
          $call_and_check_fregrid =~ s/#check_ncatted/$check_ncatted/g;
@@ -5830,12 +6044,13 @@ $check_timavg
 EOF
       }
 
+      #apparently we are assuming we want to convert to latlon...?
       my $fregrid_wt = '';
       if ( $component =~/land/ and $dtvars{all_land_static} =~/\bland_frac\b/ ) {
          print "       land_frac found, weighting exchange grid cell with $hDate.land_static\n" if $opt_v;
          $fregrid_wt = "--weight_file $hDate.land_static --weight_field land_frac";
       }
-      my $call_and_check_fregrid = $call_fregrid;
+      my $call_and_check_fregrid = $call_tile_fregrid;
       $call_and_check_fregrid =~ s/#check_fregrid/$check_fregrid/;
       $call_and_check_fregrid =~ s/#check_ncrename/$check_ncrename/g;
       $call_and_check_fregrid =~ s/#check_ncatted/$check_ncatted/g;
@@ -5887,7 +6102,9 @@ EOF
 
    foreach my $season ($startseason .. $totalseasons) {
       my $startmo = $season * 3 - 4;
-      my $tSEASON = FREUtil::modifydate($tBEG,"+ $startmo months");
+      my $plus = "+";
+      if ( "$startmo" =~ /^-/ ) { $plus = ''; }
+      my $tSEASON = FREUtil::modifydate($tBEG,"$plus $startmo months");
       my $seahist = FREUtil::graindate($tSEASON,'day');
       my $tSEASONf = FREUtil::graindate($tSEASON,'seasonal');
       my $year = substr($tSEASONf,0,4);
@@ -5898,11 +6115,12 @@ EOF
       my $nextdec = FREUtil::graindate($nextd,'day').".$diag_source.nc";
       my $hfilelist = "";
       foreach my $s ($startmo .. ($startmo+2)) {
-         my $t = FREUtil::modifydate($tBEG,"+ $s months");
+         my $plus = "+";
+         if ( "$s" =~ /^-/ ) { $plus = ''; }
+         my $t = FREUtil::modifydate($tBEG,"$plus $s months");
          my $shist = FREUtil::graindate($t,'day');
          $hfilelist = "$hfilelist $shist.$diag_source.nc";
       }
-
 
       if ( $season == 1 ) {
          $csh .= <<EOF;
@@ -5968,7 +6186,7 @@ $check_timavg
 
 EOF
             $csh .= zInterpolate($zInterp,'modellevels.nc',"$component.$tSEASONf.nc",$caltype,$variables);
-$csh .= <<EOF;
+            $csh .= <<EOF;
 $time_mv $mvfile $component.$tSEASONf.nc \$outdir/
 if ( \$status ) then
    echo "WARNING: data transfer failure, retrying..."
@@ -6077,7 +6295,7 @@ EOF
 }
 
 
-#TIMEAVERAGES - SEASONAL
+#TIMEAVERAGES - SEASONAL (doesn't support cubedsphere)
 sub seasonalAVfromav {
    #taNode = $_[0] ;
    my $sim0 = $_[1];
@@ -6197,6 +6415,7 @@ sub refineDiag {
    my $ptmpDir = $_[2];
    my $basedate = $_[3];
    my $refinedir = $_[4];
+   my $gridspec = $_[5];
 
    my $newhistorydir = "$opt_d"."_refineDiag";
    my $csh  = <<EOF;
@@ -6205,6 +6424,7 @@ set refineRequestsExit = 0
 set refineError = 0
 #make additional data available to the refineDiag user scripts
 set basedate = '$basedate'
+set gridspec = '$gridspec'
 
 set historyyear = `echo $opt_t | cut -c 1-4`
 cd \$histDir
