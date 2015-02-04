@@ -1,7 +1,7 @@
 #!/usr/bin/perl
 # -*- cperl -*-
 #
-# $Id: fremake,v 18.0.2.27.2.13 2013/05/09 18:11:00 Kyle.Olivo Exp $
+# $Id: fremake,v 18.0.2.27.2.13.2.1 2013/08/21 17:08:32 Seth.Underwood Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: Program to Create a Script to Compile a Model
 # ------------------------------------------------------------------------------
@@ -103,7 +103,7 @@ use FREXML();
 
   package fremake;
 
-  use constant VERSION => '$Id: fremake,v 18.0.2.27.2.13 2013/05/09 18:11:00 Kyle.Olivo Exp $';
+  use constant VERSION => '$Id: fremake,v 18.0.2.27.2.13.2.1 2013/08/21 17:08:32 Seth.Underwood Exp $';
 
   use constant OPTLIST =>
   (
@@ -375,6 +375,11 @@ use FREXML();
     $scoScript .= "source \$MODULESHOME/init/csh\n";
     $scoScript .= "echo Using source directory = $srcDir...\n";
     $scoScript .= "cd $srcDir\n\n";
+    $scoScript .= "module avail git >& .git_avail\n";
+    $scoScript .= "if (! -z .git_avail) then\n";
+    $scoScript .= "    module load git\n";
+    $scoScript .= "endif\n\n";
+    $scoScript .= "unalias *\n\n";
 
      foreach my $name (@names)
      {
@@ -690,8 +695,8 @@ use FREXML();
       }
     }
     
-    my $includeDirsList = join(' ', map {s/^$srcDir\///; $_} sort keys %includeDirs);
-
+#    my $includeDirsList = join(' ', map {s/^$srcDir\///; $_} sort keys %includeDirs);
+    my $includeDirsList = join(' ', map {s/^$srcDir\///; '-I'.$_} sort keys %includeDirs);
     # ---------------------------------------------- create a list of libraries in the linking order
 
     my %libs = ();

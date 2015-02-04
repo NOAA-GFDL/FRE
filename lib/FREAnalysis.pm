@@ -603,6 +603,12 @@ sub filltemplate {
 
 #    my ($aScriptout,$aScript, $workdir, $mode, $momGrid,$gridspec,$staticfile,$asrcdir,$asrcfile,$expt,$figureDir,$astartYear,$aendYear,$databegyr,$dataendyr,$clnumber,$specify1year,$archivedir) = @_; 
     my $printout = "$aScriptout.printout";  #change this to send the stdout to stdoutdir... but will break analysis scripts. -arl
+    chomp( my $scriptexists = `[ -f "$aScript" ] && echo exists`);
+    unless ( $scriptexists eq "exists" ) {
+      print "ERROR: Analysis script doesn't exist: '$aScript'\n";
+      print "       Check that all variables are set. The fre-analysis module may need to be loaded.\n";
+      exit 1;
+    }
     my $tmpsch = `cat $aScript`;
     my $fremodule = `echo \$LOADEDMODULES | tr ':' '\n' | egrep '^fre/.+'`;
     my $freanalysismodule = `echo \$LOADEDMODULES | tr ':' '\n' | egrep '^fre-analysis/.+'`;

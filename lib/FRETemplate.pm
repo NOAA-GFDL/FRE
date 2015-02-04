@@ -1,5 +1,5 @@
 #
-# $Id: FRETemplate.pm,v 18.0.2.28 2013/04/24 17:31:35 afy Exp $
+# $Id: FRETemplate.pm,v 18.0.2.28.2.2 2013/08/23 15:27:22 Seth.Underwood Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: Template Management Module
 # ------------------------------------------------------------------------------
@@ -140,16 +140,22 @@ my $schedulerSize = sub($$$$$$)
     my ($np, $nt) = @_;
     if ($np > 0)
     {
-      my $product = $np * $nt;
-      $product = $coresPerJobMax if $product > $coresPerJobMax;
-      my ($nodesM, $procsM) = (POSIX::floor($product / $coresPerJobInc), POSIX::floor($coresPerJobInc / $nt));
+      # $procsM :: How may MPI processes we can have per node when using $nt threads
+      # $nodesM :: Number of fully utilized nodes
+      my $procsM = POSIX::floor($coresPerJobInc / $nt);
+      my $nodesM = POSIX::floor($np / $procsM);
       $fre->out(FREMsg::WARNING, "It's not optimal to place '$nt' OpenMP threads on a node with '$coresPerJobInc' cores") if $coresPerJobInc % $nt;
-      if ($np > $nodesM * $procsM)
+      # When $procsM is not a perfect divisor of $np, then the extra
+      # processors on the extra node need to be handled properly.
+      if ( $np % $procsM )
       {
-	return ($nodesM, $procsM, 1, $np - $nodesM * $procsM);
+	# One node will not be fully utilized.
+	# It has the extra processors.
+	return ($nodesM, $procsM, 1, $np - $nodesM * $procsM)
       }
       else
       {
+	# All nodes are fully utilized.
 	return ($nodesM, $procsM);
       }
     }
@@ -168,14 +174,27 @@ my $schedulerSize = sub($$$$$$)
     return @result;
   };
 
-  my $coresAggregated = sub($)
-  # ------ arguments: $ncores
+  my $coresAggregated = sub($$)
+  # ------ arguments: $nMPIcores $nthreads
   {
-    my $x = shift;
-    if ($x > 0)
+    my ($np, $nt) = @_;
+
+    if ($np > 0)
     {
-      $x = $coresPerJobMax if $x > $coresPerJobMax;
-      return POSIX::ceil($x / $coresPerJobInc) * $coresPerJobInc;
+      # $procsM :: How may MPI processes we can have per node when using $nt threads
+      # $nodesM :: How many nodes are needed for all MPI processes
+      my $procsM = POSIX::floor($coresPerJobInc / $nt);
+      my $nodesM = POSIX::ceil($np / $procsM);
+
+      # $totProcs :: Total number of processors needed for reservation
+      my $totProcs = $nodesM * $coresPerJobInc;
+
+      # I'm not sure why this check is here.  This should probably be a FATAL 
+      # instead of resetting to the coresPerJobMax, but this was in the original
+      # FRETemplate.pm before putting in this fix.  
+      $totProcs = $coresPerJobMax if $totProcs > $coresPerJobMax;
+
+      return $totProcs;
     }
     else
     {
@@ -188,7 +207,10 @@ my $schedulerSize = sub($$$$$$)
   {
     my ($rp, $rt) = @_;
     my $size = 0;
-    for (my $inx = 0; $inx < scalar(@{$rp}); $inx++) {$size += $coresAggregated->($rp->[$inx] * $rt->[$inx])}
+    for (my $inx = 0; $inx < scalar(@{$rp}); $inx++) 
+    {
+      $size += $coresAggregated->($rp->[$inx], $rt->[$inx])
+    }
     return $size;
   };
 
@@ -203,7 +225,7 @@ my $schedulerSize = sub($$$$$$)
     }
     else
     {
-      my $size = ($cf) ? $coresAggregatedList->($rp, $rt) : $coresAggregated->($np);
+      my $size = ($cf) ? $coresAggregatedList->($rp, $rt) : $coresAggregated->($np,1);
       $option{size} = $fre->propertyParameterized("FRE.scheduler.option.size.$j", $size);
     }
     return \%option;
