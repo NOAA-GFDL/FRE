@@ -1,7 +1,7 @@
 #!/usr/bin/perl
 # -*- cperl -*-
 
-# $Id: freinfo,v 1.1.2.4.2.1 2013/03/27 18:53:10 afy Exp $
+# $Id: freinfo,v 1.1.2.5.4.1 2013/03/27 18:48:30 afy Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: Program to Extract Statistics From Stdouts
 # ------------------------------------------------------------------------------
@@ -14,7 +14,12 @@
 # afy    Ver   3.01  Modify analyzeRegression (check refToRunInfo)  January 12
 # afy    Ver   4.00  Modify Usage (remove ASCII escapes)            April 12
 # afy    Ver   4.01  Cosmetics in messages                          April 12
-# afy -------------- Branch 1.1.2.4.2 ----------------------------- March 13
+# afy    Ver   5.00  Use new FREExperiment module (reg*Labels)      June 12
+# afy    Ver   5.01  Remove regressionLabels subroutine             June 12
+# afy    Ver   5.02  Use new FREExperiment (run as key)             June 12
+# afy    Ver   5.03  Modify outputData (postfix is last)            June 12
+# afy    Ver   5.04  Fix extract*Data (npes => totalNP)             June 12
+# afy -------------- Branch 1.1.2.5.4 ----------------------------- March 13
 # afy    Ver   1.00  Modify analyzeProduction (FIX)                 March 13
 # ------------------------------------------------------------------------------
 # Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2000-2013
@@ -39,7 +44,7 @@ use FREUtil();
 
   package freinfo;
 
-  use constant VERSION => '$Id: freinfo,v 1.1.2.4.2.1 2013/03/27 18:53:10 afy Exp $';
+  use constant VERSION => '$Id: freinfo,v 1.1.2.5.4.1 2013/03/27 18:48:30 afy Exp $';
   
   use constant OPTLIST =>
   (
@@ -168,27 +173,6 @@ use FREUtil();
     }
   }
   
-  sub regressionLabels($$)
-  # ------ arguments: $exp $regressionLabelsList
-  {
-    my ($z, $r) = @_;
-    my ($fre, $expName, @expLabels) = ($z->fre(), $z->name(), $z->extractRegressionLabels());
-    my ($all, @optLabels) = (0, FREUtil::listUnique(split(',', $r)));
-    foreach my $optLabel (@optLabels)
-    {
-      if ($optLabel eq 'all')
-      {
-        $all = 1; 
-      }
-      elsif (scalar(grep($_ eq $optLabel, @expLabels)) == 0)
-      {
-        $fre->out(FREMsg::FATAL, "The experiment '$expName' doesn't contain the '$optLabel' regression test");
-	return ();
-      }
-    }
-    return ($all) ? @expLabels : @optLabels;
-  }
-  
   sub analyzeProduction($$)
   # ------ arguments: $exp $unique
   {
@@ -196,7 +180,7 @@ use FREUtil();
     if (my $ref = $z->extractProductionRunInfo())
     {
       my ($expName, $stdoutDir) = ($z->name(), $z->stdoutDir());
-      my ($counter, %info) = (0, ());
+      my ($counter, %allInfo) = (0, ());
       foreach my $file (glob("$stdoutDir/run/$expName.o*"))
       {
 	if ($file =~ m/^$stdoutDir\/run\/$expName\.o\d+$/)
@@ -205,8 +189,7 @@ use FREUtil();
           $infoLine{ref} = $ref;
           $infoLine{unique} = 0;
           $infoLine{file} = $file;
-          $info{$counter} = \%infoLine;
-          $counter++;
+          $allInfo{$counter++} = \%infoLine;
 	}
       }
       if ($u eq 'all')
@@ -219,8 +202,7 @@ use FREUtil();
             $infoLine{ref} = $ref;
             $infoLine{unique} = $1;
             $infoLine{file} = $uniqueFile;
-            $info{$counter} = \%infoLine;
-            $counter++;
+            $allInfo{$counter++} = \%infoLine;
 	  }
 	}
       }
@@ -236,13 +218,12 @@ use FREUtil();
               $infoLine{ref} = $ref;
               $infoLine{unique} = $n;
               $infoLine{file} = $uniqueFile;
-              $info{$counter} = \%infoLine;
-              $counter++;
+              $allInfo{$counter++} = \%infoLine;
 	    }
 	  }
 	}
       }
-      return \%info;
+      return \%allInfo;
     }
     else
     {
@@ -255,24 +236,25 @@ use FREUtil();
   {
     my ($z, $l, $u) = @_;
     my ($expName, $stdoutDir) = ($z->name(), $z->stdoutDir());
-    my ($counter, $ok, %info) = (0, 1, ());
+    my ($counter, $ok, %allInfo) = (0, 1, ());
     foreach my $label (@{$l})
     {
-      if (my $ref = $z->extractRegressionRunInfo($label))
+      if (my $regInfo = $z->extractRegressionRunInfo($label))
       {
-	foreach my $postfix (sort(keys(%{$ref})))
+	foreach my $runNo (sort(keys(%{$regInfo})))
 	{
+	  my $runInfo = $regInfo->{$runNo};
+	  my $postfix = $runInfo->{postfix};
           foreach my $file (glob("$stdoutDir/run/${expName}_$postfix.o*"))
 	  {
 	    if ($file =~ m/^$stdoutDir\/run\/${expName}_$postfix\.o\d+$/)
 	    {
               my %infoLine = ();
 	      $infoLine{postfix} = $postfix;
-	      $infoLine{ref} = $ref->{$postfix};
+	      $infoLine{ref} = $runInfo;
 	      $infoLine{unique} = 0;
 	      $infoLine{file} = $file;
-	      $info{$counter} = \%infoLine;
-	      $counter++;
+	      $allInfo{$counter++} = \%infoLine;
 	    }
 	  }
 	  if ($u eq 'all')
@@ -283,11 +265,10 @@ use FREUtil();
 	      {
         	my %infoLine = ();
 		$infoLine{postfix} = $postfix;
-		$infoLine{ref} = $ref->{$postfix};
+		$infoLine{ref} = $runInfo;
 		$infoLine{unique} = $1;
 		$infoLine{file} = $uniqueFile;
-		$info{$counter} = \%infoLine;
-		$counter++;
+		$allInfo{$counter++} = \%infoLine;
 	      }
 	    }
 	  }
@@ -301,11 +282,10 @@ use FREUtil();
 		{
         	  my %infoLine = ();
 	          $infoLine{postfix} = $postfix;
-		  $infoLine{ref} = $ref->{$postfix};
+		  $infoLine{ref} = $runInfo;
 		  $infoLine{unique} = $n;
 		  $infoLine{file} = $uniqueFile;
-		  $info{$counter} = \%infoLine;
-		  $counter++;
+		  $allInfo{$counter++} = \%infoLine;
 		}
 	      }
 	    }
@@ -317,7 +297,7 @@ use FREUtil();
         $ok = 0;
       }
     }    
-    return ($ok) ? \%info : undef;
+    return ($ok) ? \%allInfo : undef;
   }
   
   sub outputFilesListing($$)
@@ -338,7 +318,7 @@ use FREUtil();
       my ($ref, $unique, $file) = ($r->{$infoLine}{ref}, $r->{$infoLine}{unique}, $r->{$infoLine}{file});
       if (chomp(my $segmentsNmb = qx(fgrep 'set -r segmentsPerJob = ' $file | awk '{print \$5}')) > 0)
       {
-	chomp(my $host = qx(fgrep '<NOTE> : Starting at' $file | awk '{print \$5}'));
+	chomp(my $host = qx(fgrep '<NOTE> : Starting at' $file | head -1 | awk '{print \$5}'));
 	my @runTimesTotal = split(/\n/, qx(fgrep 'Total runtime ' $file | awk '{print \$5}'));
 	my @runTimesMainLoop = split(/\n/, qx(fgrep 'Main loop ' $file | awk '{print \$5}'));
 	my $length = freinfo::lengthInDays($ref->{segTimeMonths}, 0, 0);
@@ -353,13 +333,12 @@ use FREUtil();
 	  $dataLine{unique} = $unique;
 	  $dataLine{segment} = $segment;
 	  $dataLine{length} = $length;
-	  $dataLine{npes} = $ref->{npes};
+	  $dataLine{totalNP} = $ref->{totalNP};
 	  $dataLine{runTimeTotal} = $runTimesTotal[$segment];
 	  $dataLine{runTimeMainLoop} = $runTimesMainLoop[$segment];
 	  $dataLine{yearsPerDay} = $yearsPerDay;
 	  $dataLine{host} = $host;
-	  $data{$counter} = \%dataLine;
-	  $counter++;
+	  $data{$counter++} = \%dataLine;
 	}
       }
       else
@@ -381,7 +360,7 @@ use FREUtil();
       my ($postfix, $ref, $unique, $file) = ($r->{$infoLine}{postfix}, $r->{$infoLine}{ref}, $r->{$infoLine}{unique}, $r->{$infoLine}{file});
       if (chomp(my $segmentsNmb = qx(fgrep 'set -r segmentsPerJob = ' $file | awk '{print \$5}')) > 0)
       {
-	chomp(my $host = qx(fgrep '<NOTE> : Starting at' $file | awk '{print \$5}'));
+	chomp(my $host = qx(fgrep '<NOTE> : Starting at' $file | head -1 | awk '{print \$5}'));
 	my @runTimesTotal = split(/\n/, qx(fgrep 'Total runtime ' $file | awk '{print \$5}'));
 	my @runTimesMainLoop = split(/\n/, qx(fgrep 'Main loop ' $file | awk '{print \$5}'));
 	my @months = split(/ /, $ref->{months});
@@ -400,13 +379,12 @@ use FREUtil();
 	  $dataLine{unique} = $unique;
 	  $dataLine{segment} = $segment;
 	  $dataLine{length} = $length;
-	  $dataLine{npes} = $ref->{npes};
+	  $dataLine{totalNP} = $ref->{totalNP};
 	  $dataLine{runTimeTotal} = $runTimesTotal[$segment];
 	  $dataLine{runTimeMainLoop} = $runTimesMainLoop[$segment];
 	  $dataLine{yearsPerDay} = $yearsPerDay;
 	  $dataLine{host} = $host;
-	  $data{$counter} = \%dataLine;
-	  $counter++;
+	  $data{$counter++} = \%dataLine;
 	}
       }
       else
@@ -425,24 +403,24 @@ use FREUtil();
     my ($fre, $expName) = ($z->fre(), $z->name());
     print "\n/// $expName\n";
     print "/////////////////////////////////////////////////////////////////////////////////////////////////////\n";
-    print "LABEL      RUN#  POSTFIX          UNI# SEG#  LENGTH  NPES    TOTAL  MAINLOOP  YEARS/DAY  HOST        \n";
+    print "LABEL      RUN#  UNI#  SEG#  LENGTH  NPES    TOTAL  MAINLOOP  YEARS/DAY  HOST        POSTFIX         \n";
     print "-----------------------------------------------------------------------------------------------------\n";
     foreach my $run (sort {$a <=> $b} keys(%{$d}))
     {
       printf
       (
-        "%-10s %4d  %-16s %4d %4d %7.1f %5d %8.1f  %8.1f   %8.1f  %-12s\n",
+        "%-10s %4d  %4d  %4d %7.1f %5d %8.1f  %8.1f   %8.1f  %-10s  %-20s\n",
 	$d->{$run}{label},
 	$d->{$run}{number},
-	$d->{$run}{postfix},
 	$d->{$run}{unique},
 	$d->{$run}{segment},
 	$d->{$run}{length},
-	$d->{$run}{npes},
+	$d->{$run}{totalNP},
 	$d->{$run}{runTimeTotal},
 	$d->{$run}{runTimeMainLoop},
 	$d->{$run}{yearsPerDay},
-	$d->{$run}{host}
+	$d->{$run}{host},
+	$d->{$run}{postfix},
       );
     }
     print "-----------------------------------------------------------------------------------------------------\n";
@@ -590,7 +568,7 @@ use FREUtil();
         $status = FREDefaults::STATUS_FS_GENERIC_PROBLEM;
       }
     }
-    elsif (my @labels = freinfo::regressionLabels($exp, $opt{regression}))
+    elsif (my @labels = $exp->extractRegressionLabels($opt{regression}))
     {
       if (my $info = freinfo::analyzeRegression($exp, \@labels, $opt{unique}))
       {

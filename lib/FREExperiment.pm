@@ -1,5 +1,5 @@
 #
-# $Id: FREExperiment.pm,v 18.1.2.13 2012/03/08 19:32:35 afy Exp $
+# $Id: FREExperiment.pm,v 18.1.2.17 2012/08/20 18:44:58 afy Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: Experiment Management Module
 # ------------------------------------------------------------------------------
@@ -40,6 +40,21 @@
 # afy    Ver  11.00  Add extractRegressionLabels subroutine         January 12
 # afy    Ver  12.00  Add sdtoutTmpDir subroutine                    February 12
 # afy    Ver  13.00  Remove tmpDir subroutine                       March 12
+# afy    Ver  14.00  Add regressionLabels utility                   June 12
+# afy    Ver  14.01  Add extractOverrideParams utility              June 12
+# afy    Ver  14.02  Add overrideRegressionNamelists utility        June 12
+# afy    Ver  14.03  Add overrideProductionNamelists utility        June 12
+# afy    Ver  14.04  Add MPISizeParameters utility                  June 12
+# afy    Ver  14.05  Add regressionPostfix utility                  June 12
+# afy    Ver  14.06  Modify extractNamelists (use FRENamelists.pm)  June 12
+# afy    Ver  14.07  Modify extractRegressionLabels (suite, all)    June 12
+# afy    Ver  14.08  Modify extractRegressionRunInfo (add option)   June 12
+# afy    Ver  14.09  Modify extractProductionRunInfo                June 12
+# afy    Ver  14.10  Modify extractRegressionRunInfo (run as key)   June 12
+# afy    Ver  15.00  Modify extractTables (return undef on errors)  July 12
+# afy    Ver  16.00  Modify extractShellCommands (no 'defined')     July 12
+# afy    Ver  16.01  Modify regressionPostfix (add suffuxes)        July 12
+# afy    Ver  17.00  Modify MPISizeParameters (fix concurrent)      August 12
 # ------------------------------------------------------------------------------
 # Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2009-2012
 # Designed and written by V. Balaji, Amy Langenhorst and Aleksey Yakovlev
@@ -53,6 +68,7 @@ use List::Util();
 
 use FREDefaults();
 use FREMsg();
+use FRENamelists(); 
 use FRETargets();
 use FREUtil();
 
@@ -295,6 +311,15 @@ $rankSet = sub($$$)
   }
 };
     
+my $regressionLabels = sub($)
+# ------ arguments: $object
+{
+  my $r = shift;
+  my @regNodes = $r->extractNodes('runtime', 'regression');
+  my @labels = map($r->nodeValue($_, '@label') || $r->nodeValue($_, '@name'), @regNodes);
+  return grep($_ ne "", @labels);
+};
+
 my $regressionRunNode = sub($$)
 # ------ arguments: $object $label
 {
@@ -309,6 +334,316 @@ my $productionRunNode = sub($)
   my $r = shift;
   my @prdNodes = $r->extractNodes('runtime', 'production');
   return (scalar(@prdNodes) == 1) ? $prdNodes[0] : undef;
+};
+
+my $extractOverrideParams = sub($$$)
+# ------ arguments: $exp $mamelistsHandle $runNode 
+{
+
+  my ($r, $h, $n) = @_;
+  my $fre = $r->fre();
+
+  my $res = $r->nodeValue($n, '@overrideParams');
+  $res .= ';' if ($res and $res !~ /.*;$/);
+
+  my $atmosLayout = $r->nodeValue($n, '@atmos_layout');
+  if ($atmosLayout)
+  {
+    $res .= "bgrid_core_driver_nml:layout=$atmosLayout;" if $h->namelistExists('bgrid_core_driver_nml');
+    $res .= "fv_core_nml:layout=$atmosLayout;" if $h->namelistExists('fv_core_nml');
+    $fre->out
+    (
+      FREMsg::WARNING,
+      "Usage of the 'atmos_layout' attribute is deprecated; instead, use",
+      "<run overrideParams=\"fv_core_nml:layout=$atmosLayout\" ...>",
+      "or <run overrideParams=\"bgrid_core_driver_nml:layout=$atmosLayout\" ...>"
+    );
+  }
+
+  my $zetacLayout = $r->nodeValue($n, '@zetac_layout');
+  if ($zetacLayout)
+  {
+    $res .= "zetac_layout_nml:layout=$zetacLayout;";
+    $fre->out
+    (
+      FREMsg::WARNING,
+      "Usage of the 'zetac_layout' attribute is deprecated; instead, use",
+      "<run overrideParams=\"zetac_layout_nml:layout=$zetacLayout;namelist:var=val;...\" ...>"
+    );
+  }
+
+  my $iceLayout = $r->nodeValue($n, '@ice_layout');
+  if ($iceLayout)
+  {
+    $res .= "ice_model_nml:layout=$iceLayout;";
+    $fre->out
+    (
+      FREMsg::WARNING,
+      "Usage of the 'ice_layout' attribute is deprecated; instead, use",
+      "<run overrideParams=\"ice_model_nml:layout=$iceLayout;namelist:var=val;...\" ...>"
+    );
+  }
+
+  my $oceanLayout = $r->nodeValue($n, '@ocean_layout');
+  if ($oceanLayout)
+  {
+    $res .= "ocean_model_nml:layout=$oceanLayout;";
+    $fre->out
+    (
+      FREMsg::WARNING,
+      "Usage of the 'ocean_layout' attribute is deprecated; instead, use",
+      "<run overrideParams=\"ocean_model_nml:layout=$oceanLayout;namelist:var=val;...\" ...>"
+    );
+  }
+
+  my $landLayout = $r->nodeValue($n, '@land_layout');
+  if ($landLayout)
+  {
+    $res .= "land_model_nml:layout=$landLayout;";
+    $fre->out
+    (
+      FREMsg::WARNING,
+      "Usage of the 'land_layout' attribute is deprecated; instead, use",
+      "<run overrideParams=\"land_model_nml:layout=$landLayout;namelist:var=val;...\" ...>"
+    );
+  }
+
+  return $res;
+
+};
+
+my $overrideRegressionNamelists = sub($$$)
+# ------ arguments: $exp $namelistsHandle $runNode
+{
+
+  my ($r, $h, $n) = @_;
+  my $fre = $r->fre();
+  
+  my $overrideTypeless = sub($$$)
+  {
+    my ($l, $v, $x) = @_;
+    if ($h->namelistExists($l))
+    {
+      $h->namelistTypelessPut($l, $v, $x);
+    }
+    else
+    {
+      $h->namelistPut($l, "\t$v = $x");
+    }
+  };
+
+  foreach my $nml (split(/;/, $extractOverrideParams->($r, $h, $n)))
+  {
+    my ($name, $var, $val) = split(/[:=]/, $nml);
+    $name =~ s/\s*//g;
+    $var =~ s/\s*//g;
+    unless ($name and $var) {$fre->out(FREMsg::WARNING, "Got an empty namelist in overrideParams"); next}
+    $fre->out(FREMsg::NOTE, "overrideParams from xml: $name:$var=$val");
+    my $contentOld = $h->namelistGet($name);
+    $fre->out(FREMsg::NOTE, "Original namelist: '$name'\n$contentOld");
+    $overrideTypeless->($name, $var, $val);
+    my $contentNew = $h->namelistGet($name);
+    $fre->out(FREMsg::NOTE, "Overridden namelist: '$name'\n$contentNew");
+  }
+
+  return $h;
+
+};
+
+my $overrideProductionNamelists = sub($$)
+# ------ arguments: $object $namelistsHandle
+{
+
+  my ($r, $h) = @_;
+
+  my $overrideLayout = sub($$)
+  {
+    my ($l, $x) = @_;
+    if ($h->namelistExists($l))
+    {
+      $h->namelistLayoutPut($l, 'layout', $x);
+    }
+    else
+    {
+      $h->namelistPut($l, "\tlayout = $x");
+    }
+  };
+
+  my $atmosLayout = $r->extractValue('runtime/production/peLayout/@atmos');
+  $overrideLayout->('bgrid_core_driver_nml', $atmosLayout) if $atmosLayout;
+  $overrideLayout->('fv_core_nml', $atmosLayout) if $atmosLayout;
+
+  my $zetacLayout = $r->extractValue('runtime/production/peLayout/@zetac');
+  $overrideLayout->('zetacLayout_nml', $zetacLayout) if $zetacLayout;
+
+  my $iceLayout = $r->extractValue('runtime/production/peLayout/@ice');
+  $overrideLayout->('ice_model_nml', $iceLayout) if $iceLayout;
+
+  my $oceanLayout = $r->extractValue('runtime/production/peLayout/@ocean');
+  $overrideLayout->('ocean_model_nml', $oceanLayout) if $oceanLayout;
+
+  my $landLayout = $r->extractValue('runtime/production/peLayout/@land');
+  $overrideLayout->('land_model_nml', $landLayout) if $landLayout;
+
+  return $h;
+
+};
+
+my $MPISizeParameters = sub($$$)
+# ------ arguments: $exp $npes $namelistsHandle
+{
+
+  my ($r, $n, $h) = @_;
+  my $fre = $r->fre();
+
+  my $concurrentFlag = $h->namelistBooleanGet('coupler_nml', 'concurrent');
+  my $concurrent = (defined($concurrentFlag)) ? $concurrentFlag : 1;
+
+  my ($atmosNP, $atmosNT) = ($h->namelistIntegerGet('coupler_nml', 'atmos_npes') || 0, 1);
+  my ($oceanNP, $oceanNT) = ($h->namelistIntegerGet('coupler_nml', 'ocean_npes') || 0, 1);
+  
+  if ($atmosNP < 0)
+  {
+    $fre->out(FREMsg::FATAL, "Number '$atmosNP' of atmospheric MPI processes must be non-negative");
+    return ();
+  }
+  elsif ($atmosNP > $n)
+  {
+    $fre->out(FREMsg::FATAL, "Number '$atmosNP' of atmospheric MPI processes must be less or equal than a total number '$n' of MPI processes");
+    return ();
+  }
+
+  if ($oceanNP < 0)
+  {
+    $fre->out(FREMsg::FATAL, "Number '$oceanNP' of oceanic MPI processes must be non-negative");
+    return ();
+  }
+  elsif ($oceanNP > $n)
+  {
+    $fre->out(FREMsg::FATAL, "Number '$oceanNP' of oceanic MPI processes must be less or equal than a total number '$n' of MPI processes");
+    return ();
+  }
+
+  if (FRETargets::containsOpenMP($fre->target()))
+  {
+    my $coresPerNode = $fre->property('FRE.scheduler.run.coresPerJob.inc');
+    $atmosNT = $h->namelistIntegerGet('coupler_nml', 'atmos_nthreads') || 1;
+    if ($atmosNT <= 0)
+    {
+      $fre->out(FREMsg::FATAL, "Number '$atmosNT' of atmospheric OpenMP threads must be positive");
+      return ();
+    }
+    elsif ($atmosNT > $coresPerNode)
+    {
+      $fre->out(FREMsg::FATAL, "Number '$atmosNT' of atmospheric OpenMP threads must be less or equal than a number '$coresPerNode' of cores per node");
+      return ();
+    }
+    $oceanNT = $h->namelistIntegerGet('coupler_nml', 'ocean_nthreads') || 1;
+    if ($oceanNT <= 0)
+    {
+      $fre->out(FREMsg::FATAL, "Number '$oceanNT' of oceanic OpenMP threads must be positive");
+      return ();
+    }
+    elsif ($oceanNT > $coresPerNode)
+    {
+      $fre->out(FREMsg::FATAL, "Number '$oceanNT' of oceanic OpenMP threads must be less or equal than a number '$coresPerNode' of cores per node");
+      return ();
+    }
+  }
+  
+  my $ensembleSize = $h->namelistIntegerGet('ensemble_nml', 'ensemble_size') || 1;
+  
+  if ($ensembleSize <= 0)
+  {
+    $fre->out(FREMsg::FATAL, "Ensemble size '$ensembleSize' must be positive");
+    return ();
+  }
+
+  if ($atmosNP == 0 && $oceanNP == 0)
+  {
+    return ($n * $ensembleSize, 0, 0, 1, 0, 1);
+  }
+  elsif ($atmosNP < $n && $oceanNP == 0)
+  {
+    if ($concurrent)
+    {
+      return ($n * $ensembleSize, 1, $atmosNP * $ensembleSize, $atmosNT, ($n - $atmosNP) * $ensembleSize, $oceanNT);
+    }
+    else
+    {
+      $fre->out(FREMsg::FATAL, "Solo atmospheric model, serial run - total number '$n' of MPI processes exceeds a number of '$atmosNP' atmospheric ones");
+      return ();
+    }
+  }
+  elsif ($atmosNP == 0 && $oceanNP < $n)
+  {
+    if ($concurrent)
+    {
+      return ($n * $ensembleSize, 1, ($n - $oceanNP) * $ensembleSize, $atmosNT, $oceanNP * $ensembleSize, $oceanNT);
+    }
+    else
+    {
+      $fre->out(FREMsg::FATAL, "Solo oceanic model, serial run - total number '$n' of MPI processes exceeds a number of '$oceanNP' oceanic ones");
+      return ();
+    }
+  }
+  elsif ($atmosNP == $n && $oceanNP == 0)
+  {
+    return ($n * $ensembleSize, 0, $atmosNP * $ensembleSize, $atmosNT, 0, 1);
+  }
+  elsif ($atmosNP == 0 && $oceanNP == $n)
+  {
+    return ($n * $ensembleSize, 0, 0, 1, $oceanNP * $ensembleSize, $oceanNT);
+  }
+  elsif ($concurrent)
+  {
+    if ($atmosNP + $oceanNP == $n)
+    {
+      return ($n * $ensembleSize, 1, $atmosNP * $ensembleSize, $atmosNT, $oceanNP * $ensembleSize, $oceanNT);
+    }
+    else
+    {
+      $fre->out(FREMsg::FATAL, "Concurrent run - total number '$n' of MPI processes isn't equal to the sum of '$atmosNP' atmospheric and '$oceanNP' ocean ones");
+      return ();
+    }
+  }
+  else
+  {
+    if ($atmosNP == $n || $oceanNP == $n)
+    {
+      return ($n * $ensembleSize, 0, $atmosNP * $ensembleSize, $atmosNT, $oceanNP * $ensembleSize, $oceanNT);
+    }
+    else
+    {
+      $fre->out(FREMsg::FATAL, "Serial run - total number '$n' of MPI processes is less than any of '$atmosNP' atmospheric or '$oceanNP' ocean ones");
+      return ();
+    }
+  }  
+
+};
+
+my $regressionPostfix = sub($$$$$$$$$$$$)
+# ------ arguments: $label $runNo $hoursFlag $segmentsNmb $monthsNmb $daysNmb $hoursNmb $totalNP $atmosNP $atmosNT $oceanNP $oceanNT 
+{
+  my ($l, $i, $hf, $sn, $mn, $dn, $hn, $tn, $an, $at, $on, $ot) = @_;
+  my ($timing, $size) = (($hf) ? "${sn}x${mn}m${dn}d${hn}h" : "${sn}x${mn}m${dn}d", '');
+  if ($an == 0 && $on == 0)
+  {
+    $size = "${tn}pe";
+  }
+  elsif ($on == 0)
+  {
+    $size = "${an}x${at}a";
+  }
+  elsif ($an == 0)
+  {
+    $size = "${on}x${ot}o";
+  }
+  else
+  {
+    $size = "${an}x${at}a_${on}x${ot}o"; 
+  }
+  return $timing . '_' . $size;
 };
 
 # //////////////////////////////////////////////////////////////////////////////
@@ -752,14 +1087,12 @@ sub extractDatasets($)
 sub extractNamelists($)
 # ------ arguments: $object
 # ------ called as object method
-# ------ reads nmls from xml, puts into hash, i.e. $nml{'mpp_nml'}='$content'
-# ------ reads and parse nmls from file(s), puts into hash, doesn't overwrite existing hash entries
 # ------ following inherits, but doesn't overwrite existing hash entries
-# ------ returns namelists hash
+# ------ returns namelists handle
 {
 
   my $r = shift;
-  my ($exp, $fre, %res) = ($r, $r->fre(), ());
+  my ($exp, $fre, $nmls) = ($r, $r->fre(), FRENamelists->new());
 
   $fre->out(FREMsg::NOTE, "Extracting namelists...");
   
@@ -779,14 +1112,14 @@ sub extractNamelists($)
 	$content =~ s/^\s*$//mg;
 	$content =~ s/^\n//;
 	$content =~ s/\s*(?:\/\s*)?$//;
-	if (exists($res{$name}))
+	if ($nmls->namelistExists($name))
 	{
 	  my $expName = $exp->name();
           $fre->out(FREMsg::NOTE, "Using secondary specification of '$name' rather than the original setting in '$expName'");
 	}
 	elsif ($name)
 	{
-          $res{$name} = defined($content) ? $content : "";
+	  $nmls->namelistPut($name, $content);
 	}
       }
       # --------------------------------------------------------------- get namelists from files
@@ -806,19 +1139,19 @@ sub extractNamelists($)
             $fileNml =~ s/^\s*\&//;
             $fileNml =~ s/\s*(?:\/\s*)?$//;
             my ($name, $content) = split('\s', $fileNml, 2);
-            if (exists($res{$name}))
+	    if ($nmls->namelistExists($name))
 	    {
               $fre->out(FREMsg::NOTE, "Using secondary specification of '$name' rather than the original setting in '$filePath'");
             }
 	    elsif ($name)
 	    {
-              $res{$name} = defined($content) ? $content : "";
+	      $nmls->namelistPut($name, $content);
             }
 	  }
         }
 	else
 	{
-	  return (-1 => 0);
+	  return undef;
 	}
       }
     }
@@ -826,7 +1159,7 @@ sub extractNamelists($)
     $exp = $exp->parent();
   }
 
-  return %res;
+  return $nmls;
 
 }
 
@@ -865,7 +1198,7 @@ sub extractTable($$)
 	}
 	else
 	{
-	  return -1;
+	  return undef;
 	}
       }
     }
@@ -898,7 +1231,7 @@ sub extractShellCommands($$%)
     {
       my $type = $exp->nodeValue($node, '@type');
       my $content = $exp->nodeValue($node, 'text()');
-      if (defined(%a) and exists($a{$type})) {$content = $a{$type}[0].$content.$a{$type}[1];}
+      if (exists($a{$type})) {$content = $a{$type}[0].$content.$a{$type}[1];}
       $value .= $content;
     }
     $exp = $exp->parent();
@@ -1263,17 +1596,57 @@ sub extractCompileInfo($)
      
 }
 
-sub extractRegressionLabels($)
-# ------ arguments: $object
+sub extractRegressionLabels($$)
+# ------ arguments: $object $regressionOption
 {
-  my $r = shift;
-  my @labels = ();
-  foreach my $node ($r->extractNodes('runtime', 'regression'))
+  my ($r, $l) = @_;
+  my ($fre, $expName, @expLabels) = ($r->fre(), $r->name(), $regressionLabels->($r));
+  unless (my @expDuplicateLabels = FREUtil::listDuplicates(@expLabels))
   {
-    my $label = $r->nodeValue($node, '@label') || $r->nodeValue($node, '@name');
-    push @labels, $label if $label;
+    my @optLabels = split(',', $l);
+    my @optUnknownLabels = ();
+    {
+      foreach my $optLabel (@optLabels)
+      {
+	push @optUnknownLabels, $optLabel if $optLabel ne 'all' && $optLabel ne 'suite' && grep($_ eq $optLabel, @expLabels) == 0;
+      }
+    }
+    if (scalar(@optUnknownLabels) == 0)
+    {
+      my @result = ();
+      if (grep($_ eq 'all', @optLabels) > 0)
+      {
+        @result = @expLabels;
+      }
+      elsif (grep($_ eq 'suite', @optLabels) > 0)
+      {
+        foreach my $expLabel (@expLabels)
+	{
+	  push @result, $expLabel if grep($_ eq $expLabel, @optLabels) > 0 || grep($_ eq $expLabel, FREExperiment::REGRESSION_SUITE) > 0;
+	}
+      }
+      else
+      {
+        foreach my $expLabel (@expLabels)
+	{
+	  push @result, $expLabel if grep($_ eq $expLabel, @optLabels) > 0;
+	}
+      } 
+      return @result;
+    }
+    else
+    {
+      my $optUnknownLabels = join(', ', @optUnknownLabels);
+      $fre->out(FREMsg::FATAL, "The experiment '$expName' doesn't contains regression tests '$optUnknownLabels'");
+      return ();
+    }
   }
-  return @labels;
+  else
+  {
+    my $expDuplicateLabels = join(', ', @expDuplicateLabels);
+    $fre->out(FREMsg::FATAL, "The experiment '$expName' contains non-unique regression tests '$expDuplicateLabels'");
+    return ();
+  }
 }
 
 sub extractRegressionRunInfo($$)
@@ -1282,40 +1655,10 @@ sub extractRegressionRunInfo($$)
 # ------ return a reference to the regression run info
 {
   my ($r, $l) = @_;
-  my ($fre, $expName) = ($r->fre(), $r->name()); 
-  if ($l eq 'suite')
-  {
-    my ($ok, %runs) = (1, ());
-    foreach my $label (REGRESSION_SUITE)
-    {
-      my $runsForLabel = $r->extractRegressionRunInfo($label);
-      if ($runsForLabel)
-      {
-        foreach my $postfix (keys(%{$runsForLabel}))
-	{
-	  if (!exists($runs{$postfix}))
-	  {
-	    $runs{$postfix} = $runsForLabel->{$postfix};
-	  }
-	  else
-	  {
-	    my $i = $runsForLabel->{$postfix}->{number};
-            $fre->out(FREMsg::FATAL, "The experiment '$expName', the regression test '$label', run '$i' - a run with these timing parameters already exists");
-	    $ok = 0; 
-	  }
-	}
-      }
-      else
-      {
-        $ok = 0;
-      }
-    }
-    return ($ok) ? \%runs : 0;
-  }
-  else
-  {
-    my $regNode = $regressionRunNode->($r, $l);
-    if ($regNode)
+  my ($fre, $expName) = ($r->fre(), $r->name());
+  if (my $nmls = $r->extractNamelists())
+  { 
+    if (my $regNode = $regressionRunNode->($r, $l))
     {
       my @runNodes = $regNode->findnodes('run');
       if (scalar(@runNodes) > 0)
@@ -1330,7 +1673,7 @@ sub extractRegressionRunInfo($$)
 	  my $srt = $r->nodeValue($runNodes[$i], '@runTimePerJob');
 	  if ($nps > 0)
 	  {
-	    my $patternRunTime = qr/^\d\d:\d\d:\d\d$/;
+	    my $patternRunTime = qr/^\d?\d:\d\d:\d\d$/;
 	    if ($srt =~ m/$patternRunTime/)
 	    {
 	      if ($msl or $dsl or $hsl)
@@ -1342,22 +1685,30 @@ sub extractRegressionRunInfo($$)
 		while (scalar(@msa) < $spj) {push(@msa, '0');}
 		while (scalar(@dsa) < $spj) {push(@dsa, '0');}
 		while (scalar(@hsa) < $spj) {push(@hsa, '0');}
-		my $postfix = ($hsl) ? "${spj}x$msa[0]m$dsa[0]d$hsa[0]h_${nps}pe" : "${spj}x$msa[0]m$dsa[0]d_${nps}pe";
-		if (!exists($runs{$postfix}))
+		my $nmlsOverridden = $overrideRegressionNamelists->($r, $nmls->copy(), $runNodes[$i]);
+		if (my ($totalNP, $totalCC, $atmosNP, $atmosNT, $oceanNP, $oceanNT) = $MPISizeParameters->($r, $nps, $nmlsOverridden))
 		{
         	  my %run = ();
 		  $run{label} = $l;
 		  $run{number} = $i;
-		  $run{npes} = $nps;
+		  $run{postfix} = $regressionPostfix->($l, $i, $hsl, $spj, $msa[0], $dsa[0], $hsa[0], $totalNP, $atmosNP, $atmosNT, $oceanNP, $oceanNT);
+		  $run{totalNP} = $totalNP;
+		  $run{totalCC} = $totalCC;
+		  $run{atmosNP} = $atmosNP;
+		  $run{atmosNT} = $atmosNT;
+		  $run{oceanNP} = $oceanNP;
+		  $run{oceanNT} = $oceanNT;
 		  $run{months} = join(' ', @msa);
 		  $run{days} = join(' ', @dsa);
 		  $run{hours} = join(' ', @hsa);
+		  $run{hoursDefined} = ($hsl ne "");
  		  $run{runTimeMinutes} = FREUtil::makeminutes($srt);
-		  $runs{$postfix} = \%run;
-		}
+		  $run{namelists} = $nmlsOverridden;
+		  $runs{$i} = \%run;
+                }
 		else
 		{
-        	  $fre->out(FREMsg::FATAL, "The experiment '$expName', the regression test '$l', run '$i' - a run with these timing parameters already exists");
+        	  $fre->out(FREMsg::FATAL, "The experiment '$expName', the regression test '$l', run '$i' - model size parameters are invalid");
 		  $ok = 0; 
 		}
 	      }
@@ -1393,6 +1744,11 @@ sub extractRegressionRunInfo($$)
       return 0;
     }
   }
+  else
+  {
+    $fre->out(FREMsg::FATAL, "The experiment '$expName' - unable to extract namelists");
+    return 0;
+  }
 }
 
 sub extractProductionRunInfo($)
@@ -1402,89 +1758,111 @@ sub extractProductionRunInfo($)
 {
   my $r = shift;
   my ($fre, $expName) = ($r->fre(), $r->name());
-  my $prdNode = $productionRunNode->($r);
-  if ($prdNode)
+  if (my $nmls = $r->extractNamelists())
   {
-    my $nps = $r->nodeValue($prdNode, '@npes');
-    my $smt = $r->nodeValue($prdNode, '@simTime');
-    my $smu = $r->nodeValue($prdNode, '@units');
-    my $srt = $r->nodeValue($prdNode, '@runTime') || $fre->runTime($nps);
-    my $gmt = $r->nodeValue($prdNode, 'segment/@simTime');
-    my $gmu = $r->nodeValue($prdNode, 'segment/@units');
-    my $grt = $r->nodeValue($prdNode, 'segment/@runTime');
-    if ($nps > 0)
+    if (my $prdNode = $productionRunNode->($r))
     {
-      my $patternUnits = qr/^(?:years|year|months|month)$/;
-      if (($smt > 0) and ($smu =~ m/$patternUnits/))
+      my $nps = $r->nodeValue($prdNode, '@npes');
+      my $smt = $r->nodeValue($prdNode, '@simTime');
+      my $smu = $r->nodeValue($prdNode, '@units');
+      my $srt = $r->nodeValue($prdNode, '@runTime') || $fre->runTime($nps);
+      my $gmt = $r->nodeValue($prdNode, 'segment/@simTime');
+      my $gmu = $r->nodeValue($prdNode, 'segment/@units');
+      my $grt = $r->nodeValue($prdNode, 'segment/@runTime');
+      if ($nps > 0)
       {
-        if (($gmt > 0) and ($gmu =~ m/$patternUnits/))
+	my $patternUnits = qr/^(?:years|year|months|month)$/;
+	if (($smt > 0) and ($smu =~ m/$patternUnits/))
 	{
-	  my $patternYears = qr/^(?:years|year)$/;
-	  $smt *= 12 if $smu =~ m/$patternYears/;
-	  $gmt *= 12 if $gmu =~ m/$patternYears/;
-	  if ($gmt <= $smt)
+          if (($gmt > 0) and ($gmu =~ m/$patternUnits/))
 	  {
-	    my $patternRunTime = qr/^\d\d:\d\d:\d\d$/;
-	    if ($srt =~ m/$patternRunTime/)
+	    my $patternYears = qr/^(?:years|year)$/;
+	    $smt *= 12 if $smu =~ m/$patternYears/;
+	    $gmt *= 12 if $gmu =~ m/$patternYears/;
+	    if ($gmt <= $smt)
 	    {
-	      if ($grt =~ m/$patternRunTime/)
+	      my $patternRunTime = qr/^\d?\d:\d\d:\d\d$/;
+	      if ($srt =~ m/$patternRunTime/)
 	      {
-		my ($srtMinutes, $grtMinutes) = (FREUtil::makeminutes($srt), FREUtil::makeminutes($grt));
-		if ($grtMinutes <= $srtMinutes)
+		if ($grt =~ m/$patternRunTime/)
 		{
-		  my %run = ();
-		  $run{npes} = $nps;
-		  $run{simTimeMonths} = $smt;
-		  $run{simRunTimeMinutes} = $srtMinutes;
-		  $run{segTimeMonths} = $gmt;
-		  $run{segRunTimeMinutes} = $grtMinutes;
-		  return \%run;
+		  my ($srtMinutes, $grtMinutes) = (FREUtil::makeminutes($srt), FREUtil::makeminutes($grt));
+		  if ($grtMinutes <= $srtMinutes)
+		  {
+		    my $nmlsOverridden = $overrideProductionNamelists->($r, $nmls->copy());
+		    if (my ($totalNP, $totalCC, $atmosNP, $atmosNT, $oceanNP, $oceanNT) = $MPISizeParameters->($r, $nps, $nmlsOverridden))
+		    {
+		      my %run = ();
+		      $run{totalNP} = $totalNP;
+		      $run{totalCC} = $totalCC;
+		      $run{atmosNP} = $atmosNP;
+		      $run{atmosNT} = $atmosNT;
+		      $run{oceanNP} = $oceanNP;
+		      $run{oceanNT} = $oceanNT;
+		      $run{simTimeMonths} = $smt;
+		      $run{simRunTimeMinutes} = $srtMinutes;
+		      $run{segTimeMonths} = $gmt;
+		      $run{segRunTimeMinutes} = $grtMinutes;
+		      $run{namelists} = $nmlsOverridden;
+		      return \%run;
+                    }
+		    else
+		    {
+		      $fre->out(FREMsg::FATAL, "The experiment '$expName' - model size parameters are invalid");
+		      return 0; 
+		    }
+		  }
+		  else
+		  {
+		    $fre->out(FREMsg::FATAL, "The experiment '$expName' - the segment running time '$grtMinutes' must not exceed the maximum job running time allowed '$srtMinutes'");
+		    return 0; 
+		  }
 		}
 		else
 		{
-		  $fre->out(FREMsg::FATAL, "The experiment '$expName' - the segment running time '$grtMinutes' must not exceed the maximum job running time allowed '$srtMinutes'");
+        	  $fre->out(FREMsg::FATAL, "The experiment '$expName' - the segment running time '$grt' must be nonempty and have the HH:MM:SS format");
 		  return 0; 
 		}
 	      }
 	      else
 	      {
-        	$fre->out(FREMsg::FATAL, "The experiment '$expName' - the segment running time '$grt' must be nonempty and have the HH:MM:SS format");
+        	$fre->out(FREMsg::FATAL, "The experiment '$expName' - the simulation running time '$srt' must be nonempty and have the HH:MM:SS format");
 		return 0; 
 	      }
 	    }
 	    else
 	    {
-              $fre->out(FREMsg::FATAL, "The experiment '$expName' - the simulation running time '$srt' must be nonempty and have the HH:MM:SS format");
+	      $fre->out(FREMsg::FATAL, "The experiment '$expName' - the segment model time '$gmt' must not exceed the simulation model time '$smt'");
 	      return 0; 
 	    }
 	  }
 	  else
 	  {
-	    $fre->out(FREMsg::FATAL, "The experiment '$expName' - the segment model time '$gmt' must not exceed the simulation model time '$smt'");
+            $fre->out(FREMsg::FATAL, "The experiment '$expName' - the segment model time '$gmt' must be nonempty and have one of (years|year|months|month) units defined");
 	    return 0; 
 	  }
 	}
 	else
 	{
-          $fre->out(FREMsg::FATAL, "The experiment '$expName' - the segment model time '$gmt' must be nonempty and have one of (years|year|months|month) units defined");
+          $fre->out(FREMsg::FATAL, "The experiment '$expName' - the simulation model time '$smt' must be nonempty and have one of (years|year|months|month) units defined");
 	  return 0; 
 	}
       }
       else
       {
-        $fre->out(FREMsg::FATAL, "The experiment '$expName' - the simulation model time '$smt' must be nonempty and have one of (years|year|months|month) units defined");
+	$fre->out(FREMsg::FATAL, "The experiment '$expName' - a positive number of cores to run on must be defined");
 	return 0; 
       }
     }
     else
     {
-      $fre->out(FREMsg::FATAL, "The experiment '$expName' - a positive number of cores to run on must be defined");
-      return 0; 
+      $fre->out(FREMsg::FATAL, "The experiment '$expName' - production parameters aren't defined");
+      return 0;
     }
   }
   else
   {
-    $fre->out(FREMsg::FATAL, "The experiment '$expName' - production timing parameters aren't defined or defined more than once");
+    $fre->out(FREMsg::FATAL, "The experiment '$expName' - unable to extract namelists");
     return 0;
   }
 }

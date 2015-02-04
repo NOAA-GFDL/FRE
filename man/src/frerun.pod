@@ -1,0 +1,328 @@
+=head1 NAME
+
+frerun - creates a runscript based on a runscript template and
+variables from an XML file.
+
+
+
+
+=head1 SYNOPSIS
+
+frerun [OPTIONS] exp [exp ...]
+
+
+
+
+=head1 DESCRIPTION
+
+frerun creates a tcsh runscript based on a runscript template and variables
+from an FRE XML file.  To perform regression tests, use the '-r' argument,
+otherwise frerun will look for a <production> tag for the experiment
+in the FRE XML file.
+
+
+
+
+=head1 OPTIONS
+
+=head2 Run Behavior Options
+
+=over 5
+
+=over 8
+
+=item B<-D>, B<--[no-]dual>
+
+Create a pair of runscripts - the main one and the dual one.  The dual
+runscript is functionally identical to runscripts with B<--unique> and
+B<--check> options enabled, it will keep the model output in a separate
+directory and compare it with the data from the main model run.  The
+B<--dual> option is recognized for production runs only.  Default:
+depends on site.
+
+=item B<-e>, B<--extend>
+
+Extend the default run of existing experiment.  This option is useful
+to recreate a runscript after changes have been made to the FRE XML
+file defining the experiment.  Cannot be use with B<--overwrite> or
+B<--unique>.
+
+=item B<-r>, B<--regression> I<< <STRING> >>
+
+Process only regression tests (comma separated) from the I<< <STRING>
+>>.  Valid regression string values are defined in the FRE XML file,
+but are usually I<basic>, I<restarts>, I<scaling> are defined. A
+regression string of I<suite> is equivalent to I<basic>, I<restarts>,
+I<scaling>.  A value of I<all> will check available defined
+regressions.  Default: No default.
+
+=item B<-u>, B<--unique>
+
+Create a new unique run of existing experiment.  Cannot be used with
+B<--overwrite> or B<--extend>.
+
+=item B<-o>, B<--overwrite>
+
+Overwrite the main run of existing experiment.  Cannot be used with
+B<--extend> or B<--unique>.
+
+=back
+
+=back
+
+
+
+
+=head2 Data Options
+
+=over 5
+
+=over 8
+
+=item B<-a>, B<--[no-]archive>
+
+Save the model output in the archive.  Default: On.
+
+=item B<-H>, B<--cache-history>
+
+Cache history files at a post-processing site (instead of putting them
+into archive).
+
+=item B<-c>, B<--check>
+
+Check the model output with the main model run (which makes sense for
+unique runs only).
+
+=item B<-C>, B<--checksum>
+
+Compute checksums for all the output data archives to enable their
+verification.
+
+=item B<-M>, B<--[no-]combine-history>
+
+Combine history files after each segment run.  Default: On.
+
+=item B<-z>, B<--compress> I<< <STRING> >>
+
+Compress model output.  I<< <STRING> >> can be one of I<ascii>,
+I<restart>, I<history> or I<all>.
+
+=item B<-f>, B<--[no-]free>
+
+Free working directory in the end of run.  Default: depends on site.
+
+=item B<-O>, B<--output-staging> I<< <STRING> >>
+
+Type of output data staging.  Possible values for I<< <STRING> >>
+depend on site.
+
+=item B<-T>, B<--transfer>
+
+Transfer all the model output back to a post-processing site.
+Defualt: depends on site.
+
+=item B<-N>, B<--namelist>
+
+Print all the namelists with all substitutions and overrides
+
+=back
+
+=back
+
+
+
+
+=head2 Submit / Execute Options
+
+=over 5
+
+=over 8
+
+=item B<-R>, B<--remote-user> B<< <STRING> >>
+
+Use the remote user I<< <STRING> >> for the model output transfer to a
+post-processing site.
+
+=item B<-E>, B<--execute>
+
+Execute all the created scripts in the current session.
+
+=item B<-P>, B<--partition> I<< <STRING> >> 
+
+Partition I<< <STRING> >> to use for model runs.  Default: depends on
+site.
+
+=item B<-q>, B<--queue> I<< <STRING> >>
+
+Queue STRING to use for model runs.  Default: depends on site.
+
+=item B<-S>, B<--submit-chained>
+
+Submit all the created scripts as input data staging jobs, submitting
+run jobs at their end.  See L<Data Staging Options> for more options
+on controlling data staging submissions.
+
+=item B<--submit-staged>
+
+Submit all the created scripts as batch jobs with input data staging.
+See L<Data Staging Options> for more options on controlling data
+staging submissions.
+
+=item B<-s>, B<--submit>
+
+Submit all the created scripts as batch jobs.
+
+=back
+
+=back
+
+
+
+
+=head2 Data Staging Options
+
+=over 5
+
+=over 8
+
+=item B<-n>, B<--ncores> I<< <NUM> >>
+
+Number of processor cores to use for input data staging.  Default:
+depends on site.
+
+=item B<-w>, B<--walltime> I<< <NUM> >>
+
+Maximum wall time (in minutes) to use for input data staging.
+Default: depends on site.
+
+=back
+
+=back
+
+
+
+
+=head2 General FRE Options
+
+=over 5
+
+=over 8
+
+=item B<-p>, B<--platform> I<< <PLATFORM> >>
+
+Use this platform from the XML to setup the specific hardware and
+software the experiment will be built and run on.  I<< <PLATFORM> >> is
+of the form <site>.<software>.  <site> must be one of the following
+(ncrc1, ncrc2, gfdl, ...), and <software> can be any descriptive
+string (no spaces), or "default".  <site> is dependent on where
+B<frerun> is executed.  Default: <site>.default.
+
+=item B<-t>, B<--target> I<< <STRING> >>
+
+The compilation target.  Predefined targets strings are I<repro>,
+I<prod>, I<debug>, I<hdf5> and I<openmp>.  The targets can be combined
+using a comma separated list (e.g. prod,openmp).  Default: I<prod>.
+
+The targets I<prod>, I<repro> and I<debug> are mutually exclusive.
+Not more than one of these is allowed in the target list.
+
+User defined targets should refer to a <compile> node with the
+corresponding value of its target attribute.
+
+=item B<-x>, B<--xmlfile> I<< <xmlFile> >>
+
+Use the XML file defined by I<< <xmlFile> >>.  Default: F<$cwd/rts.xml>.
+
+=item B<-v>, B<--verbose>
+
+Verbose messages.  Option can be repeated to increase the verbosity.
+
+=item B<-V>, B<--version>
+
+Print the version and exit.
+
+=item B<-h>, B<--help>
+
+Print the usage message and exit.
+
+=item I<exp>
+
+At least one experiment from the I<< <xmlFile> >> must be listed as an
+argument.  Run B<frelist> to get a list of available experiments.
+
+=back
+
+=back
+
+
+
+
+=head1 SEE ALSO
+
+B<frelist>(1)
+
+
+
+
+
+=head1 BUGS
+
+=begin man
+
+Report any bugs to GFDL's Helpdesk <oar.gfdl.help@noaa.gov>
+
+=end man
+
+=begin html
+
+<p>Report any bugs to 
+<script type="text/javascript">
+   <!--
+   var contact = "GFDL's Helpdesk";
+   var email = "oar.gfdl.help";
+   var emailHost = "noaa.gov";
+   document.write("<a href=" + "mail" + "to:" + email + "@" + emailHost + ">" + contact + "</a>" + ".");
+   //-->
+</script>
+</p>
+
+=end html
+
+=begin latex
+
+Report any bugs to GFDL's Helpdesk <\texttt{oar.gfdl.help@noaa.gov}>.
+
+=end latex
+
+=begin mediawiki
+
+Report any bugs to GFDL's Helpdesk <oar.gfdl.heml@noaa.gov>
+
+=end mediawiki
+
+
+
+
+=head1 AUTHORS
+
+Designed and written by V. Balaji, Amy Langenhorst and Aleksey Yakovlev
+
+
+
+
+=head1 COPYRIGHT
+
+Copyright 2000-2012 Geophysical Fluid Dynamics Laboratory
+
+The Flexible Modeling System (FMS) is free software; you can
+redistribute it and/or modify it and are expected to follow the terms
+of the GNU General Public License as published by the Free Software
+Foundation; either version 2 of the License, or (at your option) any
+later version.
+
+FMS is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY; without even the implied warranty of MERCHANTABILITY or
+FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License
+for more details.
+
+=cut

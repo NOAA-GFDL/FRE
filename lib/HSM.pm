@@ -1,5 +1,5 @@
 #
-# $Id: HSM.pm,v 1.1.2.6 2012/03/28 23:00:37 afy Exp $
+# $Id: HSM.pm,v 1.1.2.10 2012/09/02 02:57:20 afy Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: HSM Main Library Module
 # ------------------------------------------------------------------------------
@@ -18,6 +18,17 @@
 # afy    Ver   4.01  Modify 'alignAccessTime' subroutine            December 11
 # afy    Ver   5.00  Modify 'setAccessTime' utility (add check)     January 12
 # afy    Ver   6.00  Modify 'unlock' (add flock(..., LOCK_UN))      March 12
+# afy    Ver   7.00  Remove 'unlockHandle'                          May 12
+# afy    Ver   7.01  Modify 'lockHandle' (write signature in file)  May 12
+# afy    Ver   7.02  Modify 'tryLock' (return ref to hash)          May 12
+# afy    Ver   7.03  Modify 'unlock' (accept ref to hash)           May 12
+# afy    Ver   7.04  Modify 'remove' (pass ref to unlock)           May 12
+# afy    Ver   8.00  Add locking via the 'File::NFSLock' module     May 12
+# afy    Ver   8.01  Modify 'lock' (use time increase rate)         May 12
+# afy    Ver   8.02  Add 'lockingInfo' subroutine                   May 12
+# afy    Ver   9.00  Fix 'SITE_CURRENT' constant                    May 12
+# afy    Ver  10.00  Add 'getCache' subroutine                      September 12
+# afy    Ver  10.01  Enhanced globbing @ 'gfdl' site only           September 12
 # ------------------------------------------------------------------------------
 # Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2000-2012
 # Designed and written by V. Balaji, Amy Langenhorst and Aleksey Yakovlev
@@ -29,37 +40,190 @@ use strict;
 
 use Fcntl();
 use File::Basename();
+use File::NFSLock();
 use File::Path();
 use File::stat;
 use POSIX();
+use Sys::Hostname();
 
 # //////////////////////////////////////////////////////////////////////////////
 # ////////////////////////////////////////////////////////// Global Constants //
 # //////////////////////////////////////////////////////////////////////////////
 
+use constant SITE_CURRENT => $ENV{FRE_SYSTEM_SITE};
+use constant SITES_NFSLOCK => ('gfdl');
+use constant SITES_GLOBENHANCED => ('gfdl');
+
+use constant HOSTNAME => Sys::Hostname::hostname();
+
 use constant EXTENSION_LOCK => '.LOCK';
 use constant EXTENSION_OK => '.ok';
 
+use constant TIME_TO_WAIT_DEFAULT => 30;
+use constant TIME_TO_WAIT_INCREASE_RATE => 1.25;
+
 # //////////////////////////////////////////////////////////////////////////////
-# ///////////////////////////////////////////////////////////////// Utilities //
+# ////////////////////////////////////////////////////////// Global Variables //
 # //////////////////////////////////////////////////////////////////////////////
 
-my $lockHandle = sub($)
+my ($HSMTryLock, $HSMUnlock, $HSMLockingInfo, $HSMGlob) = (undef, undef, undef, undef);
+
+# //////////////////////////////////////////////////////////////////////////////
+# ///////////////////////////////////////////// Locking/Unlocking Using flock //
+# //////////////////////////////////////////////////////////////////////////////
+
+my $flockLockHandle = sub($)
 # ------ arguments: $filehandle
 {
   my $fh = shift;
-  my $locked = flock($fh, &Fcntl::LOCK_EX | &Fcntl::LOCK_NB);
-  close $fh unless $locked;
-  return ($locked) ? $fh : 0;
+  if (my $locked = flock $fh, &Fcntl::LOCK_EX | &Fcntl::LOCK_NB)
+  {
+    my $signature = HSM::HOSTNAME . ':' . $$;
+    syswrite $fh, $signature, length($signature);
+    return 1;
+  }
+  else
+  {
+    close $fh;
+    return 0;
+  }
 };
 
-my $unlockHandle = sub($)
-# ------ arguments: $filehandle
+my $flockTryLock = sub($)
+# ------ arguments: $path
 {
-  my $fh = shift;
-  my $unlocked = flock($fh, &Fcntl::LOCK_UN);
-  close $fh if $unlocked;
+  my $p = shift;
+  my $lockfile = $p . &HSM::EXTENSION_LOCK;
+  if (-f $lockfile)
+  {
+    if (sysopen my $fh, $lockfile, &Fcntl::O_WRONLY)
+    {
+      return ($flockLockHandle->($fh)) ? {file => $lockfile, handle => $fh} : 0;
+    }
+    elsif (POSIX::errno() == &POSIX::ENOENT)
+    {
+      return 0;
+    }
+    else
+    {
+      return undef;
+    }
+  }
+  else
+  {
+    if (sysopen my $fh, $lockfile, &Fcntl::O_WRONLY | &Fcntl::O_CREAT | &Fcntl::O_EXCL)
+    {
+      return ($flockLockHandle->($fh)) ? {file => $lockfile, handle => $fh} : 0;
+    }
+    elsif (POSIX::errno() == &POSIX::EEXIST)
+    {
+      return 0;
+    }
+    else
+    {
+      return undef;
+    }
+  }
 };
+
+my $flockUnlock = sub($)
+# ------ arguments: $refToHash
+{
+  my $r = shift;
+  flock $r->{handle}, &Fcntl::LOCK_UN;
+  close $r->{handle};
+  unlink $r->{file};
+};
+
+my $flockLockingInfo = sub()
+# ------ arguments: none
+{
+  return "flock";
+};
+
+# //////////////////////////////////////////////////////////////////////////////
+# ///////////////////////////////////// Locking/Unlocking Using File::NFSLock //
+# //////////////////////////////////////////////////////////////////////////////
+
+my $NFSLockTryLock = sub($)
+# ------ arguments: $path
+{
+  my $p = shift;
+  my $r = new File::NFSLock($p, &Fcntl::LOCK_EX | &Fcntl::LOCK_NB);
+  return (defined($r)) ? $r : 0;
+};
+
+my $NFSLockUnlock = sub($)
+# ------ arguments: $handle
+{
+  my $r = shift;
+  $r->unlock();
+};
+
+my $NFSLockLockingInfo = sub()
+# ------ arguments: none
+{
+  if (defined($File::NFSLock::VERSION))
+  {
+    return "File::NFSLock Version $File::NFSLock::VERSION";
+  }
+  else
+  {
+    return "File::NFSLock";
+  }
+};
+
+# //////////////////////////////////////////////////////////////////////////////
+# ////////////////////////////////////////////////////////////////// Globbing //
+# //////////////////////////////////////////////////////////////////////////////
+
+my $globEnhanced = sub($)
+# ------ arguments: $pattern
+{
+  my $p = shift;
+  my @parts = split(/\//, $p);
+  my ($search, @results) = (undef, ());
+  $search = sub($$)
+  {
+    my ($n, $i) = @_;
+    if (-d $n)
+    {
+      if (opendir my $dh, $n)
+      {
+	my $curDir = Cwd::getcwd();
+	if (chdir $n)
+	{
+	  foreach my $name (glob(@parts[$i]))
+	  {
+	    my $fullName = ($n ne '/') ? "$n/$name" : "/$name";
+	    if ($i < $#parts)
+	    {
+	      $search->($fullName, $i + 1);
+	    }
+	    else
+	    {
+	      push @results, $fullName;
+	    }
+	  }
+	  chdir $curDir;
+	}
+	closedir $dh;
+      }
+    }
+  };
+  $search->("/", 1);
+  return @results;
+};
+
+my $globRegular = sub($)
+# ------ arguments: $pattern
+{
+  return glob(shift);
+};
+
+# //////////////////////////////////////////////////////////////////////////////
+# /////////////////////////////////////////////////////////// Other Utilities //
+# //////////////////////////////////////////////////////////////////////////////
 
 my $elements = sub($)
 # ------ arguments: $dirPath
@@ -235,54 +399,31 @@ sub pathIsMountable($)
   }
 }
 
+sub getCache($)
+# ------ arguments: $pattern
+# ------ return list of existing files, satisfying the $pattern
+{
+  return $HSMGlob->(shift);
+}
+
 # //////////////////////////////////////////////////////////////////////////////
 # ////////////////////////////////////////////// Exported Functions - Locking //
 # //////////////////////////////////////////////////////////////////////////////
 
 sub tryLock($)
 # ------ arguments: $path
-# ------ try to open (or create) a lockfile for the $path and lock it
-# ------ return the lockfile handle if succeeded, '0' if the lockfile is already locked, 'undef' otherwise 
+# ------ try to lock the $path (without blocking)
+# ------ return a handle if succeeded, '0' if the $path is already locked, 'undef' otherwise 
 {
   my $p = shift;
-  my $lockfile = $p . &HSM::EXTENSION_LOCK;
-  my $dir = File::Basename::dirname($lockfile);
+  my $dir = File::Basename::dirname($p);
   if (-d $dir or HSM::createDir($dir))
   {
     if (-w $dir)
     {
-      if (-f $lockfile)
-      {
-	if (sysopen(my $fh, $lockfile, &Fcntl::O_WRONLY))
-	{
-	  return $lockHandle->($fh);
-	}
-	elsif (POSIX::errno() == &POSIX::ENOENT)
-	{
-	  return 0;
-	}
-	else
-	{
-	  print STDERR "HSM::tryLock - the file '$lockfile' can't be opened ($!)\n";
-	  return undef;
-	}
-      }
-      else
-      {
-	if (sysopen(my $fh, $lockfile, &Fcntl::O_WRONLY | &Fcntl::O_CREAT | &Fcntl::O_EXCL))
-	{
-	  return $lockHandle->($fh);
-	}
-	elsif (POSIX::errno() == &POSIX::EEXIST)
-	{
-	  return 0;
-	}
-	else
-	{
-	  print STDERR "HSM::tryLock - the file '$lockfile' can't be created ($!)\n";
-	  return undef;
-	}
-      }
+      my $r = $HSMTryLock->($p);
+      print STDERR "HSM::tryLock - a lockfile for the '$p' can't be opened or created\n" unless defined($r);
+      return $r;
     }
     else
     {
@@ -298,24 +439,25 @@ sub tryLock($)
 }
 
 sub lock($$)
-# ------ arguments: $path $timeout
-# ------ wait until a lockfile for the $path can be locked then lock it
-# ------ return the lockfile handle if succeeded, 'undef' otherwise 
+# ------ arguments: $path $timeToWait
+# ------ lock the $path (with blocking), trying every $timeToWait seconds until success
+# ------ return a handle if succeeded, 'undef' otherwise 
 {
   my ($p, $t) = @_;
+  $t = HSM::TIME_TO_WAIT_DEFAULT unless $t;
   while (1)
   {
-    my $fh = HSM::tryLock($p);
-    if (defined($fh))
+    my $r = HSM::tryLock($p);
+    if (defined($r))
     {
-      if ($fh)
+      if ($r)
       {
-        return $fh;
+        return $r;
       }
       else
       {
-        print STDERR "HSM::lock - the '$p' is locked by another process, trying again in $t seconds ...\n";
-        sleep $t;
+        print STDERR "HSM::lock - the '$p' is locked by another process, trying again in $t seconds ...\n" and sleep $t;
+        $t = int($t * HSM::TIME_TO_WAIT_INCREASE_RATE);
       }
     }
     else
@@ -327,38 +469,24 @@ sub lock($$)
 }
 
 sub unlock($)
-# ------ arguments: $path
-# ------ unlock a lockfile for the $path (by removing it)
+# ------ arguments: $handle
+# ------ unlock the previously locked path by its $handle
 {
-  my $p = shift;
-  my $lockfile = $p . &HSM::EXTENSION_LOCK;
-  my $dir = File::Basename::dirname($lockfile);
-  if (-w $dir)
+  my $r = shift;
+  if ($r)
   {
-    if (-f $lockfile)
-    {
-      if (-w $lockfile)
-      {
-	if (sysopen(my $fh, $lockfile, &Fcntl::O_RDONLY))
-	{
-	  $unlockHandle->($fh);
-          unlink $lockfile;
-	}
-	else
-	{
-	  print STDERR "HSM::unlock - the file '$lockfile' can't be opened ($!)\n";
-	}
-      }
-      else
-      {
-        print STDERR "HSM::unlock - the file '$lockfile' isn't writable\n";
-      }
-    }
+    $HSMUnlock->($r);
   }
   else
   {
-    print STDERR "HSM::unlock - the directory '$dir' isn't writable\n";
+    print STDERR "HSM::unlock - invalid reference (system error)\n";
   }
+}
+
+sub lockingInfo()
+# ------ arguments: none
+{
+  return $HSMLockingInfo->();
 }
 
 # //////////////////////////////////////////////////////////////////////////////
@@ -449,20 +577,20 @@ sub remove($$$$)
 	  print "HSM::remove - testing  '$okfile': atime = '$atimeFormatted'\n" if $v;
 	  if ($atime <= $t)
 	  {
-            if (HSM::tryLock($element))
+            if (my $r = HSM::tryLock($element))
 	    {
 	      print "HSM::remove - removing '$element'\n" if $v;
 	      if ($removeElement->($element))
 	      {
 		print "HSM::remove - removing '$okfile'\n" if $v;
 		unlink $okfile;
-	        HSM::unlock($element);
+	        HSM::unlock($r);
                 sleep $p;
 	      }
 	      else
 	      {
 		print "HSM::remove - keeping  '$element' (problem with permissions during the removal)\n" if $v;
-	        HSM::unlock($element);
+	        HSM::unlock($r);
 		$ok = 0;
 		last;
 	      }
@@ -523,5 +651,29 @@ sub remove($$$$)
 # //////////////////////////////////////////////////////////////////////////////
 # //////////////////////////////////////////////////////////// Initialization //
 # //////////////////////////////////////////////////////////////////////////////
+
+{
+  my ($site, @sites) = (HSM::SITE_CURRENT, HSM::SITES_NFSLOCK);
+  if ($site && scalar(grep($_ eq $site, @sites)) > 0)
+  {
+    ($HSMTryLock, $HSMUnlock, $HSMLockingInfo) = ($NFSLockTryLock, $NFSLockUnlock, $NFSLockLockingInfo);
+  }
+  else
+  {
+    ($HSMTryLock, $HSMUnlock, $HSMLockingInfo) = ($flockTryLock, $flockUnlock, $flockLockingInfo);
+  }
+}
+
+{
+  my ($site, @sites) = (HSM::SITE_CURRENT, HSM::SITES_GLOBENHANCED);
+  if ($site && scalar(grep($_ eq $site, @sites)) > 0)
+  {
+    $HSMGlob = $globEnhanced;
+  }
+  else
+  {
+    $HSMGlob = $globRegular;
+  }
+}
 
 return 1;

@@ -1,5 +1,5 @@
 #
-# $Id: FRETemplate.pm,v 18.0.2.20.2.3 2013/01/04 21:49:34 afy Exp $
+# $Id: FRETemplate.pm,v 18.0.2.25 2012/12/27 22:47:35 afy Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: Template Management Module
 # ------------------------------------------------------------------------------
@@ -53,14 +53,22 @@
 # afy    Ver  19.03  Add 'schedulerSizeAsString' subroutine         April 12
 # afy    Ver  20.00  Modify 'schedulerNames' (dual settings)        April 12
 # afy    Ver  20.01  Modify 'schedulerSize' (better placement)      April 12
-# afy -------------- Branch 18.0.2.20.2 --------------------------- December 12
-# afy    Ver   1.00  Add '*Account*' subs                           December 12
-# afy    Ver   1.01  Modify '*Resources*' subs (add dualFlag)       December 12
-# afy    Ver   1.02  Modify '*Names' subs (remove dualFlag)         December 12
-# afy    Ver   2.00  Fix 'setSchedulerAccount' (reorder params)     December 12
-# afy    Ver   3.00  Fix 'setSchedulerResources' (add $)            January 13
+# afy    Ver  21.00  Modify 'schedulerSize' (rename property)       May 12
+# afy    Ver  21.01  Modify 'schedulerResources' (rename property)  May 12
+# afy    Ver  22.00  Modify 'schedulerSize' (add concurrency flag)  June 12
+# afy    Ver  23.00  Add 'FRETemplatePragmaCsh' global variable     July 12
+# afy    Ver  23.01  Add 'setInputDatasets' subroutine              July 12
+# afy    Ver  23.02  Add 'setTable' subroutine                      July 12
+# afy    Ver  23.03  Add 'setNamelists' subroutine                  July 12
+# afy    Ver  23.04  Add 'setShellCommands' subroutine              July 12
+# afy    Ver  23.05  Standardize the 'fre' argument usage           July 12
+# afy    Ver  24.00  Modify 'setNamelists' (expanded/unexpanded)    July 12
+# afy    Ver  25.00  Add '*Account*' subs                           December 12
+# afy    Ver  25.01  Modify '*Resources*' subs (add dualFlag)       December 12
+# afy    Ver  25.02  Modify '*Names' subs (remove dualFlag)         December 12
+# afy    Ver  25.00  Fix 'schedulerResources' utility               December 12
 # ------------------------------------------------------------------------------
-# Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2009-2013
+# Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2009-2012
 # Designed and written by V. Balaji, Amy Langenhorst and Aleksey Yakovlev
 #
 
@@ -68,9 +76,13 @@ package FRETemplate;
 
 use strict; 
 
+use List::Util();
 use POSIX();
 
 use FRE();
+use FREMsg();
+use FRENamelists();
+use FREUtil();
 
 # //////////////////////////////////////////////////////////////////////////////
 # ////////////////////////////////////////////////////////// Global Constants //
@@ -84,17 +96,34 @@ use constant PRAGMA_ALIAS => 'alias';
 use constant PRAGMA_SCHEDULER_OPTIONS => 'scheduler-options';
 use constant PRAGMA_SCHEDULER_MAKE_VERBOSE => 'scheduler-make-verbose';
 use constant PRAGMA_VERSION_INFO => 'version-info';
+use constant PRAGMA_DATAFILES => 'dataFiles';
+use constant PRAGMA_FMSDATASETS => 'fmsDataSets';
+use constant PRAGMA_GENERIC_TABLE => 'table';
+use constant PRAGMA_NAMELISTS_EXPANDED => 'namelists-expanded';
+use constant PRAGMA_NAMELISTS_UNEXPANDED => 'namelists';
+
+# //////////////////////////////////////////////////////////////////////////////
+# ////////////////////////////////////////////////////////// Global Variables //
+# //////////////////////////////////////////////////////////////////////////////
+
+my %FRETemplatePragmaCsh =
+(
+  'platformCsh'			=> 'setup-platform-csh',
+  'expRuntimeCsh'		=> 'experiment-runtime-csh',
+  'expInputCshInit'		=> 'experiment-input-csh-init',
+  'expInputCshAlwaysOrNotInit'	=> 'experiment-input-csh-always-or-postinit',
+  'expPostProcessCsh'		=> 'experiment-postprocess-csh'
+);
 
 # //////////////////////////////////////////////////////////////////////////////
 # ///////////////////////////////////////////////////////////////// Utilities //
 # //////////////////////////////////////////////////////////////////////////////
 
-my $schedulerSize = sub($$$$$$$)
-# ------ arguments: $expt $jobType $total_np $atmos_np $atmos_nt $ocean_np $ocean_nt
+my $schedulerSize = sub($$$$$$$$)
+# ------ arguments: $fre $jobType $totalNP $totalCC $atmosNP $atmosNT $oceanNP $oceanNT
 {
 
-  my ($z, $j, $tp, $ap, $at, $op, $ot) = @_;
-  my $fre = $z->fre();
+  my ($fre, $j, $tp, $tc, $ap, $at, $op, $ot) = @_;
   my $coresPerJobInc = $fre->property("FRE.scheduler.$j.coresPerJob.inc") || 1;
   my $coresPerJobMax = $fre->property("FRE.scheduler.$j.coresPerJob.max") || &POSIX::INT_MAX;
   
@@ -129,29 +158,31 @@ my $schedulerSize = sub($$$$$$$)
     my %option = ();
     if ($ap == 0 && $op == 0)
     {
-      $option{size} = $fre->propertyParameterized("FRE.scheduler.option.$j.size", $coresAggregated->($tp));
+      $option{size} = $fre->propertyParameterized("FRE.scheduler.option.size.$j", $coresAggregated->($tp));
     }
-    elsif ($fre->property("FRE.scheduler.option.$j.size.aggregated"))
+    elsif ($fre->property("FRE.scheduler.option.size.$j.aggregated"))
     {
-      $option{size} = $fre->propertyParameterized("FRE.scheduler.option.$j.size", $coresAggregated->($ap * $at) + $coresAggregated->($op * $ot));
+      my ($coresAtmos, $coresOcean) = ($coresAggregated->($ap * $at), $coresAggregated->($op * $ot));
+      my $size = ($tc) ? ($coresAtmos + $coresOcean) : List::Util::max($coresAtmos, $coresOcean);  
+      $option{size} = $fre->propertyParameterized("FRE.scheduler.option.size.$j", $size);
     }
     elsif ($ap > 0 && $op == 0)
     {
       my @nodeSpec = $coresDistributed->($ap, $at);
       my $nodeSpecSize = scalar(@nodeSpec);
-      $option{size} = $fre->propertyParameterized("FRE.scheduler.option.$j.$nodeSpecSize.size", @nodeSpec);
+      $option{size} = $fre->propertyParameterized("FRE.scheduler.option.size.$j.$nodeSpecSize", @nodeSpec);
     }
     elsif ($ap == 0 && $op > 0)
     {
       my @nodeSpec = $coresDistributed->($op, $ot);
       my $nodeSpecSize = scalar(@nodeSpec);
-      $option{size} = $fre->propertyParameterized("FRE.scheduler.option.$j.$nodeSpecSize.size", @nodeSpec);
+      $option{size} = $fre->propertyParameterized("FRE.scheduler.option.size.$j.$nodeSpecSize", @nodeSpec);
     }
     else
     {
-      my @nodeSpec = ($coresDistributed->($ap, $at), $coresDistributed->($op, $ot));
+      my @nodeSpec = ($tc) ? ($coresDistributed->($ap, $at), $coresDistributed->($op, $ot)) : $coresDistributed->(List::Util::max($ap, $op), List::Util::max($at, $ot));
       my $nodeSpecSize = scalar(@nodeSpec);
-      $option{size} = $fre->propertyParameterized("FRE.scheduler.option.$j.$nodeSpecSize.size", @nodeSpec);
+      $option{size} = $fre->propertyParameterized("FRE.scheduler.option.size.$j.$nodeSpecSize", @nodeSpec);
     }
     return \%option;
   }
@@ -163,11 +194,10 @@ my $schedulerSize = sub($$$$$$$)
 };
 
 my $schedulerAccount = sub($$)
-# ------ arguments: $expt $windfallFlag
+# ------ arguments: $fre $windfallFlag
 {
 
-  my ($z, $f) = @_;
-  my $fre = $z->fre();
+  my ($fre, $f) = @_;
 
   if ($fre->property('FRE.scheduler.enabled'))
   {
@@ -194,11 +224,10 @@ my $schedulerAccount = sub($$)
 };
 
 my $schedulerResources = sub($$$$$$$)
-# ------ arguments: $expt $jobType $ncores $time $partition $queue $dualFlag
+# ------ arguments: $fre $jobType $ncores $time $partition $queue $dualFlag
 {
 
-  my ($z, $j, $n, $t, $p, $q, $f) = @_;
-  my $fre = $z->fre();
+  my ($fre, $j, $n, $t, $p, $q, $f) = @_;
 
   if ($fre->property('FRE.scheduler.enabled'))
   {
@@ -230,7 +259,7 @@ my $schedulerResources = sub($$$$$$$)
       my $coresPerJobInc = $fre->property("FRE.scheduler.$j.coresPerJob.inc") || 1;
       my $coresPerJobMax = $fre->property("FRE.scheduler.$j.coresPerJob.max") || &POSIX::INT_MAX;
       my $ncores = ($n < $coresPerJobInc) ? $coresPerJobInc : (($coresPerJobMax < $n) ? $coresPerJobMax : $n);
-      $option{size} = $fre->propertyParameterized("FRE.scheduler.option.$j.size", POSIX::ceil($ncores / $coresPerJobInc) * $coresPerJobInc),
+      $option{size} = $fre->propertyParameterized("FRE.scheduler.option.size.$j", POSIX::ceil($ncores / $coresPerJobInc) * $coresPerJobInc),
     }
     
     return \%option;
@@ -246,11 +275,10 @@ my $schedulerResources = sub($$$$$$$)
 };
 
 my $schedulerNames = sub($$$)
-# ------ arguments: $expt $scriptName $stdoutDir
+# ------ arguments: $fre $scriptName $stdoutDir
 {
 
-  my ($z, $n, $d) = @_;
-  my $fre = $z->fre();
+  my ($fre, $n, $d) = @_;
 
   if ($fre->property('FRE.scheduler.enabled'))
   {
@@ -277,34 +305,125 @@ my $schedulerNames = sub($$$)
 
 };
 
+my $prepareInputFile = sub($$$)
+# ------ arguments: $fre $source $target
+{
+
+  my ($fre, $s, $t) = @_;
+
+  if (File::Spec->file_name_is_absolute($s))
+  {
+
+    if (!File::Spec->file_name_is_absolute($t))
+    {
+
+      my $csh = '';
+
+      my $sName = substr($s, 1);
+      my $sArchiveFlag = FREUtil::fileIsArchive($s);
+      $sName = FREUtil::fileArchiveExtensionStrip($sName) if $sArchiveFlag;
+
+      my ($tFileName, $tDirName) = File::Basename::fileparse($t);
+      my $tDirectoryFlag = ($tDirName ne './');
+
+      if ($sArchiveFlag and $tDirectoryFlag and !$tFileName)
+      {
+	$csh .= '  hsmget ' . $sName . '/\* && \\' . "\n";
+        $csh .= '  if (! -d $workDir/' . $tDirName . ') mkdir -p $workDir/' . $tDirName . ' && \\' . "\n";
+	$csh .= '  ls $hsmDir/' . $sName . '/* | xargs ln -f -t $workDir/' . $tDirName . "\n";
+      }
+      elsif ($sArchiveFlag and $tFileName)
+      {
+	$fre->out(FREMsg::FATAL, "The source archive '$s' can't be linked to the non-directory target '$t'");
+	return undef;
+      }
+      elsif (!$sArchiveFlag and ($tDirectoryFlag or $tFileName))
+      {
+	$csh .= '  hsmget ' . $sName . ' && \\' . "\n";
+        $csh .= '  if (! -d $workDir/' . $tDirName . ') mkdir -p $workDir/' . $tDirName . ' && \\' . "\n" if $tDirectoryFlag;
+	$csh .= '  ln -f $hsmDir/' . $sName . ' $workDir/' . $tDirName . (($tFileName) ? $tFileName : '.') . "\n";
+      }
+      else
+      {
+	$fre->out(FREMsg::FATAL, "The target pathname is empty");
+	return undef;
+      }
+
+      if ($csh)
+      {
+	$csh .= '  if ( $status != 0 ) then' . "\n";
+	$csh .= '    set dataFilesNotOK = ( $dataFilesNotOK ' . $s . ' )' . "\n";
+	$csh .= '  endif' . "\n";
+      }
+
+      return $csh;
+
+    }
+    else
+    {
+      $fre->out(FREMsg::FATAL, "The target pathname '$t' isn't relative");
+      return undef;
+    }
+  }
+  else
+  {
+    $fre->out(FREMsg::FATAL, "The source pathname '$s' isn't absolute");
+    return undef;
+  }
+
+};
+
+my $checkNamelists = sub($$)
+# ------ arguments: $fre $nameListsHandle
+{
+  my ($fre, $h) = @_;
+  my $targetListRepro = FRETargets::containsRepro($fre->target());
+  if ($h->namelistExists('xgrid_nml'))
+  {
+    my $nmlRepro = $h->namelistBooleanGet('xgrid_nml', 'make_exchange_reproduce');
+    if ($nmlRepro and !$targetListRepro)
+    {
+      $fre->out(FREMsg::WARNING, "The 'make_exchange_reproduce' is .TRUE. in the 'xgrid_nml' namelist, which contradicts with absence of 'repro' in your targets");
+    }
+    elsif (!$nmlRepro and $targetListRepro)
+    {
+      $fre->out(FREMsg::WARNING, "The 'make_exchange_reproduce' is absent or isn't .TRUE. in the 'xgrid_nml' namelist, which contradicts with 'repro' in your targets");
+    }
+  }
+  elsif ($targetListRepro)
+  {
+    $fre->out(FREMsg::WARNING, "The 'xgrid_nml' namelist isn't found, which contradicts with 'repro' in your targets");
+  }
+};
+  
 # //////////////////////////////////////////////////////////////////////////////
 # //////////////////////////////////////////////////////// Exported Functions //
 # //////////////////////////////////////////////////////////////////////////////
 
-sub setAlias($$$)
-# ------ arguments: $refToScript $name $value
+sub setAlias($$$$)
+# ------ arguments: $fre $refToScript $name $value
 {
-  my ($r, $n, $v) = @_;
+  my ($fre, $r, $n, $v) = @_;
   my $prefix = FRETemplate::PRAGMA_PREFIX;
   my $alias = FRETemplate::PRAGMA_ALIAS;
   my ($placeholderPrefix, $placeholderSuffix) = (qr/^([ \t]*)$prefix[ \t]+$alias[ \t]*\([ \t]*/mo, qr/[ \t]*\)[ \t]*$/mo);
   ${$r} =~ s/$placeholderPrefix$n$placeholderSuffix/$1alias $n $v/;
 }
 
-sub setFlag($$$)
-# ------ arguments: $refToScript $name $value
+sub setFlag($$$$)
+# ------ arguments: $fre $refToScript $name $value
 {
-  my ($r, $n, $v) = @_;
+  my ($fre, $r, $n, $v) = @_;
   my $prefix = FRETemplate::PRAGMA_PREFIX;
   my $flag = FRETemplate::PRAGMA_FLAG;
   my ($placeholderPrefix, $placeholderSuffix) = (qr/^([ \t]*)$prefix[ \t]+$flag[ \t]*\([ \t]*/mo, qr/[ \t]*\)[ \t]*$/mo);
   ${$r} =~ s/$placeholderPrefix$n$placeholderSuffix/$1set -r $n$v/;
 }
 
-sub setVariable($$$)
-# ------ arguments: $refToScript $name $value
+sub setVariable($$$$)
+# ------ arguments: $fre $refToScript $name $value
 {
-  my ($r, $n, $v) = @_;
+  my ($fre, $r, $n, $v) = @_;
   my $prefix = FRETemplate::PRAGMA_PREFIX;
   my ($constant, $variable) = (FRETemplate::PRAGMA_CONSTANT, FRETemplate::PRAGMA_VARIABLE);
   my ($placeholderPrefix, $placeholderSuffix) = (qr/^([ \t]*)$prefix[ \t]+($constant|$variable)[ \t]*\([ \t]*/mo, qr/[ \t]*\)[ \t]*$/mo);
@@ -315,10 +434,10 @@ sub setVariable($$$)
   }
 }
 
-sub setList($$@)
-# ------ arguments: $refToScript $name @value
+sub setList($$$@)
+# ------ arguments: $fre $refToScript $name @value
 {
-  my ($r, $n, @v) = @_;
+  my ($fre, $r, $n, @v) = @_;
   my $prefix = FRETemplate::PRAGMA_PREFIX;
   my ($constant, $variable) = (FRETemplate::PRAGMA_CONSTANT, FRETemplate::PRAGMA_VARIABLE);
   my ($placeholderPrefix, $placeholderSuffix) = (qr/^([ \t]*)$prefix[ \t]+($constant|$variable)[ \t]*\([ \t]*/mo, qr/[ \t]*\)[ \t]*$/mo);
@@ -330,18 +449,18 @@ sub setList($$@)
   }
 }
 
-sub setSchedulerSize($$$$$$$$)
-# ------ arguments: $refToScript $expt $jobType $total_np $atmos_np $atmos_nt $ocean_np $ocean_nt
+sub setSchedulerSize($$$$$$$$$)
+# ------ arguments: $fre $refToScript $jobType $totalNP $totalCC $atmosNP $atmosNT $oceanNP $oceanNT
 {
 
-  my ($r, $z, $j, $tp, $ap, $at, $op, $ot) = @_;
+  my ($fre, $r, $j, $tp, $tc, $ap, $at, $op, $ot) = @_;
 
   my $prefix = FRETemplate::PRAGMA_PREFIX;
   my $schedulerOptions = FRETemplate::PRAGMA_SCHEDULER_OPTIONS;
   my $placeholder = qr/^[ \t]*$prefix[ \t]+$schedulerOptions[ \t]*$/mo;
 
-  my $schedulerPrefix = $z->fre()->property('FRE.scheduler.prefix');
-  my $h = $schedulerSize->($z, $j, $tp, $ap, $at, $op, $ot);
+  my $schedulerPrefix = $fre->property('FRE.scheduler.prefix');
+  my $h = $schedulerSize->($fre, $j, $tp, $tc, $ap, $at, $op, $ot);
 
   foreach my $key (sort keys %{$h})
   {
@@ -351,12 +470,12 @@ sub setSchedulerSize($$$$$$$$)
 
 }
 
-sub schedulerSizeAsString($$$$$$$)
-# ------ arguments: $expt $jobType $total_np $atmos_np $atmos_nt $ocean_np $ocean_nt
+sub schedulerSizeAsString($$$$$$$$)
+# ------ arguments: $fre $jobType $totalNP $totalCC $atmosNP $atmosNT $oceanNP $oceanNT
 {
 
-  my ($z, $j, $tp, $ap, $at, $op, $ot) = @_;
-  my ($h, @result) = ($schedulerSize->($z, $j, $tp, $ap, $at, $op, $ot), ());
+  my ($fre, $j, $tp, $tc, $ap, $at, $op, $ot) = @_;
+  my ($h, @result) = ($schedulerSize->($fre, $j, $tp, $tc, $ap, $at, $op, $ot), ());
 
   foreach my $key (sort keys %{$h})
   {
@@ -369,17 +488,17 @@ sub schedulerSizeAsString($$$$$$$)
 }
 
 sub setSchedulerAccount($$$)
-# ------ arguments: $refToScript $expt $windfallFlag
+# ------ arguments: $fre $refToScript $windfallFlag
 {
 
-  my ($r, $z, $f) = @_;
+  my ($fre, $r, $f) = @_;
 
   my $prefix = FRETemplate::PRAGMA_PREFIX;
   my $schedulerOptions = FRETemplate::PRAGMA_SCHEDULER_OPTIONS;
   my $placeholder = qr/^[ \t]*$prefix[ \t]+$schedulerOptions[ \t]*$/mo;
 
-  my $schedulerPrefix = $z->fre()->property('FRE.scheduler.prefix');
-  my $h = $schedulerAccount->($z, $f);
+  my $schedulerPrefix = $fre->property('FRE.scheduler.prefix');
+  my $h = $schedulerAccount->($fre, $f);
 
   foreach my $key (sort keys %{$h})
   {
@@ -390,12 +509,12 @@ sub setSchedulerAccount($$$)
 }
 
 sub schedulerAccountAsString($$)
-# ------ arguments: $expt $windfallFlag
+# ------ arguments: $fre $windfallFlag
 {
 
-  my ($z, $f) = @_;
+  my ($fre, $f) = @_;
 
-  my ($h, @result) = ($schedulerAccount->($z, $f), ());
+  my ($h, @result) = ($schedulerAccount->($fre, $f), ());
 
   foreach my $key (sort keys %{$h})
   {
@@ -408,17 +527,17 @@ sub schedulerAccountAsString($$)
 }
 
 sub setSchedulerResources($$$$$$$$)
-# ------ arguments: $refToScript $expt $jobType $ncores $time $partition $queue $dualFlag
+# ------ arguments: $fre $refToScript $jobType $ncores $time $partition $queue $dualFlag
 {
 
-  my ($r, $z, $j, $n, $t, $p, $q, $f) = @_;
+  my ($fre, $r, $j, $n, $t, $p, $q, $f) = @_;
 
   my $prefix = FRETemplate::PRAGMA_PREFIX;
   my $schedulerOptions = FRETemplate::PRAGMA_SCHEDULER_OPTIONS;
   my $placeholder = qr/^[ \t]*$prefix[ \t]+$schedulerOptions[ \t]*$/mo;
 
-  my $schedulerPrefix = $z->fre()->property('FRE.scheduler.prefix');
-  my $h = $schedulerResources->($z, $j, $n, $t, $p, $q, $f);
+  my $schedulerPrefix = $fre->property('FRE.scheduler.prefix');
+  my $h = $schedulerResources->($fre, $j, $n, $t, $p, $q, $f);
 
   foreach my $key (sort keys %{$h})
   {
@@ -429,12 +548,12 @@ sub setSchedulerResources($$$$$$$$)
 }
 
 sub schedulerResourcesAsString($$$$$$$)
-# ------ arguments: $expt $jobType $ncores $time $partition $queue $dualFlag
+# ------ arguments: $fre $jobType $ncores $time $partition $queue $dualFlag
 {
 
-  my ($z, $j, $n, $t, $p, $q, $f) = @_;
+  my ($fre, $j, $n, $t, $p, $q, $f) = @_;
 
-  my ($h, @result) = ($schedulerResources->($z, $j, $n, $t, $p, $q, $f), ());
+  my ($h, @result) = ($schedulerResources->($fre, $j, $n, $t, $p, $q, $f), ());
 
   foreach my $key (sort keys %{$h})
   {
@@ -447,17 +566,17 @@ sub schedulerResourcesAsString($$$$$$$)
 }
 
 sub setSchedulerNames($$$$)
-# ------ arguments: $refToScript $expt $scriptName $stdoutDir
+# ------ arguments: $fre $refToScript $scriptName $stdoutDir
 {
 
-  my ($r, $z, $n, $d) = @_;
+  my ($fre, $r, $n, $d) = @_;
 
   my $prefix = FRETemplate::PRAGMA_PREFIX;
   my $schedulerOptions = FRETemplate::PRAGMA_SCHEDULER_OPTIONS;
   my $placeholder = qr/^[ \t]*$prefix[ \t]+$schedulerOptions[ \t]*$/mo;
 
-  my $schedulerPrefix = $z->fre()->property('FRE.scheduler.prefix');
-  my $h = $schedulerNames->($z, $n, $d);
+  my $schedulerPrefix = $fre->property('FRE.scheduler.prefix');
+  my $h = $schedulerNames->($fre, $n, $d);
 
   foreach my $key (sort keys %{$h})
   {
@@ -468,12 +587,12 @@ sub setSchedulerNames($$$$)
 }
 
 sub schedulerNamesAsString($$$)
-# ------ arguments: $expt $scriptName $stdoutDir
+# ------ arguments: $fre $scriptName $stdoutDir
 {
 
-  my ($z, $n, $d) = @_;
+  my ($fre, $n, $d) = @_;
 
-  my ($h, @result) = ($schedulerNames->($z, $n, $d), ());
+  my ($h, @result) = ($schedulerNames->($fre, $n, $d), ());
 
   foreach my $key (sort keys %{$h})
   {
@@ -486,16 +605,15 @@ sub schedulerNamesAsString($$$)
 }
 
 sub setSchedulerMakeVerbose($$)
-# ------ arguments: $reToScript $exp
+# ------ arguments: $fre $refToScript
 {
 
-  my ($r, $z) = @_;
+  my ($fre, $r) = @_;
 
   my $prefix = FRETemplate::PRAGMA_PREFIX;
   my $schedulerOptions = FRETemplate::PRAGMA_SCHEDULER_MAKE_VERBOSE;
   my $placeholder = qr/^[ \t]*$prefix[ \t]+$schedulerOptions[ \t]*$/mo;
 
-  my $fre = $z->fre();
   my $variableEnv = $fre->property('FRE.scheduler.variable.environment');
   my $variableEnvValueBatch = $fre->property('FRE.scheduler.variable.environment.value.batch');
   my $makeVerbose = '';
@@ -516,17 +634,17 @@ sub setSchedulerMakeVerbose($$)
 
 }
 
-sub setVersionInfo($$$%)
-# ------ arguments: $refToScript $expt $caller %options
+sub setVersionInfo($$$$%)
+# ------ arguments: $fre $refToScript $caller $expName %options
 {
 
-  my ($r, $z, $c, %o) = @_;
+  my ($fre, $r, $c, $n, %o) = @_;
 
   my $prefix = FRETemplate::PRAGMA_PREFIX;
   my $versionInfo = FRETemplate::PRAGMA_VERSION_INFO;
   my $placeholder = qr/^[ \t]*$prefix[ \t]+$versionInfo[ \t]*$/mo;
 
-  my $configFileAbsPathName = $z->fre()->configFileAbsPathName();
+  my $configFileAbsPathName = $fre->configFileAbsPathName();
 
   $/ = "";
   chomp(my $createDate = qx(date +%Y-%m-%dT%H:%M:%S));
@@ -544,8 +662,130 @@ sub setVersionInfo($$$%)
       $info .= ' --' . $key . '=' . $value;
     }
   }
+  
+  $info .= ' ' . $n;
 
   ${$r} =~ s/$placeholder/$info/;
+
+}
+
+sub setInputDatasets($$$)
+# ------ arguments: $fre $refToScript $refToDatasetsArray 
+{
+
+  my ($fre, $r, $d) = @_;
+
+  my $prefix = FRETemplate::PRAGMA_PREFIX;
+  my $dataFiles = FRETemplate::PRAGMA_DATAFILES;
+  my $placeholderDataFiles = qr/^[ \t]*$prefix[ \t]+$dataFiles[ \t]*$/mo;
+  my $fmsDataSets = FRETemplate::PRAGMA_FMSDATASETS;
+  my $placeholderFMSDataSets = qr/^[ \t]*$prefix[ \t]+$fmsDataSets[ \t]*$/mo;
+
+  my ($csh, $dataSets, @results) = ('', '', @{$d});
+
+  while (scalar(@results) > 0)
+  {
+    my $source = shift @results;
+    my $target = shift @results;
+    if ($source =~ m/\//)
+    {
+      my ($cshSnippet, $status) = $prepareInputFile->($fre, $source, $target);
+      if ($cshSnippet)
+      {
+        $csh .= $cshSnippet . "\n";
+      }
+      else
+      {
+	$fre->out(FREMsg::FATAL, "The pathname '$source' can't be setup in the runscript");
+	return undef;
+      }
+    }
+    else
+    {
+      $dataSets .= ' ' . $source;
+    }
+  }
+
+  if ($dataSets)
+  {
+    $fre->out(FREMsg::WARNING, "The usage of 'get_fms_data' datasets is deprecated - please list your input files explicitly in the XML file");
+    ${$r} =~ s/$placeholderFMSDataSets/get_fms_data$dataSets/;
+  }
+  else
+  {
+    ${$r} =~ s/$placeholderFMSDataSets//;
+  }
+
+  ${$r} =~ s/$placeholderDataFiles/$csh/;
+
+  return 1;
+
+}
+
+sub setTable($$$$)
+# ------ arguments: $fre $refToScript $tableName $tableData
+{
+
+  my ($fre, $r, $n, $d) = @_;
+  
+  my $prefix = FRETemplate::PRAGMA_PREFIX;
+  my $genericTable = FRETemplate::PRAGMA_GENERIC_TABLE;
+  my ($placeholderPrefix, $placeholderSuffix) = (qr/^([ \t]*)$prefix[ \t]+$genericTable[ \t]*\([ \t]*/mo, qr/[ \t]*\)[ \t]*$/mo);
+  
+  if (${$r} =~ m/$placeholderPrefix$n$placeholderSuffix/)
+  {
+    $d = "cat >> $n <<EOF\n$d\nEOF\n" if $d;
+    substr(${$r}, $-[0], $+[0] - $-[0]) = $d;
+  }
+
+}
+
+sub setNamelists($$$)
+# ------ arguments: $fre $refToScript $namelistsHandle
+{
+
+  my ($fre, $r, $h) = @_;
+  
+  my $prefix = FRETemplate::PRAGMA_PREFIX;
+  my $nmlAsFortranString = $h->asFortranString();
+  
+  $checkNamelists->($fre, $h);
+  
+  {
+    my $namelists = FRETemplate::PRAGMA_NAMELISTS_EXPANDED;
+    my $placeholder = qr/^[ \t]*$prefix[ \t]+$namelists[ \t]*$/mo;
+    my $nmlString = '';
+    $nmlString .= 'cat > input.nml <<EOF' . "\n";
+    $nmlString .= $nmlAsFortranString;
+    $nmlString .= 'EOF' . "\n";
+    ${$r} =~ s/$placeholder/$nmlString/;
+  }
+  
+  {
+    my $namelists = FRETemplate::PRAGMA_NAMELISTS_UNEXPANDED;
+    my $placeholder = qr/^[ \t]*$prefix[ \t]+$namelists[ \t]*$/mo;
+    my $nmlString = '';
+    $nmlString .= 'cat > input.nml.unexpanded <<\EOF' . "\n";
+    $nmlString .= $nmlAsFortranString;
+    $nmlString .= '\EOF' . "\n";
+    ${$r} =~ s/$placeholder/$nmlString/;
+  }
+
+}
+
+sub setShellCommands($$$$)
+# ------ arguments: $fre $refToScript $destinationName $shellCommands
+{
+
+  my ($fre, $r, $n, $d) = @_;
+
+  if (my $anchor = $FRETemplatePragmaCsh{$n})
+  {
+    chomp($d);
+    my $prefix = FRETemplate::PRAGMA_PREFIX;
+    my $placeholder = qr/^[ \t]*$prefix[ \t]+$anchor[ \t]*$/m;
+    ${$r} =~ s/$placeholder/$d/;
+  }
 
 }
 

@@ -1,0 +1,722 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" elementFormDefault="qualified" xmlns:xi="http://www.w3.org/2001/XInclude">
+  <xs:import namespace="http://www.w3.org/2001/XInclude" schemaLocation="xi.xsd"/>
+  <xs:import namespace="http://www.w3.org/XML/1998/namespace" schemaLocation="xml.xsd"/>  
+  <xs:element name="experimentSuite">
+    <xs:annotation>
+      <xs:documentation>The "experimentSuite" tag is the root element and should contain the "setup" tag as well as all of your experiments. The name attribute is not required and the rtsVersion specifies the version of the schema.</xs:documentation>
+    </xs:annotation>
+    <xs:complexType>
+      <xs:sequence>
+        <xs:choice maxOccurs="unbounded">
+          <xs:element ref="xi:include"/>
+          <xs:element ref="property"/>
+          <xs:element ref="setup"/>
+          <xs:element ref="user"/>
+          <xs:element ref="institution"/>
+        </xs:choice>
+        <xs:element maxOccurs="unbounded" ref="experiment"/>
+      </xs:sequence>
+      <xs:attribute name="name" type="xs:string"/>
+      <xs:attribute name="rtsVersion" use="required" type="RtsVersion"/>
+    </xs:complexType>
+    <xs:unique name="unique_experiment">
+      <xs:selector xpath="experiment"/>
+      <xs:field xpath="@name"/>
+    </xs:unique>
+  </xs:element>
+  
+  <xs:element name="user">
+    <xs:annotation>
+      <xs:documentation>Used by the curator tools to specify user information.</xs:documentation>
+    </xs:annotation>
+    <xs:complexType>
+      <xs:attribute name="login" use="required" type="xs:string"/>
+      <xs:attribute name="name" use="required" type="xs:string"/>
+      <xs:attribute name="email" use="required" type="xs:string"/>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="institution">
+    <xs:annotation>
+      <xs:documentation>Used by the curator tools to specify institution information.</xs:documentation>
+    </xs:annotation>
+    <xs:complexType>
+      <xs:attribute name="name" use="required" type="xs:string"/>
+      <xs:attribute name="address" use="required" type="xs:string"/>
+      <xs:attribute name="url" use="required" type="xs:string"/>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="experiment">
+    <xs:annotation>
+      <xs:documentation>The experiment tag holds all of the details about an experiment, including: source code locations, compiler flags, components to process, and input file locations. Each experiment must be given a unique name.</xs:documentation>
+    </xs:annotation>
+    <xs:complexType mixed="true">
+      <xs:choice minOccurs="0" maxOccurs="unbounded">
+        <xs:element name="component">
+          <xs:annotation>
+            <xs:documentation>An experiments component defines the CVS paths through which the component may be acquired. The 'requires' attribute lists dependencies for that component. The 'paths' attribute lists the directory that will be search after CVS checkout.</xs:documentation>
+          </xs:annotation>
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="description" minOccurs="0">
+                <xs:annotation>
+                  <xs:documentation>A description of the component.</xs:documentation>
+                </xs:annotation>
+                <xs:complexType mixed="true">
+                  <xs:attribute name="communityGrid" type="xs:string"/>
+                  <xs:attribute name="communityName" type="xs:string"/>
+                  <xs:attribute name="communityVersion" type="xs:string"/>
+                  <xs:attribute name="domainName" type="xs:string"/>
+                </xs:complexType>
+              </xs:element>
+              <xs:element minOccurs="0" ref="source"/>
+              <xs:element minOccurs="0" maxOccurs="unbounded" ref="compile"/>
+              <xs:element minOccurs="0" ref="library"/>
+            </xs:sequence>
+            <xs:attribute name="includeDir" type="xs:string"/>
+            <xs:attribute name="name" type="xs:string"/>
+            <xs:attribute name="paths" type="xs:string"/>
+            <xs:attribute name="requires" type="xs:string"/>
+          </xs:complexType>
+        </xs:element>
+        <xs:element name="description">
+          <xs:annotation>
+            <xs:documentation>A description of the experiment.</xs:documentation>
+          </xs:annotation>
+          <xs:complexType mixed="true">
+            <xs:attribute name="communityExperimentID" type="xs:string"/>
+            <xs:attribute name="communityExperimentName" type="xs:string"/>
+            <xs:attribute name="communityModel" type="xs:string"/>
+            <xs:attribute name="communityModelID" type="xs:string"/>
+            <xs:attribute name="communityProject" type="xs:string"/>
+          </xs:complexType>
+        </xs:element>
+        <xs:element ref="communityComment"/>
+        <xs:element ref="executable"/>
+        <xs:element ref="input"/>
+        <xs:element ref="postProcess"/>
+        <xs:element ref="realization"/>
+        <xs:element ref="runtime"/>
+        <xs:element ref="scenario"/>
+      </xs:choice>
+      <xs:attribute name="inherit" type="xs:string"/>
+      <xs:attribute name="name" use="required" type="xs:string"/>
+    </xs:complexType>
+  </xs:element>
+  
+  <xs:element name="communityComment" type="xs:string">
+    <xs:annotation>
+      <xs:documentation>This tag is used by the fre-curator tools. It is a public comment about the experiment that will be visible in the netcdf output files.</xs:documentation>
+    </xs:annotation>
+  </xs:element>
+  
+  <xs:element name="executable">
+    <xs:annotation>
+      <xs:documentation>A pointer to the experiment executable file. This is not a required tag.</xs:documentation>
+    </xs:annotation>
+    <xs:complexType>
+      <xs:attribute name="file" use="required" type="xs:string"/>
+    </xs:complexType>
+  </xs:element>
+  
+  <xs:element name="input">
+    <xs:annotation>
+      <xs:documentation>A container tag for all the input files for an experiment (notably, the namelist files and definitions).</xs:documentation>
+    </xs:annotation>
+    <xs:complexType>
+      <xs:choice minOccurs="0" maxOccurs="unbounded">
+        <xs:element ref="initCond"/>
+        <xs:element ref="gridSpec"/>
+        <xs:element ref="csh"/>
+        <xs:element ref="dataFile"/>
+        <xs:element ref="dataTable"/>
+        <xs:element ref="diagTable"/>
+        <xs:element ref="fieldTable"/>
+        <xs:element ref="namelist"/>
+      </xs:choice>
+    </xs:complexType>
+  </xs:element>
+  
+  <xs:element name="initCond">
+    <xs:annotation>
+      <xs:documentation>Directly define an initial conditions file's location.</xs:documentation>
+    </xs:annotation>
+    <xs:complexType>
+      <xs:attribute name="file" use="required" type="xs:string"/>
+    </xs:complexType>
+  </xs:element>
+  
+  <xs:element name="gridSpec">
+    <xs:annotation>
+      <xs:documentation>Directly define a gridspec file's location.</xs:documentation>
+    </xs:annotation>
+    <xs:complexType>
+      <xs:attribute name="file" use="required" type="xs:string"/>
+    </xs:complexType>
+  </xs:element>
+  
+  <xs:element name="dataTable" type="xs:string">
+    <xs:annotation>
+      <xs:documentation>Data tables hold input configuration details.</xs:documentation>
+    </xs:annotation>
+  </xs:element>
+  
+  <xs:element name="diagTable">
+    <xs:annotation>
+      <xs:documentation>Diagnostic tables hold input configuration details.</xs:documentation>
+    </xs:annotation>
+    <xs:complexType mixed="true">
+      <xs:attribute name="file" type="xs:string"/>
+    </xs:complexType>
+  </xs:element>
+  
+  <xs:element name="fieldTable" type="xs:string">
+    <xs:annotation>
+      <xs:documentation>Field tables hold input configuration details.</xs:documentation>
+    </xs:annotation>
+  </xs:element>
+  
+  <xs:element name="namelist">
+    <xs:annotation>
+      <xs:documentation>Namelists are fortran files that consist of simple name and value pairs. They are used to define configuration options in the model.</xs:documentation>
+    </xs:annotation>
+    <xs:complexType mixed="true">
+      <xs:attribute name="file" type="xs:string"/>
+      <xs:attribute name="name" type="xs:string"/>
+    </xs:complexType>
+  </xs:element>
+  
+  <xs:element name="postProcess">
+    <xs:annotation>
+      <xs:documentation>This tag holds all of the post processing settings. Inside of this tag, the components, time ranges, and variable subsets are declared for post processing.</xs:documentation>
+    </xs:annotation>
+    <xs:complexType>
+      <xs:choice minOccurs="0" maxOccurs="unbounded">
+        <xs:element ref="csh">
+          <xs:annotation>
+            <xs:documentation>The csh tag can be used to issue shell commands that will be run before post processing occurs.</xs:documentation>
+          </xs:annotation>
+        </xs:element>
+        <xs:element ref="refineDiag">
+          <xs:annotation>
+            <xs:documentation/>
+          </xs:annotation>
+        </xs:element>
+        <xs:element name="component">
+          <xs:annotation>
+            <xs:documentation>The component defines the type of output component (which will be the output directory name that contains the post processed files), the z-interpolation method, the start year (in the event that you wish to account for spin up time), the source component (which should link back to a component defined in the experiment tag, an interpolation method, and finally a cubed-sphere to lat/lon grid conversion factor.</xs:documentation>
+          </xs:annotation>
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element minOccurs="0" maxOccurs="unbounded" ref="timeSeries">
+                <xs:annotation>
+                  <xs:documentation>This tag defines the frequency in which the original model output data is to be post processed, as well as the "chunk length" or the length of time per output file. </xs:documentation>
+                </xs:annotation>
+              </xs:element>
+              <xs:element minOccurs="0" maxOccurs="unbounded" ref="timeAverage"/>
+            </xs:sequence>
+            <xs:attribute name="cubicToLatLon" type="xs:string"/>
+            <xs:attribute name="interpMethod" type="xs:string"/>
+            <xs:attribute name="source" type="xs:string"/>
+            <xs:attribute name="start" type="xs:string"/>
+            <xs:attribute name="type" type="xs:string"/>
+            <xs:attribute name="zInterp" type="xs:string"/>
+          </xs:complexType>
+        </xs:element>
+      </xs:choice>
+      <xs:attribute name="combine" type="xs:string"/>
+      <xs:attribute name="npes" type="xs:integer"/>
+    </xs:complexType>
+  </xs:element>
+  
+  <xs:element name="refineDiag">
+    <xs:annotation>
+      <xs:documentation>The refineDiag tag points to a script that will be run on the post processed data.</xs:documentation>
+    </xs:annotation>
+    <xs:complexType>
+      <xs:attribute name="script" use="required" type="xs:string"/>
+    </xs:complexType>
+  </xs:element>
+  
+  <xs:element name="realization">
+    <xs:annotation>
+      <xs:documentation>This tag is part of the fre-curator tools and is not required for the main part of FRE. What follows is the CMIP5 definition of what values these ensemble members should contain. When multiple simulations are derived form the same experiment, the 'r' value should be incremented. When the initialization method or input files are altered, the 'i' value should be incremented. When forcings cause the physics version to differ between simulations, the 'p' value should be incremented.</xs:documentation>
+    </xs:annotation>
+    <xs:complexType>
+      <xs:attribute name="i" use="required" type="xs:integer"/>
+      <xs:attribute name="p" use="required" type="xs:integer"/>
+      <xs:attribute name="r" use="required" type="xs:integer"/>
+    </xs:complexType>
+  </xs:element>
+  
+  <xs:element name="runtime">
+    <xs:annotation>
+      <xs:documentation>The runtime tag holds production and regression run details.</xs:documentation>
+    </xs:annotation>
+    <xs:complexType>
+      <xs:sequence>
+        <xs:choice minOccurs="0" maxOccurs="unbounded">
+          <xs:element ref="dataFile"/>
+          <xs:element ref="production"/>
+          <xs:element ref="reference"/>
+          <xs:element ref="regression"/>
+        </xs:choice>
+        <xs:element minOccurs="0" ref="csh"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+  
+  <xs:element name="production">
+    <xs:annotation>
+      <xs:documentation>This tag defines the simulation time (in the specified units), the number of cores to use, and the total runtime for the run.</xs:documentation>
+    </xs:annotation>
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element ref="segment"/>
+        <xs:element minOccurs="0" ref="peLayout"/>
+      </xs:sequence>
+      <xs:attribute name="npes" use="required" type="xs:string"/>
+      <xs:attribute name="ocean_layout" type="xs:string"/>
+      <xs:attribute name="overrideParams" type="xs:string"/>
+      <xs:attribute name="runTime" type="xs:string"/>
+      <xs:attribute name="runtime" type="xs:string"/>
+      <xs:attribute name="simTime" use="required" type="xs:string"/>
+      <xs:attribute name="units" use="required" type="xs:string"/>
+    </xs:complexType>
+  </xs:element>
+  
+  <xs:element name="segment">
+    <xs:annotation>
+      <xs:documentation>Runs are broken into segments because running a full production run would take too many system resources (notably, wall clock time). Segments define their own simulation time (and units), as well as their own run time. The run time defined in the production tag will be used over the run time defined in the segment tag.</xs:documentation>
+    </xs:annotation>
+    <xs:complexType>
+      <xs:attribute name="runTime" use="required" type="xs:string"/>
+      <xs:attribute name="simTime" use="required" type="xs:integer"/>
+      <xs:attribute name="units" use="required" type="xs:string"/>
+    </xs:complexType>
+  </xs:element>
+  
+  <xs:element name="peLayout">
+    <xs:annotation>
+      <xs:documentation>This tag overrides parameters set in the namelist files. Avoid using if possible.</xs:documentation>
+    </xs:annotation>
+    <xs:complexType>
+      <xs:attribute name="ocean" use="required" type="xs:string"/>
+    </xs:complexType>
+  </xs:element>
+  
+  <xs:element name="reference">
+    <xs:annotation>
+      <xs:documentation>This tag can define the platform and the path to a restart file for an optimized reference run.</xs:documentation>
+    </xs:annotation>
+    <xs:complexType>
+      <xs:attribute name="platform" type="xs:string"/>
+      <xs:attribute name="restart" use="required" type="xs:string"/>
+      <xs:attribute name="site" type="xs:string"/>
+    </xs:complexType>
+  </xs:element>
+  
+  <xs:element name="regression">
+    <xs:annotation>
+      <xs:documentation>This tag defines regression test runs.</xs:documentation>
+    </xs:annotation>
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element maxOccurs="unbounded" ref="run"/>
+      </xs:sequence>
+      <xs:attribute name="label" type="xs:string"/>
+      <xs:attribute name="name" type="xs:string"/>
+    </xs:complexType>
+  </xs:element>
+  
+  <xs:element name="run">
+    <xs:annotation>
+      <xs:documentation>A regression run frequency, number of cores, run time per job, and optional namelist override parameters are specified in this tag.</xs:documentation>
+    </xs:annotation>
+    <xs:complexType>
+      <xs:attribute name="days" type="xs:string"/>
+      <xs:attribute name="hours" type="xs:string"/>
+      <xs:attribute name="months" type="xs:string"/>
+      <xs:attribute name="npes" use="required" type="xs:string"/>
+      <xs:attribute name="overrideParams" type="xs:string"/>
+      <xs:attribute name="runTimePerJob" use="required" type="xs:string"/>
+    </xs:complexType>
+  </xs:element>
+  
+  <xs:element name="scenario">
+    <xs:annotation>
+      <xs:documentation>This tag is only used by fre-curator and does not impact general usage of FRE. It defines: forcings used in the simulation, the start and end time of the simulation, and parent experiment information (including name, ensemble member values, and the branch time).</xs:documentation>
+    </xs:annotation>
+    <xs:complexType mixed="true">
+      <xs:attribute name="branch_time" type="xs:decimal"/>
+      <xs:attribute name="communityForcing" use="required" type="xs:string"/>
+      <xs:attribute name="endTime" use="required" type="xs:integer"/>
+      <xs:attribute name="parentExperimentID" type="xs:string"/>
+      <xs:attribute name="parentExperimentRIP" type="xs:string"/>
+      <xs:attribute name="startTime" use="required" type="xs:integer"/>
+    </xs:complexType>
+  </xs:element>
+  
+  <xs:element name="setup">
+    <xs:annotation>
+      <xs:documentation>The setup tag contains the system dependent platform tags.</xs:documentation>
+    </xs:annotation>
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element maxOccurs="unbounded" ref="platform"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+  
+  <xs:element name="platform">
+    <xs:annotation>
+      <xs:documentation>The platform tag defines system dependent commands, paths, and substitutions that will be used in the rest of your XML.</xs:documentation>
+    </xs:annotation>
+    <xs:complexType>
+      <xs:sequence>
+        <xs:choice minOccurs="0" maxOccurs="unbounded">
+          <xs:element ref="csh"/>
+          <xs:element ref="property"/>
+          <xs:element ref="directory"/>
+          <xs:element ref="project"/>
+          <xs:element ref="xi:include"/>
+          <xs:element ref="mkmfTemplate"/>
+        </xs:choice>
+      </xs:sequence>
+      <xs:attribute name="name" use="required" type="xs:string"/>
+    </xs:complexType>
+  </xs:element>
+  
+  <xs:element name="directory">
+    <xs:annotation>
+      <xs:documentation>Contains a list of directories.</xs:documentation>
+    </xs:annotation>
+    <xs:complexType>
+      <xs:choice minOccurs="0" maxOccurs="unbounded">
+        <xs:element ref="root"/>
+        <xs:element ref="src"/>
+        <xs:element ref="exec"/>
+        <xs:element ref="scripts"/>
+        <xs:element ref="stdout"/>
+        <xs:element ref="stdoutTmp"/>
+        <xs:element ref="state"/>
+        <xs:element ref="work"/>
+        <xs:element ref="ptmp"/>
+        <xs:element ref="stmp"/>
+        <xs:element ref="archive"/>
+	<xs:element name="postProcess" type="xs:string">
+	  <xs:annotation>
+	    <xs:documentation>Defines the path to the post-processing directory.</xs:documentation>
+	  </xs:annotation>
+	</xs:element>
+	<xs:element name="analysis" type="xs:string">
+	  <xs:annotation>
+	    <xs:documentation>Defines the path to the analysis directory.</xs:documentation>
+	  </xs:annotation>
+	</xs:element>
+      </xs:choice>
+      <xs:attribute name="stem" type="xs:string"/>
+    </xs:complexType>
+  </xs:element>
+  
+  <xs:element name="archive" type="xs:string">
+    <xs:annotation>
+      <xs:documentation>Defines the path to the platforms long term storage.</xs:documentation>
+    </xs:annotation>
+  </xs:element>
+  
+  <xs:element name="scripts" type="xs:string">
+    <xs:annotation>
+      <xs:documentation>Defines a path to the scripts directory.</xs:documentation>
+    </xs:annotation>
+  </xs:element>
+  
+  <xs:element name="state" type="xs:string">
+    <xs:annotation>
+      <xs:documentation>Defines a path for saving the state files (used for checkpointing in FRE).</xs:documentation>
+    </xs:annotation>
+  </xs:element>
+
+  <xs:element name="root" type="xs:string">
+    <xs:annotation>
+      <xs:documentation>A prefix for other directory names.</xs:documentation>
+    </xs:annotation>
+  </xs:element>
+
+  <xs:element name="src" type="xs:string">
+    <xs:annotation>
+      <xs:documentation>Directory for source files.</xs:documentation>
+    </xs:annotation>
+  </xs:element>
+
+  <xs:element name="exec" type="xs:string">
+    <xs:annotation>
+      <xs:documentation>Directory for compiled executables and libraries.</xs:documentation>
+    </xs:annotation>
+  </xs:element>
+
+  <xs:element name="stdoutTmp" type="xs:string">
+    <xs:annotation>
+      <xs:documentation>Temporary directory for model standard output (gaea only).</xs:documentation>
+    </xs:annotation>
+  </xs:element>
+  
+  <xs:element name="stdout" type="xs:string">
+    <xs:annotation>
+      <xs:documentation>Defines the path for saving standard output from FRE.</xs:documentation>
+    </xs:annotation>
+  </xs:element>
+
+  <xs:element name="work" type="xs:string">
+    <xs:annotation>
+      <xs:documentation>Defines the path for model working files.</xs:documentation>
+    </xs:annotation>
+  </xs:element>
+
+  <xs:element name="ptmp" type="xs:string">
+    <xs:annotation>
+      <xs:documentation>Cached directory between the working directory and the archive.</xs:documentation>
+    </xs:annotation>
+  </xs:element>
+  
+  <xs:element name="stmp" type="xs:string">
+    <xs:annotation>
+      <xs:documentation>Cached directory for post-processed files.</xs:documentation>
+    </xs:annotation>
+  </xs:element>
+
+  <xs:element name="project" type="xs:string">
+    <xs:annotation>
+      <xs:documentation>This tag defines the user's project for accounting purposes. It can be used by a job scheduler for allocation purposes.</xs:documentation>
+    </xs:annotation>
+  </xs:element>
+  
+  <xs:element name="mkmfTemplate">
+    <xs:annotation>
+      <xs:documentation>Mkmf is a tool that creates a makefile that can be run to easily compile various tools. FRE contains a template for this utility, but the ability to override the template is provide in this tag.</xs:documentation>
+    </xs:annotation>
+    <xs:complexType>
+      <xs:attribute name="file" use="required" type="xs:string"/>
+    </xs:complexType>
+  </xs:element>
+  
+  <xs:element name="property">
+    <xs:annotation>
+      <xs:documentation>Allows simple substitutions of "name"s for "value"s within your XML.</xs:documentation>
+    </xs:annotation>
+    <xs:complexType>
+      <xs:attribute name="name" use="required" type="xs:string"/>
+      <xs:attribute name="value" use="required" type="xs:string"/>
+    </xs:complexType>
+  </xs:element>
+  
+  <xs:element name="dataFile">
+    <xs:annotation>
+      <xs:documentation>Each input file that is needed for the model run must be defined in a dataFile tag. The file is given a label to define the type of file it is, a target that defines where the file will be transferred to, and file attributes that may be used by FRE in the future to ensure successful transfers (checksum, timestamp, and file size).</xs:documentation>
+    </xs:annotation>
+    <xs:complexType mixed="true">
+      <xs:sequence>
+        <xs:element minOccurs="0" maxOccurs="unbounded" ref="dataSource"/>
+      </xs:sequence>
+      <xs:attribute name="chksum" type="xs:string"/>
+      <xs:attribute name="label" use="required" type="xs:string"/>
+      <xs:attribute name="size" type="xs:string"/>
+      <xs:attribute name="target" type="xs:string"/>
+      <xs:attribute name="timestamp" type="xs:string"/>
+    </xs:complexType>
+  </xs:element>
+  
+  <xs:element name="dataSource">
+    <xs:annotation>
+      <xs:documentation>A data source is the platform specific location for the file being described by the data file tag. If the simulation is run on multiple platforms, multiple data source tags can be used to specify the various locations of the needed file.</xs:documentation>
+    </xs:annotation>
+    <xs:complexType mixed="true">
+      <xs:attribute name="platform" type="xs:string"/>
+      <xs:attribute name="site" type="xs:string"/>
+    </xs:complexType>
+  </xs:element>
+  
+  <xs:element name="csh">
+    <xs:annotation>
+      <xs:documentation>Csh tags allow for shell commands to be run before specific phases in the FRE workflow.</xs:documentation>
+    </xs:annotation>
+    <xs:complexType mixed="true">
+      <xs:attribute name="type" type="xs:string"/>
+    </xs:complexType>
+  </xs:element>
+  
+  <xs:element name="timeSeries">
+    <xs:annotation>
+      <xs:documentation>Used in the creation of time series files, it defines the frequency, source of the time series files, and the chunk length. </xs:documentation>
+    </xs:annotation>
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element minOccurs="0" ref="variables"/>
+        <xs:element minOccurs="0" maxOccurs="unbounded" ref="analysis"/>
+        <xs:element minOccurs="0" ref="xi:include"/>
+      </xs:sequence>
+      <xs:attribute name="chunkLength" use="required" type="xs:string"/>
+      <xs:attribute name="cumulative" type="xs:string"/>
+      <xs:attribute name="endYear" type="xs:integer"/>
+      <xs:attribute name="freq" use="required" type="xs:string"/>
+      <xs:attribute name="from" type="xs:string"/>
+      <xs:attribute name="source" type="xs:string"/>
+    </xs:complexType>
+  </xs:element>
+  
+  <xs:element name="variables" type="xs:string">
+    <xs:annotation>
+      <xs:documentation>If only specific variables are needed, they can be defined in this tag. If this tag is not present, all variables are post processed.</xs:documentation>
+    </xs:annotation>
+  </xs:element>
+  <xs:element name="timeAverage">
+    <xs:annotation>
+      <xs:documentation>Used in the creation of time average files, this tag's usage is very similar to the time series tag. A source and interval are defined for creating these files.</xs:documentation>
+    </xs:annotation>
+    <xs:complexType>
+      <xs:choice>
+        <xs:element ref="xi:include"/>
+        <xs:element minOccurs="0" maxOccurs="unbounded" ref="analysis"/>
+      </xs:choice>
+      <xs:attribute name="calcInterval" type="xs:string"/>
+      <xs:attribute name="endYear" type="xs:integer"/>
+      <xs:attribute name="from" type="xs:string"/>
+      <xs:attribute name="interval" use="required" type="xs:string"/>
+      <xs:attribute name="source" use="required" type="xs:string"/>
+    </xs:complexType>
+  </xs:element>
+  
+  <xs:element name="source">
+    <xs:annotation>
+      <xs:documentation>Contains information about the location of the source files.</xs:documentation>
+    </xs:annotation>
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element ref="codeBase"/>
+        <xs:element minOccurs="0" ref="csh"/>
+      </xs:sequence>
+      <xs:attribute name="versionControl" type="xs:string"/>
+      <xs:attribute name="versonControl" type="xs:string"/>
+    </xs:complexType>
+  </xs:element>
+  
+  <xs:element name="codeBase">
+    <xs:annotation>
+      <xs:documentation>Defines the branch name and CVS location for the source files.</xs:documentation>
+    </xs:annotation>
+    <xs:complexType mixed="true">
+      <xs:attribute name="version" use="required" type="xs:string"/>
+    </xs:complexType>
+  </xs:element>
+  
+  <xs:element name="compile">
+    <xs:annotation>
+      <xs:documentation>Contains the compiler options tag.</xs:documentation>
+    </xs:annotation>
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element ref="cppDefs"/>
+        <xs:choice minOccurs="0">
+          <xs:element ref="csh"/>
+          <xs:element ref="makeOverrides"/>
+        </xs:choice>
+      </xs:sequence>
+      <xs:attribute name="target" type="xs:string"/>
+    </xs:complexType>
+  </xs:element>
+  
+  <xs:element name="cppDefs" type="xs:string">
+    <xs:annotation>
+      <xs:documentation>Compiler options are specified in this tag.</xs:documentation>
+    </xs:annotation>
+  </xs:element>
+  
+  <xs:element name="makeOverrides" type="xs:string">
+    <xs:annotation>
+      <xs:documentation>Override compiler options.</xs:documentation>
+    </xs:annotation>
+  </xs:element>
+  
+  <xs:element name="library">
+    <xs:annotation>
+      <xs:documentation>Defines library and header paths for the components.</xs:documentation>
+    </xs:annotation>
+    <xs:complexType>
+      <xs:attribute name="headerDir" use="required" type="xs:string"/>
+      <xs:attribute name="path" type="xs:string"/>
+    </xs:complexType>
+  </xs:element>
+  
+  <xs:element name="analysis">
+    <xs:annotation>
+      <xs:documentation>Defines the location of analysis scripts to be run after the post processed data has been created.</xs:documentation>
+    </xs:annotation>
+    <xs:complexType mixed="true">
+      <xs:attribute name="cumulative" type="xs:string"/>
+      <xs:attribute name="mode" type="xs:string"/>
+      <xs:attribute name="momGrid" type="xs:string"/>
+      <xs:attribute name="script" type="xs:string"/>
+      <xs:attribute name="specify1year" type="xs:integer"/>
+      <xs:attribute name="startYear" type="Year"/>
+      <xs:attribute name="endYear" type="Year"/>
+      <xs:attribute name="switch" type="xs:string"/>
+      <xs:attribute name="outdir" type="xs:string"/>
+      <xs:attribute ref="xml:base"/>
+    </xs:complexType>
+  </xs:element>
+  
+  <xs:simpleType name="ChunkLength">
+    <xs:annotation>
+      <xs:documentation>Restricts the possible values for the chunk length (or how much data, in some unit of time, should be present in each output file).</xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:string">
+      <xs:pattern value="[0-9]+yr"/>
+    </xs:restriction>
+  </xs:simpleType>
+  
+  <xs:simpleType name="PostProcessInterpMethod">
+    <xs:annotation>
+      <xs:documentation>Restricts the possible values for the interpolation method.</xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="conserve_order1"/>
+      <xs:enumeration value="conserve_order2"/>
+    </xs:restriction>
+  </xs:simpleType>
+  
+  <xs:simpleType name="PostProcessZInterp">
+    <xs:annotation>
+      <xs:documentation>Restricts the possible values of the post processing z-interpolation values.</xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="ncep"/>
+      <xs:enumeration value="am3"/>
+      <xs:enumeration value="hs20"/>
+      <xs:enumeration value="era40"/>
+      <xs:enumeration value="narcaap"/>
+      <xs:enumeration value="zgrid"/>
+    </xs:restriction>
+  </xs:simpleType>
+  
+  <xs:simpleType name="RtsVersion">
+    <xs:annotation>
+      <xs:documentation>Restricts the valid values for the schema version (the terminology 'rtsVersion' no longer means what it once did -- it is now simply the schema version).</xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:positiveInteger">
+      <xs:minInclusive value="1"/>
+      <xs:maxInclusive value="4"/>
+    </xs:restriction>
+  </xs:simpleType>
+  
+  <xs:simpleType name="Year">
+    <xs:annotation>
+      <xs:documentation>Restricts the possible values for a valid year to a sane range.</xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:positiveInteger">
+      <xs:minInclusive value="0001"/>
+      <xs:maxInclusive value="9999"/>
+    </xs:restriction>
+  </xs:simpleType>
+</xs:schema>

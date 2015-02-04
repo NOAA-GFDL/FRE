@@ -1,5 +1,5 @@
 #!/usr/bin/perl
-# $Id: hsmget,v 18.0.2.7 2011/12/08 01:20:44 afy Exp $
+# $Id: hsmget,v 18.0.2.12 2012/09/04 21:00:34 afy Exp $
 # script for calling hsmget.mk
 
 require 5;
@@ -71,17 +71,12 @@ if( $opt{help} ) {
    exit 0;
 }
 
-$SIG{INT} = \&cleanup;          # remove temp files if hsmget is interruped by ^C
+$SIG{'INT'}  = \&cleanup;          # interruped by ^C
+$SIG{'TERM'} = \&cleanup;          # terminated by another process
+
 my $verbose = $opt{verbose};
 
-my $homeDir = sub($)
-{
-  my $p = shift;
-  my $binDir = dirname((File::Spec->file_name_is_absolute($p)) ? $p : File::Spec->rel2abs($p));
-  return ($binDir =~ m/(.*)\/bin$/) ? $1 : ($binDir . '/..');
-};
-
-my $makefile = $opt{makefile} || $homeDir->($0) . '/site/hsmget.mk';
+my $makefile = $opt{makefile} || "$FindBin::Bin/../etc/mk/hsmget.mk";
 croak "Non-existent makefile $makefile\n" unless -f $makefile;
 print "Using Makefile $makefile ...\n" if $verbose;
 
@@ -113,6 +108,7 @@ $cmd .= " -r -f $makefile";
 undef my $target;
 undef my $result;
 undef my $okfile;
+undef my $handle;
 
 foreach ( @ARGV ) {
    croak "$0 target $_ cannot be an absolute pathname!\n\n$usage" 
@@ -153,53 +149,59 @@ foreach ( @ARGV ) {
          }
       }
       my $dir = dirname("$ptmproot/$file");
-      print STDERR "ptmproot=$ptmproot file=$file mkdir -p dir=$dir\n" if $verbose;
-# vb 20090420: direct mkdir on ptmp above instead of going via hsmget.mk
-      qx/mkdir -p $dir/ unless -d $dir;
+      print STDERR "ptmproot=$ptmproot file=$file\n" if $verbose;
+# vb  20090420: direct mkdir on ptmp above instead of going via hsmget.mk
+# afy 20120514: the direct mkdir is commented out
+#     qx/mkdir -p $dir/ unless -d $dir;
 #   $result = qx/mkdir -p $dir/ or croak "ERROR: Unable to mkdir -p $dir\n";
 #if source on archroot isn't a file, assume it's an an archive and make
 #its ok file
       # default assumes source is an archive
       $target = ( -f "$archroot/$file" ) ? "$ptmproot/$file" : $dir;
-      HSM::lock($target,30) or exit 1;
+      $handle = HSM::lock($target,30) or exit 1;
       HSM::clean($target);
       $okfile = "$target.ok";
       print STDERR "+CMD: $cmd $okfile\n" if $verbose;
       $result = qx/$cmd $okfile/;
       if ( $? ) {
          unlink $okfile if -f $okfile;
-         HSM::unlock($target);
+         HSM::unlock($handle);
          croak "ERROR: Unable to make $okfile\n$result\n";
       }
       print $result unless $result =~ / is up to date./;
       HSM::alignAccessTime($target);
-      HSM::unlock($target);
+      HSM::unlock($handle);
    } else {
       carp "WARNING: invalid archive location $dir; \
          hsmget will only do ptmp->work processing\n";
    }
 # the glob below allows handling of wildcards in targets
-   my @targets = glob("$ptmproot/$file ");
+   my @targets = HSM::getCache("$ptmproot/$file");
    print "ptmproot=$ptmproot file=$file targets=@targets\n" if $verbose;
-   foreach ( @targets ) {
-      $file = "$workroot/" . File::Spec->abs2rel($_,$ptmproot);
-      print STDERR "++CMD: $cmd $file\n" if $verbose;
-      $result = qx/$cmd $file/;
-      if ( $? ) {
-         unlink $file if -f $file;
-         croak "ERROR: Unable to make $file\n$result\n";
+   if ( @targets ) {
+      foreach ( @targets ) {
+	 $file = "$workroot/" . File::Spec->abs2rel($_,$ptmproot);
+	 print STDERR "++CMD: $cmd $file\n" if $verbose;
+	 $result = qx/$cmd $file/;
+	 if ( $? ) {
+            unlink $file if -f $file;
+            croak "ERROR: Unable to make $file\n$result\n";
+	 }
+	 print $result unless $result =~ / is up to date./;
+	 my $final = "$workorig/" . basename($_);
+	 print qx/ln -f $file $final/ if( $opt{extra} && $file ne $final );
       }
-      print $result unless $result =~ / is up to date./;
-      my $final = "$workorig/" . basename($_);
-      print qx/ln -f $file $final/ if( $opt{extra} && $file ne $final );
+      chdir dirname($file);
+      print qx/md5sum -c $okfile/ if $opt{checksum};
+      print qx/md5sum -c $opt{sum}/ if $opt{sum};
+   } else {
+      print STDERR "WARNING: Unable to get targets from the $ptmproot cache\n";
    }
-   chdir dirname($file);
-   print qx/md5sum -c $okfile/ if $opt{checksum};
-   print qx/md5sum -c $opt{sum}/ if $opt{sum};
 }
 
-sub cleanup () {
-   print "Caught ^C, removing temporary file '$okfile' ...\n";
+sub cleanup ($) {
+   my $sig = shift;
+   print "Caught a SIG$sig, removing temporary file '$okfile' ...\n";
    unlink $okfile if -f $okfile;
-   HSM::unlock($target);
+   HSM::unlock($handle);
 }

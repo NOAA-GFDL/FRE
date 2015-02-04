@@ -1,7 +1,7 @@
 #!/usr/bin/perl
 # -*- cperl -*-
 
-# $Id: frecheck,v 18.0.4.8 2012/04/11 16:06:42 afy Exp $
+# $Id: frecheck,v 18.0.4.9 2012/06/29 19:52:56 afy Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: Program to Check Model Restart Files
 # ------------------------------------------------------------------------------
@@ -32,6 +32,13 @@
 # afy    Ver   7.02  Add outputFilesListing subroutine              January 12
 # afy    Ver   8.00  Modify Usage (remove ASCII escapes)            April 12
 # afy    Ver   8.01  Cosmetics in messages                          April 12
+# afy    Ver   9.00  Use new FRENamelists module (totally new)      June 12
+# afy    Ver   9.01  Use new FREExperiment module (reg*Labels)      June 12
+# afy    Ver   9.02  Modify calendarType subroutine                 June 12
+# afy    Ver   9.03  Modify startDate subroutine                    June 12
+# afy    Ver   9.04  Modify analyzeRegression subroutine            June 12
+# afy    Ver   9.05  Remove regressionLabels subroutine             June 12
+# afy    Ver   9.06  Use new FREExperiment (run as key)             June 12
 # ------------------------------------------------------------------------------
 # Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2000-2012
 # Designed and written by V. Balaji, Amy Langenhorst and Aleksey Yakovlev
@@ -46,6 +53,7 @@ use Getopt::Long(':config', 'no_ignore_case', 'no_auto_abbrev');
 use FRE();
 use FREDefaults();
 use FREExperiment();
+use FRENamelists();
 use FREUtil();
 
 # //////////////////////////////////////////////////////////////////////////////
@@ -56,7 +64,7 @@ use FREUtil();
 
   package frecheck;
 
-  use constant VERSION => '$Id: frecheck,v 18.0.4.8 2012/04/11 16:06:42 afy Exp $';
+  use constant VERSION => '$Id: frecheck,v 18.0.4.9 2012/06/29 19:52:56 afy Exp $';
   
   use constant OPTLIST =>
   (
@@ -213,16 +221,15 @@ use FREUtil();
   }
   
   sub calendarType($)
-  # ------ arguments: $refToNamelists
+  # ------ arguments: $namelistsHandle
   {
-    my $r = shift;
+    my $h = shift;
     my $result = 'no_calendar';
-    foreach my $listName ('coupler_nml', 'main_nml', 'ocean_solo_nml', 'standalone_rad_nml')
+    foreach my $name ('coupler_nml', 'main_nml', 'ocean_solo_nml', 'standalone_rad_nml')
     {
-      my $value = $r->{$listName};
-      if ($value =~ m/calendar\s*=\s*'?(\w+)'?/s)
+      if (my $value = $h->namelistDoubleQuotedStringGet($name, 'calendar') || $h->namelistSingleQuotedStringGet($name, 'calendar'))
       {
-        $result = $1;
+        $result = $value;
 	last;
       }
     }
@@ -244,42 +251,20 @@ use FREUtil();
   }
   
   sub startDate($)
-  # ------ arguments: $refToNamelists
+  # ------ arguments: $namelistsHandle
   {
-    my $r = shift;
+    my $h = shift;
     my $result = '0,1,1,0,0,0';
-    foreach my $listRef (['frecheck_nml', 'start_date'], ['coupler_nml', 'current_date'], ['ocean_solo_nml', 'date_init'], ['standalone_rad_nml', 'rad_date'])
+    foreach my $ref (['frecheck_nml', 'start_date'], ['coupler_nml', 'current_date'], ['ocean_solo_nml', 'date_init'], ['standalone_rad_nml', 'rad_date'])
     {
-      my ($listName, $tag) = @{$listRef};
-      my $value = $r->{$listName};
-      if ($value =~ m/$tag\s*=\s*(\d+\s*,\s*\d+\s*,\s*\d+\s*,\s*\d+\s*,\s*\d+\s*,\s*\d+)/s)
+      my ($name, $variable) = @{$ref};
+      if (my $value = $h->namelistDateGet($name, $variable))
       {
-        $result = $1;
+        $result = $value;
 	last;
       }
     }
     return FREUtil::parseFortranDate($result);
-  }
-  
-  sub regressionLabels($$)
-  # ------ arguments: $exp $regressionLabelsList
-  {
-    my ($z, $r) = @_;
-    my ($fre, $expName, @expLabels) = ($z->fre(), $z->name(), $z->extractRegressionLabels());
-    my ($all, @optLabels) = (0, FREUtil::listUnique(split(',', $r)));
-    foreach my $optLabel (@optLabels)
-    {
-      if ($optLabel eq 'all')
-      {
-        $all = 1; 
-      }
-      elsif (scalar(grep($_ eq $optLabel, @expLabels)) == 0)
-      {
-        $fre->out(FREMsg::FATAL, "The experiment '$expName' doesn't contain the '$optLabel' regression test");
-	return ();
-      }
-    }
-    return ($all) ? @expLabels : @optLabels;
   }
   
   sub allPossibleTimestamps($$$)
@@ -299,15 +284,17 @@ use FREUtil();
   # ------ arguments: $exp $refToLabels $startDate $unique
   {
     my ($z, $l, $s, $u) = @_;
-    my ($fre, $archiveDir, %nml) = ($z->fre(), $z->archiveDir(), $z->extractNamelists());
-    my ($startDate, $calendarType, $ok, %result) = ($s || frecheck::startDate(\%nml), frecheck::calendarType(\%nml), 1, ());
+    my ($fre, $archiveDir, $ok, %result) = ($z->fre(), $z->archiveDir(), 1, ());
     foreach my $label (@{$l})
     {
-      if (my $ref = $z->extractRegressionRunInfo($label))
+      if (my $regInfo = $z->extractRegressionRunInfo($label))
       {
-	foreach my $postfix (keys %{$ref})
+	foreach my $runNo (sort(keys(%{$regInfo})))
 	{
-          my @timestamps = frecheck::allPossibleTimestamps($ref->{$postfix}, $startDate, $calendarType);
+	  my $runInfo = $regInfo->{$runNo};
+	  my ($postfix, $nmls) = ($runInfo->{postfix}, $runInfo->{namelists});
+	  my ($startDate, $calendarType) = ($s || frecheck::startDate($nmls), frecheck::calendarType($nmls));
+          my @timestamps = frecheck::allPossibleTimestamps($runInfo, $startDate, $calendarType);
           my $dir = "$archiveDir/$postfix/restart";
 	  if (-d $dir && -r $dir)
 	  {
@@ -614,7 +601,7 @@ use FREUtil();
     my $expName = $exp->name();
     $fre->setCurrentExperimentName($expName);
     
-    if (my @labels = frecheck::regressionLabels($exp, $opt{regression}))
+    if (my @labels = $exp->extractRegressionLabels($opt{regression}))
     {
       if (my $info = frecheck::analyzeRegression($exp, \@labels, $opt{'start-date'}, $opt{unique}))
       {

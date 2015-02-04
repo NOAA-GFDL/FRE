@@ -1,7 +1,7 @@
 #!/bin/csh -f
 #FRE scheduler-options
 # 
-# $Id: runscript.template.main,v 1.1.2.9 2012/02/21 17:06:51 afy Exp $
+# $Id: runscript.template.main,v 1.1.2.16 2012/09/20 20:58:58 afy Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: Runscript Template - GFDL Workstations Version
 # ------------------------------------------------------------------------------
@@ -44,6 +44,22 @@
 # afy    Ver   8.03  Use xargs to hardlink restarts                 February 12
 # afy    Ver   8.04  Use xargs to move history files                February 12
 # afy    Ver   9.00  Move constants/aliases to the beginning        February 12
+# afy    Ver  10.00  Remove settable constant 'freModuleFilesDir'   June 12
+# afy    Ver  10.01  Remove settable constant 'freCommandsHomeDir'  June 12
+# afy    Ver  10.02  Add settable constants 'freCommands*'          June 12
+# afy    Ver  10.03  Preload the fre-commands module                June 12
+# afy    Ver  10.04  Use 'which' to locate executables              June 12
+# afy    Ver  10.05  Use 'findModuleInfo' to locate 'fre-nctools'   June 12
+# afy    Ver  10.06  Use 'output.stager' for output processing      June 12
+# afy    Ver  11.00  Standardize FRE placeholders                   July 12
+# afy    Ver  12.00  Use HSM split makefiles                        July 12
+# afy    Ver  12.01  Unload 'fre-commands' before its loading       July 12
+# afy    Ver  12.02  Postload the 'fre-commands' for protection     July 12
+# afy    Ver  12.03  Look for 'fre-combiners' before 'fre-nctools'  July 12
+# afy    Ver  13.00  Add 'freNCToolsModuleName' argument            July 12
+# afy    Ver  14.00  Support 64-bit architecture                    August 12
+# afy    Ver  15.00  Add settable variables 'max_npes/max_nthreads' August 12
+# afy    Ver  16.00  Initialize the 'memoryDefault' variable        September 12
 # ------------------------------------------------------------------------------
 # Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2000-2012
 # Designed and written by V. Balaji, Amy Langenhorst and Aleksey Yakovlev
@@ -57,7 +73,7 @@
   set -r runtimeBeg = `date "+%s"`
 
   if ( $echoOn ) unset echo
-  echo '<NOTE> : ====== FRE RUNSCRIPT $Id: runscript.template.main,v 1.1.2.9 2012/02/21 17:06:51 afy Exp $ ======'
+  echo '<NOTE> : ====== FRE RUNSCRIPT $Id: runscript.template.main,v 1.1.2.16 2012/09/20 20:58:58 afy Exp $ ======'
   echo "<NOTE> : Starting at $HOST on `date`"
   if ( $echoOn ) set echo
 
@@ -83,12 +99,13 @@
 #---------------- global constants and variables, set by frerun ----------------
 ################################################################################
 
+  #FRE const(freCommandsModuleFilesDir)
+  #FRE const(freCommandsVersion)
+
   #FRE const(platform)
   #FRE const(target)
   #FRE const(name)
   #FRE const(rtsxml)
-  #FRE const(freModuleFilesDir)
-  #FRE const(freCommandsHomeDir)
   #FRE const(stdoutDir)
   #FRE const(stateDir)
   #FRE const(workDir)
@@ -119,6 +136,13 @@
   #FRE flag(flagOutputCheck)
 
   #FRE var(npes)
+  #FRE var(atmos_npes)
+  #FRE var(atmos_nthreads)
+  #FRE var(ocean_npes)
+  #FRE var(ocean_nthreads)
+  #FRE var(max_npes)
+  #FRE var(max_nthreads)
+
   #FRE var(outputDir)
   #FRE var(gridSpec)
   #FRE var(initCond)
@@ -129,17 +153,38 @@
 #------------------------ global constants and aliases -------------------------
 ################################################################################
 
+  # ---------------- preload the fre-commands module
+
+  if ( -d $freCommandsModuleFilesDir && -r $freCommandsModuleFilesDir ) then
+    set freCommandsModuleFile = $freCommandsModuleFilesDir/fre-commands/$freCommandsVersion
+    if ( -f $freCommandsModuleFile && -r $freCommandsModuleFile ) then
+      if ( $echoOn ) unset echo
+      module use $freCommandsModuleFilesDir
+      module unload fre-commands
+      module load fre-commands/$freCommandsVersion
+      if ( $echoOn ) set echo
+    else
+      if ( $echoOn ) unset echo
+      echo "*ERROR*: The fre-commands modulefile '$freCommandsModuleFile' doesn't exist or not readable"
+      if ( $echoOn ) set echo
+      exit 1
+    endif
+    unset freCommandsModuleFile
+  else
+    if ( $echoOn ) unset echo
+    echo "*ERROR*: The fre-commands modulefiles directory '$freCommandsModuleFilesDir' doesn't exist or not readable"
+    if ( $echoOn ) set echo
+    exit 1
+  endif
+
   # ---------------- machine architecture
 
-  set -r architecture = 'i686'
+  set -r architecture32 = 'i686'
+  set -r architecture64 = 'x86_64'
 
   # ---------------- for compatibility only
 
   set -r work = $workDir
-
-  # ---------------- HSM site-dependent directory
-
-  set -r hsmSiteDir = $freCommandsHomeDir/site/gfdl-ws
 
   # ---------------- top directory for all the HSM-copied files
 
@@ -164,33 +209,30 @@
   set -r patternGrepHistory = '\<nc\>'
   set -r patternGrepRegion = '^rregion'
 
-  # ---------------- selection patterns for combining errors reporting
-
-  set -r tagFail = 'fail'
-  set -r patternGrepFail = '\.'$tagFail'$'
-
   # ---------------- archive extension
 
   set -r archExt = 'tar'
 
+  # ---------------- default memory to be used by combiners (in mb)
+
+  set -r memoryDefault = 16
+
   # ---------------- FRE data copying between work directory and archive directory via ptmp directory
 
-  alias hsmget $freCommandsHomeDir/bin/hsmget --quiet --time --makefile $hsmSiteDir/hsmget.mk --workroot $hsmDir --ptmproot $ptmpDir --archroot /
-
-  if ( $?flagOutputArchiveOn ) then
-    alias hsmput $freCommandsHomeDir/bin/hsmput --quiet --time --makefile $hsmSiteDir/hsmput.mk --workroot $tmpOutputDir --ptmproot $tmpOutputDir --archroot / --store $archExt
-  else
-    alias hsmput $freCommandsHomeDir/bin/hsmput --quiet --time --makefile $hsmSiteDir/hsmput.mk --workroot $tmpOutputDir --ptmproot $ptmpDir --archroot /
-  endif
-
-  if ( $?flagCheckSumOn ) alias hsmput `alias hsmput` --checksum
+  alias hsmget `which hsmget` --quiet --time --workroot=$hsmDir --ptmproot=$ptmpDir --archroot=//
 
   # ---------------- FRE runscript site-independent helper scripts
 
-  alias compareDual $freCommandsHomeDir/sbin/compare_dual.csh
-  alias expandVariables $freCommandsHomeDir/sbin/expand_variables --verbose
-  alias prepareDir $freCommandsHomeDir/sbin/prepare_dir.csh
-  alias timeStamp $freCommandsHomeDir/sbin/time_stamp.csh $timeStampOptions
+  alias expandVariables `which expand_variables` --verbose
+  alias findModuleInfo `which find_module_info` --verbose
+  alias memoryLimit `which memory_limit.csh`
+  alias prepareDir `which prepare_dir.csh`
+  alias timeStamp `which time_stamp.csh` $timeStampOptions
+  alias workDirCleaner `which batch_rmdir.csh`
+
+  # ---------------- FRE runscript site-dependent helper scripts
+
+  alias outputStager `which output.stager`
 
 ################################################################################
 #--------------------------------- environment ---------------------------------
@@ -203,28 +245,49 @@
   module list
   if ( $echoOn ) set echo
 
-  # ---------------- exit if no fre-nctools module is loaded
+  # ---------------- postload the fre-commands module to be sure it's still there
 
-  if ( $?FRE_NCTOOLS_HOME ) then
-    if ( $echoOn ) unset echo
-    echo "<NOTE> : Using the 'fre-nctools' home directory '$FRE_NCTOOLS_HOME'..."
-    if ( $echoOn ) set echo
+  if ( -d $freCommandsModuleFilesDir && -r $freCommandsModuleFilesDir ) then
+    set freCommandsModuleFile = $freCommandsModuleFilesDir/fre-commands/$freCommandsVersion
+    if ( -f $freCommandsModuleFile && -r $freCommandsModuleFile ) then
+      if ( $echoOn ) unset echo
+      module use $freCommandsModuleFilesDir
+      module unload fre-commands
+      module load fre-commands/$freCommandsVersion
+      if ( $echoOn ) set echo
+    else
+      if ( $echoOn ) unset echo
+      echo "*ERROR*: The fre-commands modulefile '$freCommandsModuleFile' doesn't exist or not readable"
+      if ( $echoOn ) set echo
+      exit 1
+    endif
+    unset freCommandsModuleFile
   else
     if ( $echoOn ) unset echo
-    echo "*ERROR*: The script '$scriptName' must load a 'fre-nctools' module"
+    echo "*ERROR*: The fre-commands modulefiles directory '$freCommandsModuleFilesDir' doesn't exist or not readable"
     if ( $echoOn ) set echo
     exit 1
   endif
 
-  # ---------------- the settings below aren't changeable
+  # ---------------- determine the fre-combiners/fre-nctools module info, exit if none of them is loaded
 
-  setenv FRE_COMMANDS_HOME $freCommandsHomeDir
+  set freNCToolsInfo = ( `findModuleInfo 'fre-combiners' || findModuleInfo 'fre-nctools'` )
 
-  if ( $?PATH ) then
-    setenv PATH $freCommandsHomeDir/bin:$freCommandsHomeDir/sbin:$PATH
+  if ( $status == 0 ) then
+    set -r freNCToolsModuleFilesDir = $freNCToolsInfo[1]
+    set -r freNCToolsModuleName = $freNCToolsInfo[2]
+    set -r freNCToolsVersion = $freNCToolsInfo[3]
+    if ( $echoOn ) unset echo
+    echo "<NOTE> : Using the '$freNCToolsModuleName' modulefiles directory '$freNCToolsModuleFilesDir' and version '$freNCToolsVersion'..."
+    if ( $echoOn ) set echo
   else
-    setenv PATH $freCommandsHomeDir/bin:$freCommandsHomeDir/sbin
+    if ( $echoOn ) unset echo
+    echo "*ERROR*: The script '$scriptName' must load at least one of 'fre-combiners' or 'fre-nctools' modules"
+    if ( $echoOn ) set echo
+    exit 1
   endif
+
+  unset freNCToolsInfo
 
   # ---------------- some global configuration
 
@@ -236,7 +299,7 @@
 
   set machine = `uname -m`
 
-  if ( $machine != $architecture ) then
+  if ( $machine != $architecture32 && $machine != $architecture64 ) then
     if ( $echoOn ) unset echo
     echo "*ERROR*: The script '$scriptName' is intended for the machine architecture '$architecture'"
     if ( $echoOn ) set echo
@@ -254,20 +317,19 @@
     exit 1
   endif
 
-################################################################################
-#------------------ FRE netCDF files combining utilities -----------------------
-################################################################################
+  # ---------------- setup the FRE temporary directory, exit if it's not defined
 
-  if ( $?flagOutputFormat64Bit ) then
-    alias mppnccombine `which mppnccombine` -r -64 -h 16384
-  else if ( $?flagOutputFormatHDF5 ) then
-    alias mppnccombine `which mppnccombine` -r -n4 -h 16384
+  if ( $?FRE_SYSTEM_TMP ) then
+    if ( $echoOn ) unset echo
+    echo "<NOTE> : Using the '$FRE_SYSTEM_TMP' temporary directory"
+    if ( $echoOn ) set echo
+    prepareDir $FRE_SYSTEM_TMP || exit 1
   else
-    alias mppnccombine `which mppnccombine` -r -h 16384
+    if ( $echoOn ) unset echo
+    echo "*ERROR*: The FRE temporary directory is not defined"
+    if ( $echoOn ) set echo
+    exit 1
   endif
-
-  alias slmnccombine `which combine-ncc`
-  alias slmnccompressed `which is-compressed`
 
 ################################################################################
 #----------------------------- global variables --------------------------------
@@ -333,9 +395,36 @@
 
   # ---------------- set up working directory structure
 
-  prepareDir $workDir 'clean'		|| exit 1
-  prepareDir $workDir/INPUT 'clean'	|| exit 1
-  prepareDir $workDir/RESTART 'clean'	|| exit 1
+  if ( -e $workDir ) then
+    if ( -d $workDir ) then
+      if ( -r $workDir ) then
+	if ( -w $workDir ) then
+          ls -1 --directory --file-type $workDir/* | grep --fixed-strings --invert-match $tmpOutputDir | xargs rm --force --recursive
+          prepareDir $workDir/INPUT 'clean'	|| exit 1
+          prepareDir $workDir/RESTART 'clean'	|| exit 1
+	else
+	  if ( $echoOn ) unset echo
+	  echo "*ERROR*: The directory '$workDir' exists, but is not writable"
+	  if ( $echoOn ) set echo
+	  exit 1
+	endif
+      else
+	if ( $echoOn ) unset echo
+	echo "*ERROR*: The directory '$workDir' exists, but is not readable"
+	if ( $echoOn ) set echo
+	exit 1
+      endif
+    else
+      if ( $echoOn ) unset echo
+      echo "*ERROR*: The pathname '$workDir' exists, but is not a directory"
+      if ( $echoOn ) set echo
+      exit 1
+    endif
+  else
+    prepareDir $workDir		|| exit 1
+    prepareDir $workDir/INPUT	|| exit 1
+    prepareDir $workDir/RESTART	|| exit 1
+  endif
 
   # ---------------- input data loading
 
@@ -343,7 +432,7 @@
 
   set dataFilesNotOK = ( )
 
-#dataFiles_from_xml
+  #FRE dataFiles
 
   if ( $#dataFilesNotOK > 0 ) then
     if ( $echoOn ) unset echo
@@ -452,21 +541,22 @@
     exit 1
   endif
 
-#diagTable_from_xml
-#fieldTable_from_xml
+  #FRE table(diag_table)
+  #FRE table(field_table)
 
   touch data_table
 
-#dataTable_from_xml
-#tracerTreeTable_from_xml
-#tracerTreeInit_from_xml
-#namelists_from_xml
+  #FRE table(data_table)
+  #FRE table(ocean_tracer_tree)
+  #FRE table(ocean_tracer_tree_init)
+
+  #FRE namelists
 
   # ---------------- expand namelists 
 
   set months = $monthslist[1]
   set days = $dayslist[1]
-  set hours = $hourslist[$irun]
+  set hours = $hourslist[1]
 
   set | sort > $envFile
   sleep $envFileDelay
@@ -488,7 +578,7 @@
       if ( $echoOn ) set echo
       exit 0
     else
-      rm -fr $workDir
+      workDirCleaner $workDir
       if ( $echoOn ) unset echo
       echo "<NOTE> : Natural end-of-input-staging for '$scriptName'"
       if ( $echoOn ) set echo
@@ -639,7 +729,6 @@
       unset msg
 
       set outputDir = ${outputDir}_crash
-
       set MPI_FAIL
 
     endif
@@ -674,15 +763,50 @@
 
       prepareDir $asciiWorkDir 'clean' || exit 1 
 
-      foreach file ( $asciiFiles )
-	mv -f $file $asciiWorkDir/$begindate.$file
-      end
+      if ( ! $?MPI_FAIL ) then
 
-      if ( $?flagOutputCompressAsciiOn ) then
-        hsmput --zip $asciiArchDir:s+/++
+        ls -1 | egrep "$patternGrepAscii" | xargs -I'{}' mv --force '{}' $asciiWorkDir/$begindate.'{}'
+
+        set actionSaveOn	= 1
+        set paramArchiveOn	= $?flagOutputArchiveOn
+        @   paramPtmpOn		= ! $?flagOutputArchiveOn
+        set paramCheckSumOn	= $?flagCheckSumOn
+        set paramCompressOn	= $?flagOutputCompressAsciiOn
+
       else
-        hsmput $asciiArchDir:s+/++
+
+        ls -1 | egrep "$patternGrepAscii" | xargs -I'{}' ln --force '{}' $asciiWorkDir/$begindate.'{}'
+
+        set actionSaveOn	= 1
+        set paramArchiveOn	= 1
+        set paramPtmpOn		= 0
+        set paramCheckSumOn	= 0
+        set paramCompressOn	= 0
+
       endif
+
+      set asciiArgFile = $stateDir/$FRE_JOBID.output.stager.$begindate.A.args
+
+      echo "set expName				=   $name"			 > $asciiArgFile
+      echo "set type				=   ascii"			>> $asciiArgFile
+      echo "set actionSaveOn			=   $actionSaveOn"		>> $asciiArgFile
+      echo "set paramArchiveOn			=   $paramArchiveOn"		>> $asciiArgFile
+      echo "set paramPtmpOn			=   $paramPtmpOn"		>> $asciiArgFile
+      echo "set paramCheckSumOn			=   $paramCheckSumOn"		>> $asciiArgFile
+      echo "set paramCompressOn			=   $paramCompressOn"		>> $asciiArgFile
+      echo "set workDir				=   $tmpOutputDir"		>> $asciiArgFile
+      echo "set ptmpDir				=   $ptmpDir"			>> $asciiArgFile
+      echo "set archDir				=   $asciiArchDir"		>> $asciiArgFile
+      echo "set freCommandsModuleFilesDir       =   $freCommandsModuleFilesDir"	>> $asciiArgFile
+      echo "set freCommandsVersion		=   $freCommandsVersion"	>> $asciiArgFile
+      echo "set modulesHomeDir			=   $modulesHomeDir"		>> $asciiArgFile
+
+      if ( $?MPICH_RANK_REORDER_METHOD ) then
+        set mpiRankReorderMethod = $MPICH_RANK_REORDER_METHOD
+        unsetenv MPICH_RANK_REORDER_METHOD
+      endif
+
+      outputStager $asciiArgFile
 
       if ( $status == 0 ) then
         if ( $echoOn ) unset echo
@@ -695,7 +819,18 @@
         exit 1
       endif
 
-      rm -fr $asciiWorkDir
+      if ( $?mpiRankReorderMethod ) then
+        setenv MPICH_RANK_REORDER_METHOD $mpiRankReorderMethod
+        unset $mpiRankReorderMethod
+      endif
+
+      unset asciiArgFile
+
+      unset paramCompressOn
+      unset paramCheckSumOn
+      unset paramPtmpOn
+      unset paramArchiveOn
+      unset actionSaveOn
 
       unset asciiWorkDir
       unset asciiArchDir
@@ -726,69 +861,83 @@
       cp --force --preserve=mode,ownership,timestamps $rtsxml			$restartWorkDir
       cp --force --preserve=mode,ownership,timestamps $scriptName		$restartWorkDir
 
-      if ( $?flagRunTypeRegression && $irun == $segmentsPerJob ) then
+      if ( ! $?MPI_FAIL ) then
 
-	pushd $restartWorkDir
+	if ( $currentSeg < $segmentsPerSimulation ) then
 
-        set filesToCombine = ( `ls -1 | egrep "($patternGrepRestart).*$patternGrepTail" | sed -r "s/$patternGrepTail//g" | sort -u` )
+	  if ( $irun < $segmentsPerJob ) then
 
-	if ( $#filesToCombine > 0 ) then
-          set combineTimeBeg = `date "+%s"`
-	  foreach file ( $filesToCombine )
-	    set inputFiles = ( `ls -1 | egrep "^$file$patternGrepTail"` )
-	    if ( $#inputFiles > 0 ) then
-	      slmnccompressed $inputFiles[1]
-              if ( $status == 0 ) then
-        	( slmnccombine $inputFiles $file && rm -f $inputFiles || touch $file.$tagFail ) &
-              else
-        	( mppnccombine $file $inputFiles || touch $file.$tagFail ) &
-              endif
-	    endif
-            unset inputFiles
-	  end
-          wait
+            find $workDir/INPUT   -maxdepth 1 -type f | egrep "$patternGrepRestartNextDrop" | xargs --no-run-if-empty rm --force
+            find $workDir/RESTART -maxdepth 1 -type f | egrep "$patternGrepRestartNextMove" | xargs --no-run-if-empty mv --force --target-directory ../INPUT
+
+          endif
+
+          set actionCombineOn	= 0
+          set actionCheckOn	= $?flagOutputCheckOn
+          set actionSaveOn	= 1
+          set paramArchiveOn	= $?flagOutputArchiveOn
+          set paramPtmpOn	= 1
+          set paramCheckSumOn	= $?flagCheckSumOn
+          set paramCompressOn	= $?flagOutputCompressRestartOn
+
+        else
+
+          set actionCombineOn	= $?flagRunTypeRegression
+          set actionCheckOn	= $?flagOutputCheckOn
+          set actionSaveOn	= 1
+          set paramArchiveOn	= $?flagOutputArchiveOn
+          set paramPtmpOn	= 1
+          set paramCheckSumOn	= $?flagCheckSumOn
+          set paramCompressOn	= $?flagOutputCompressRestartOn
+
         endif
 
-        unset filesToCombine
-
-	set filesNotOK = ( `ls -1 | egrep "$patternGrepFail"` )
-
-	if ( $#filesNotOK > 0 ) then
-	  if ( $echoOn ) unset echo
-	  foreach file ( $filesNotOK )
-	    echo "*ERROR*: A problem during combining the restart file '$file:r'"
-            rm -f $file
-	  end
-	  echo "*ERROR*: Failed to combine restart files"
-	  if ( $echoOn ) set echo
-	  exit 1
-	else if ( $?combineTimeBeg ) then
-	  set combineTimeEnd = `date "+%s"`
-	  set combineTime = `echo "$combineTimeEnd - $combineTimeBeg" | bc -l`
-	  if ( $echoOn ) unset echo
-	  echo "<NOTE> : All the restart files have been combined successfully"
-	  echo "<NOTE> : Time to combine = '$combineTime' (seconds)"
-	  if ( $echoOn ) set echo
-          unset combineTime
-          unset combineTimeEnd
-          unset combineTimeBeg 
-	else
-	  if ( $echoOn ) unset echo
-	  echo "<NOTE> : No uncombined restart files have been found"
-	  if ( $echoOn ) set echo
-	endif
-
-	unset filesNotOK 
-
-	popd
-
-      endif
-
-      if ( $?flagOutputCompressRestartOn ) then
-        hsmput --zip $restartArchDir:s+/++
       else
-        hsmput $restartArchDir:s+/++
+
+        set actionCombineOn	= 0
+        set actionCheckOn	= 0
+        set actionSaveOn	= 1
+        set paramArchiveOn	= 1
+        set paramPtmpOn		= 0
+        set paramCheckSumOn	= 0
+        set paramCompressOn 	= 0
+
       endif
+
+      if ( $actionCombineOn ) then
+        set combineMemory = `memoryLimit $restartWorkDir`
+      else
+        set combineMemory = $memoryDefault
+      endif
+
+      set restartArgFile = $stateDir/$FRE_JOBID.output.stager.$enddate.R.args
+
+      echo "set expName				=   $name"			 > $restartArgFile 
+      echo "set type				=   restart"			>> $restartArgFile 
+      echo "set actionCombineOn			=   $actionCombineOn"		>> $restartArgFile
+      echo "set actionCheckOn			=   $actionCheckOn"		>> $restartArgFile
+      echo "set actionSaveOn			=   $actionSaveOn"		>> $restartArgFile 
+      echo "set paramArchiveOn			=   $paramArchiveOn"		>> $restartArgFile
+      echo "set paramPtmpOn			=   $paramPtmpOn"		>> $restartArgFile 
+      echo "set paramCheckSumOn			=   $paramCheckSumOn"		>> $restartArgFile
+      echo "set paramCompressOn			=   $paramCompressOn"		>> $restartArgFile
+      echo "set combineMemory			=   $combineMemory"		>> $restartArgFile
+      echo "set workDir				=   $tmpOutputDir"		>> $restartArgFile 
+      echo "set ptmpDir				=   $ptmpDir"			>> $restartArgFile 
+      echo "set archDir				=   $restartArchDir"		>> $restartArgFile 
+      echo "set freCommandsModuleFilesDir       =   $freCommandsModuleFilesDir"	>> $restartArgFile
+      echo "set freCommandsVersion		=   $freCommandsVersion"	>> $restartArgFile
+      echo "set freNCToolsModuleFilesDir	=   $freNCToolsModuleFilesDir"	>> $restartArgFile
+      echo "set freNCToolsModuleName		=   $freNCToolsModuleName"	>> $restartArgFile
+      echo "set freNCToolsVersion		=   $freNCToolsVersion"		>> $restartArgFile
+      echo "set modulesHomeDir			=   $modulesHomeDir"		>> $restartArgFile
+
+      if ( $?MPICH_RANK_REORDER_METHOD ) then
+        set mpiRankReorderMethod = $MPICH_RANK_REORDER_METHOD
+        unsetenv MPICH_RANK_REORDER_METHOD
+      endif
+
+      outputStager $restartArgFile
 
       if ( $status == 0 ) then
         if ( $echoOn ) unset echo
@@ -796,21 +945,26 @@
         if ( $echoOn ) set echo
       else
         if ( $echoOn ) unset echo
-        echo "*ERROR*: Can't process the restart directory '$restartArchDir'"
+        echo "*ERROR*: Can't save the restart directory '$restartArchDir'"
         if ( $echoOn ) set echo
         exit 1
       endif
 
-      if ( $?flagOutputCheckOn ) then
-        compareDual $name 0 $restartArchDir.$archExt
+      if ( $?mpiRankReorderMethod ) then
+        setenv MPICH_RANK_REORDER_METHOD $mpiRankReorderMethod
+        unset $mpiRankReorderMethod
       endif
 
-      if ( $irun < $segmentsPerJob ) then
-        find $workDir/INPUT   -maxdepth 1 -type f | egrep "$patternGrepRestartNextDrop" | xargs -r rm -f
-        find $workDir/RESTART -maxdepth 1 -type f | egrep "$patternGrepRestartNextMove" | xargs -r mv -f -t ../INPUT
-      endif
+      unset restartArgFile
 
-      rm -fr $restartWorkDir
+      unset combineMemory
+      unset paramCompressOn
+      unset paramCheckSumOn
+      unset paramPtmpOn
+      unset paramArchiveOn
+      unset actionSaveOn
+      unset actionCheckOn
+      unset actionCombineOn
 
       unset restartWorkDir
       unset restartSuffix
@@ -824,9 +978,13 @@
     set regionHistoryFiles = ( `ls -1 | egrep "$patternGrepRegion"` )
 
     if ( $#regionHistoryFiles > 0 ) then
-      foreach file ( $regionHistoryFiles )
-        mv -f $file `echo $file | sed -r "s/$patternGrepRegion//"`
-      end
+
+      if ( ! $?MPI_FAIL ) then
+        foreach file ( $regionHistoryFiles )
+          mv -f $file `echo $file | sed -r "s/$patternGrepRegion//"`
+        end
+      endif
+
     endif
 
     unset regionHistoryFiles
@@ -843,70 +1001,70 @@
 
       prepareDir $historyWorkDir 'clean' || exit 1
 
-      ls -1 | egrep "$patternGrepHistory" | xargs -I'{}' mv --force '{}' $historyWorkDir/$begindate.'{}'
+      if ( ! $?MPI_FAIL ) then
 
-      if ( $?flagOutputCombineHistoryOn ) then
+        ls -1 | egrep "$patternGrepHistory" | xargs -I'{}' mv --force '{}' $historyWorkDir/$begindate.'{}'
 
-        pushd $historyWorkDir
+        set actionCombineOn	= $?flagOutputCombineHistoryOn
+        set actionCheckOn	= $?flagOutputCheckOn
+        set actionSaveOn	= 1
+        set paramArchiveOn	= $?flagOutputArchiveOn
+        @   paramPtmpOn		= ! $?flagOutputArchiveOn
+        set paramCheckSumOn	= $?flagCheckSumOn
+        set paramCompressOn 	= $?flagOutputCompressHistoryOn
 
-	set filesToCombine = ( `ls -1 | egrep "($patternGrepHistory).*$patternGrepTail" | sed -r "s/$patternGrepTail//g" | sort -u` )
-
-        if ( $#filesToCombine > 0 ) then
-          set combineTimeBeg = `date "+%s"`
-	  foreach file ( $filesToCombine )
-            set inputFiles = ( `ls -1 | egrep "^$file$patternGrepTail"` )
-            if ( $#inputFiles > 0 ) then
-       	      ( mppnccombine $file $inputFiles || touch $file.$tagFail ) &
-            endif
-            unset inputFiles
-	  end
-	  wait
-        endif
-
-        unset filesToCombine
-
-	set filesNotOK = ( `ls -1 | egrep "$patternGrepFail"` )
-
-	if ( $#filesNotOK > 0 ) then
-	  if ( $echoOn ) unset echo
-	  foreach file ( $filesNotOK )
-	    echo "*ERROR*: A problem during combining the history file '$file:r'"
-            rm -f $file
-	  end
-	  echo "*ERROR*: Failed to combine history files"
-	  if ( $echoOn ) set echo
-	  exit 1
-	else if ( $?combineTimeBeg ) then
-	  set combineTimeEnd = `date "+%s"`
-	  set combineTime = `echo "$combineTimeEnd - $combineTimeBeg" | bc -l`
-	  if ( $echoOn ) unset echo
-	  echo "<NOTE> : All the history files have been combined successfully"
-	  echo "<NOTE> : Time to combine = '$combineTime' (seconds)"
-	  if ( $echoOn ) set echo
-          unset combineTime
-          unset combineTimeEnd
-          unset combineTimeBeg 
-	else
-	  if ( $echoOn ) unset echo
-	  echo "<NOTE> : No uncombined history files have been found"
-	  if ( $echoOn ) set echo
-	endif
-
-	unset filesNotOK 
-
-        popd
-
-      endif
-
-      if ( $?flagOutputCompressHistoryOn ) then
-        hsmput --zip $historyArchDir:s+/++
       else
-        hsmput $historyArchDir:s+/++
+
+        ls -1 | egrep "$patternGrepHistory" | xargs -I'{}' ln --force '{}' $historyWorkDir/$begindate.'{}'
+
+        set actionCombineOn	= 0
+        set actionCheckOn	= 0
+        set actionSaveOn	= 1
+        set paramArchiveOn	= 1
+        set paramPtmpOn		= 0
+        set paramCheckSumOn	= 0
+        set paramCompressOn 	= 0
+
       endif
+
+      if ( $actionCombineOn ) then
+        set combineMemory = `memoryLimit $historyWorkDir`
+      else
+        set combineMemory = $memoryDefault
+      endif
+
+      set historyArgFile = $stateDir/$FRE_JOBID.output.stager.$begindate.H.args
+
+      echo "set expName				=   $name"			 > $historyArgFile
+      echo "set type				=   history"			>> $historyArgFile
+      echo "set actionCombineOn			=   $actionCombineOn"		>> $historyArgFile
+      echo "set actionCheckOn			=   $actionCheckOn"		>> $historyArgFile
+      echo "set actionSaveOn			=   $actionSaveOn"		>> $historyArgFile
+      echo "set paramArchiveOn			=   $paramArchiveOn"		>> $historyArgFile
+      echo "set paramPtmpOn			=   $paramPtmpOn"		>> $historyArgFile
+      echo "set paramCheckSumOn			=   $paramCheckSumOn"		>> $historyArgFile
+      echo "set paramCompressOn			=   $paramCompressOn"		>> $historyArgFile
+      echo "set combineMemory			=   $combineMemory"		>> $historyArgFile
+      echo "set workDir				=   $tmpOutputDir"		>> $historyArgFile
+      echo "set ptmpDir				=   $ptmpDir"			>> $historyArgFile
+      echo "set archDir				=   $historyArchDir"		>> $historyArgFile
+      echo "set freCommandsModuleFilesDir       =   $freCommandsModuleFilesDir"	>> $historyArgFile
+      echo "set freCommandsVersion		=   $freCommandsVersion"	>> $historyArgFile
+      echo "set freNCToolsModuleFilesDir	=   $freNCToolsModuleFilesDir"	>> $historyArgFile
+      echo "set freNCToolsModuleName		=   $freNCToolsModuleName"	>> $historyArgFile
+      echo "set freNCToolsVersion		=   $freNCToolsVersion"		>> $historyArgFile
+      echo "set modulesHomeDir			=   $modulesHomeDir"		>> $historyArgFile
+
+      if ( $?MPICH_RANK_REORDER_METHOD ) then
+        set mpiRankReorderMethod = $MPICH_RANK_REORDER_METHOD
+        unsetenv MPICH_RANK_REORDER_METHOD
+      endif
+
+      outputStager $historyArgFile
 
       if ( $status == 0 ) then
         if ( $echoOn ) unset echo
-        echo "<NOTE> : The history directory '$historyArchDir' has been processed succesfully"
+        echo "<NOTE> : The history directory '$historyArchDir' has been processed successfully"
         if ( $echoOn ) set echo
       else
         if ( $echoOn ) unset echo
@@ -915,11 +1073,21 @@
         exit 1
       endif
 
-      if ( $?flagOutputCheckOn ) then
-        compareDual $name 0 $historyArchDir.$archExt
+      if ( $?mpiRankReorderMethod ) then
+        setenv MPICH_RANK_REORDER_METHOD $mpiRankReorderMethod
+        unset $mpiRankReorderMethod
       endif
 
-      rm -fr $historyWorkDir
+      unset historyArgFile
+
+      unset combineMemory
+      unset paramCompressOn
+      unset paramCheckSumOn
+      unset paramPtmpOn
+      unset paramArchiveOn
+      unset actionSaveOn
+      unset actionCheckOn
+      unset actionCombineOn
 
       unset historyWorkDir
       unset historyArchDir
@@ -1062,7 +1230,19 @@
   # ---------------- working directory cleaning
 
   if ( $?flagWorkDirCleanOn ) then
-    rm -fr $workDir
+
+    workDirCleaner $workDir
+
+    if ( $status == 0 ) then
+      if ( $echoOn ) unset echo
+      echo "<NOTE> : The working directory has been cleaned successfully"
+      if ( $echoOn ) set echo
+    else
+      if ( $echoOn ) unset echo
+      echo "WARNING: Can't clean the working directory"
+      if ( $echoOn ) set echo
+    endif
+
   endif
 
   # ---------------- normal end of script 

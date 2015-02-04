@@ -290,12 +290,12 @@ set LOGS = "$LOGS $TODAY </br> $CMD_IN </br>"
 	set STDOUTDATE = $STDOUT.$DATE.$xmlbase.$platform.$target
 	set STDERRDATE = $STDERR.$DATE.$xmlbase.$platform.$target
 
-        set CMD = "( $RTSTOOL -x $xmlfile -p $platform -t $target $GO_OPS $EXPLIST >> $STDOUTDATE & ) >> & $STDERRDATE"
+        set CMD = "( $RTSTOOL -x $xmlfile -p $platform -t $target $GO_OPS --stdout $STDOUTDATE --stderr $STDERRDATE $EXPLIST >> $STDOUTDATE & ) >> & $STDERRDATE"
 
-	set LOGS = "$LOGS </br> (<a href=file://$RTSTOOL>$RTSTOOL</a> -x <a href=file://$xmlfile>$xmlfile</a>  -p $platform -t $target $GO_OPS $EXPLIST >> <a href=file://$STDOUTDATE>$STDOUTDATE</a> & ) >> & <a href=file://$STDERRDATE>$STDERRDATE</a></br></br>" 
+	set LOGS = "$LOGS </br> (<a href=file://$RTSTOOL>$RTSTOOL</a> -x <a href=file://$xmlfile>$xmlfile</a>  -p $platform -t $target $GO_OPS  --stdout $STDOUTDATE --stderr $STDERRDATE $EXPLIST >> <a href=file://$STDOUTDATE>$STDOUTDATE</a> & ) >> & <a href=file://$STDERRDATE>$STDERRDATE</a></br></br>" 
 
  	echo $DATE > $STDOUTDATE
-	( $RTSTOOL -x $xmlfile -p $platform -t $target $GO_OPS $EXPLIST >> $STDOUTDATE & ) >> & $STDERRDATE 
+	( $RTSTOOL -x $xmlfile -p $platform -t $target $GO_OPS --stdout $STDOUTDATE --stderr $STDERRDATE $EXPLIST >> $STDOUTDATE & ) >> & $STDERRDATE 
 
 #       Delay so that the CVS check-out to the same directory won't happen 
 	echo

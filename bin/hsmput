@@ -1,5 +1,5 @@
 #!/usr/bin/perl
-# $Id: hsmput,v 18.0.2.7 2011/12/08 01:20:44 afy Exp $
+# $Id: hsmput,v 18.0.2.8 2012/05/17 17:16:00 afy Exp $
 # script for calling hsmput.mk
 
 require 5;
@@ -73,14 +73,7 @@ my $verbose = $opt{verbose};
 # if delete is on checksums must be on
 $opt{checksum} = $opt{checksum} || $opt{delete};
 
-my $homeDir = sub($)
-{
-  my $p = shift;
-  my $binDir = dirname((File::Spec->file_name_is_absolute($p)) ? $p : File::Spec->rel2abs($p));
-  return ($binDir =~ m/(.*)\/bin$/) ? $1 : ($binDir . '/..');
-};
-
-my $makefile = $opt{makefile} || $homeDir->($0) . '/site/hsmput.mk';
+my $makefile = $opt{makefile} || "$FindBin::Bin/../etc/mk/hsmput.mk";
 croak "Non-existent makefile $makefile\n" unless -f $makefile;
 print "Using Makefile $makefile ...\n" if $verbose;
 
@@ -107,6 +100,7 @@ undef my $target;
 undef my $source;
 undef my $result;
 undef my $okfile;
+undef my $handle;
 
 foreach ( @ARGV ) {
    croak "$0 source $_ cannot be an absolute pathname!\n\n$usage" 
@@ -145,21 +139,21 @@ foreach ( @ARGV ) {
    exit 0 if $opt{delete};
 # pass to ptmp
    $target = "$ptmproot/" . File::Spec->abs2rel($source,$workroot);
-   HSM::lock($target,30) or exit 1;
+   $handle = HSM::lock($target,30) or exit 1;
    HSM::clean($target);
    $okfile = "$target.ok";
    print STDERR "+CMD: $cmd $okfile\n" if $verbose;
    $result = qx/$cmd $okfile/;
    if ( $? ) {
       unlink $okfile if -f $okfile;
-      HSM::unlock($target);
+      HSM::unlock($handle);
       croak "ERROR: Unable to make $okfile\n$result\n";
    }
    print $result unless $result =~ / is up to date./;
    chdir $target or chdir dirname($target);
    print qx/md5sum -c $okfile/ if $opt{checksum};
    HSM::alignAccessTime($target);
-   HSM::unlock($target);
+   HSM::unlock($handle);
 }
 
 sub deleteFiles ($) {

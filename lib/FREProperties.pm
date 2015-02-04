@@ -1,5 +1,5 @@
 #
-# $Id: FREProperties.pm,v 18.0.2.18 2012/01/07 17:59:18 afy Exp $
+# $Id: FREProperties.pm,v 18.0.2.19 2012/08/06 22:48:35 afy Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: Properties Management Module
 # ------------------------------------------------------------------------------
@@ -61,6 +61,7 @@
 # afy    Ver  17.03  Modify treeProcessDataSource (checks, parsing) January 12
 # afy    Ver  17.04  Modify new (less one argument, site parts)     January 12
 # afy    Ver  18.00  Modify treeProcessDataSource (bug fix)         January 12
+# afy    Ver  19.00  Modify treeProcessPlatform (final dirs)        August 12
 # ------------------------------------------------------------------------------
 # Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2009-2012
 # Designed and written by V. Balaji, Amy Langenhorst and Aleksey Yakovlev
@@ -389,18 +390,23 @@ my $treeProcessPlatform = sub($$$)
 		}
 		foreach my $t (FREProperties::DIRECTORIES)
 		{
-		  my $value =
-		  (     
-		    $n->findvalue('directory[@type="' . $t . '"]')
-		    ||
-		    $n->findvalue('directory/' . $t)
-		    ||
-		    $r->{'FRE.directory.' . $t . '.default'}
-		  );
-		  $value =~ s/\s*//g;
 		  my $dir = $t . 'Dir';
+		  my $value = $r->{'FRE.directory.' . $t . '.default'};
+		  if (my $valueCustomized = $n->findvalue('directory[@type="' . $t . '"]') || $n->findvalue('directory/' . $t))
+		  {
+		    unless ($r->{'FRE.directory.' . $t . '.final'})
+		    {
+		      $value = $valueCustomized;
+		    }
+		    else
+		    {
+		      my $line = $n->line_number();
+		      FREMsg::out($v, FREMsg::WARNING, "XML file line $line: the directory '$dir' can't be customized on this site");
+		    }
+		  }
 		  unless ($r->propertyExists($dir))
 		  {
+		    $value =~ s/\s*//g;
 		    $r->propertyInsert($dir, $placeholdersExpand->($r, $value));
 		    $r->propertyInsert('root', $r->{rootDir}) if $t eq 'root';
 		  }

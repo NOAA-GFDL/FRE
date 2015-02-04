@@ -1,6 +1,6 @@
 #!/bin/csh -x
 set FILEPROTOCOL = "file:"
-set FRE_VERSION = fre/test
+set FRE_VERSION = fre
 set FRECHECKOPS = ""
 set DATE =  `date +%Y%m%d%H%M%S`
 set num = 1
@@ -15,6 +15,7 @@ set xml_dir = ""
 set list = "mom4p1_solo.xml mom4p1_cpld.xml CM2M_Control-1900.xml ESM2_Control.xml ICCMp1.xml GOLD_SIS.xml"
 
 set ignore_var_list = "NONE"
+set ignore_file_list = ""
 
 set argv = (`getopt -u -o hrd:p:t:x: -l reference_tag: -l frecheck_ops: --  $*`)
 
@@ -57,7 +58,8 @@ end
 
 echo EXPLIST: $EXPLIST
 
-
+set ignore_file_list = `echo $FRECHECKOPS | awk  '{gsub(/.*--ignore_file_list=/,"");print}'`
+set ignore_file_list = `echo $ignore_file_list | awk  '{gsub(/,/,"|");print}'`
 
 
 if ( $help ) then
@@ -83,6 +85,12 @@ frerts_status.csh -r --reference_tag siena_201202 -p ncrc2.intel -t prod-openmp 
 EOF
 exit 1
 endif
+
+#Load the required modules and set the necessary envs
+source $MODULESHOME/init/tcsh
+module use -a /ncrc/home2/fms/local/modulefiles
+module rm fre
+module load $FRE_VERSION
 
 
 if(! $#xml_list ) then
@@ -156,9 +164,8 @@ foreach xml ( $xml_list )
 	  echo "stdouts: </br>" > $outputlist
           set cnt_fail = 0
           set error = 0
-          foreach file (`ls -1 |egrep -v "output.stager|file_sender|chain|workDir.cleaner"`)
-#            @ cnt_fail = $cnt_fail + `grep -c "ERROR.: Any" $file`      
-	    grep -qc "ERROR: Any" $file 
+          foreach file (`ls -1 |egrep -v "stager|file_sender|chain|workDir.cleaner|finisher"`)
+	    egrep -qc "FATAL|\*ERROR\*" $file 
 	    if( ! $status ) then
 		@ cnt_fail = $cnt_fail + 1
 		echo "ERROR. : <a href=$FILEPROTOCOL//$stdout_dir/run/$file><nobr>$stdout_dir/run/$file</nobr></a></br>" >> $outputlist
@@ -168,16 +175,20 @@ foreach xml ( $xml_list )
           end
 
 
-          if ( $cnt_fail > 0 ) set run_status = "<td bgcolor='#FF0000' <a href=$FILEPROTOCOL//$outputlist title='ERROR. in stdout'>$cnt_fail</a></td>" # Red to indicate failure
+#          if ( $cnt_fail > 0 ) set run_status = "<td bgcolor='#FF0000' <a href=$FILEPROTOCOL//$outputlist title='ERROR in stdout'>$cnt_fail</a></td>" # Red to indicate failure
 
-          foreach file (`ls -1 |egrep -v "output.stager|file_sender|chain|workDir.cleaner"`)
+          foreach file (`ls -1 |egrep -v "stager|file_sender|chain|workDir.cleaner|finisher"`)
             @ cnt = $cnt + `grep -c "Natural end-of-script" $file`
           end
-         
+
+# 	  @ cnt = `ls -1 |egrep -v "output.stager|file_sender|chain|workDir.cleaner|finisher" | wc -l`
+
+        if ( $cnt_fail > 0 ) set run_status = "<td bgcolor='#FF0000' <a href=$FILEPROTOCOL//$outputlist title='ran without errors'>$cnt</a> , (<a href=$FILEPROTOCOL//$outputlist title='ERROR in stdout'>$cnt_fail</a>)</td>"  # Red to indicate failure
+
+        
 	  if ( $cnt > 0 ) set run_status = "<td bgcolor='#FFFF00' <a href=$FILEPROTOCOL//$outputlist title='Something ran'>$cnt ($cnt_fail)</a></td>" # Yellow to indicate some successful runs
           cd -
         endif
-
 
 	if ( $cnt == 0 ) then
 	    echo $run_status>> $html_file
@@ -228,7 +239,10 @@ foreach xml ( $xml_list )
 	   grep -q "NO RUNS TO COMPARE:.*$k.*"   $frecheckout
 	   if( ! $status ) set NO_RUNS_TO_COMPARE = 1
 
-	   grep DIFFER $frecheckout | egrep -q -v "iceberg|blobs.res|GOLD_IC|ocean_geometry|timestats|Vertical_coordinate|WARNING"
+	   set ignorediffs = "iceberg|blobs.res|GOLD_IC|ocean_geometry|timestats|Vertical_coordinate|WARNING"
+	   if( $ignore_file_list != "") set ignorediffs = "$ignorediffs|$ignore_file_list"
+	   grep DIFFER $frecheckout | egrep -q -v "$ignorediffs" 
+
 	   if( $status ) then #only icebergs DIFFER, flip the failures if any
 		if( $CROSSOVER_FAILED )     then 
 		    set CROSSOVER_FAILED = 0
@@ -296,7 +310,7 @@ foreach xml ( $xml_list )
      		endif
 	   endif
 
-	   set run_status = "<td bgcolor=$color <a href="$FILEPROTOCOL//$frecheckout" title=$title>$cnt </a> , (<a href=$FILEPROTOCOL//$outputlist title=$outputlist>$cnt_fail</a>)</td>"
+	   set run_status = "<td bgcolor=$color> <a href=$FILEPROTOCOL//$frecheckout title=$title>$cnt</a> , (<a href=$FILEPROTOCOL//$outputlist title="failures">$cnt_fail</a>)</td>"
       	 endif
 
        echo $run_status>> $html_file
@@ -321,3 +335,4 @@ echo "</table>">> $html_file
     echo "FRECHECKOPS: $FRECHECKOPS</br> \n" >> $html_file
 
 
+echo "All done! Please view $html_file"

@@ -1,20 +1,22 @@
 #!/bin/csh -x
 
 echo ================
-date
-hostname
+set MY_DATE = `date`
+set MY_HOST = `hostname`
+set MY_PID  = $$
+echo Date: $MY_DATE
+echo Host: $MY_HOST
+echo PID:  $MY_PID
 echo $0 $argv
-echo MY_PID= $$
 echo ================
 
 ######USER options##################################
 set MY_FRE = 0
 ####################################################
 
-set argv = (`getopt -u -o hp:t:x:l: -l suit: -l no_rts -l compile -l build_only -l use_libs  -l fre_version: -l fre_ops: -l dry_run -l no_wait -l no_stage -l all -l do_frecheck -l reference_tag: --  $*`)
+set argv = (`getopt -u -o hp:t:x:l: -l suit: -l no_rts -l compile -l build_only -l use_libs  -l fre_version: -l fre_ops: -l dry_run -l no_wait -l no_stage -l all -l do_frecheck -l reference_tag: -l stdout: -l stderr: --  $*`)
  
-set FRE_VERSION = fre/test
-set frerts_check = `which frerts_status.csh`
+set FRE_VERSION = fre
 set REFTAG = siena
 set EXPLIST = () 
 set DO_all = 0
@@ -35,6 +37,7 @@ set MAXWARN = 20
 set MAXTRY = 50
 set DOFRECHECK = 0 
 set help = 0
+set submit_delay = 20 #sleep this many seconds after issuing a frerun -s
 
 while ("$argv[1]" != "--")
     switch ($argv[1])
@@ -75,6 +78,10 @@ while ("$argv[1]" != "--")
             set FRE_OPS = $argv[2]; shift argv; breaksw
         case --reference_tag:
             set REFTAG = $argv[2]; shift argv; breaksw
+        case --stdout:
+            set MYSTDOUT = $argv[2]; shift argv; breaksw
+        case --stderr:
+            set MYSTDERR = $argv[2]; shift argv; breaksw
     endsw
     shift argv
 end
@@ -120,10 +127,15 @@ endif
 source $MODULESHOME/init/tcsh
 module use -a /ncrc/home2/fms/local/modulefiles
 module rm fre
+
+#Read version of fre from xml
+set FRE_VERSION = `grep FRE_VERSION $XML | grep -o 'value=".*"' | grep -o '".*"' | awk '{gsub(/"/," ");print}' `
+echo $FRE_VERSION
+
 module load $FRE_VERSION
 set myfreBin = /ncrc/home2/Niki.Zadeh/myfre/fre-commands/bin/
 
-
+set frerts_check = `which frerts_status.csh`
 set fremake = "fremake"
 set frerun  = "frerun"
 set frelist = "frelist"
@@ -155,6 +167,12 @@ if(! $#EXPLIST ) then
 endif
 
 echo experiments to run: $EXPLIST
+
+  mail -s "FRERTS $MY_HOST $MY_PID Started" $USER <<EOF
+frerts is starting on $MY_HOST.
+Please refer to the logs:
+tail -f $MYSTDOUT
+EOF
 
 
 set ARCHIVE_ROOT = `$frelist -d archive -x $XML -p $PLAT -t $TARGET  $EXPLIST[1]`
@@ -199,6 +217,11 @@ if( $LIB != "" ) then
     #error check only valid with --nolink passed to fremake
     if( $status != 0 ) then
     echo "fremake failed!"
+  mail -s "FRERTS $MY_HOST $MY_PID Failed fremake libraries" $USER <<EOF
+frerts failed to fremake the libraries.
+Please refer to the logs at:
+$MYSTDOUT
+EOF
     exit
     endif
   endif
@@ -221,22 +244,33 @@ foreach EXP ( $TODOLIST )
 	   $freCMD 
 	   if( $status != 0 ) then
 	      echo "fremake failed!"
+  mail -s "FRERTS $MY_HOST $MY_PID Failed fremake executable" $USER <<EOF
+frerts failed to fremake the executable.
+Please refer to the logs at:
+$MYSTDOUT
+EOF
 	      exit
            endif
       endif
       sleep 5
   endif
-#Stage the executable
-  echo "Pre-stage the executable $EXEC"
-  set exec_dir = `dirname $EXEC`
-  mkdir -p $CSCRATCH/$USER/ptmp/$exec_dir
-  chmod +w $CSCRATCH/$USER/ptmp/$exec_dir/*
-  cp $EXEC $CSCRATCH/$USER/ptmp/$exec_dir/
-
+  if( -e $EXEC) then 
+    #Stage the executable
+    echo "Pre-stage the executable $EXEC"
+    set exec_dir = `dirname $EXEC`
+    mkdir -p $CSCRATCH/$USER/ptmp/$exec_dir
+    chmod +w $CSCRATCH/$USER/ptmp/$exec_dir/*
+    cp $EXEC $CSCRATCH/$USER/ptmp/$exec_dir/
+  endif
 end
 
 if( $BUILD_ONLY ) then
     echo All built.
+  mail -s "FRERTS $MY_HOST $MY_PID Finished the build-only experiment" $USER <<EOF
+frerts finished the build-only experiment.
+Please refer to the logs at:
+$MYSTDOUT
+EOF
     exit
 endif
 
@@ -281,6 +315,7 @@ while( $#TODOLIST );
 		if( $NODRYRUN ) then
 		     set cmdout = `$logit $freCMD`
 		     echo "$cmdout" 
+                     sleep $submit_delay
 #We don't want to wait here till we get a job number. How else can we find the job number?
 #		     set jobID = `echo "$cmdout" | egrep -o "gaea.[0-9]*|moab02ncrc.[0-9]*" `
 #		     echo "jobID: $jobID"
@@ -315,17 +350,18 @@ while( $#TODOLIST );
 		end
 		if( $alreadydone ) continue 
 		#Ensure the basic regression was successful before submitting the rts
-	        set freCMD = "$frecheck -l -x $XML -p $PLAT -t $TARGET  $EXP"
+	        set freCMD = "$frecheck -l -x $XML -p $PLAT -t $TARGET -r basic $EXP"
 		if( $k <  $MAXWARN) echo $freCMD
 #		$freCMD
 #                set MYFRECHECKSTATUS =  $status
 
 		set FRECHECKOUTPUT = `$freCMD`
+                echo $FRECHECKOUTPUT
 		echo $FRECHECKOUTPUT | egrep "crash"
 		if( ! $status ) then
 		    set MYFRECHECKSTATUS = 255
 		else		    
-		    set MYFRECHECKSTATUS =  `$frecheck -l -x $XML -p $PLAT -t $TARGET  $EXP | wc -l`
+		    set MYFRECHECKSTATUS =  `$frecheck -l -x $XML -p $PLAT -t $TARGET -r basic $EXP | wc -l`
 		endif    
 
 		if(  $MYFRECHECKSTATUS == 255 ) then
@@ -341,7 +377,10 @@ while( $#TODOLIST );
 		    echo $freCMD
 		    echo
 		    sleep 2
-		    if( $NODRYRUN ) $logit $freCMD
+		    if( $NODRYRUN ) then
+			$logit $freCMD
+			sleep $submit_delay
+		    endif
 		    set EXPDONE = ( $EXPDONE $EXP )
 		    endif
 		endif
@@ -358,17 +397,18 @@ set crashed_exp =
 set CRASH = 0
 
 foreach DONE ( $EXPDONE_1 ) 
-   set freCMD = "$frecheck -l -x $XML -p $PLAT -t $TARGET  $DONE"
+   set freCMD = "$frecheck -l -x $XML -p $PLAT -t $TARGET $regressswitch,rts $DONE"
    if( $k <  $MAXWARN) echo $freCMD
    $freCMD
 #   set MYFRECHECKSTATUS =  $status
 
     set FRECHECKOUTPUT = `$freCMD`
+    echo $FRECHECKOUTPUT
     echo $FRECHECKOUTPUT | egrep "crash"
     if( ! $status ) then
 	set MYFRECHECKSTATUS = 255
     else		    
-	set MYFRECHECKSTATUS =  `$frecheck -l -x $XML -p $PLAT -t $TARGET  $DONE | wc -l`
+	set MYFRECHECKSTATUS =  `$frecheck -l -x $XML -p $PLAT -t $TARGET $regressswitch,rts $DONE | wc -l`
     endif    
  
     if( $MYFRECHECKSTATUS == 255 ) then
@@ -409,7 +449,24 @@ end
 
 if( $#TODOLIST == 0 ) then
     echo "All Done." 
-    if( $DOFRECHECK ) echo "Please view $frecheckoutput"
+    if( $DOFRECHECK ) then
+	#redo the status page
+        cat $XML.html >> $XML.old.html
+	\rm $XML.html
+        `$frerts_check --reference_tag $REFTAG -x $XML -p $PLAT -t $TARGET`
+	echo "Please view $XML.html"
+    endif
+
+  mail -s "FRERTS $MY_HOST $MY_PID Finished Successfully" $USER <<EOF
+frerts ran successfully.
+Please refer to the logs at:
+$MYSTDOUT
+There may also be a status page to view at:
+
+file://$XML.html
+
+EOF
+
     exit
 endif
 
@@ -420,6 +477,17 @@ set old_nember = $#TODOLIST
 
 if( $k > $MAXTRY ) then
   echo Giving up! 
+  mail -s "FRERTS $MY_HOST $MY_PID Gave up" $USER <<EOF
+frerts gave up waiting for results.
+Please refer to the logs at:
+$MYSTDOUT
+
+There may also be a status page to view at:
+
+file://$XML.html
+
+EOF
+
   exit
 endif
 
@@ -432,7 +500,11 @@ sleep 1200
 end
 
 
-
+  mail -s "FRERTS $MY_HOST $MY_PID Finished unknown status" $USER <<EOF
+frerts finished with unknown status.
+Please refer to the logs at:
+$MYSTDOUT
+EOF
 exit
 
 #EXAMPLES

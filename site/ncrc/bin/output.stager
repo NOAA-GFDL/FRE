@@ -1,13 +1,13 @@
 #!/bin/csh -fx
 #PBS -j oe
-#PBS -l partition=es,size=1,walltime=4:00:00
+#PBS -l partition=es,walltime=4:00:00
 #PBS -m a
 #PBS -N output.stager
 #PBS -q ldtn
 #PBS -r y
 #PBS -W umask=026
 # 
-# $Id: output.stager,v 1.1.2.39.2.2 2012/11/06 17:44:00 afy Exp $
+# $Id: output.stager,v 1.1.2.46.2.1 2012/11/06 17:39:33 afy Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: Output Stager - NCRC Version
 # ------------------------------------------------------------------------------
@@ -120,9 +120,29 @@
 # afy    Ver  37.00  Modify combining (fix buffers number guess)    February 12
 # afy    Ver  38.00  Modify combining (fix buffers number again)    February 12
 # afy    Ver  39.00  Modify saving (fix checks after hsmput)        February 12
-# afy -------------- Branch 1.1.2.39.2 ---------------------------- August 12
-# afy    Ver   1.00  Modify combining (c1ms => c1, no t1ms)         August 12
-# afy    Ver   2.00  Detect RDTNs by 'rdtn*' name                   November 12
+# afy    Ver  40.00  Add double-quotes into string comparisons      May 12
+# afy    Ver  40.01  Load 'File-NFSLock' (for the hsmput)           May 12
+# afy    Ver  40.02  Set FRE modulefiles directory only once        May 12
+# afy    Ver  40.03  Remove "size=1" from PBS options               May 12
+# afy    Ver  40.04  Fix checking in case PTMP exists, but empty    May 12
+# afy    Ver  41.00  Remove argument 'freModuleFilesDir'            June 12
+# afy    Ver  41.01  Remove argument 'freCommandsHomeDir'           June 12
+# afy    Ver  41.02  Remove argument 'freNCToolsHomeDir'            June 12
+# afy    Ver  41.03  Remove argument 'freTempDir'                   June 12
+# afy    Ver  41.04  Add arguments 'freCommands(Module*|Version)*'  June 12
+# afy    Ver  41.05  Add arguments 'freNCTools(Module*|Version)'    June 12
+# afy    Ver  41.06  Set environment via modules only               June 12
+# afy    Ver  41.07  Use 'which' to locate executables              June 12
+# afy    Ver  41.08  Add derived flags to simplify conditions       June 12
+# afy    Ver  41.09  Don't load any default 'gcp' module            June 12
+# afy    Ver  42.00  Modify flag 'freCommandsToLoad'                June 12
+# afy    Ver  42.01  Cosmetics in messages                          June 12
+# afy    Ver  43.00  Unload modulefiles before their loading        July 12
+# afy    Ver  44.00  Add 'freNCToolsModuleName' argument            July 12
+# afy    Ver  45.00  Modify 'patternSedRegression'                  July 12
+# afy    Ver  46.00  Translate from 'c1ms' to 'c1'                  August 12
+# afy -------------- Branch 1.1.2.46.2 ---------------------------- November 12
+# afy    Ver   1.00  Detect RDTNs by 'rdtn*' name                   November 12
 # ------------------------------------------------------------------------------
 # Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2000-2012
 # Designed and written by V. Balaji, Amy Langenhorst and Aleksey Yakovlev
@@ -132,7 +152,7 @@
   set -r runtimeBeg = `date "+%s"`
 
   if ( $echoOn ) unset echo
-  echo '<NOTE> : ====== FRE OUTPUT STAGER $Id: output.stager,v 1.1.2.39.2.2 2012/11/06 17:44:00 afy Exp $ ======'
+  echo '<NOTE> : ====== FRE OUTPUT STAGER $Id: output.stager,v 1.1.2.46.2.1 2012/11/06 17:39:33 afy Exp $ ======'
   echo "<NOTE> : Starting at $HOST on `date`"
   if ( $echoOn ) set echo
 
@@ -168,9 +188,6 @@
   set actionXferOk = 0
   set actionPPStartOk = 0
 
-  set actionCombineForce = 0
-  set actionCheckForce = 0
-  set actionSaveForce = 0
   set actionXferForce = 0
   set actionPPStartForce = 0
 
@@ -191,16 +208,18 @@
 
   set xmlFiles = ( )
   set xmlFilesRemote = ( )
-  set ppStarterOptions = ()
+  set ppStarterOptions = ( )
   set stdoutDirRemote = ""
 
-  set freModuleFilesDir = ""
-  set freCommandsHomeDir = ""
-  set freNCToolsHomeDir = ""
-  set freTempDir = ""
+  set freCommandsModuleFilesDir = ""
+  set freCommandsVersion = ""
+
+  set freNCToolsModuleFilesDir = ""
+  set freNCToolsModuleName = 'fre-nctools'
+  set freNCToolsVersion = ""
 
   set xferToolModuleFilesDir = ""
-  set xferToolModuleFile = ""
+  set xferToolVersion = ""
 
   set modulesHomeDir = ""
 
@@ -210,7 +229,7 @@
 
   if ( $?batch && $# == 0 ) then
     if ( $?argFile ) then
-      if ( $argFile != "" ) then
+      if ( "$argFile" != "" ) then
         set -r argFile = $argFile
       else
 	if ( $echoOn ) unset echo
@@ -225,7 +244,7 @@
       exit 1
     endif
   else if ( $# == 1 ) then
-    if ( $1 != "" ) then
+    if ( "$1" != "" ) then
       if ( $1 =~ /* ) then
         set -r argFile = $1
       else
@@ -257,10 +276,10 @@
   endif
 
 ################################################################################
-#----------------------------- arguments checkup -------------------------------
+#--------------------- arguments checkup (first part) --------------------------
 ################################################################################
 
-  if ( $expName != "" ) then
+  if ( "$expName" != "" ) then
     set -r expName = $expName
     if ( $echoOn ) unset echo
     echo "<NOTE> : expName = '$expName'"
@@ -403,12 +422,36 @@
     exit 1
   endif
 
-  if ( $combineMemory != "" ) then
+################################################################################
+#------------------------------- derived flags ---------------------------------
+################################################################################
+
+  @ actionCombineToDo       = ( $actionCombineOn * ! $actionCombineOk )
+  @ actionCheckToDo         = ( $actionCheckOn * ! $actionCheckOk )
+  @ actionSaveToDo          = ( $actionSaveOn * ( $paramArchiveOn || $paramPtmpOn ) * ! $actionSaveOk )
+
+  @ actionXferToConsider    = ( $actionXferOn * ! $actionXferOk )
+  @ actionXferToPerform     = ( $stagingType == 'Online' || $actionXferForce )
+  @ actionXferToDo          = ( $actionXferToConsider * $actionXferToPerform )
+
+  @ actionPPStartToConsider = ( $actionPPStartOn * ! $actionPPStartOk )
+  @ actionPPStartToPerform  = ( $stagingType == 'Online' || $actionPPStartForce )
+  @ actionPPStartToDo       = ( $actionPPStartToConsider * $actionPPStartToPerform )
+
+  @ freCommandsToLoad       = ( $actionCheckToDo || $actionSaveToDo || $actionXferToConsider || $actionPPStartToConsider )
+  @ freNCToolsToLoad        = ( $actionCombineToDo )
+  @ xferToolToLoad          = ( $actionXferToDo || $actionPPStartToDo )
+
+################################################################################
+#---------------------- arguments checkup (second part) ------------------------
+################################################################################
+
+  if ( "$combineMemory" != "" ) then
     set -r combineMemory = $combineMemory
     if ( $echoOn ) unset echo
     echo "<NOTE> : combineMemory = '$combineMemory'"
     if ( $echoOn ) set echo
-  else if ( $actionCombineOn ) then
+  else if ( $actionCombineToDo ) then
     if ( $echoOn ) unset echo
     echo "*ERROR*: The 'combineMemory' argument is not defined"
     if ( $echoOn ) set echo
@@ -419,7 +462,7 @@
     if ( $echoOn ) set echo
   endif
 
-  if ( $workDir != "" ) then
+  if ( "$workDir" != "" ) then
     set -r workDir = $workDir
     if ( $echoOn ) unset echo
     echo "<NOTE> : workDir = '$workDir'"
@@ -430,7 +473,7 @@
     if ( $echoOn ) set echo
   endif
 
-  if ( $ptmpDir != "" ) then
+  if ( "$ptmpDir" != "" ) then
     set -r ptmpDir = $ptmpDir
     if ( $echoOn ) unset echo
     echo "<NOTE> : ptmpDir = '$ptmpDir'"
@@ -441,7 +484,7 @@
     if ( $echoOn ) set echo
   endif
 
-  if ( $archDir != "" ) then
+  if ( "$archDir" != "" ) then
     set -r archDir = $archDir
     if ( $echoOn ) unset echo
     echo "<NOTE> : archDir = '$archDir'"
@@ -452,12 +495,12 @@
     if ( $echoOn ) set echo
   endif
 
-  if ( $outputDirRemote != "" ) then
+  if ( "$outputDirRemote" != "" ) then
     set -r outputDirRemote = $outputDirRemote
     if ( $echoOn ) unset echo
     echo "<NOTE> : outputDirRemote = '$outputDirRemote'"
     if ( $echoOn ) set echo
-  else if ( $actionXferOn ) then
+  else if ( $actionXferToDo ) then
     if ( $echoOn ) unset echo
     echo "*ERROR*: The 'outputDirRemote' argument is not defined"
     if ( $echoOn ) set echo
@@ -495,7 +538,7 @@
     if ( $echoOn ) unset echo
     echo "<NOTE> : xmlFiles = $xmlFiles"
     if ( $echoOn ) set echo
-  else if ( $actionPPStartOn ) then
+  else if ( $actionPPStartToConsider ) then
     if ( $echoOn ) unset echo
     echo "*ERROR*: The 'xmlFiles' argument is not defined"
     if ( $echoOn ) set echo
@@ -511,7 +554,7 @@
     if ( $echoOn ) unset echo
     echo "<NOTE> : xmlFilesRemote = $xmlFilesRemote"
     if ( $echoOn ) set echo
-  else if ( $actionPPStartOn ) then
+  else if ( $actionPPStartToConsider ) then
     if ( $echoOn ) unset echo
     echo "*ERROR*: The 'xmlFilesRemote' argument is not defined"
     if ( $echoOn ) set echo
@@ -527,7 +570,7 @@
     if ( $echoOn ) unset echo
     echo "<NOTE> : ppStarterOptions = $ppStarterOptions"
     if ( $echoOn ) set echo
-  else if ( $actionPPStartOn ) then
+  else if ( $actionPPStartToConsider ) then
     if ( $echoOn ) unset echo
     echo "*ERROR*: The 'ppStarterOptions' argument is not defined"
     if ( $echoOn ) set echo
@@ -538,12 +581,12 @@
     if ( $echoOn ) set echo
   endif
 
-  if ( $stdoutDirRemote != "" ) then
+  if ( "$stdoutDirRemote" != "" ) then
     set -r stdoutDirRemote = $stdoutDirRemote
     if ( $echoOn ) unset echo
     echo "<NOTE> : stdoutDirRemote = '$stdoutDirRemote'"
     if ( $echoOn ) set echo
-  else if ( $actionPPStartOn ) then
+  else if ( $actionPPStartToConsider ) then
     if ( $echoOn ) unset echo
     echo "*ERROR*: The 'stdoutDirRemote' argument is not defined"
     if ( $echoOn ) set echo
@@ -554,129 +597,119 @@
     if ( $echoOn ) set echo
   endif
 
-  if ( $freModuleFilesDir != "" ) then
-    if ( -d $freModuleFilesDir && -r $freModuleFilesDir ) then
-      set -r freModuleFilesDir = $freModuleFilesDir
-      if ( $echoOn ) unset echo
-      echo "<NOTE> : freModuleFilesDir = '$freModuleFilesDir'"
-      if ( $echoOn ) set echo
-    else
-      if ( $echoOn ) unset echo
-      echo "*ERROR*: The FRE modulefiles directory '$freModuleFilesDir' doesn't exist or not readable"
-      if ( $echoOn ) set echo
-      exit 1
-    endif
-  else if ( $actionPPStartOn || $stagingType == 'Chained' ) then
+  if ( "$freCommandsModuleFilesDir" != "" ) then
+    set -r freCommandsModuleFilesDir = $freCommandsModuleFilesDir
     if ( $echoOn ) unset echo
-    echo "*ERROR*: The 'freModuleFilesDir' argument is not defined"
+    echo "<NOTE> : freCommandsModuleFilesDir = '$freCommandsModuleFilesDir'"
+    if ( $echoOn ) set echo
+  else if ( $freCommandsToLoad ) then
+    if ( $echoOn ) unset echo
+    echo "*ERROR*: The 'freCommandsModuleFilesDir' argument is not defined"
     if ( $echoOn ) set echo
     exit 1
   else
     if ( $echoOn ) unset echo
-    echo "WARNING: Not using the 'freModuleFilesDir' argument"
+    echo "WARNING: Not using the 'freCommandsModuleFilesDir' argument"
     if ( $echoOn ) set echo
   endif
 
-  if ( $freCommandsHomeDir != "" ) then
-    if ( -d $freCommandsHomeDir && -r $freCommandsHomeDir ) then
-      set -r freCommandsHomeDir = $freCommandsHomeDir
-      if ( $echoOn ) unset echo
-      echo "<NOTE> : freCommandsHomeDir = '$freCommandsHomeDir'"
-      if ( $echoOn ) set echo
-    else
-      if ( $echoOn ) unset echo
-      echo "*ERROR*: The 'fre-commands' home directory '$freCommandsHomeDir' doesn't exist or not readable"
-      if ( $echoOn ) set echo
-      exit 1
-    endif
-  else if ( $?FRE_COMMANDS_HOME ) then
-    set -r freCommandsHomeDir = $FRE_COMMANDS_HOME
+  if ( "$freCommandsVersion" != "" ) then
+    set -r freCommandsVersion = $freCommandsVersion
     if ( $echoOn ) unset echo
-    echo "<NOTE> : freCommandsHomeDir = '$freCommandsHomeDir'"
+    echo "<NOTE> : freCommandsVersion = '$freCommandsVersion'"
     if ( $echoOn ) set echo
-  else if ( $actionCheckOn || $paramPtmpOn || $paramArchiveOn ) then
+  else if ( $freCommandsToLoad ) then
     if ( $echoOn ) unset echo
-    echo "*ERROR*: The 'freCommandsHomeDir' argument is not defined"
+    echo "*ERROR*: The 'freCommandsVersion' argument is not defined"
     if ( $echoOn ) set echo
     exit 1
   else
     if ( $echoOn ) unset echo
-    echo "WARNING: Not using the 'freCommandsHomeDir' argument"
+    echo "WARNING: Not using the 'freCommandsVersion' argument"
     if ( $echoOn ) set echo
   endif
 
-  if ( $freNCToolsHomeDir != "" ) then
-    if ( -d $freNCToolsHomeDir && -r $freNCToolsHomeDir ) then
-      set -r freNCToolsHomeDir = $freNCToolsHomeDir
-      if ( $echoOn ) unset echo
-      echo "<NOTE> : freNCToolsHomeDir = '$freNCToolsHomeDir'"
-      if ( $echoOn ) set echo
-    else
-      if ( $echoOn ) unset echo
-      echo "*ERROR*: The 'fre-nctools' home directory '$freNCToolsHomeDir' doesn't exist or not readable"
-      if ( $echoOn ) set echo
-      exit 1
-    endif
-  else if ( $?FRE_NCTOOLS_HOME ) then
-    set -r freNCToolsHomeDir = $FRE_NCTOOLS_HOME
+  if ( "$freNCToolsModuleFilesDir" != "" ) then
+    set -r freNCToolsModuleFilesDir = $freNCToolsModuleFilesDir
     if ( $echoOn ) unset echo
-    echo "<NOTE> : freNCToolsHomeDir = '$freNCToolsHomeDir'"
+    echo "<NOTE> : freNCToolsModuleFilesDir = '$freNCToolsModuleFilesDir'"
     if ( $echoOn ) set echo
-  else if ( $actionCombineOn ) then
+  else if ( $freNCToolsToLoad ) then
     if ( $echoOn ) unset echo
-    echo "*ERROR*: The 'freNCToolsHomeDir' argument is not defined"
+    echo "*ERROR*: The 'freNCToolsModuleFilesDir' argument is not defined"
     if ( $echoOn ) set echo
     exit 1
   else
     if ( $echoOn ) unset echo
-    echo "WARNING: Not using the 'freNCToolsHomeDir' argument"
+    echo "WARNING: Not using the 'freNCToolsModuleFilesDir' argument"
     if ( $echoOn ) set echo
   endif
 
-  if ( $freTempDir != "" ) then
-    set -r freTempDir = $freTempDir
+  if ( "$freNCToolsModuleName" != "" ) then
+    set -r freNCToolsModuleName = $freNCToolsModuleName
     if ( $echoOn ) unset echo
-    echo "<NOTE> : freTempDir = '$freTempDir'"
+    echo "<NOTE> : freNCToolsModuleName = '$freNCToolsModuleName'"
     if ( $echoOn ) set echo
-  else if ( $?FRE_SYSTEM_TMP ) then
-    set -r freTempDir = $FRE_SYSTEM_TMP
+  else if ( $freNCToolsToLoad ) then
     if ( $echoOn ) unset echo
-    echo "<NOTE> : freTempDir = '$freTempDir'"
-    if ( $echoOn ) set echo
-  else if ( $actionCheckOn ) then
-    if ( $echoOn ) unset echo
-    echo "*ERROR*: The 'freTempDir' argument is not defined"
+    echo "*ERROR*: The 'freNCToolsModuleName' argument is not defined"
     if ( $echoOn ) set echo
     exit 1
   else
     if ( $echoOn ) unset echo
-    echo "WARNING: Not using the 'freTempDir' argument"
+    echo "WARNING: Not using the 'freNCToolsModuleName' argument"
     if ( $echoOn ) set echo
   endif
 
-  if ( $xferToolModuleFilesDir != "" ) then
+  if ( "$freNCToolsVersion" != "" ) then
+    set -r freNCToolsVersion = $freNCToolsVersion
+    if ( $echoOn ) unset echo
+    echo "<NOTE> : freNCToolsVersion = '$freNCToolsVersion'"
+    if ( $echoOn ) set echo
+  else if ( $freNCToolsToLoad ) then
+    if ( $echoOn ) unset echo
+    echo "*ERROR*: The 'freNCToolsVersion' argument is not defined"
+    if ( $echoOn ) set echo
+    exit 1
+  else
+    if ( $echoOn ) unset echo
+    echo "WARNING: Not using the 'freNCToolsVersion' argument"
+    if ( $echoOn ) set echo
+  endif
+
+  if ( "$xferToolModuleFilesDir" != "" ) then
     set -r xferToolModuleFilesDir  = $xferToolModuleFilesDir
     if ( $echoOn ) unset echo
     echo "<NOTE> : xferToolModuleFilesDir = '$xferToolModuleFilesDir'"
     if ( $echoOn ) set echo
+  else if ( $xferToolToLoad ) then
+    if ( $echoOn ) unset echo
+    echo "*ERROR*: The 'xferToolModuleFilesDir' argument is not defined"
+    if ( $echoOn ) set echo
+    exit 1
   else
     if ( $echoOn ) unset echo
     echo "WARNING: Not using the 'xferToolModuleFilesDir' argument"
     if ( $echoOn ) set echo
   endif
 
-  if ( $xferToolModuleFile != "" ) then
-    set -r xferToolModuleFile = $xferToolModuleFile
+  if ( "$xferToolVersion" != "" ) then
+    set -r xferToolVersion = $xferToolVersion
     if ( $echoOn ) unset echo
-    echo "<NOTE> : xferToolModuleFile = '$xferToolModuleFile'"
+    echo "<NOTE> : xferToolVersion = '$xferToolVersion'"
     if ( $echoOn ) set echo
+  else if ( $xferToolToLoad ) then
+    if ( $echoOn ) unset echo
+    echo "*ERROR*: The 'xferToolVersion' argument is not defined"
+    if ( $echoOn ) set echo
+    exit 1
   else
     if ( $echoOn ) unset echo
-    echo "WARNING: Not using the 'xferToolModuleFile' argument"
+    echo "WARNING: Not using the 'xferToolVersion' argument"
     if ( $echoOn ) set echo
   endif
 
-  if ( $modulesHomeDir != "" ) then
+  if ( "$modulesHomeDir" != "" ) then
     set -r modulesHomeDir  = $modulesHomeDir
     if ( $echoOn ) unset echo
     echo "<NOTE> : modulesHomeDir = '$modulesHomeDir'"
@@ -691,83 +724,95 @@
 #-------------- environment modules initialization and loading -----------------
 ################################################################################
 
-  if ( $actionCheckOn || $actionXferOn || $actionPPStartOn || $stagingType == 'Chained' ) then 
-
-    if ( -f $modulesHomeDir/init/tcsh && -r $modulesHomeDir/init/tcsh ) then
+  if ( -f $modulesHomeDir/init/tcsh && -r $modulesHomeDir/init/tcsh ) then
+    if ( $echoOn ) unset echo
+    source $modulesHomeDir/init/tcsh
+    if ( $echoOn ) set echo
+  else if ( $?MODULESHOME ) then
+    if ( -f $MODULESHOME/init/tcsh && -r $MODULESHOME/init/tcsh ) then
       if ( $echoOn ) unset echo
-      source $modulesHomeDir/init/tcsh
+      source $MODULESHOME/init/tcsh
       if ( $echoOn ) set echo
-    else if ( $?MODULESHOME ) then
-      if ( -f $MODULESHOME/init/tcsh && -r $MODULESHOME/init/tcsh ) then
-	if ( $echoOn ) unset echo
-	source $MODULESHOME/init/tcsh
-	if ( $echoOn ) set echo
-      else
-	if ( $echoOn ) unset echo
-	echo "*ERROR*: The 'MODULESHOME' variable isn't defined => can't initialize environment modules"
-	if ( $echoOn ) set echo
-	exit 1
-      endif
     else
       if ( $echoOn ) unset echo
-      echo "*ERROR*: Can't initialize environment modules"
+      echo "*ERROR*: The 'MODULESHOME' variable isn't defined => can't initialize environment modules"
       if ( $echoOn ) set echo
       exit 1
     endif
+  else
+    if ( $echoOn ) unset echo
+    echo "*ERROR*: Can't initialize environment modules"
+    if ( $echoOn ) set echo
+    exit 1
+  endif
 
-    if ( $actionCheckOn ) then
-      if ( -d $freModuleFilesDir && -r $freModuleFilesDir ) then
-	module use $freModuleFilesDir
-	module load nccmp/1.1.0-fre
+  if ( $freCommandsToLoad ) then
+    if ( -d $freCommandsModuleFilesDir && -r $freCommandsModuleFilesDir ) then
+      set freCommandsModuleFile = $freCommandsModuleFilesDir/fre-commands/$freCommandsVersion
+      if ( -f $freCommandsModuleFile && -r $freCommandsModuleFile ) then
+	module use $freCommandsModuleFilesDir
+        module unload fre-commands
+	module load fre-commands/$freCommandsVersion
       else
 	if ( $echoOn ) unset echo
-	echo "*ERROR*: The FRE modulefiles directory '$freModuleFilesDir' doesn't exist or not readable"
+	echo "*ERROR*: The 'fre-commands' modulefile '$freCommandsModuleFile' doesn't exist or not readable"
 	if ( $echoOn ) set echo
 	exit 1
       endif
+      unset freCommandsModuleFile
+    else
+      if ( $echoOn ) unset echo
+      echo "*ERROR*: The 'fre-commands' modulefiles directory '$freCommandsModuleFilesDir' doesn't exist or not readable"
+      if ( $echoOn ) set echo
+      exit 1
     endif
+  endif
 
-    if ( $actionXferOn ) then
-      if ( $xferToolModuleFilesDir != "" ) then
-	if ( -d $xferToolModuleFilesDir && -r $xferToolModuleFilesDir ) then
-          module use $xferToolModuleFilesDir
-	  if ( $xferToolModuleFile != "" ) then
-            if ( -f $xferToolModuleFilesDir/gcp/$xferToolModuleFile && -r $xferToolModuleFilesDir/gcp/$xferToolModuleFile ) then
-	      module load gcp/$xferToolModuleFile
-            else
-	      if ( $echoOn ) unset echo
-	      echo "*ERROR*: The 'gcp' module file '$xferToolModuleFilesDir/gcp/$xferToolModuleFile' doesn't exist or not readable"
-	      if ( $echoOn ) set echo
-              exit 1
-            endif
-	  else
-	    module load gcp
-	  endif
-	else
-	  if ( $echoOn ) unset echo
-	  echo "*ERROR*: The 'gcp' module directory '$xferToolModuleFilesDir' doesn't exist or not readable"
-	  if ( $echoOn ) set echo
-          exit 1
-	endif
-      else if ( $xferToolModuleFile != "" ) then
-	module load gcp/$xferToolModuleFile
-      else
-	module load gcp
-      endif
-    endif
-
-    if ( $actionPPStartOn || $stagingType == 'Chained' ) then
-      if ( -d $freModuleFilesDir && -r $freModuleFilesDir ) then
-	module use $freModuleFilesDir
-	module load XML-LibXML/1.70
+  if ( $freNCToolsToLoad ) then
+    if ( -d $freNCToolsModuleFilesDir && -r $freNCToolsModuleFilesDir ) then
+      set freNCToolsModuleFile = $freNCToolsModuleFilesDir/$freNCToolsModuleName/$freNCToolsVersion
+      if ( -f $freNCToolsModuleFile && -r $freNCToolsModuleFile ) then
+	module use $freNCToolsModuleFilesDir
+        module unload $freNCToolsModuleName
+	module load $freNCToolsModuleName/$freNCToolsVersion
       else
 	if ( $echoOn ) unset echo
-	echo "*ERROR*: The FRE modulefiles directory '$freModuleFilesDir' doesn't exist or not readable"
+	echo "*ERROR*: The modulefile '$freNCToolsModuleFile' doesn't exist or not readable"
 	if ( $echoOn ) set echo
 	exit 1
       endif
+      unset freNCToolsModuleFile
+    else
+      if ( $echoOn ) unset echo
+      echo "*ERROR*: The modulefiles directory '$freNCToolsModuleFilesDir' doesn't exist or not readable"
+      if ( $echoOn ) set echo
+      exit 1
     endif
+  endif
 
+  if ( $xferToolToLoad ) then
+    if ( -d $xferToolModuleFilesDir && -r $xferToolModuleFilesDir ) then
+      set xferToolModuleFile = $xferToolModuleFilesDir/gcp/$xferToolVersion
+      if ( -f $xferToolModuleFile && -r $xferToolModuleFile ) then
+        module use $xferToolModuleFilesDir
+        module unload gcp
+	module load gcp/$xferToolVersion
+	set -r xferSrcPrefix = ""
+	set -r xferDstPrefix = "gfdl:"
+	alias xferTool `which gcp` --create-dirs --verbose
+      else
+	if ( $echoOn ) unset echo
+	echo "*ERROR*: The 'gcp' modulefile '$xferToolModuleFile' doesn't exist or not readable"
+	if ( $echoOn ) set echo
+        exit 1
+      endif
+      unset xferToolModuleFile
+    else
+      if ( $echoOn ) unset echo
+      echo "*ERROR*: The 'gcp' modulefiles directory '$xferToolModuleFilesDir' doesn't exist or not readable"
+      if ( $echoOn ) set echo
+      exit 1
+    endif
   endif
 
 ################################################################################
@@ -776,20 +821,13 @@
 
   set -r archExt = 'tar'
 
-  set -r checkRetriesNmb = 60
-  set -r checkRetryDelay = 30
-
-  set -r ppStarter = $freCommandsHomeDir/site/gfdl/bin/pp.starter
-  set -r outputStager = $freCommandsHomeDir/site/ncrc/bin/output.stager
-
-  alias ardiff $freCommandsHomeDir/bin/ardiff -c cp
-  alias submit $freCommandsHomeDir/site/ncrc/bin/batch.scheduler.submit --verbose
+  alias submit `which batch.scheduler.submit` --verbose
 
 ################################################################################
 #----------------------------------- combining ---------------------------------
 ################################################################################
 
-  if ( $actionCombineOn && ! $actionCombineOk ) then
+  if ( $actionCombineToDo ) then
 
     set -r patternGrepTail = '\.[0-9]{4}$'
     set -r patternGrepRestart = '\<res\>|\<nc\>'
@@ -824,13 +862,13 @@
     endif  
 
     if ( $hostType == 'login' || $hostType == 'ldtn' ) then
-      alias mppnccombine $freNCToolsHomeDir/$machine/bin/mppnccombine -64 -h 16384
-      alias slmnccombine $freNCToolsHomeDir/$machine/bin/combine-ncc
-      alias slmnccompressed $freNCToolsHomeDir/$machine/bin/is-compressed
+      alias mppnccombine `which mppnccombine` -64 -h 16384
+      alias slmnccombine `which combine-ncc`
+      alias slmnccompressed `which is-compressed`
     else if ( $hostType == 'c1' || $hostType == 'c2' || $hostType == 't1' ) then
-      alias mppnccombine aprun -n 1 -N 1 $freNCToolsHomeDir/$machine/bin/mppnccombine -64 -h 16384
-      alias slmnccombine aprun -n 1 -N 1 $freNCToolsHomeDir/$machine/bin/combine-ncc
-      alias slmnccompressed $freNCToolsHomeDir/$machine/bin/is-compressed
+      alias mppnccombine aprun -n 1 -N 1 `which mppnccombine` -64 -h 16384
+      alias slmnccombine aprun -n 1 -N 1 `which combine-ncc`
+      alias slmnccompressed `which is-compressed`
     else
       if ( $echoOn ) unset echo
       echo "*ERROR*: Combining on '$hostType' hosts isn't allowed"
@@ -993,12 +1031,15 @@
 #----------------------------------- checking ----------------------------------
 ################################################################################
 
-  if ( $actionCheckOn && ! $actionCheckOk ) then
+  if ( $actionCheckToDo ) then
 
-    setenv FRE_SYSTEM_TMP $freTempDir 
+    set -r checkRetriesNmb = 60
+    set -r checkRetryDelay = 30
 
     set -r patternSedProduction = 's/\/[0-9]+(\/(restart|history)\/[0-9]+(\.nc)*$)/\1/'
-    set -r patternSedRegression = 's/pe[0-9]+(\/(restart|history)\/[0-9]+(\.nc)*$)/pe\1/'
+    set -r patternSedRegression = 's/(pe|a|o)[0-9]+(\/(restart|history)\/[0-9]+(\.nc)*$)/\1\2/'
+
+    alias ardiff `which ardiff` -c cp
 
     set srcDir = $workDir$archDir
 
@@ -1021,21 +1062,46 @@
 
 	  if ( -d "$ptmpDir$archDirMain" ) then
             if ( -r "$ptmpDir$archDirMain" ) then
-              set dstDirOrArchive = $ptmpDir$archDirMain
+              set filesToCompare = `ls "$ptmpDir$archDirMain"`
+              if ( $#filesToCompare > 0 ) then
+                set filesToCompareAreReadable = 1 
+                foreach fileToCompare ( $filesToCompare )
+                  if ( ! -r "$ptmpDir$archDirMain/$fileToCompare" ) then
+                    set filesToCompareAreReadable = 0
+                    break
+                  endif
+                end
+                if ( $filesToCompareAreReadable ) then
+                  set dstDirOrArchive = $ptmpDir$archDirMain
+                else
+		  if ( $echoOn ) unset echo
+		  echo "WARNING: The $type directory '$ptmpDir$archDirMain' contains unreadable files - skipping the dual checking"
+		  if ( $echoOn ) set echo
+        	  break
+                endif
+                unset filesToCompareAreReadable 
+              endif
+              unset filesToCompare
             else
 	      if ( $echoOn ) unset echo
 	      echo "WARNING: The $type directory '$ptmpDir$archDirMain' exists, but is not readable - skipping the dual checking"
 	      if ( $echoOn ) set echo
+              break
             endif
-	  else if ( -f $archDirMain.$archExt ) then
-            if ( -r $archDirMain.$archExt ) then
-              set dstDirOrArchive = $archDirMain.$archExt
-            else
-	      if ( $echoOn ) unset echo
-	      echo "WARNING: The $type archive '$archDirMain.$archExt' exists, but is not readable - skipping the dual checking"
-	      if ( $echoOn ) set echo
-            endif
-	  endif
+          endif
+
+          if ( ! $?dstDirOrArchive ) then
+	    if ( -f $archDirMain.$archExt ) then
+              if ( -r $archDirMain.$archExt ) then
+        	set dstDirOrArchive = $archDirMain.$archExt
+              else
+		if ( $echoOn ) unset echo
+		echo "WARNING: The $type archive '$archDirMain.$archExt' exists, but is not readable - skipping the dual checking"
+		if ( $echoOn ) set echo
+        	break
+              endif
+	    endif
+          endif
 
 	  if ( $?dstDirOrArchive ) then
 	    set diffCommand = ( ls -1d $dstDirOrArchive $srcDir | `alias ardiff` )
@@ -1190,11 +1256,11 @@
 #----------------------------------- saving ------------------------------------
 ################################################################################
 
-  if ( $actionSaveOn && ( $paramArchiveOn || $paramPtmpOn ) && ! $actionSaveOk ) then
+  if ( $actionSaveToDo ) then
 
-    set hsmSiteDir = $freCommandsHomeDir/site/ncrc
+    set hsmSiteDir = $FRE_COMMANDS_HOME/site/ncrc
 
-    alias hsmput $freCommandsHomeDir/bin/hsmput --quiet --time --makefile=$hsmSiteDir/hsmput.mk --workroot=$workDir --archroot=//
+    alias hsmput `which hsmput` --quiet --time --makefile=$hsmSiteDir/hsmput.mk --workroot=$workDir --archroot=//
     
     if ( $paramCheckSumOn ) alias hsmput `alias hsmput` --checksum
     if ( $paramCompressOn ) alias hsmput `alias hsmput` --zip
@@ -1257,19 +1323,13 @@
 #---------------------------------- transfer -----------------------------------
 ################################################################################
 
-  if ( $actionXferOn && ! $actionXferOk ) then
+  if ( $actionXferToConsider ) then
 
-    if ( $stagingType == 'Online' || $actionXferForce ) then
+    if ( $actionXferToPerform ) then
 
       if ( -f $archDir.$archExt && -r $archDir.$archExt ) then
 
-	if ( $paramCheckSumOn ) then
-	  alias gcpTransfer `which gcp` --verbose --create-dirs --checksum-disabled
-	else
-	  alias gcpTransfer `which gcp` --verbose --create-dirs
-	endif
-
-	gcpTransfer $archDir.$archExt gfdl:$outputDirRemote:h/
+	xferTool $xferSrcPrefix$archDir.$archExt $xferDstPrefix$outputDirRemote:h/
 
 	if ( $status == 0 ) then
 	  if ( $echoOn ) unset echo
@@ -1284,7 +1344,7 @@
 
 	if ( -f $archDir.$archExt.ok && -r $archDir.$archExt.ok && -s $archDir.$archExt.ok ) then
 
-	  gcpTransfer $archDir.$archExt.ok gfdl:$outputDirRemote:h/
+	  xferTool $xferSrcPrefix$archDir.$archExt.ok $xferDstPrefix$outputDirRemote:h/
 
 	  if ( $status == 0 ) then
 	    if ( $echoOn ) unset echo
@@ -1296,6 +1356,7 @@
 	    if ( $echoOn ) set echo
 	    exit 1
 	  endif
+
 	endif
 
       else
@@ -1319,11 +1380,9 @@
 #----------------- post-processing preparations and starting -------------------
 ################################################################################
 
-  if ( $actionPPStartOn && ! $actionPPStartOk ) then
+  if ( $actionPPStartToConsider ) then
 
-    if ( $stagingType == 'Online' || $actionPPStartForce ) then
-
-      alias gcpPPStart `which gcp` --verbose --create-dirs
+    if ( $actionPPStartToPerform ) then
 
       # ---------------- copy XML files to GFDL
 
@@ -1337,7 +1396,7 @@
 	  set xmlFileRemote = $xmlFilesRemote[$inx]
 
 	  if ( -f "$xmlFile" && -r "$xmlFile" ) then
-	    gcpPPStart $xmlFile gfdl:$xmlFileRemote:h/
+	    xferTool $xferSrcPrefix$xmlFile $xferDstPrefix$xmlFileRemote:h/
 	    if ( $status == 0 ) then
 	      if ( $echoOn ) unset echo
 	      echo "<NOTE> : The XML file '$xmlFile' has been copied to the remote XML file '$xmlFileRemote' successfully"
@@ -1380,7 +1439,7 @@
       echo "dummy" >> $dummyFile
 
       if ( $status == 0 ) then
-	gcpPPStart $dummyFile gfdl:$stdoutDirRemotePP/
+	xferTool $xferSrcPrefix$dummyFile $xferDstPrefix$stdoutDirRemotePP/
 	if ( $status == 0 ) then
 	  if ( $echoOn ) unset echo
 	  echo "<NOTE> : The remote directory '$stdoutDirRemotePP' has been created successfully"
@@ -1400,13 +1459,12 @@
 	exit 1
       endif
 
-      unset dummyFile
-
-      set ppResult = `submit -O "$ppStarterOptions -d $stdoutDirRemotePP -o $stdoutDirRemotePP/" $ppStarter`
+      set ppStarter = $FRE_COMMANDS_HOME/site/gfdl/bin/pp.starter
+      set ppStarterResult = `submit -O "$ppStarterOptions -d $stdoutDirRemotePP -o $stdoutDirRemotePP/" $ppStarter`
 
       if ( $status == 0 ) then
 	if ( $echoOn ) unset echo
-	echo "<NOTE> : The post-processor starter job '$ppResult' to process the '$outputDirRemote:h' has been submitted successfully"
+	echo "<NOTE> : The post-processor starter job '$ppStarterResult' to process the '$outputDirRemote:h' has been submitted successfully"
 	if ( $echoOn ) set echo
       else
 	if ( $echoOn ) unset echo
@@ -1415,8 +1473,10 @@
 	exit 1
       endif
 
-      unset ppResult
+      unset ppStarterResult
+      unset ppStarter
 
+      unset dummyFile
       unset stdoutDirRemotePP
 
       # ---------------- mark the success
@@ -1441,6 +1501,7 @@
 
     if ( $stagingType == 'Chained' ) then
 
+      set outputStager = `which output.stager`
       set outputStagerResult = `submit -O "$xferOptions -v argFile=$argFile" $outputStager`
 
       if ( $status == 0 ) then
@@ -1455,6 +1516,7 @@
       endif
 
       unset outputStagerResult
+      unset outputStager
 
     endif
 
@@ -1464,11 +1526,11 @@
 #----------------------------- the argFile removal -----------------------------
 ################################################################################
 
-  @ actionCombineDone = ( $actionCombineOn * $actionCombineOk ) + ( ! $actionCombineOn )
-  @ actionCheckDone   = ( $actionCheckOn   * $actionCheckOk   ) + ( ! $actionCheckOn   )
-  @ actionSaveDone    = ( $actionSaveOn    * $actionSaveOk    ) + ( ! $actionSaveOn    )
-  @ actionXferDone    = ( $actionXferOn    * $actionXferOk    ) + ( ! $actionXferOn    )
-  @ actionPPStartDone = ( $actionPPStartOn * $actionPPStartOk ) + ( ! $actionPPStartOn )
+  @ actionCombineDone = ( $actionCombineOn * $actionCombineOk || ! $actionCombineOn )
+  @ actionCheckDone   = ( $actionCheckOn   * $actionCheckOk   || ! $actionCheckOn   )
+  @ actionSaveDone    = ( $actionSaveOn    * $actionSaveOk    || ! $actionSaveOn    )
+  @ actionXferDone    = ( $actionXferOn    * $actionXferOk    || ! $actionXferOn    )
+  @ actionPPStartDone = ( $actionPPStartOn * $actionPPStartOk || ! $actionPPStartOn )
 
   if ( $actionCombineDone && $actionCheckDone && $actionSaveDone && $actionXferDone && $actionPPStartDone ) rm -f $argFile
 

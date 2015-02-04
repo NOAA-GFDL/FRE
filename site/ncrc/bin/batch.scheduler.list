@@ -1,7 +1,7 @@
 #!/usr/bin/perl
 # -*- cperl -*-
 
-# $Id: batch.scheduler.list,v 1.1.2.7 2012/03/21 21:21:20 afy Exp $
+# $Id: batch.scheduler.list,v 1.1.2.8 2012/08/23 15:57:24 afy Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: Program to List Batch Scheduler Jobs in a Uniform Format
 # ------------------------------------------------------------------------------
@@ -18,6 +18,9 @@
 # afy    Ver   6.00  Add option --running                           October 11
 # afy    Ver   6.01  Add user name to the output                    October 11
 # afy    Ver   7.00  Add option --noblock to the 'showq' call       March 12
+# afy    Ver   8.00  Add more verbose output                        August 12
+# afy    Ver   8.01  Modify RETRIES_NUMBER (8 => 60)                August 12
+# afy    Ver   8.02  Modify RETRY_DELAY (15 => 60)                  August 12
 # ------------------------------------------------------------------------------
 # Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2000-2012
 # Designed and written by V. Balaji, Amy Langenhorst and Aleksey Yakovlev
@@ -33,7 +36,7 @@ use XML::LibXML();
 
   package batch_scheduler_list;
 
-  use constant VERSION => '$Id: batch.scheduler.list,v 1.1.2.7 2012/03/21 21:21:20 afy Exp $';
+  use constant VERSION => '$Id: batch.scheduler.list,v 1.1.2.8 2012/08/23 15:57:24 afy Exp $';
 
   use constant OPTLIST =>
   (
@@ -45,12 +48,12 @@ use XML::LibXML();
     'retry-delay|D=i',
     'running|R',
     'user|u=s',
-    'verbose|v',
+    'verbose|v+',
     'version|V'
   );
 
-  use constant RETRIES_NUMBER => 8;
-  use constant RETRY_DELAY => 15;
+  use constant RETRIES_NUMBER => 60;
+  use constant RETRY_DELAY => 60;
 
   my $self = File::Basename::basename($0);
 
@@ -143,14 +146,15 @@ use XML::LibXML();
     $showqCall .= " -w class=$opt{queue}" if $opt{queue};
     $showqCall .= " -u $opt{user}" if $opt{user};
     $showqCall .= " -r" if $opt{running};
-    print STDERR "$showqCall\n" if $opt{verbose};
     my $parser = XML::LibXML->new();
     my $retry = 0;
     while (1)
     {
-      my $res = qx($showqCall);
+      print STDERR "$showqCall\n" if $opt{verbose};
+      chomp(my $res = qx($showqCall));
       if ($? == 0)
       {
+        print STDERR "$res\n" if $opt{verbose} > 1;
 	my $root = $parser->parse_string($res)->documentElement();
 	my $xpath = ($opt{name}) ? '/Data/queue/job[@JobName="' . $opt{name} . '"]' : '/Data/queue/job';
 	foreach my $job ($root->findnodes($xpath))
