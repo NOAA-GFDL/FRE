@@ -1,7 +1,7 @@
 #!/usr/bin/perl
 # -*- cperl -*-
 #
-# $Id: fremake,v 18.0.2.16 2011/02/09 22:46:03 afy Exp $
+# $Id: fremake,v 18.0.2.22.4.7 2012/03/16 18:03:52 sdu Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: Program to Create a Script to Compile a Model
 # ------------------------------------------------------------------------------
@@ -47,8 +47,28 @@
 # afy    Ver  15.00  Modify processCompileExecuteOrSubmit (checks)  January 11
 # afy    Ver  16.00  Use new FRETemplate module (*Resources)        February 11
 # afy    Ver  16.01  Remove option --partition                      February 11
+# afy    Ver  17.00  Remove option --validate                       November 11
+# afy    Ver  17.01  Revive option --partition                      November 11
+# afy    Ver  17.02  Add option --queue                             November 11
+# afy    Ver  17.03  Add all the option values checkup              November 11
+# afy    Ver  17.04  Check 'FRE.tool.fremake.enabled' value         November 11
+# afy    Ver  17.05  Use 'FREUtil::listUnique' to remove dupes      November 11
+# afy    Ver  18.00  Add option --keep-compiled                     November 11
+# afy    Ver  18.01  Elaborate compiled files removal               November 11
+# afy    Ver  18.02  Build component libraries in subdirectories    November 11
+# afy    Ver  18.03  Replace 'moduleInitDir' => 'modulesHomeDir'    November 11
+# afy    Ver  18.04  Add option --make-jobs                         November 11
+# afy    Ver  18.05  Fix jobs setting in the MAKEFLAGS              November 11
+# afy    Ver  19.00  Use new module FREExperiment (executable)      November 11
+# afy    Ver  20.00  Remove option --partition                      December 11
+# afy    Ver  20.01  Remove option --queue                          December 11
+# afy    Ver  21.00  Add option --link (for Niki testing script)    December 11
+# afy    Ver  22.00  Modify process*CleanDir (new FRETemplate)      January 12
+# afy    Ver  23.00  Modify Usage (remove ASCII escapes)            March 12
+# afy    Ver  23.01  Modify processCheckoutClean (no tmpDir)        March 12
+# afy    Ver  23.02  Modify processCompileClean (no tmpDir)         March 12
 # ------------------------------------------------------------------------------
-# Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2000-2011
+# Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2000-2012
 # Designed and written by V. Balaji, Amy Langenhorst and Aleksey Yakovlev
 #
 
@@ -56,6 +76,7 @@ use strict;
 
 use File::Basename();
 use File::Copy();
+use File::Path();
 use Getopt::Long(':config', 'no_ignore_case', 'no_auto_abbrev');
 
 use FRE();
@@ -75,19 +96,21 @@ use FREXML();
 
   package fremake;
 
-  use constant VERSION => '$Id: fremake,v 18.0.2.16 2011/02/09 22:46:03 afy Exp $';
+  use constant VERSION => '$Id: fremake,v 18.0.2.22.4.7 2012/03/16 18:03:52 sdu Exp $';
 
   use constant OPTLIST =>
   (
-    'force-compile|F',
     'force-checkout|f',
+    'force-compile|F',
+    'keep-compiled|K',
+    'link|L!',
+    'make-jobs|j=i',
     'execute|E',
     'help|h',
     'ncores|n=i',
     'platform|p=s',
     'submit|s',
     'target|t=s',
-    'validate',
     'version|V',
     'verbose|v+',
     'walltime|w=i',
@@ -121,26 +144,26 @@ use FREXML();
     my $tgt = FREDefaults::Target();
     my $ncs = fremake::NCORES_DEFAULT;
     my $wtm = fremake::WALLTIME_DEFAULT;
-    my $beg = "\e[0;4m";
-    my $end = "\e[m";
     return
     (
       "\n",
       "  Usage: $self [option|experiment] ...\n\n",
       "  Options:\n\n",
-      "   -F,          --force-compile      ${beg}f${end}orce compile in case the executable directory exists\n", 
-      "   -f,          --force-checkout     ${beg}f${end}orce checkout in case the source directory exists\n\n", 
-      "   -E,          --execute            ${beg}e${end}xecute all the created scripts in the current session\n", 
-      "   -h,          --help               print ${beg}h${end}elp message and exit\n",
-      "   -n NUM,      --ncores=NUM         ${beg}n${end}umber of processor cores to use (default is $ncs)\n",
-      "   -p STRING,   --platform=STRING    hardware and software ${beg}p${end}latform STRING (default is '$pfm')\n", 
-      "   -s,          --submit             ${beg}s${end}ubmit all the created scripts as batch jobs\n",
-      "   -t STRING,   --target=STRING      use compilation directives, ${beg}t${end}argeted by STRING (default is '$tgt')\n", 
-      "                --validate           validate the FILE against its XML schema before processing\n",
-      "   -V,          --version            print the tool ${beg}v${end}ersion and exit\n",
-      "   -v,          --verbose            get ${beg}v${end}erbose messages (repeat the option to increase verbosity level)\n", 
-      "   -w NUM,      --walltime=NUM       maximum ${beg}w${end}all time (in minutes) to use (default is $wtm)\n", 
-      "   -x FILE,     --xmlfile=FILE       experiment suite ${beg}X${end}ML configuration FILE (default is '$cwd/$xml')\n\n", 
+      "   -f,        --force-checkout            force checkout in case the source directory exists\n", 
+      "   -F,        --force-compile             force compile in case the executable directory exists\n", 
+      "   -K,        --keep-compiled             keep compiled files in the executable directory\n",
+      "   -L,        --link                      link the executable (negatable, default is on)\n",
+      "   -j NUM,    --make-jobs=NUM             number NUM of concurrent make jobs to use for compilation\n\n",
+      "   -E,        --execute                   execute all the created scripts in the current session\n", 
+      "   -h,        --help                      print help message and exit\n",
+      "   -n NUM,    --ncores=NUM                number NUM of processor cores to use (default is $ncs)\n",
+      "   -p STRING, --platform=STRING           hardware and software patform STRING (default is '$pfm')\n", 
+      "   -s,        --submit                    submit all the created scripts as batch jobs\n",
+      "   -t STRING, --target=STRING             use compilation directives, targeted by STRING (default is '$tgt')\n", 
+      "   -V,        --version                   print the tool version and exit\n",
+      "   -v,        --verbose                   get verbose messages (repeat the option to increase verbosity level)\n", 
+      "   -w NUM,    --walltime=NUM              maximum wall time NUM (in minutes) to use (default is $wtm)\n", 
+      "   -x FILE,   --xmlfile=FILE              experiment suite XML configuration FILE (default is '$cwd/$xml')\n\n", 
       "  All the option names may be abbreviated, a single leading dash is also acceptable.\n",
       "  At least one experiment from the FILE must be listed as an argument.\n\n"
     );
@@ -167,7 +190,11 @@ use FREXML();
       "      instructions don't match the experiment suite configuration file UNLESS the option --force-compile is used.\n",
       "      This option allows to recreate the compile script according to the current configuration file.\n",   
       "      The existing executable directory is NOT saved if a new compilation is forced.\n",
-      "      Rather, we save only scripts with the timestamp and do 'make clean' in that directory.\n",
+      "      Rather, we save only scripts with the timestamp and clean that directory (unless the option --keep-compiled is used).\n",
+      "   Use --keep-compiled if you want to keep compiled files in the executable directory for the future use.\n",
+      "      This option allows you to modify the standard behavior of the --force-compile option.\n",
+      "   Use --make-jobs to set a number of concurrent make jobs (it corresponds to the GNU make option --jobs)\n",
+      "      The default value of this option depends on the site you are working at.\n",
       "   Use --platform to pick a platform for experiment(s).\n", 
       "      The <platform> node in the experiment suite configuration file is used\n", 
       "      to set platform-specific data and instructions.\n",
@@ -225,21 +252,12 @@ use FREXML();
     return "$execDir/env.cshrc";
   }
   
-  sub execName($)
-  # ------ arguments: $exp
-  {
-    my $z = shift;
-    my ($expName, $execDir) = ($z->name(), $z->execDir());
-    return "$execDir/fms_$expName.x";
-  }
-  
   sub checkExecutable($)
   # ------ arguments: $exp
   # ------ return ($flag, $status)
   {
     my $z = shift;
-    my ($execName, $fre) = (fremake::execName($z), $z->fre());
-    my ($execNamePredefined, $expObject) = $z->extractExecutable();
+    my ($fre, $execName, $execNamePredefined) = ($z->fre(), $z->executable(), $z->extractExecutable());
     if ($execNamePredefined)
     {
       if (-f $execNamePredefined)
@@ -306,34 +324,23 @@ use FREXML();
   # ------ arguments: $exp
   {
     my $z = shift;
-    my ($tmpDir, $fre) = ($z->tmpDir(), $z->fre());
-    if (FREUtil::createDir($tmpDir))
+    my ($fre, $srcDir, $timeStr) = ($z->fre(), $z->srcDir(), FREUtil::timeString());
+    my $saveDir = $srcDir . '.' . $timeStr;
+    if (File::Copy::move($srcDir, $saveDir))
     {
-      my $srcDir = $z->srcDir();
-      my $timeStr = FREUtil::timeString();
-      my $saveDir = "$tmpDir/src.$timeStr";
-      if (File::Copy::move($srcDir, $saveDir))
-      {
-	$fre->out
-	(
-	  FREMsg::WARNING,
-	  "Current source directory is '$srcDir'...",
-	  "Since you've specified --force-checkout, I've moved its content into the directory '$saveDir'.", 
-	  "A new source directory will be created and populated by sources from the CVS...",
-	  "You can remove the saved directory later by typing:", 
-	  "rm -rf $saveDir"
-	);
-	return 1;
-      }
-      else
-      {
-	$fre->out(FREMsg::FATAL, "Unable to move '$srcDir' to '$saveDir'! ($!)");
-	return 0;
-      }
+      $fre->out
+      (
+	FREMsg::WARNING,
+	"Since you've specified --force-checkout (-f), the existing source directory has been renamed using timestamp '$timeStr'", 
+	"A new source directory will be created and populated by sources from the CVS...",
+	"You can remove the old source directory later by typing:", 
+	"rm -rf $saveDir"
+      );
+      return 1;
     }
     else
     {
-      $fre->out(FREMsg::FATAL, "Unable to create the directory '$tmpDir'!");
+      $fre->out(FREMsg::FATAL, "Unable to rename '$srcDir' to '$saveDir' ($!)");
       return 0;
     }
   }
@@ -343,9 +350,7 @@ use FREXML();
   {
 
     my ($z, $r) = @_;
-    my ($expName, $srcDir, $fre) = ($z->name(), $z->srcDir(), $z->fre());
-
-    $fre->out(FREMsg::NOTE, "Using source directory '$srcDir'...");
+    my ($expName, $srcDir) = ($z->name(), $z->srcDir());
 
     # --------------------------------------------------------- get and sort component names
 
@@ -439,7 +444,7 @@ use FREXML();
       {
         $fre->out
 	(
-	  1,
+	  FREMsg::WARNING,
 	  "The existing checkout script '$scoScriptName' doesn't match checkout instructions in the XML file!",
           "If you need a fresh checkout, please rerun the fremake with the --force-checkout (-f) option.",
 	  "Please consider checking your changed sources in the CVS before that!", 
@@ -514,47 +519,62 @@ use FREXML();
     }
   }
 
-  sub processCompileClean($)
+  sub processCompileCleanExecDir($)
   # ------ arguments: $exp
   {
     my $z = shift;
     my ($execDir, $fre) = ($z->execDir(), $z->fre());
-    my @scripts = <$execDir/*.{csh,cshrc}>;
-    if (scalar(@scripts) > 0)
+    if (-f "$execDir/Makefile" && -r "$execDir/Makefile")
     {
-      my $tmpDir = $z->tmpDir();
-      if (FREUtil::createDir($tmpDir))
+      qx(tcsh -c "cd $execDir; make clean" >/dev/null 2>&1);
+      if (!$?)
       {
-	my $timeStr = FREUtil::timeString();
-	foreach my $script (@scripts)
-	{
-	  my $scriptSaved = $tmpDir . '/' . File::Basename::basename($script) . '.' . $timeStr;
-	  my $res = File::Copy::move($script, $scriptSaved);
-	  unless ($res)
-	  {
-	    $fre->out(FREMsg::FATAL, "Unable to move '$script' to '$scriptSaved'! ($!)");
-	    return 0;
-	  }
-        }
-	$fre->out
-	(
-	  1,
-	  "Current executable directory is '$execDir'...",
-	  "Since you've specified --force-compile, I've moved the existing compile script into the directory '$tmpDir'.",
-	  "The executable directory will be cleaned by 'make clean', and then the compile script will be recreated..."
-	);
-	if (-f "$execDir/Makefile")
-	{
-	  chdir $execDir;
-	  qx(make clean);
-	}
-	return 1;
+        $fre->out(FREMsg::WARNING, "The executable directory '$execDir' has been cleaned by the 'make clean'");
       }
       else
       {
-	$fre->out(FREMsg::FATAL, "Unable to create the directory '$tmpDir'!");
-	return 0;
+        $fre->out(FREMsg::WARNING, "Unable to clean the executable directory '$execDir' by the 'make clean' ($?)");
       }
+    }
+    else
+    {
+      my @paths = <$execDir/*>;
+      if (scalar(@paths) > 0)
+      {
+        my $n = File::Path::rmtree(\@paths);
+        $fre->out(FREMsg::WARNING, "The executable directory '$execDir' has been cleaned") if $n > 0;
+      }
+    }
+  }
+  
+  sub processCompileClean($%)
+  # ------ arguments: $exp %options
+  {
+    my ($z, %o) = @_;
+    my ($execDir, $fre) = ($z->execDir(), $z->fre());
+    my @scripts = <$execDir/*.{csh,cshrc}>;
+    if (scalar(@scripts) > 0)
+    {
+      my $timeStr = FREUtil::timeString();
+      foreach my $script (@scripts)
+      {
+	my $scriptSaved = $script . '.' . $timeStr;
+	unless (File::Copy::move($script, $scriptSaved))
+	{
+	  $fre->out(FREMsg::FATAL, "Unable to rename '$script' to '$scriptSaved' ($!)");
+	  return 0;
+	}
+      }
+      $fre->out
+      (
+        FREMsg::WARNING, 
+	"Since you've specified --force-compile (-F), existing compile and environment scripts have been renamed using timestamp '$timeStr'",
+	"New compile and environment scripts will be created...",
+	"You can remove old scripts later by typing:", 
+	map("rm -f $_.$timeStr", @scripts)
+      );
+      processCompileCleanExecDir($z) unless $o{'keep-compiled'};
+      return 1;
     }
     else
     {
@@ -562,14 +582,12 @@ use FREXML();
     }
   }
 
-  sub processCompileScriptCreate($$)
-  # ------ arguments: $exp $refToHash
+  sub processCompileScriptCreate($$%)
+  # ------ arguments: $exp $refToHash %options
   {
 
-    my ($z, $r) = @_;
-    my ($expName, $srcDir, $execDir, $fre) = ($z->name(), $z->srcDir(), $z->execDir(), $z->fre());
-
-    $fre->out(FREMsg::NOTE, "Using executable directory '$execDir'...");
+    my ($z, $r, %o) = @_;
+    my ($expName, $srcDir, $execDir, $ptmpDir, $fre) = ($z->name(), $z->srcDir(), $z->execDir(), $z->ptmpDir(), $z->fre());
 
     my $baseCsh	= $fre->baseCsh();
     my $mkmfTemplate = $fre->mkmfTemplate();
@@ -590,15 +608,16 @@ use FREXML();
       $makeOverrides .= ' NETCDF=3';
     }
 
-    # --------------------------------------- create a list of include directories
+    # --------------------------------- create a global list of include directories
 
-    my %includeDirList;
+    my %includeDirs = ();
+
     if (-d $srcDir)
     {
       my $defaultIncludeDirs = qx(find $srcDir -type d -name include);
       foreach my $dir (split("\n", $defaultIncludeDirs))
       {
-	$includeDirList{$dir} = 1 if $dir;
+	$includeDirs{$dir} = 1 if $dir;
       }
     }
 
@@ -607,40 +626,31 @@ use FREXML();
       my $ref = $r->{$name};
       foreach my $dir (split(' ', $ref->{includeDirs}))
       {
-	$includeDirList{$dir} = 1 if $dir;
+	$includeDirs{$dir} = 1 if $dir;
       }
     }
     
-    my $includeList = join(' ', map {s/^$srcDir\///; $_} keys %includeDirList);
-
-    # ------------------------------------------- create a list of library header directories
-
-    my %libHeaderDirList;
-    foreach my $name (keys %{$r})
-    {
-      my $ref = $r->{$name};
-      my $dir = $ref->{libHeaderDir};
-      $libHeaderDirList{$dir} = 1 if $dir;
-    }
-
-    my $libHeaderList = join(' ', map {'-I' . $_} keys %libHeaderDirList);
+    my $includeDirsList = join(' ', map {s/^$srcDir\///; $_} sort keys %includeDirs);
 
     # ---------------------------------------------- create a list of libraries in the linking order
 
-    my @libList = ();
-    foreach my $name (sort {$r->{$b}{rank} <=> $r->{$a}{rank}} keys %{$r})
+    my %libs = ();
+
+    foreach my $name (keys %{$r})
     {
       my $ref = $r->{$name};
-      if (exists($ref->{libPath}) and $ref->{libPath})
+      if ($ref->{libPath})
       {
-	$fre->out(FREMsg::NOTE, "Using library '$ref->{libPath}'");
-	push @libList, $ref->{libPath};
+	$fre->out(FREMsg::NOTE, "Using library '$ref->{libPath}'...");
+	$libs{$ref->{libPath}} = $ref->{rank};
       }
       else
       {
-        push @libList, "lib$name.a";
+        $libs{"$name/lib$name.a"} = $ref->{rank};
       }
     }
+    
+    my $libList = join(' ', sort {$libs{$b} <=> $libs{$a}} keys %libs);
 
     # -------------------------------------------------- create a list of component names in the XML order
 
@@ -649,41 +659,50 @@ use FREXML();
     # --------------------------------------------------------------------------- create the master Makefile
 
     my ($Makefile, $tab) = ('', fremake::TAB);
-    $Makefile .= "# Makefile for Experiment '$expName'\n";
-    $Makefile .= "include $mkmfTemplate\n\n";
-    $Makefile .= "fms_$expName.x: " . join(' ', @libList) . "\n";
-    $Makefile .= "${tab}\\\$(LD) \\\$\^ \\\$(LDFLAGS) -o \\\$\@ \n\n";
+    $Makefile .= "# Makefile for Experiment '$expName'\n\n";
+    $Makefile .= "SRCROOT = \$src_dir/\n";
+    $Makefile .= "BUILDROOT = \$bld_dir/\n";
+    $Makefile .= "STAGEDIR = \$ptmp_dir/\$bld_dir/\n\n";
+    $Makefile .= "MK_TEMPLATE = \$mkmf_template\n";
+    $Makefile .= "include \\\$(MK_TEMPLATE)\n\n";
+    $Makefile .= "fms_$expName.x: $libList\n";
+    $Makefile .= "${tab}\\\$(LD) \\\$\^ \\\$(LDFLAGS) -o \\\$\@ \n" if $o{link};
+    $Makefile .= "\n";
 
     foreach my $name (@names)
     {
       my $ref = $r->{$name};
-      unless (exists($ref->{libPath}) and $ref->{libPath})
+      unless ($ref->{libPath})
       {
-	my @prerequisites = ();
+	my %requiredLibs = ();
 	foreach my $required (split(' ', $ref->{requires}))
 	{
 	  my $refRequired = $r->{$required};
-	  if (exists($refRequired->{libPath}) and $refRequired->{libPath})
+	  if ($refRequired->{libPath})
 	  {
-            push @prerequisites, $refRequired->{libPath};
+	    $requiredLibs{$refRequired->{libPath}} = $refRequired->{rank};
 	  }
 	  else
 	  {
-            push @prerequisites, "lib$required.a";
+	    $requiredLibs{"$required/lib$required.a"} = $refRequired->{rank};
 	  }
 	}
-	$Makefile .= "lib$name.a: " . join(' ', @prerequisites) . " FORCE\n";
-	$Makefile .= "${tab}make $makeOverrides $ref->{makeOverrides} -f Makefile.$name \\\$\@\n\n";
+	$Makefile .= "$name/lib$name.a: " . join(' ', sort {$requiredLibs{$b} <=> $requiredLibs{$a}} keys %requiredLibs) . " FORCE\n";
+	$Makefile .= "${tab}\\\$(MAKE) SRCROOT=\\\$(SRCROOT) BUILDROOT=\\\$(BUILDROOT) MK_TEMPLATE=\\\$(MK_TEMPLATE) --directory=$name \\\$(\@F) \n\n";
       }
     }
 
     $Makefile .= "FORCE:\n\n";
 
+    $Makefile .= "stage:\n";
+    $Makefile .= "${tab}install -d \\\$(STAGEDIR)\n";
+    $Makefile .= "${tab}install -m 555 fms_$expName.x \\\$(STAGEDIR)\n\n";
+
     $Makefile .= "clean:\n";
     foreach my $name (@names)
     {
       my $ref = $r->{$name};
-      $Makefile .= "${tab}make $makeOverrides $ref->{makeOverrides} -f Makefile.$name clean\n";
+      $Makefile .= "${tab}\\\$(MAKE) --directory=$name clean\n";
     }
     $Makefile .= "\n";
 
@@ -691,14 +710,24 @@ use FREXML();
     foreach my $name (@names)
     {
       my $ref = $r->{$name};
-      $Makefile .= "${tab}make $makeOverrides $ref->{makeOverrides} -f Makefile.$name localize\n";
+      $Makefile .= "${tab}\\\$(MAKE) -f \\\$(BUILDROOT)$name/Makefile localize\n";
     }
+    $Makefile .= "\n";
+
+    $Makefile .= "distclean:\n";
+    foreach my $name (@names)
+    {
+      my $ref = $r->{$name};
+      $Makefile .= "${tab}\\\$(RM) -r $name\n";
+    }
+    $Makefile .= "${tab}\\\$(RM) fms_$expName.x\n";
+    $Makefile .= "${tab}\\\$(RM) Makefile\n";
 
     # ---------------------------------------------------------------------------------------- get FRE parameters
 
     my $freCommandsHomeDir = FRE::home();
-    my $jobs = $fre->property('FRE.tool.make.jobs.default');
-    my $moduleInitDir = $fre->property('FRE.tool.module.initDir') || '$MODULESHOME/init';
+    my $jobs = $o{'make-jobs'} || $fre->property('FRE.tool.make.jobs.default');
+    my $modulesHomeDir = $fre->property('FRE.tool.modules.home');
 
     # ------------------------------------------------------------------- create the environment setting script
 
@@ -709,13 +738,11 @@ use FREXML();
     $envScript .= "#FRE version-info\n";
     $envScript .= "# ------------------------------------------------------------------------------\n\n";
 
-    $envScript .= "setenv MAKEFLAGS jobs=$jobs\n\n";
+    $envScript .= "setenv MAKEFLAGS --jobs=$jobs\n\n";
 
-    $envScript .= "unset echo\n";
-    $envScript .= "source $moduleInitDir/tcsh\n";
+    $envScript .= "source $modulesHomeDir/init/tcsh\n";
     $envScript .= "$baseCsh\n";
     $envScript .= "module list\n";
-    $envScript .= "set echo\n\n";
 
     $envScript .= "setenv PATH $freCommandsHomeDir/bin:\$PATH\n\n";
     $envScript .= "#FRE scheduler-make-verbose\n";
@@ -724,24 +751,36 @@ use FREXML();
 
     my $cmpScript = '';
     my $envScriptName = fremake::envScriptName($z);
+    $envScriptName =~ s/$execDir/\$bld_dir/;
 
-    $cmpScript .= "#!/bin/tcsh -f\n";
+    $cmpScript .= "#!/bin/tcsh -fx\n";
     $cmpScript .= "#FRE scheduler-options\n\n";
     $cmpScript .= "# Compile Script for Experiment '$expName'\n";
     $cmpScript .= "# ------------------------------------------------------------------------------\n";
     $cmpScript .= "#FRE version-info\n";
     $cmpScript .= "# ------------------------------------------------------------------------------\n\n";
-    
-    $cmpScript .= "echo Starting on `date`\n";
-    $cmpScript .= "echo \$HOST \$HOSTNAME\n";
-    $cmpScript .= "set echo\n";
+
+    $cmpScript .= "set -r echoOn = \$?echo\n\n";
+    $cmpScript .= "if ( \$echoOn ) unset echo\n";
+    $cmpScript .= "echo \"<NOTE> : Starting at \$HOST on `date`\"\n";
+    $cmpScript .= "if ( \$echoOn ) set echo\n\n";
     $cmpScript .= "unalias *\n\n";
 
+    $cmpScript .= "# ---------------- Set build, src and stage directories\n\n";
+    $cmpScript .= "set src_dir = $srcDir\n";
+    $cmpScript .= "set bld_dir = $execDir\n";
+    $cmpScript .= "set ptmp_dir = $ptmpDir\n\n";
+
+    $cmpScript .= "# ---------------- Make template\n\n";
+    $cmpScript .= "set mkmf_template = $mkmfTemplate\n\n";
+
     $cmpScript .= "# ---------------- set environment\n\n";
-    $cmpScript .= "source $envScriptName\n\n";
+    $cmpScript .= "if ( \$echoOn ) unset echo\n";
+    $cmpScript .= "source $envScriptName\n";
+    $cmpScript .= "if ( \$echoOn ) set echo\n\n";
 
     $cmpScript .= "# ---------------- write main Makefile\n\n";
-    $cmpScript .= "cat >$execDir/Makefile <<END\n";
+    $cmpScript .= "sed -e 's/<TAB>/\\t/' >\$bld_dir/Makefile <<END\n";
     $cmpScript .= "$Makefile\n";
     $cmpScript .= "END\n\n";
 
@@ -750,35 +789,56 @@ use FREXML();
     foreach my $name (@names)
     {
       my $ref = $r->{$name};
-      unless (exists($ref->{libPath}) and $ref->{libPath})
+      unless ($ref->{libPath})
       {
+	my %requiredDirs = ();
+	foreach my $required (split(' ', $ref->{requires}))
+	{
+	  my $refRequired = $r->{$required};
+	  if ($refRequired->{libPath})
+	  {
+	    $requiredDirs{$refRequired->{libHeaderDir}} = $refRequired->{rank};
+	  }
+	  else
+	  {
+	    $requiredDirs{"\$bld_dir/$required"} = $refRequired->{rank};
+	  }
+	}
+	my $otherFlags = join(' ', map {'-I' . $_} sort {$requiredDirs{$b} <=> $requiredDirs{$a}} keys %requiredDirs);
 	my $pathNames = $ref->{pathNames} || "pathnames_$name";
-	$cmpScript .= "cd $srcDir\n";
-	$cmpScript .= "list_paths -o $pathNames $ref->{paths}\n";
+#	$cmpScript .= "cd \$src_dir\n";
+	$cmpScript .= "mkdir -p \$bld_dir/$name\n";
+	$cmpScript .= "list_paths -o \$bld_dir/$name/$pathNames ";
+	foreach my $path ( split(/\s+/,$ref->{paths}) ) {
+	  $cmpScript .= "\$src_dir/$path ";
+	}
+	$cmpScript .= "\n";
 	$cmpScript .= "$ref->{compileCsh}\n" if $ref->{compileCsh};
-	$cmpScript .= "cd $execDir\n";
-	$cmpScript .= "mkmf -m Makefile.$name -a $srcDir -p lib$name.a -t $ref->{mkmfTemplate}";
+	$cmpScript .= "cd \$bld_dir\n";
+	$cmpScript .= "pushd $name\n";
+	$cmpScript .= "mkmf -m Makefile -a \$src_dir -b \$bld_dir -p lib$name.a -t \$mkmf_template";
 	$cmpScript .= " -c \"$ref->{cppDefs}\"" if $ref->{cppDefs};
-	$cmpScript .= " -o \"$libHeaderList\"" if $libHeaderList;
+	$cmpScript .= " -o \"$otherFlags\"" if $otherFlags;
 	$cmpScript .= " $ref->{srcList}" if $ref->{srcList};
-	$cmpScript .= " $pathNames"; 
-	$cmpScript .= " $includeList" if $includeList;
-	$cmpScript .= "\n\n";
+	$cmpScript .= " \$bld_dir/$name/$pathNames"; 
+	$cmpScript .= " $includeDirsList" if $includeDirsList;
+	$cmpScript .= "\npopd\n\n";
       }
     }
 
-    $cmpScript .= "# ---------------- adjust the main Makefile\n\n";
-    $cmpScript .= "cat Makefile | sed -e 's/${tab}/\\t/' > Makefile.\$\$ && mv -f Makefile.\$\$ Makefile\n\n";
     $cmpScript .= "# ---------------- call make on the main Makefile\n\n";
     $cmpScript .= "make $makeOverrides fms_$expName.x\n\n";
-    $cmpScript .= "if ( \$status ) then\n";
-    $cmpScript .= "  unset echo\n";
-    $cmpScript .= "  echo ERROR: make failed for $expName.\n";
-    $cmpScript .= "  exit 1\n";
+    $cmpScript .= "if ( \$status == 0 ) then\n";
+    $cmpScript .= "  if ( \$echoOn ) unset echo\n";
+    $cmpScript .= "  echo \"<NOTE> : make succeeded for $expName.\"\n";
+    $cmpScript .= "  if ( \$echoOn ) set echo\n";
     $cmpScript .= "else\n";
-    $cmpScript .= "  unset echo\n";
-    $cmpScript .= "  echo NOTE: make succeeded for $expName.\n";
-    $cmpScript .= "endif\n";
+    $cmpScript .= "  if ( \$echoOn ) unset echo\n";
+    $cmpScript .= "  echo \"*ERROR*: make failed for $expName.\"\n";
+    $cmpScript .= "  if ( \$echoOn ) set echo\n";
+    $cmpScript .= "  exit 1\n";
+    $cmpScript .= "endif\n\n";
+    $cmpScript .= "exit 0\n";
 
     # ----------------------------------------------- normal return
 
@@ -847,7 +907,7 @@ use FREXML();
   # ------ return ($flag, $status)
   {
     my ($z, $r, %o) = @_;
-    my ($cmpScript, $envScript) = fremake::processCompileScriptCreate($z, $r);
+    my ($cmpScript, $envScript) = fremake::processCompileScriptCreate($z, $r, %o);
     my ($fre, $envScriptName, $cmpScriptName) = ($z->fre(), fremake::envScriptName($z), fremake::compileScriptName($z));
     if ($cmpScript)
     {
@@ -855,8 +915,8 @@ use FREXML();
       FRETemplate::setVersionInfo(\$envScript, $z, $0, %o);
       FRETemplate::setSchedulerMakeVerbose(\$envScript, $z);
 
-      FRETemplate::setSchedulerResources(\$cmpScript, $z, 'make', $o{ncores}, $o{walltime} * 60, '', '');
-      FRETemplate::setSchedulerNames(\$cmpScript, $z, File::Basename::basename($cmpScriptName), $z->execDir());
+      FRETemplate::setSchedulerResources(\$cmpScript, $z, 'make', $o{ncores}, $o{walltime} * 60, undef, undef);
+      FRETemplate::setSchedulerNames(\$cmpScript, $z, File::Basename::basename($cmpScriptName), $z->execDir(), 0);
       FRETemplate::setVersionInfo(\$cmpScript, $z, $0, %o);
       FRETemplate::setSchedulerMakeVerbose(\$cmpScript, $z);
 
@@ -900,7 +960,7 @@ use FREXML();
       {
 	$fre->out
 	(
-	  0,
+	  FREMsg::FATAL,
 	  "The existing compile script '$cmpScriptName' doesn't match compile instructions in the XML file!",
           "Please rerun the fremake with the --force-compile (-F) option.", 
           "Try the --help option for more information."
@@ -929,7 +989,7 @@ use FREXML();
 	{
           if ($o{'force-compile'})
 	  {
-	    if (fremake::processCompileClean($z))
+	    if (fremake::processCompileClean($z, %o))
 	    {
 	      return fremake::processCompileExistingCleanDir($z, $ref, %o);
 	    }
@@ -984,6 +1044,7 @@ use FREXML();
 
   my %opt =
   (
+    'link'	=> 1,
     'ncores'	=> fremake::NCORES_DEFAULT,
     'walltime'	=> fremake::WALLTIME_DEFAULT,
     'platform'	=> FREDefaults::Platform(),
@@ -995,17 +1056,69 @@ use FREXML();
   if ($opt{version}) {print fremake::VERSION,"\n" and exit FREDefaults::STATUS_OK;}
   if ($opt{help}) {print fremake::Help() and exit FREDefaults::STATUS_OK;}
 
-  if (scalar(@ARGV) == 0)
+  unless (scalar(@ARGV) > 0)
   {
     my $self = File::Basename::basename($0);
     FREMsg::out($opt{verbose}, 0, "At least one experiment name is needed on the command line", "Try '$self --help' for more information");
     exit FREDefaults::STATUS_COMMAND_NO_EXPERIMENTS;
   }
 
-  my $fre = FRE->new('fremake', %opt) or exit FREDefaults::STATUS_FRE_GENERIC_PROBLEM;
+  if (exists($opt{ncores}))
+  {
+    unless ($opt{ncores} > 0)
+    {
+      FREMsg::out($opt{verbose}, FREMsg::FATAL, "The --ncores option value must be a positive number");
+      exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
+    }
+  }
+  
+  if (exists($opt{walltime}))
+  {
+    unless ($opt{walltime} > 0)
+    {
+      FREMsg::out($opt{verbose}, FREMsg::FATAL, "The --walltime option value must be a positive number");
+      exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
+    }
+  }
+  
+  if (exists($opt{platform}))
+  {
+    unless ($opt{platform} && substr($opt{platform}, 0, 1) ne '-')
+    {
+      FREMsg::out($opt{verbose}, FREMsg::FATAL, "The --platform option value is missed");
+      exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
+    }
+  }
+ 
+  if (exists($opt{target}))
+  {
+    unless ($opt{target} && substr($opt{target}, 0, 1) ne '-')
+    {
+      FREMsg::out($opt{verbose}, FREMsg::FATAL, "The --target option value is missed");
+      exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
+    }
+  }
 
+  if (exists($opt{xmlfile}))
+  {
+    unless ($opt{xmlfile} && substr($opt{xmlfile}, 0, 1) ne '-')
+    {
+      FREMsg::out($opt{verbose}, FREMsg::FATAL, "The --xmlfile option value is missed");
+      exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
+    }
+  }
+  
+  my $fre = FRE->new('fremake', %opt) or exit FREDefaults::STATUS_FRE_GENERIC_PROBLEM;
+  
+  unless ($fre->property('FRE.tool.fremake.enabled'))
+  {
+    my $platformSite = $fre->platformSite();
+    $fre->out(FREMsg::FATAL, "You are not supposed to call this tool on the '$platformSite' site");
+    exit FREDefaults::STATUS_FRE_GENERIC_PROBLEM;
+  }
+  
   my @exps = ();
-  foreach my $expName (@ARGV)
+  foreach my $expName (FREUtil::listUnique(@ARGV))
   {
     my $exp = FREExperiment->new($fre, $expName) or exit FREDefaults::STATUS_FRE_GENERIC_PROBLEM;
     push @exps, $exp;
