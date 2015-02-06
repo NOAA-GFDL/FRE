@@ -244,7 +244,14 @@ sub curator($$$)
   my $descriptionNode = $experimentNode->findnodes("description")->get_node(1);
   my @curatorTags = qw{communityModel communityProject communityExperimentID};
   my @missingCuratorTags;
-  print "Set curator tags for $expName:\n";
+  print "A well formed XML will have the following attributes and tags set in the desired experiment\n";
+  print "Please consult documentation on the wiki for more information\n";
+  print "NOTE: 'realization' is the only required tag for ingestion into the curator database,\n";
+  print "      other tags will be populated with the defaults found in the curator documentation.\n";
+  print "Documentation: http://wiki.gfdl.noaa.gov/index.php/Curator_MDBI\n";
+  print "**************************************************************************************************\n";
+  print "Curator tags for $expName:\n";
+
   foreach ( @curatorTags ){
     my $value = $descriptionNode->getAttribute($_);
     if ( $value ){
