@@ -121,6 +121,48 @@ sub writescript {
    }
 }
 
+# convert a date string following either yyyy or yyyymmddinto to a
+# Date::Manip date ('yyyymmddhh:mm:ss')
+#
+# As we move forward to allow for years past 9999, we need to set some
+# guidance on how the passed in date string is interpreted.  Thus, we
+# somewhat arbitrarily decide that if length($opt_t) < 7, we assume a
+# year has been passed in, 8 and beyond assume yyyymmdd.
+sub parseDate {
+  my $date = $_[0];
+  my $return_date = undef;
+
+  # Variables to hold year and mmdd to allow for date verification
+  my $year = "";
+  my $mmdd = "";
+
+  if (length($date) < 8) {
+    # Assume only a year has been passed in, and the month/day/time is
+    # 01 Jan @ 00:00:00
+    $year = $date;
+    $mmdd = "0101";
+  } else {
+    ( $year, $mmdd ) = $date =~ /(\d{4,})(\d{4})/;
+  }
+
+  # Verify year is > 0
+  if (int($year) <= 0) {
+    print STDERR "ERROR: Non-positive years are not supported.\n";
+  } else {
+    # Using Date::Manip::ParseDate to verify a valid date.  But since
+    # Date::Manip cannot handle certain dates, we force to use a date
+    # between years 2000 and 2999.
+    my $vYear = 2000 + int($year)%2000;
+    my $vDate = sprintf("%04d%04d",$vYear,$mmdd);
+    if (Date::Manip::ParseDate($vDate) eq '') {
+      print STDERR "ERROR: Date '$date' is not a valid date.\n";
+    } else {
+      $return_date = sprintf("%04d%04d00:00:00",$year,$mmdd);
+    }
+  }
+  return $return_date;
+}
+
 #convert a fortran date string ( "1,1,1,0,0,0" ) to a Date::Manip date
 sub parseFortranDate {
    my $date = $_[0];
@@ -225,10 +267,22 @@ sub modifydate {
 
 # Wrapper to Date::Manip::Date_DaysSince1BC to deal with possible years beyond 9999
 sub daysSince1BC($) {
-  my $date = $_[0];
+  my $year = $_[0];
+  my $mon = $_[1];
+  my $day = $_[3];
 
-  if ( $date !~ /\d{4,}\d{4}\d{2}:\d{2}:\d{2}/ ) {
-    print STDERR "NOTE: Date '$date' not in the correct format.  Expected 'yyyymmddhh:mm:ss'\n";
+  # Simple, non-exhaustive checks on the validity of the passed in 
+  # values.
+  if ($year<=0) {
+    print STDERR "NOTE: year ($year) must be a positive digit.\n";
+    return undef;
+  }
+  if ($mon < 1 || $mon > 12) {
+    print STDERR "Note: Month must be in the range [1,12]\n";
+    return undef;
+  }
+  if ($day < 1 || $day > 31) {
+    print STDERR "Note: Day must be in the range [1,31]\n";
     return undef;
   }
 
@@ -236,19 +290,14 @@ sub daysSince1BC($) {
   # force all calculations to be rebased to 2000, then convert back.
   my $y2k = 2000;
 
-  # Separate the passed in yyyy and mmddhh:mm:ss
-  my ($oYear, $oMon, $oDay) = $date =~ /(\d{4,})(\d{2})(\d{2})\d{2}:\d{2}:\d{2}/;
-
-  my $y2k = 2000;
-
-  my $y2kMult = floor($oYear/$y2k);
-  my $y2kMod = $oYear%$y2k;
+  my $y2kMult = floor($year/$y2k);
+  my $y2kMod = $year%$y2k;
 
   # Number of days from 00010101 - 20001221 (2000 years)
   my $d2kyears = Date::Manip::Date_DaysSince1BC(12,31,2000);
 
   # Number of days in from 00010101 - $y2k + $ydkMod
-  my $numDaysTmp = Date::Manip::Date_DaysSince1BC($oMon, $oDay, $y2k + $y2kMod);
+  my $numDaysTmp = Date::Manip::Date_DaysSince1BC($mon, $day, $y2k + $y2kMod);
 
   # Because we rebase to 2000, we need to remove the 1st 2000 years off all calculations
   # (it is already done in the above Date_SaysSince1BC call).  If the original year is
@@ -259,6 +308,7 @@ sub daysSince1BC($) {
 
 #wrapper for DateCalc handling low year numbers
 sub cmpdate {
+  #TODO: This cannot handle anything but 4-digit years
    my $date = $_[0];
    my $date2 = $_[1];
    my $err = '';

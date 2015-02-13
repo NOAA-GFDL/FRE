@@ -1135,7 +1135,7 @@ EOF
          $cshscript =~ s/(-w $expt)/$1_$component/;
          $cshscript =~ s/(-soft -l fre_info=)/$1ppComponent\@$component+/;
          $opt_w =~ s/( -hold_jid $expt)(.*)(_\d\d\d\d\d\d\d\d)/$1_$component$3/;
-         $statefile = "$statedir/$component.".substr($hDate,0,4);
+         $statefile = "$statedir/$component.".$userstartyr;
 
          #check status of this frepp year
          unless ( $opt_A ) {
@@ -1361,6 +1361,7 @@ EOF
 
       my $scriptcopy = $cshscript;
       my @depyears = ();
+      #TODO: verify that FRETargets::standardize can handle large years
       (my $standardTarget,my $targeterr)  = FRETargets::standardize($hDate);
 
       #STATIC
@@ -2110,7 +2111,7 @@ sub hsmget_history_csh {
 
   foreach my $h ( @histfiles ) {
     chdir $opt_d;
-    my $year = substr($h,0,4);
+    my $year = $h =~ /(\d{4,})\d{4}\./;
     #print "\nyear:$year\n";
     my @availraw = split /\n/,`ls -1 | egrep "$year....\.raw\.nc\.cpio\$|$year....\.raw\.nc\.tar\$"`;
     #print "availraw:".join(", ", @availraw)."\n";
@@ -2303,17 +2304,16 @@ sub checkHistComplete {
    my ($dir, $hf, $frepp_cmd, $usedfiles, $diagtablecontent) = @_;
    my $script = "cd $dir\n";
 
-   my $firsthisty = substr($hf,0,4);
+   my $firsthisty = $hf =~ /(\d{4,})\d{4}\./;
    my $firsthistm = substr($userstartmo,0,2);
    my $firsthistd = substr($userstartmo,2,2);
-   my $tENDy = substr($tEND,0,4);
-   my $tENDm = substr($tEND,4,2);
-   my $tENDd = substr($tEND,6,2);
+   my ($tENDy, $tENDm, $tENDd) = $tEND =~ /(\d{4,})(\d{2})(\d{2})/;
+
    #TODO: Date_DaysSince1BC can be problematic if year is greater than 9999
    my $days_firsthist = Date_DaysSince1BC($firsthistm,$firsthistd,$firsthisty);
    my $days_tEND = Date_DaysSince1BC($tENDm,$tENDd,$tENDy);
 
-   my $firsthist = FREUtil::parseDate( substr($hf,0,4).$userstartmo );
+   my $firsthist = FREUtil::parseDate( $firsthisty.$userstartmo );
    #TODO: DateCalc can be problematic if $firsthist year modified with $tEND is goes beyond
    # 9999
    my $delta = &DateCalc($firsthist,FREUtil::modifydate($tEND,"+1 sec"),\$err,1);
@@ -3204,8 +3204,8 @@ sub get_subint {
 
    #get dependant years
    my @depyears = ();
-   my $thisyear = substr($t0,0,4);
-   my $simstart = substr($sim0,0,4);
+   my $thisyear = $t0 =~ /(\d{4,})\d{4}\d{2}:\d{2}:\d{2}/;
+   my $simstart = $sim0 =~ /(\d{4,})\d{4}\d{2}:\d{2}:\d{2}/;
 
    #print "in get_subint with thisyear=$thisyear, simstart=$simstart, interval=$interval, subint=$subint\n";
 
@@ -3745,14 +3745,14 @@ EOF
       my $nummonths = $season * 3 - 4;
       my $tSEASON = FREUtil::modifydate($tBEG,"+ $nummonths months");
       my $tSEASONf = FREUtil::graindate($tSEASON,'seasonal');
-      my $year = substr($tSEASONf,0,4);
+      my $year = $tSEASONf =~ /\d{4,}\./;
       my $catfiles = "";
       my $makecpio = "";
       my $tmp = FREUtil::graindate($sim0,'annual');
       #if it is time, chunk the files.  only put chunked files into archive now.
       if ( ($year-$tmp + 1) % $cl == 0 ) {
          $tmp = $year-$tmp + 1;
-         my $abbrev = substr($tSEASONf,5,4);
+         my $abbrev = $tSEASONf =~ /\d{4,}\.(\w{3})/;
          my $begin = FREUtil::padzeros($year - $cl + 1);
          my $chunkedoutfile = "$component.$begin-$year.$abbrev.\$var";
          my $filelist = "";
@@ -3987,7 +3987,7 @@ sub monthlyAVfromhist {
    $mkdircommand .= "$outdir ";
    if( $int > $maxyrs ) { $maxyrs = $int; }
 
-   my $hDateyr = substr($hDate,0,4);
+   my $hDateyr = $userstartyr;
    my @hDates = ( FREUtil::padzeros($hDateyr-$int+1) .. "$hDateyr" );
 
    my $sim0f = FREUtil::graindate($sim0,$src);
@@ -4252,15 +4252,14 @@ sub annualAV1yrfromhist {
    my $chunkLength = $_[0]->findvalue('@chunkLength');
 
    if ( "$yr2do" eq '' ) { $yr2do = $hDate; }
-   #TODO: ParseDate and years > 9999
-   my $yr2do0 = &ParseDate($yr2do);
+   my $yr2do0 = FREUtil::parseDate($yr2do);
    my $sim0f = FREUtil::graindate($sim0,$src);
    my $t0f = FREUtil::graindate($yr2do0,$src);
    my $yr2doEND = FREUtil::modifydate($yr2do0,'+1 year -1 sec');
    my $tENDf = FREUtil::graindate($yr2doEND,$src);
    if ( "$yr2do" eq "00010101" ) { $tENDf = "0001" }
 #print "annualAV1yrfromhist yr2do $yr2do yr2do0 $yr2do0 yr2doEND $yr2doEND tENDf $tENDf\n";
-   my $hDateyr = substr($yr2do,0,4);
+   my $hDateyr = $userstartyr;
 
    my $diag_source = $_[0]->findvalue('@diagSource');
    my @monthnodes = $ppcNode->findnodes('timeSeries[@freq="monthly"]');
@@ -4537,7 +4536,7 @@ sub annualAVxyrfromann {
    $ppcNode->appendChild($newnode);
    my $annNode = $ppcNode->findnodes('timeAverage[@source="annual" and @interval="1yr"]')->get_node(1);
    foreach my $i ( 0 .. ($int-1) ) {
-      my $annyr = substr($hDate,0,4);
+      my $annyr = $userstartyr;
       $annyr -= $i;
       $annyr = FREUtil::padzeros($annyr)."0101";
       #print "\nNOTE: Calling annualAV1yrfromhist( $annNode, $sim0, $annavnodes, $annyr )\n\n";
@@ -4689,7 +4688,7 @@ sub monthlyTSfromdailyTS {
    $mkdircommand .= "$outdir ";
    if( $chunkLength > $maxyrs ) { $maxyrs = $chunkLength; }
    my $indir = "$ppRootDir/$component/ts/$avgatt/$chunkLength"."yr";
-   my $hDateyr = substr($hDate,0,4);
+   my $hDateyr = $userstartyr;
    my @hDates = ( FREUtil::padzeros($hDateyr-$chunkLength+1) .. "$hDateyr" );
    my $in_start = FREUtil::graindate(FREUtil::modifydate($tEND,"-$chunkLength yr +1 sec"),$avgatt);
    my $in_end = FREUtil::graindate($tEND,$avgatt);
@@ -4866,8 +4865,8 @@ sub directTS{
    $mkdircommand .= "$outdir ";
    if( $chunkLength > $maxyrs ) { $maxyrs = $chunkLength; }
 
-   my $hDateyr = substr($hDate,0,4);
-   my $hDatemo = substr($hDate,4,2);
+   my $hDateyr = $userstartyr;
+   my $hDatemo = $userstartmo;
    my @hDates = ();
    my $start = '';
    if ( "$iunit" eq "years" ) {
@@ -6040,7 +6039,7 @@ sub seasonalAVfromhist {
    unless( $mod == 0 ) { return ""; }
    $mkdircommand .= "$outdir ";
    if( $int > $maxyrs ) { $maxyrs = $int; }
-   my $hDateyr = substr($hDate,0,4);
+   my $hDateyr = $userstartyr;
    my @hDates = ( FREUtil::padzeros($hDateyr-$int+1) .. "$hDateyr" );
    my $tBEG = FREUtil::modifydate($tEND,"- $int years + 1 sec");
    my $range = FREUtil::graindate($tEND,'year');
@@ -6122,8 +6121,8 @@ EOF
       my $tSEASON = FREUtil::modifydate($tBEG,"+ $startmo months");
       my $seahist = FREUtil::graindate($tSEASON,'day');
       my $tSEASONf = FREUtil::graindate($tSEASON,'seasonal');
-      my $year = substr($tSEASONf,0,4);
-      my $prevyear = substr($seahist,0,4);
+      my $year = $tSEASONf =~ /(\d{4,})\./;
+      my $prevyear = $seahist =~ /(\d{4,})\d{4}/;
       my $prevhistcpio = "$prevyear".$decSeg.".nc.cpio";
       my $prevhisttar = "$prevyear".$decSeg.".nc.tar";
       my $nextd = FREUtil::modifydate($tSEASON, "+ 12 months");
@@ -6419,8 +6418,8 @@ EOF
       my $tSEASON = FREUtil::modifydate($tBEG,"$plus $startmo months");
       my $seahist = FREUtil::graindate($tSEASON,'day');
       my $tSEASONf = FREUtil::graindate($tSEASON,'seasonal');
-      my $year = substr($tSEASONf,0,4);
-      my $prevyear = substr($seahist,0,4);
+      my $year = $tSEASONf =~ /(\d{4,})\./;
+      my $prevyear = $seahist =~ /(\d{4,})\d{4}/;
       my $prevhistcpio = "$prevyear".$decSeg.".nc.cpio";
       my $prevhisttar = "$prevyear".$decSeg.".nc.tar";
       my $nextd = FREUtil::modifydate($tSEASON, "+ 12 months");
