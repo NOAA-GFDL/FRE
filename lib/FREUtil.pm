@@ -166,22 +166,9 @@ sub parseDate {
 #convert a fortran date string ( "1,1,1,0,0,0" ) to a Date::Manip date
 sub parseFortranDate {
    my $date = $_[0];
-   my @tmparray = split(',',$date);
-   if ($#tmparray < 5 ) {
-      @tmparray = split(' ',$date);
-   }
-   $tmparray[0] = padzeros($tmparray[0]);    #year
-   $tmparray[1] = pad2digits($tmparray[1]);  #mo
-   $tmparray[2] = pad2digits($tmparray[2]);  #day
-   $tmparray[3] = pad2digits($tmparray[3]);  #hour
-   $tmparray[4] = pad2digits($tmparray[4]);  #min
-   $tmparray[5] = pad2digits($tmparray[5]);  #sec
-   my $newdate = join('',@tmparray);
-   #print STDERR "date is $date, newdate is '$newdate'\n";
-   my $parseddate = Date::Manip::ParseDate($newdate);
-   if ("$newdate" eq '00010101000000') {$parseddate = '0001010100:00:00';}
-   #print STDERR "parseddate is $parseddate\n";
-   return $parseddate;
+   my @tmparray = split(',|\s+',$date);
+
+   return sprintf("%04d%02d%02d%02d:%02d:%02d", @tmparray);
 }
 
 #pad to 4 digits
