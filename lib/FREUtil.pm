@@ -139,10 +139,13 @@ sub parseDate {
   if (length($date) < 8) {
     # Assume only a year has been passed in, and the month/day/time is
     # 01 Jan @ 00:00:00
+    #
+    # This assumption works until year 10,000,000, which for most
+    # cases is a good assumption.
     $year = $date;
     $mmdd = "0101";
   } else {
-    ( $year, $mmdd ) = $date =~ /(\d{4,})(\d{4})/;
+    ( $year, $mmdd ) = splitDate($date);
   }
 
   # Verify year is > 0
@@ -313,7 +316,7 @@ sub daysSince1BC($$$) {
   my $mon = $_[1];
   my $day = $_[3];
 
-  # Simple, non-exhaustive checks on the validity of the passed in 
+  # Simple, non-exhaustive checks on the validity of the passed in
   # values.
   if ($year<=0) {
     print STDERR "NOTE: year ($year) must be a positive digit.\n";
