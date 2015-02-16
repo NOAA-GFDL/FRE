@@ -208,15 +208,15 @@ sub dateCalc($$) {
 
   my $err = 0;
 
-  if ($d1 !~ /\d{4,}\d{4}\d{2}:\d{2}:\d{2}/) {
-    print STDERR "WARNING: '$d1' is not recognized as a date format.\n";
-    $errs+=1;
-  }
-  if ($d2 !~ /\d{4,}\d{4}\d{2}:\d{2}:\d{2}/) {
-    print STDERR "WARNING: '$d2' is not recognized as a date format.\n";
+  if ($date1 !~ /^\d{4,}\d{4}\d{2}:\d{2}:\d{2}$/) {
+    print STDERR "WARNING: '$date1' is not recognized as a date format.\n";
     $err+=1;
   }
-  if ($errs>0) {
+  if ($date2 !~ /^\d{4,}\d{4}\d{2}:\d{2}:\d{2}$/) {
+    print STDERR "WARNING: '$date2' is not recognized as a date format.\n";
+    $err+=1;
+  }
+  if ($err>0) {
     return undef
   }
 
