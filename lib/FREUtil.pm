@@ -308,7 +308,7 @@ sub modifydate {
 }
 
 # Wrapper to Date::Manip::Date_DaysSince1BC to deal with possible years beyond 9999
-sub daysSince1BC($) {
+sub daysSince1BC($$$) {
   my $year = $_[0];
   my $mon = $_[1];
   my $day = $_[3];
@@ -346,6 +346,19 @@ sub daysSince1BC($) {
   # less than 2000, then the $y2kMult - 1 will remove the counting of the first 2000
   # years.
   return ($y2kMult - 1) * $d2kyears + $numDaysTmp;
+}
+
+# Wrapper for Date::Manip::Date_Cmp.  As Date_Cmp for DM5 "does little
+# more than use 'cmp'" that is all we do here as we do not deal with
+# dates/times in multiple time zones, cmp should be good enough.
+#
+# We leave this wrapped in this subroutine to allow for easier
+# modifications if needed when issues are found when using cmp instead
+# of something more substantial.
+sub dateCmp ($$) {
+  my ($date1, $date2) = @_;
+
+  return $date1 cmp $date2;
 }
 
 #return appropriate date granularity
