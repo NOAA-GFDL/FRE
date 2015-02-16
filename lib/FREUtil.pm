@@ -189,7 +189,62 @@ sub pad8digits {
    return sprintf("%08d", int($date));
 }
 
-#wrapper for DateCalc handling low year numbers
+# splitDate separates a Date::Manip date string into yyyy and
+# mmddhh or mmddhh:mm:ss components.
+sub splitDate($) {
+  my ( $date ) = @_;
+
+  return $date =~ /^(\d{4,})(\d{4}(?:\d{2}:\d{2}:\d{2})?$)/;
+}
+
+# Calculate the difference between two date and returns a Date::Manip
+# delta format.  This is not a full wrapper for Date::Manip::DateCalc
+# as we only use it to calculate the difference between two dates.
+sub dateCalc($$) {
+  my ( $date1, $date2 ) = @_;
+
+  my $err = 0;
+
+  if ($d1 !~ /\d{4,}\d{4}\d{2}:\d{2}:\d{2}/) {
+    print STDERR "WARNING: '$d1' is not recognized as a date format.\n";
+    $errs+=1;
+  }
+  if ($d2 !~ /\d{4,}\d{4}\d{2}:\d{2}:\d{2}/) {
+    print STDERR "WARNING: '$d2' is not recognized as a date format.\n";
+    $err+=1;
+  }
+  if ($errs>0) {
+    return undef
+  }
+
+  # Separate out the year from the mmddhh:mm:ss portion of the date.
+  my ( $y1, $mdt1 ) = splitDate($date1);
+  my ( $y2, $mdt2 ) = splitDate($date2);
+
+  my $y2k = 2000;
+
+  my $d1mult = floor(int($y1)/$y2k);
+  my $d1modu = int($y1)%$y2k;
+  my $d2mult = floor(int($y2)/$y2k);
+  my $d2modu = int($y2)%$y2k;
+
+  # Strings to hold the modified dates that are between the years 2000
+  # and 2999.  This is needed due to issues in Date::Manip that cannot
+  # deal with low dates (i.e. 00010101) or dates beyond 99991224.
+  my $d1_2k = sprintf("%04d%s",$y2k+int($d1modu),$mdt1);
+  my $d2_2k = sprintf("%04d%s",$y2k+int($d2modu),$mdt2);
+
+  my $delta = Date::Manip::DateCalc($d1_2k,$d2_2k,\$err,1);
+
+  # year_mod hold a Date::Manip delta string that will be used to
+  # take into account the change in year introduced by forcing the
+  # first delta calculation to be done on years between 2000 and 2999.
+  my $year_mod = sprintf("%d:0:0:0:0:0:0",$y2k*($d2mult-$d1mult));
+
+  return Date::Manip::DateCalc($delta,$year_mod,\$err,1);
+}
+
+# wrapper for DateCalc handling low year numbers
 # modifydate takes a date (usually of format yyyymmddhh:mm:ss), and modifies it via the
 # instructions in $str (i.e. +1 year, -1 second --- using the manipulation rules for
 # Date::Manip.
@@ -224,7 +279,7 @@ sub modifydate {
   my $newDeltaYears = eval("$pm 1 * ($dYearsMult * $y2k)");
 
   # Separate the passed in yyyy and mmddhh:mm:ss
-  my ($oYear, $oMDT) = $date =~ /(\d{4,})(\d{4}\d{2}:\d{2}:\d{2})/;
+  my ($oYear, $oMDT) = splitDate($date);
 
   # Save how many 2thousand years the passed in yyyy has
   my $yyyyMult = floor(int($oYear)/$y2k);
@@ -242,7 +297,7 @@ sub modifydate {
   }
 
   # Convert back to a date based on the original date
-  my ($nYear, $nMDT) = $dateManipd =~ /(\d{4})(\d{4}\d{2}:\d{2}:\d{2})/;
+  my ($nYear, $nMDT) = splitDate($dateManipd);
   my $yyyy = sprintf("%04d", $y2k * $yyyyMult + int($nYear)-$y2k + $newDeltaYears);
   if (int($yyyy) < 1) {
     print STDERR "NOTE: Performing '$str' on '$date' does not give a valid year: got '$yyyy'\n";

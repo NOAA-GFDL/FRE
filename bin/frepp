@@ -2312,9 +2312,7 @@ sub checkHistComplete {
    my $days_tEND = FREUtil::daysSince1BC($tENDm,$tENDd,$tENDy);
 
    my $firsthist = FREUtil::parseDate( $firsthisty.$userstartmo );
-   #TODO: DateCalc can be problematic if $firsthist year modified with $tEND is goes beyond
-   # 9999
-   my $delta = &DateCalc($firsthist,FREUtil::modifydate($tEND,"+1 sec"),\$err,1);
+   my $delta = FREUtil::dateCalc($firsthist,FREUtil::modifydate($tEND,"+1 sec"));
 
    foreach (@$diagtablecontent) {
       if ( /"(\w*)"\s*,\s*(\d*)\s*,\s*"(\w*)"\s*,.*,.*,.*,?/ and not /^#/ ) {
@@ -3468,8 +3466,7 @@ sub annualTS {
    }
 
    my $tmp = FREUtil::modifydate($tEND,"+1 sec");
-   #TODO: Delta_Format and DateCalc with year > 9999
-   my $yrsSoFar = &Delta_Format( &DateCalc($sim0,$tmp,\$err,1) ,0,"%yd");
+   my $yrsSoFar = &Delta_Format( FREUtil::dateCalc($sim0,$tmp) ,0,"%yd");
    my $int = $TSchunkLength;
    $int =~ s/yr//;
    my $mod = $yrsSoFar % $int;
@@ -3664,8 +3661,7 @@ sub seasonalTS {
    }
    if ($opt_v) {print "      TSchunkLength is $TSchunkLength\n";}
    my $tmp = FREUtil::modifydate($tEND,"+1 sec");
-   #TODO: Delta_Format and DateCalc with year > 9999
-   my $yrsSoFar = &Delta_Format( &DateCalc($sim0,$tmp,\$err,1) ,0,"%yd");
+   my $yrsSoFar = &Delta_Format( FREUtil::dateCalc($sim0,$tmp) ,0,"%yd");
    my $int = $TSchunkLength;
    $int =~ s/yr//;
    my $cl = $chunkLength;
@@ -3976,8 +3972,7 @@ sub monthlyAVfromhist {
    my $outdir = "$ppRootDir/$component/av/$src"."_$interval";
    my $chunkLength = $_[0]->findvalue('@chunkLength');
    my $tmp = FREUtil::modifydate($tEND,"+ 1 sec");
-   #TODO: Delta_Format and DateCalc with year > 9999
-   my $yrsSoFar = &Delta_Format( &DateCalc($sim0,$tmp,\$err,1) ,0,"%yd");
+   my $yrsSoFar = &Delta_Format( FREUtil::dateCalc($sim0,$tmp) ,0,"%yd");
    my $int = $interval;
    $int =~ s/yr//;
    my $mod = $yrsSoFar % $int;
@@ -4504,8 +4499,7 @@ sub annualAVxyrfromann {
    my $outdirpath = "$component/av/$src"."_$interval";
    my $outdir = "$ppRootDir/$outdirpath";
    my $tmp = FREUtil::modifydate($tEND,"+ 1 sec");
-   #TODO: Delta_Format and DateCalc with year > 9999
-   my $yrsSoFar = &Delta_Format( &DateCalc($sim0,$tmp,\$err,1) ,0,"%yd");
+   my $yrsSoFar = &Delta_Format( FREUtil::dateCalc($sim0,$tmp) ,0,"%yd");
    my $int = $interval;
    $int =~ s/yr//;
    my $mod = $yrsSoFar % $int;
@@ -4679,8 +4673,7 @@ sub monthlyTSfromdailyTS {
    }
    my $outdir = "$ppRootDir/$component/ts/$freq/$chunkLength";
    $chunkLength =~ s/yr//;
-   #TODO: Delta_Format and DateCalc with year > 9999
-   my $yrsSoFar=&Delta_Format( &DateCalc($sim0,$t0,\$err,1) ,0,"%yd");
+   my $yrsSoFar=&Delta_Format( FREUtil::dateCalc($sim0,$t0) ,0,"%yd");
    my $mod = ($yrsSoFar+1) % $chunkLength;
    if( $mod != 0 ) { return ""; } #don't do any calculations until a chunk is ready to go.
    $mkdircommand .= "$outdir ";
@@ -4853,11 +4846,11 @@ sub directTS{
    }
    $chunkLength =~ s/mo//;
 
-   #TODO: Delta_Format and DateCalc with year > 9999
-   my $yrsSoFar=&Delta_Format( &DateCalc($sim0,$t0,\$err,1) ,0,"%yd");
-#print "yrsSoFar=$yrsSoFar, chunkLength=$chunkLength, err=$err\n";
-   $yrsSoFar=&Delta_Format( FREUtil::cmpdate($sim0,$t0) ,0,"%yd");
-#print "yrsSoFar=$yrsSoFar, chunkLength=$chunkLength, err=$err\n";
+   my $yrsSoFar=&Delta_Format( FREUtil::dateCalc($sim0,$t0) ,0,"%yd");
+   # This yrsSoFar is no longer needed as FREUtil::dateCalc does the
+   # correct thing with all dates from year 0001 to well past year
+   # 10000.
+   # $yrsSoFar=&Delta_Format( FREUtil::cmpdate($sim0,$t0) ,0,"%yd");
    my $mod = ($yrsSoFar+1) % $chunkLength;
    if( $mod != 0 and "$iunit" eq "years") { return ""; } #don't do any calculations until a chunk is ready to go.
    $mkdircommand .= "$outdir ";
@@ -5204,8 +5197,7 @@ sub monthlyAVfromav {
    my $chunkLength = $_[0]->findvalue('@chunkLength');
 
    my $tmp = FREUtil::modifydate($tEND,"+ 1 sec");
-   #TODO: Delta_Format and DateCalc with year > 9999
-   my $yrsSoFar = &Delta_Format( &DateCalc($sim0,$tmp,\$err,1) ,0,"%yd");
+   my $yrsSoFar = &Delta_Format( FREUtil::dateCalc($sim0,$tmp) ,0,"%yd");
    my $int = $interval;
    $int =~ s/yr//;
    my $mod = $yrsSoFar % $int;
@@ -5332,8 +5324,7 @@ sub annualAVfromav {
    my $outdir = "$ppRootDir/$component/av/$src"."_$interval";
    my $srcdir = "$ppRootDir/$component/av/$src"."_$subint"."yr";
    my $tmp = FREUtil::modifydate($tEND,"+ 1 sec");
-   #TODO: Delta_Format and DateCalc with year > 9999
-   my $yrsSoFar = &Delta_Format( &DateCalc($sim0,$tmp,\$err,1) ,0,"%yd");
+   my $yrsSoFar = &Delta_Format( FREUtil::dateCalc($sim0,$tmp) ,0,"%yd");
    my $int = $interval;
    $int =~ s/yr//;
    my $mod = $yrsSoFar % $int;
@@ -5658,8 +5649,7 @@ sub TSfromts {
    my $subchunkyr = "$subchunk"."yr";
    my $reqpath = "$ppRootDir/$component/ts/$freq/$subchunk"."yr";
    my $tmp = FREUtil::modifydate($tEND,"+1 sec");
-   #TODO: Delta_Format and DateCalc with year > 9999
-   my $yrsSoFar = &Delta_Format( &DateCalc($sim0,$tmp,\$err,1) ,0,"%yd");
+   my $yrsSoFar = &Delta_Format( FREUtil::dateCalc($sim0,$tmp) ,0,"%yd");
    my $cl = $chunkLength;
    $cl =~ s/yr//;
    my $mod = $yrsSoFar % $cl;
@@ -5850,8 +5840,7 @@ sub seaTSfromts {
    my $reqpath = "$ppRootDir/$component/ts/$freq/$subchunk"."yr";
    my $req = "$component/ts/$freq/$subchunk"."yr";
    my $tmp = FREUtil::modifydate($tEND,"+1 sec");
-   #TODO: Delta_Format and DateCalc with year > 9999
-   my $yrsSoFar = &Delta_Format( &DateCalc($sim0,$tmp,\$err,1) ,0,"%yd");
+   my $yrsSoFar = &Delta_Format( FREUtil::dateCalc($sim0,$tmp) ,0,"%yd");
    my $cl = $chunkLength;
    $cl =~ s/yr//;
    my $mod = $yrsSoFar % $cl;
@@ -6029,8 +6018,7 @@ sub seasonalAVfromhist {
    my $outdir = "$ppRootDir/$component/av/$src"."_$interval";
    my $chunkLength = $_[0]->findvalue('@chunkLength');
    my $tmp = FREUtil::modifydate($tEND,"+ 1 sec");
-   #TODO: Delta_Format and DateCalc with year > 9999
-   my $yrsSoFar = &Delta_Format( &DateCalc($sim0,$tmp,\$err,1) ,0,"%yd");
+   my $yrsSoFar = &Delta_Format( FREUtil::dateCalc($sim0,$tmp) ,0,"%yd");
    my $int = $interval;
    $int =~ s/yr//;
    my $mod = $yrsSoFar % $int;
@@ -6617,8 +6605,7 @@ sub seasonalAVfromav {
    my $srcdir = "$ppRootDir/$component/av/$src"."_$subint"."yr";
    my $chunkLength = $_[0]->findvalue('@chunkLength');
    my $tmp = FREUtil::modifydate($tEND,"+ 1 sec");
-   #TODO: Delta_Format and DateCalc with year > 9999
-   my $yrsSoFar = &Delta_Format( &DateCalc($sim0,$tmp,\$err,1) ,0,"%yd");
+   my $yrsSoFar = &Delta_Format( FREUtil::dateCalc($sim0,$tmp) ,0,"%yd");
    my $int = $interval;
    $int =~ s/yr//;
    my $mod = $yrsSoFar % $int;
