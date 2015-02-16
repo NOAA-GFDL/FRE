@@ -348,30 +348,6 @@ sub daysSince1BC($) {
   return ($y2kMult - 1) * $d2kyears + $numDaysTmp;
 }
 
-#wrapper for DateCalc handling low year numbers
-sub cmpdate {
-  #TODO: This cannot handle anything but 4-digit years
-   my $date = $_[0];
-   my $date2 = $_[1];
-   my $err = '';
-   my $y1 = substr($date,0,4);
-   my $md1 = substr($date,4);
-   my $y2 = substr($date2,0,4);
-   my $md2 = substr($date2,4);
-#print "date=$date,date2=$date2\n";
-#print "y1=$y1,md1=$md1,y2=$y2,md2=$md2\n";
-
-   if ( "$md1" eq "$md2" ) {
-      my $diff = $y2 - $y1;
-      my $delta = Date::Manip::ParseDateDelta("$diff years");
-#print "delta=$delta\n";
-      return $delta;
-   } else {
-      die "ERROR: Date calculation malfunction, date=$date,date2=$date2\n";
-   }
-
-}
-
 #return appropriate date granularity
 sub graindate {
    my $date = $_[0];
