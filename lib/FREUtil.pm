@@ -365,44 +365,50 @@ sub dateCmp ($$) {
 sub graindate {
    my $date = $_[0];
    my $freq = $_[1];
+
    my $formatstr = "";
 
-   if ( "$freq" =~ /daily/ or "$freq" =~ /day/) {
-      $formatstr = 8;
-   } elsif ( "$freq" =~ /mon/ ) {
-      $formatstr = 6;
-   } elsif ( "$freq" =~ /ann/ or "$freq" =~ /yr/ or "$freq" =~ /year/) {
-      $formatstr = 4;
-   } elsif ( "$freq" =~ /hour/ or "$freq" =~ /hr/ ) {
-      $formatstr = 10;
-   } elsif ( "$freq" =~ /season/ ) {
-      my $month = substr($date,4,2);
-      unless ( $month==12 or $month==3 or $month==6 or $month==9  ) {
-	 if ($::opt_v) {print STDERR "WARNING: graindate: $month is not the beginning of a known season in date $date.\n";}
-      }
-      my $year = substr($date,0,4);
-      if ( $month == 12 ) {
-	 $year = $year + 1;
-	 $year = padzeros($year);
-	 return "$year.DJF";
-      } elsif ( $month == 1 or $month == 2 ) {
-	 return "$year.DJF";
-      } elsif ( $month == 3 or $month == 4 or $month == 5 ) {
-	 return "$year.MAM";
-      } elsif ( $month == 6 or $month == 7 or $month == 8 ) {
-	 return "$year.JJA";
-      } elsif ( $month == 9 or $month == 10 or $month == 11 ) {
-	 return "$year.SON";
-      } else {
-	 print STDERR "WARNING: graindate: month $month not recognized";
-	 $formatstr = 6;
-      }
+   if ($freq =~ /(?>day|daily)/i) {
+     # Return yyyymmdd
+     ($formatstr) = $date =~ /^(\d{4,}\d{2}\d{2})\d{2}:\d{2}:\d{2}$/;
+   } elsif ($freq =~ /(?>mon|month|monthly)/i) {
+     # Return yyyymm
+     ($formatstr) = $date =~ /^(\d{4,}\d{2})\d{2}\d{2}:\d{2}:\d{2}$/;
+   } elsif ($freq =~ /(?>ann|annual|yr|year)/i) {
+     # Return yyyy
+     ($formatstr) = $date =~ /^(\d{4,})\d{2}\d{2}\d{2}:\d{2}:\d{2}$/;
+   } elsif ($freq =~ /(?>hr|hour)/i) {
+     # Return yyyymmddhh
+     ($formatstr) = $date =~ /^(\d{4,}\d{2}\d{2}\d{2}):\d{2}:\d{2}$/;
+   } elsif ($freq =~ /season/i) {
+     my ($year, $month) = $date =~ /^(\d{4,})(\d{2})\d{2}\d{2}:\d{2}:\d{2}$/;
+     unless (int($month)%3==0) {
+       if ($::opt_v) {print STDERR "WARNING: graindate: $month is not the beginning of a known season in date $date.\n";}
+     }
+     if ( $month == 12 ) {
+       $year = int($year) + 1;
+       $year = padzeros($year);
+       $formatstr = "$year.DJF";
+     } elsif ( $month == 1 or $month == 2 ) {
+       $formatstr = "$year.DJF";
+     } elsif ( $month == 3 or $month == 4 or $month == 5 ) {
+       $formatstr = "$year.MAM";
+     } elsif ( $month == 6 or $month == 7 or $month == 8 ) {
+       $formatstr = "$year.JJA";
+     } elsif ( $month == 9 or $month == 10 or $month == 11 ) {
+       $formatstr =  "$year.SON";
+     } else {
+       print STDERR "WARNING: graindate: month $month not recognized";
+       # Return yyyymm
+       ($formatstr) = $date =~ /^(\d{4,}\d{2})\d{2}\d{2}:\d{2}:\d{2}$/;
+     }
    } else {
-      print STDERR "WARNING: frequency not recognized in graindate\n";
-      $formatstr = 10;
+     print STDERR "WARNING: frequency not recognized in graindate\n";
+     # Return yyyymmddhh
+     ($formatstr) = $date =~ /^(\d{4,}\d{2}\d{2}\d{2}):\d{2}:\d{2}$/;
    }
 
-   return substr($date,0,$formatstr);
+   return $formatstr;
 }
 
 #return appropriate abbreviation
