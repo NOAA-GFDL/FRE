@@ -312,9 +312,7 @@ sub modifydate {
 
 # Wrapper to Date::Manip::Date_DaysSince1BC to deal with possible years beyond 9999
 sub daysSince1BC($$$) {
-  my $year = $_[0];
-  my $mon = $_[1];
-  my $day = $_[3];
+  my ($mon, $day, $year) = @_;
 
   # Simple, non-exhaustive checks on the validity of the passed in
   # values.
