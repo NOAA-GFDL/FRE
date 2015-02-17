@@ -3198,8 +3198,8 @@ sub get_subint {
 
    #get dependant years
    my @depyears = ();
-   my ($thisyear) = $t0 =~ /(\d{4,})\d{4}\d{2}:\d{2}:\d{2}/;
-   my ($simstart) = $sim0 =~ /(\d{4,})\d{4}\d{2}:\d{2}:\d{2}/;
+   my ($thisyear) = FREUtil::splitDate($t0);
+   my ($simstart) = FREUtil::splitDate($sim0);
 
    #print "in get_subint with thisyear=$thisyear, simstart=$simstart, interval=$interval, subint=$subint\n";
 
@@ -3736,14 +3736,14 @@ EOF
       my $nummonths = $season * 3 - 4;
       my $tSEASON = FREUtil::modifydate($tBEG,"+ $nummonths months");
       my $tSEASONf = FREUtil::graindate($tSEASON,'seasonal');
-      my $year = $tSEASONf =~ /\d{4,}\./;
+      my ($year) = $tSEASONf =~ /(\d{4,})\./;
       my $catfiles = "";
       my $makecpio = "";
       my $tmp = FREUtil::graindate($sim0,'annual');
       #if it is time, chunk the files.  only put chunked files into archive now.
       if ( ($year-$tmp + 1) % $cl == 0 ) {
 	 $tmp = $year-$tmp + 1;
-	 my $abbrev = $tSEASONf =~ /\d{4,}\.(\w{3})/;
+	 my ($abbrev) = $tSEASONf =~ /\d{4,}\.(\w{3})/;
 	 my $begin = FREUtil::padzeros($year - $cl + 1);
 	 my $chunkedoutfile = "$component.$begin-$year.$abbrev.\$var";
 	 my $filelist = "";
@@ -4249,7 +4249,7 @@ sub annualAV1yrfromhist {
    my $tENDf = FREUtil::graindate($yr2doEND,$src);
    if ( "$yr2do" eq "00010101" ) { $tENDf = "0001" }
 #print "annualAV1yrfromhist yr2do $yr2do yr2do0 $yr2do0 yr2doEND $yr2doEND tENDf $tENDf\n";
-   my $hDateyr = $userstartyear;
+   my ($hDateyr) = FREUtil::splitDate($yr2do);
 
    my $diag_source = $_[0]->findvalue('@diagSource');
    my @monthnodes = $ppcNode->findnodes('timeSeries[@freq="monthly"]');
