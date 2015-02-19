@@ -276,10 +276,11 @@ sub modifydate {
   my ( $preStr, $pm, $dYears, $postStr ) = $str =~ /(.*?)([-+])\s*(\d+)\s*years?(.*)/i;
   my $dYearsMult = floor(int($dYears)/$y2k);
   my $dYearsMod = int($dYears)%$y2k;
-  # New string to pass to Date::Manip::DateCalc
-  my $newStr = "$preStr $pm $dYearsMod year $postStr";
   # Amount to add/subtract at the end.
   my $newDeltaYears = eval("$pm 1 * ($dYearsMult * $y2k)");
+
+  # New string to pass to Date::Manip::DateCalc
+  my $newStr = ($dYears !~ /^$/) ? "$preStr $pm $dYearsMod year $postStr" : $str;
 
   # Separate the passed in yyyy and mmddhh:mm:ss
   my ($oYear, $oMDT) = splitDate($date);
@@ -293,7 +294,7 @@ sub modifydate {
   # New date string to pass to Date::Manip
   my $dDate = $yyyy2to4 . $oMDT;
 
-  my $dateManipd = Date::Manip::DateCalc($dDate,$str,\$err);
+  my $dateManipd = Date::Manip::DateCalc($dDate,$newStr,\$err);
   if ( "$err" ne "" ) {
     print STDERR "NOTE: Encountered Date::Manip problem with modifydate/DateCalc '$date' '$str': '$err'\n";
     return undef;
@@ -350,16 +351,39 @@ sub daysSince1BC($$$) {
 }
 
 # Wrapper for Date::Manip::Date_Cmp.  As Date_Cmp for DM5 "does little
-# more than use 'cmp'" that is all we do here as we do not deal with
-# dates/times in multiple time zones, cmp should be good enough.
-#
-# We leave this wrapped in this subroutine to allow for easier
-# modifications if needed when issues are found when using cmp instead
-# of something more substantial.
+# more than use 'cmp'." However, since cmp will not work as required if
+# the two strings have different lengths, this wrapper uses cmp on the 
+# separate date components.
 sub dateCmp ($$) {
   my ($date1, $date2) = @_;
 
-  return $date1 cmp $date2;
+  my $return = 0;
+
+  my ($yr1, $mo1, $dy1, $hr1, $mn1, $sc1) = $date1 =~ /^(\d{4,})(\d{2})(\d{2})(\d{2}):(\d{2}):(\d{2})$/;
+  my ($yr2, $mo2, $dy2, $hr2, $mn2, $sc2) = $date1 =~ /^(\d{4,})(\d{2})(\d{2})(\d{2}):(\d{2}):(\d{2})$/;
+
+  if (int($yr1) == int($yr2)) {
+    if (int($mo1) == int($mo2)) {
+      if (int($dy1) == int($dy2)) {
+	if (int($hr1) == int($hr2)) {
+	  if (int($mn1) == int($mn2)) {
+	    $return = $sc1 cmp $sc2;
+	  } else {
+	    $return = $mn1 cmp $mn2;
+	  }
+	} else {
+	  $return = $hr1 cmp $hr2;
+	}
+      } else {
+	$return = $dy1 cmp $dy2;
+      }
+    } else {
+      $return = $mn1 cmp $mn2;
+    }
+  } else {
+    $return = $yr1 cmp $yr2;
+  }
+  return $return;
 }
 
 #return appropriate date granularity

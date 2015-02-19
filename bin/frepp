@@ -979,7 +979,7 @@ if (\$#attCmds > 0) then
 endif
 
 if ( "\$fregrid_wt" != '' ) then
-   set fregrid_yr = `echo \$fregrid_in_date | cut -c 1-4`
+   set fregrid_yr = `echo \$fregrid_in_date | sed 's/[0-9][0-9][0-9][0-9]$//'`
    foreach fregridwtfile ( `ls $opt_d/\${fregrid_yr}????.nc.*` )
       set fregridwtfile = \$fregridwtfile:t:r
       $time_hsmget \$hsmget -a $opt_d -p $ptmpDir/history -w $tmphistdir \$fregridwtfile/\\*land_static\\*
@@ -1009,7 +1009,7 @@ if (\$#attCmds > 0) then
 endif
 
 if ( "\$fregrid_wt" != '' ) then
-   set fregrid_yr = `echo \$fregrid_in_date | cut -c 1-4`
+   set fregrid_yr = `echo \$fregrid_in_date | sed 's/[0-9][0-9][0-9][0-9]$//'`
    foreach i ( 1 2 3 4 5 6 )
 	set oldassoc = `ncdump -h \$fregrid_in.tile\$i.nc | grep ':associated_files' | cut -d'"' -f2`
 	if ("\$oldassoc" != '' ) then
@@ -2232,7 +2232,7 @@ EOF
    my $hsmget_history = <<EOF;
 cd $opt_d
 foreach h ( $hf )
- set historyyear = `echo \$h | cut -c 1-4`
+ set historyyear = `echo \$h | sed 's/[0-9][0-9][0-9][0-9].nc.tar//'`
  set availhf = ( `ls \$historyyear????.nc.cpio \$historyyear????.nc.tar` )
  if ( "\$availhf" == "" ) then
    Mail -s "\$name year \$historyyear cannot be postprocessed" \$USER <<END
@@ -2277,7 +2277,7 @@ if ( -d $refinedir ) then
   cd $refinedir
   foreach h ( $hf )
   foreach hsmsrc ( $hsmf )
-   set historyyear = `echo \$h | cut -c 1-4`
+   set historyyear = `echo \$h | sed 's/[0-9][0-9][0-9][0-9].nc.tar//'`
    foreach historyfile ( `ls \$historyyear????.nc.cpio \$historyyear????.nc.tar`)
     set hsmdate = \$historyfile:r
     $time_hsmget \$hsmget -a $refinedir -p $ptmpDir/history_refineDiag -w $tmphistdir \$hsmdate/\\*.\$hsmsrc.\\*
@@ -4050,9 +4050,9 @@ while ( \$i <= 6 )
    set monthf = `echo \$month | sed 's/.*/0&/;s/.\\(..\\)/\\1/'`
    set histmonth = "\$monthf"
 
-   $time_ncrcat ncrcat \$ncrcatopt ????\${histmonth}01.$diag_source$tile.nc month.nc
+   $time_ncrcat ncrcat \$ncrcatopt *\${histmonth}01.$diag_source$tile.nc month.nc
    $check_ncrcat
-   $time_rm rm -f ????\${histmonth}01.$diag_source$tile.nc
+   $time_rm rm -f *\${histmonth}01.$diag_source$tile.nc
 EOF
 
    if ( $do_zInterp ) {
@@ -4154,9 +4154,9 @@ while (\$month <= 12)
    set histmonth = "\$monthf"
 
    if ( -e month.nc ) rm -f month.nc
-   $time_ncrcat ncrcat \$ncrcatopt ????\${histmonth}01.$diag_source.nc month.nc
+   $time_ncrcat ncrcat \$ncrcatopt *\${histmonth}01.$diag_source.nc month.nc
    $check_ncrcat
-   $time_rm rm -f ????\${histmonth}01.$diag_source.nc
+   $time_rm rm -f *\${histmonth}01.$diag_source.nc
 EOF
 
       if ( $do_zInterp ) {
@@ -4782,7 +4782,7 @@ foreach var ( $variables )
    end
 
    if ( -e \$out.\$var.nc ) rm -f \$out.\$var.nc
-   $time_ncrcat ncrcat \$ncrcatopt ??????.\$var.nc \$out.\$var.nc
+   $time_ncrcat ncrcat \$ncrcatopt *??.\$var.nc \$out.\$var.nc
    $check_ncrcat
    $time_ncatted ncatted -h -O -a filename,global,m,c,"\$out.\$var.nc" \$out.\$var.nc
    $check_ncatted
@@ -4794,7 +4794,7 @@ foreach var ( $variables )
       $checktransfer
    endif
    $time_rm rm \$out.\$var.nc
-   $time_rm rm -f ??????.\$var.nc
+   $time_rm rm -f *??.\$var.nc
    @ len = \$#tmpstring - 1
    set length = `echo \$tmpstring[\$len] | cut -c2-`
    test \$length = $numtimelevels
@@ -6306,11 +6306,11 @@ EOF
       my $dates = "$range".".$season";
       $csh .= <<EOF;
 echo season $season =========================================================
-test $int = `ls -1 $component.????.$season.tile1.nc | wc -l`
+test $int = `ls -1 $component.*.$season.tile1.nc | wc -l`
 $check_numfiles
 set i = 1
 while ( \$i <= 6 )
-  set list = `ls -1 $component.????.$season.tile\$i.nc`
+  set list = `ls -1 $component.*.$season.tile\$i.nc`
   if ( -e sea\$i.nc ) $time_rm rm -f sea\$i.nc
   $time_ncrcat ncrcat \$ncrcatopt \$list sea\$i.nc
   $check_ncrcat
@@ -6532,9 +6532,9 @@ EOF
       my $dates = "$range".".$season";
       $csh .= <<EOF;
 echo season $season =========================================================
-test $int = `ls -1 $component.????.$season.nc | wc -l`
+test $int = `ls -1 $component.*.$season.nc | wc -l`
 $check_numfiles
-set list = `ls -1 $component.????.$season.nc`
+set list = `ls -1 $component.*.$season.nc`
 if ( -e sea.nc ) $time_rm rm -f sea.nc
 $time_ncrcat ncrcat \$ncrcatopt \$list sea.nc
 $check_ncrcat
@@ -6716,7 +6716,7 @@ set refineError = 0
 set basedate = '$basedate'
 set gridspec = '$gridspec'
 
-set historyyear = `echo $hDate | cut -c 1-4`
+set historyyear = `echo $hDate | sed 's/[0-9][0-9][0-9][0-9]$//'`
 cd \$histDir
 foreach historyfile ( `ls \$historyyear????.nc.cpio \$historyyear????.nc.tar`)
    set hsmdate = \$historyfile:r
