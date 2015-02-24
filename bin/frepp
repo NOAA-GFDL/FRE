@@ -37,7 +37,7 @@ use vars qw( $do_static $segTime $segUnits $caltype);
 use vars qw( $analysisdir $absfrepp $relfrepp $perlerrors );
 use vars qw( $archivedir $rootdir $workdir $tempCache $rtsVersion $platform $versionId $batchSubmit );
 use vars qw( $maxyrs $maxdisk $cubic $nlat $nlon $interpMethod $getgridspec $basenpes $call_fregrid );
-use vars qw( $checktransfer $statefile $state $writestate $didsomething $userstartmo $call_tile_fregrid );
+use vars qw( $checktransfer $statefile $state $writestate $didsomething $userstartyear $userstartmo $call_tile_fregrid );
 use vars qw( $mosaic_type $sourceGrid $xyInterp );
 
 {
@@ -140,16 +140,16 @@ use vars qw( $mosaic_type $sourceGrid $xyInterp );
 
    ################### PROCESS ARGS, SET DEFAULTS #########################
    if ( -l $0 ) {
-     $absfrepp = File::Spec->rel2abs( readlink($0) );
+   $absfrepp = File::Spec->rel2abs( readlink($0) );
    } else {
-     $absfrepp = File::Spec->rel2abs( $0 );
+   $absfrepp = File::Spec->rel2abs( $0 );
    }
    $relfrepp = basename($absfrepp);
 
    #getopts( 'AB:C:O:RY:Z:c:d:f:hlmMp:oqr:S:st:u:vVx:z' ) || die "\aSyntax: $0 [-AB:C:O:RY:Z:c:d:f:hlmMp:oqr:S:st:u:vVx:z]\n";
 
    if ( $opt_h or "$#ARGV" eq "-1" ) {
-     print <<EOF;
+   print <<EOF;
 
 Synopsis: $relfrepp is the FRE postprocessing utility.
 
@@ -204,7 +204,7 @@ Usage:    $relfrepp [ -AB:C:O:RY:Z:c:d:f:hlmMp:oqr:S:st:u:vx:z ] experiment [ ex
           experiment   = experiment to create scripts for; must be found in xml file
 
 EOF
-     exit 1;
+   exit 1;
    }
 
    #still there but no longer advertised / DEBUGGING
@@ -220,13 +220,13 @@ EOF
 
    $opt_x = 'rts.xml' unless $opt_x; #set default filename for experiments xml file
    if ( ! -f $opt_x ) {
-     mailuser("XML file does not exist: $opt_x");
-     sysmailuser();
-     die "ERROR: XML file does not exist: $opt_x\n";
+   mailuser("XML file does not exist: $opt_x");
+   sysmailuser();
+   die "ERROR: XML file does not exist: $opt_x\n";
    }
 
    if ( !$opt_t or ("$opt_t" eq "") ) {
-     print STDERR "WARNING: You did not specify a model date\n" unless $opt_A;
+   print STDERR "WARNING: You did not specify a model date\n" unless $opt_A;
    }
 
    if ( $opt_V ) { $opt_v = 1; }
@@ -236,8 +236,8 @@ EOF
    if ( $opt_O ) { print STDERR "NOTE: There has been a change to the behavior of the -O option. Your scripts will be written directly to '$opt_O' and not to '$opt_O/scripts/postProcess'\n"; }
 
    unless ( $opt_c ) {
-     print STDERR "NOTE: adding '-c split'; frepp will do each component in a separate batch job\n";
-     $opt_c = 'split';
+   print STDERR "NOTE: adding '-c split'; frepp will do each component in a separate batch job\n";
+   $opt_c = 'split';
    }
 
    $versionId = ' $Id: frepp,v 18.0.2.52.2.1.2.89.2.74 2014/12/17 15:42:41 arl Exp $';
@@ -256,11 +256,11 @@ EOF
    #initialize hsmfiles string
    my $hsmfiles="";
 
-   #begin generating version string
-   my $abs_xml_path = File::Spec->rel2abs($opt_x);
-   my $createdate = &ParseDate('now');
-   my $version_head = "# FMS postprocessing script created at $createdate via:\n# $0 ";
-   $version_head .= "-x $abs_xml_path ";
+#begin generating version string
+my $abs_xml_path = File::Spec->rel2abs($opt_x);
+my $createdate = Date::Manip::ParseDate('now');
+my $version_head = "# FMS postprocessing script created at $createdate via:\n# $0 ";
+$version_head .= "-x $abs_xml_path ";
 
    $username = $ENV{'USER'};
 
@@ -294,14 +294,28 @@ EOF
    my $time_hsmput = "";
    my $time_combine = "";
 
-   #clean up opt_t
-   if ( length($opt_t) < 4 ) { $opt_t = FREUtil::padzeros($opt_t); }
-   if ( length($opt_t) == 4 ) { $opt_t = "$opt_t"."0101"; }
-   $opt_t = substr($opt_t,0,8);
-   $userstartmo = substr($opt_t,4,8);
-   $t0 = &ParseDate($opt_t);
-   if ( "$opt_t" eq "00000000" ) { $t0 = &ParseDate("0000"); }
-   $hDate = $opt_t;
+#clean up opt_t
+#
+# opt_t should be of the form \d{4,}\d{2}\d{2}.  It is possible a user
+# will pass in only a year (\d{4}).  As we move forward to allow for
+# years past 9999, we need to set some guidance on how opt_t is
+# interpreted.  Thus, we somewhat arbitrarily decide that if
+# length($opt_t) < 7, we assume a year has been passed in, 8 and
+# beyond, assume the from above.
+#
+# There should also be a method to correctly know how many digits are
+# in a year, when the year is needed later on in the script.
+#
+# $t0 holds $opt_t in the Date::Manip date format 'yyyymmddhh:mm:ss'
+$t0 = FREUtil::parseDate($opt_t);
+if ($t0 == undef) {
+  print STDERR "ERROR: The date passed in via the '-t' option is not a valid date.\n";
+  exit 1;
+}
+# Hold required information in the correct format in these three variables
+# should not use $opt_t anywhere as it may not have the correct format.
+($userstartyear, $userstartmo) = $t0 =~ /(\d{4,})(\d{2}\d{2})\d{2}:\d{2}:\d{2}/;
+($hDate) = $t0 =~ /(\d{4,}\d{4})\d{2}:\d{2}:\d{2}/;
 
    #assume we are processing 1 year
    $tEND = FREUtil::modifydate($t0,'+1 year -1 sec');
@@ -335,115 +349,115 @@ EOF
    $root = $fre->{rootNode};
    $rtsVersion = $fre->{version};
    if ( "$rtsVersion" eq "" ) {
-     $rtsVersion = 1;
-     print STDERR "WARNING: rtsVersion information not found in your xml file, assuming rtsVersion 1.\n";
-     print STDERR "         The latest version available is version 2.  Automate conversion with\n";
-     print STDERR "            /home/fms/bin/rtsversion2 [in.xml] [out.xml]\n";
-     print STDERR "         Run '/home/fms/bin/rtsversion2' with no arguments for a help message.\n";
+   $rtsVersion = 1;
+   print STDERR "WARNING: rtsVersion information not found in your xml file, assuming rtsVersion 1.\n";
+   print STDERR "         The latest version available is version 2.  Automate conversion with\n";
+   print STDERR "            /home/fms/bin/rtsversion2 [in.xml] [out.xml]\n";
+   print STDERR "         Run '/home/fms/bin/rtsversion2' with no arguments for a help message.\n";
    } elsif ( $rtsVersion == 1 ) {
-     print STDERR "NOTE: You are using rtsVersion 1.  A newer version is available.  \n";
-     print STDERR "      The latest version available is version 2.  Automate conversion with\n";
-     print STDERR "         /home/fms/bin/rtsversion2 [in.xml] [out.xml]\n";
-     print STDERR "      Run '/home/fms/bin/rtsversion2' with no arguments for a help message.\n";
+   print STDERR "NOTE: You are using rtsVersion 1.  A newer version is available.  \n";
+   print STDERR "      The latest version available is version 2.  Automate conversion with\n";
+   print STDERR "         /home/fms/bin/rtsversion2 [in.xml] [out.xml]\n";
+   print STDERR "      Run '/home/fms/bin/rtsversion2' with no arguments for a help message.\n";
    } elsif ( "$rtsVersion" > "4" ) {
-     print STDERR "WARNING: This frerun is designed for version 3/4 xml and your xml is version $rtsVersion.\n";
+   print STDERR "WARNING: This frerun is designed for version 3/4 xml and your xml is version $rtsVersion.\n";
    }
    my $project = $fre->project();
 
    #------------ LOOP OVER EXPTS GIVEN AS SCRIPT ARGUMENTS ----------------
    foreach $expt ( @ARGV ) {
-     print "Setting up experiment '$expt'...\n" if $opt_v;
-     unless ( FREUtil::checkExptExists($expt) ) { next; }
+   print "Setting up experiment '$expt'...\n" if $opt_v;
+   unless ( FREUtil::checkExptExists($expt) ) { next; }
 
-     my $exp = FREExperiment->new($fre, $expt) or exit(1);
-     $fre->setCurrentExperimentName($expt);
-     $rootdir = $exp->rootDir();
-     if ( (! -d $rootdir) or (! -w $rootdir) and (! $opt_O) ) {
-       system("mkdir -p $rootdir");
-     }
-     if ( (! -d $rootdir) or (! -w $rootdir) and (! $opt_O) ) {
-       mailuser("Can't write to your root directory $rootdir");
-       sysmailuser();
-       die "ERROR: Can't write to your root directory $rootdir\n";
-     }
-     $workdir = $exp->workDir();
-     $archivedir = $exp->archiveDir();
-     my $postprocessdir = $exp->postProcessDir();
-     my $analysisdir = $exp->analysisDir();
-     my $scriptsdir = $exp->scriptsDir();
-     my $stdoutdir = $exp->stdoutDir();
-     my $ptmpDir = $exp->ptmpDir();
-     my $tempCache = (split /\//,$workdir)[0] . "/tempCache";
-     my $statedir = $exp->stateDir()."/postProcess";
-     my $outscriptdir = "$scriptsdir/postProcess";
-     if ( $opt_O ) {$outscriptdir = "$opt_O";}
-     unless ( -d "$outscriptdir" or $opt_A ) { system "mkdir -p $outscriptdir"; }
-     unless ( -d "$stdoutdir/postProcess" or $opt_A ) { system "mkdir -p $stdoutdir/postProcess"; }
-     if ( "$opt_u" ne '' ) { $statedir .= "/$opt_u"; }
-     unless ( -d "$statedir" or $opt_A ) { system "mkdir -p $statedir"; }
-     my $aoutscriptdir = "$scriptsdir/analysis";
-     if ( $opt_O ) {$aoutscriptdir = "$opt_O";}
-     my $shortxml = $abs_xml_path;
-     $shortxml =~ s/.+\/(.+\.xml)(\.$expt\.o.+)?/$1/;
-     #if ( -e "$archivedir/$shortxml" ) {
-     #   print "Running ln -s $abs_xml_path $archivedir/$shortxml\n" if $opt_v;
-     #   system("ln -s $abs_xml_path $archivedir/$shortxml");
-     #}
+   my $exp = FREExperiment->new($fre, $expt) or exit(1);
+   $fre->setCurrentExperimentName($expt);
+   $rootdir = $exp->rootDir();
+   if ( (! -d $rootdir) or (! -w $rootdir) and (! $opt_O) ) {
+      system("mkdir -p $rootdir");
+   }
+   if ( (! -d $rootdir) or (! -w $rootdir) and (! $opt_O) ) {
+      mailuser("Can't write to your root directory $rootdir");
+      sysmailuser();
+      die "ERROR: Can't write to your root directory $rootdir\n";
+   }
+   $workdir = $exp->workDir();
+   $archivedir = $exp->archiveDir();
+   my $postprocessdir = $exp->postProcessDir();
+   my $analysisdir = $exp->analysisDir();
+   my $scriptsdir = $exp->scriptsDir();
+   my $stdoutdir = $exp->stdoutDir();
+   my $ptmpDir = $exp->ptmpDir();
+   my $tempCache = (split /\//,$workdir)[0] . "/tempCache";
+   my $statedir = $exp->stateDir()."/postProcess";
+   my $outscriptdir = "$scriptsdir/postProcess";
+   if ( $opt_O ) {$outscriptdir = "$opt_O";}
+   unless ( -d "$outscriptdir" or $opt_A ) { system "mkdir -p $outscriptdir"; }
+   unless ( -d "$stdoutdir/postProcess" or $opt_A ) { system "mkdir -p $stdoutdir/postProcess"; }
+   if ( "$opt_u" ne '' ) { $statedir .= "/$opt_u"; }
+   unless ( -d "$statedir" or $opt_A ) { system "mkdir -p $statedir"; }
+   my $aoutscriptdir = "$scriptsdir/analysis";
+   if ( $opt_O ) {$aoutscriptdir = "$opt_O";}
+   my $shortxml = $abs_xml_path;
+   $shortxml =~ s/.+\/(.+\.xml)(\.$expt\.o.+)?/$1/;
+   #if ( -e "$archivedir/$shortxml" ) {
+   #   print "Running ln -s $abs_xml_path $archivedir/$shortxml\n" if $opt_v;
+   #   system("ln -s $abs_xml_path $archivedir/$shortxml");
+   #}
 
-     my $tmphistdir = "";
-     if ( "$workdir" eq "" ) {
-       die "ERROR: No workDir from xml\n";
-       $tmphistdir = "\$TMPDIR/$expt"."_$opt_t";
-       $workdir = "\$TMPDIR/$expt"."_$opt_t/work";
-     } else {
-       $tmphistdir = "$workdir/$expt"."_$opt_t";
-       $workdir = "$workdir/$expt"."_$opt_t/work";
-     }
+   my $tmphistdir = "";
+   if ( "$workdir" eq "" ) {
+      die "ERROR: No workDir from xml\n";
+      $tmphistdir = "\$TMPDIR/$expt"."_$hDate";
+      $workdir = "\$TMPDIR/$expt"."_$hDate/work";
+   } else {
+      $tmphistdir = "$workdir/$expt"."_$hDate";
+      $workdir = "$workdir/$expt"."_$hDate/work";
+   }
 
-     if ( !$opt_d ) {                #set appropriate history directory
-       if ( $opt_r ) {
+   if ( !$opt_d ) {                #set appropriate history directory
+      if ( $opt_r ) {
          $opt_d = "$archivedir/$opt_r/history";
-       } else {
+      } else {
          $opt_d = "$archivedir/history";
-       }
-     }
-     if ( "$opt_d" eq '$archive/$name/history' ) {
-       $opt_d = "$archivedir/history";
-     }
-     my $histDir = $opt_d;
-     if ( ! -d "$histDir" ) {
-       print STDERR "\nNOTE: Creating history dir ($histDir)\n" if $opt_v;
-       system "mkdir -p $histDir";
-     }
-     print "\nDIRECTORIES: FRE4\nworkdir $workdir\nrootdir $rootdir\narchivedir $archivedir\nanalysisdir $analysisdir\noutscriptdir $outscriptdir\naoutscriptdir $aoutscriptdir\nhistDir $histDir\nptmpDir $ptmpDir\nstatedir $statedir\n\n" if $opt_v;
+      }
+   }
+   if ( "$opt_d" eq '$archive/$name/history' ) {
+      $opt_d = "$archivedir/history";
+   }
+   my $histDir = $opt_d;
+   if ( ! -d "$histDir" ) {
+      print STDERR "\nNOTE: Creating history dir ($histDir)\n" if $opt_v;
+      system "mkdir -p $histDir";
+   }
+   print "\nDIRECTORIES: FRE4\nworkdir $workdir\nrootdir $rootdir\narchivedir $archivedir\nanalysisdir $analysisdir\noutscriptdir $outscriptdir\naoutscriptdir $aoutscriptdir\nhistDir $histDir\nptmpDir $ptmpDir\nstatedir $statedir\n\n" if $opt_v;
 
-     my $refinedir = "$opt_d"."_refineDiag";
-     $ptmpDir .= $archivedir;
-     if ( "$opt_u" ne '' ) { $ptmpDir .= "/$opt_u"; }
+   my $refinedir = "$opt_d"."_refineDiag";
+   $ptmpDir .= $archivedir;
+   if ( "$opt_u" ne '' ) { $ptmpDir .= "/$opt_u"; }
 
-     #set whether to aggregate time series files in archive
-     my $agg = FREUtil::getxpathval('postProcess/@archiveTimeSeries');
-     if ( "$agg" eq 'byVariable' ) { $aggregateTS = 0; }
+   #set whether to aggregate time series files in archive
+   my $agg = FREUtil::getxpathval('postProcess/@archiveTimeSeries');
+   if ( "$agg" eq 'byVariable' ) { $aggregateTS = 0; }
 
-     #may need to change platform here
-     my $freppplatform = FREUtil::getxpathval('postProcess/@platform');
-     if ( "$freppplatform" ne "" and "$freppplatform" ne "$platform" ) {
-       $platform = $freppplatform;
-     }
+   #may need to change platform here
+   my $freppplatform = FREUtil::getxpathval('postProcess/@platform');
+   if ( "$freppplatform" ne "" and "$freppplatform" ne "$platform" ) {
+      $platform = $freppplatform;
+   }
 
-     #set platform specific variables
-     print STDERR "Using platform $platform\n" if $opt_v;
-     $batchSubmit = "msub -d /home/$username/ ";
-     if ( "$platform" eq 'sgi' ) {
-       $cpio = 'cpio -C 524288';
-       $cp = 'cp -b 2097152';
-       $mv = 'mv -b 2097152';
-       $mvfile = '/lopt/bin/mvfile';
-       $timecmd = '/bin/time';
-       $maxruntime = '18:00:00';
-       $systimecmd = '/usr/etc/amtime1970';
-       $timereal = 'E';
-       $platformcsh = <<'EOF';
+   #set platform specific variables
+   print STDERR "Using platform $platform\n" if $opt_v;
+   $batchSubmit = "msub -d /home/$username/ ";
+   if ( "$platform" eq 'sgi' ) {
+      $cpio = 'cpio -C 524288';
+      $cp = 'cp -b 2097152';
+      $mv = 'mv -b 2097152';
+      $mvfile = '/lopt/bin/mvfile';
+      $timecmd = '/bin/time';
+      $maxruntime = '18:00:00';
+      $systimecmd = '/usr/etc/amtime1970';
+      $timereal = 'E';
+      $platformcsh = <<'EOF';
 set path = (/usr/local/nco-3.0.1/bin/ /usr/local/netcdf-3.6.0-p1/bin $path)
 setenv NETCDF_FFIOSPEC "cache:256:2"
 set ncks = /usr/local/bin/ncks
@@ -451,302 +465,302 @@ set ncks = /usr/local/bin/ncks
 #sanity check
 which ncatted
 EOF
-     } elsif ( "$platform" eq 'ia64' ) {
-       $batchSubmit = 'qsub';
-       $cp = '/usr/cluster/bin/cxfscp';
-       $cpio = 'cpio -C 524288';
-       $uncpio = 'cpio -C 2097152';
-       $mvfile = '/usr/cluster/bin/cxfscp';
-       $platformcsh = $exp->fre()->platformValue('csh');
-       $platformcsh .= <<'EOF';
+   } elsif ( "$platform" eq 'ia64' ) {
+      $batchSubmit = 'qsub';
+      $cp = '/usr/cluster/bin/cxfscp';
+      $cpio = 'cpio -C 524288';
+      $uncpio = 'cpio -C 2097152';
+      $mvfile = '/usr/cluster/bin/cxfscp';
+      $platformcsh = $exp->fre()->platformValue('csh');
+      $platformcsh .= <<'EOF';
 
 setenv NC_BLKSZ 64K
 set ncksopt = "-a -h -F --64bit --header_pad 16384"
 set ncrcatopt = "-h -O --64bit -t 2 --header_pad 16384"
 EOF
-     } elsif ( "$platform" eq 'x86_64' ) {
-       $cp = 'gcp -v';
-       $cpio = 'cpio -C 524288';
-       $uncpio = 'cpio -C 2097152';
-       $mvfile = 'gcp -v';
-       $platformcsh = $exp->fre()->platformValue('csh');
-       $platformcsh .= <<'EOF';
+   } elsif ( "$platform" eq 'x86_64' ) {
+      $cp = 'gcp -v';
+      $cpio = 'cpio -C 524288';
+      $uncpio = 'cpio -C 2097152';
+      $mvfile = 'gcp -v';
+      $platformcsh = $exp->fre()->platformValue('csh');
+      $platformcsh .= <<'EOF';
 
 setenv NC_BLKSZ 64K
 set ncksopt = "-a -h -F --64bit --header_pad 16384"
 set ncrcatopt = "-h -O --64bit -t 2 --header_pad 16384"
 EOF
 
-     } elsif ( "$platform" eq 'ifc' ) {
-     } else {
-       mailuser("platform $platform not supported for postprocessing");
-       print STDERR "ERROR: You specified '$freppplatform' for the post-processing platform in the <postProcess> tag.\nPlatform must be either 'ia64' or 'sgi' (for the Origins)\n";
-     }
+   } elsif ( "$platform" eq 'ifc' ) {
+   } else {
+      mailuser("platform $platform not supported for postprocessing");
+      print STDERR "ERROR: You specified '$freppplatform' for the post-processing platform in the <postProcess> tag.\nPlatform must be either 'ia64' or 'sgi' (for the Origins)\n";
+   }
 
-     if ( "$opt_w" ne '' ) {
-       if ( "$platform" eq 'ia64' ) {
+   if ( "$opt_w" ne '' ) {
+      if ( "$platform" eq 'ia64' ) {
          $opt_w = " -hold_jid $opt_w";
-       } else {
+      } else {
          $opt_w = " -l depend=afterok:$opt_w";
-       }
-     }
+      }
+   }
 
 
-     #don't use job schooling if queue is stage. Maintain the same queue for future jobs when schooling.
-     my $schooling = 1;
-     my $pbsqueue = '';
-     my $pbsenv = $ENV{'PBS_ENVIRONMENT'};
-     if ( "$pbsenv" eq "PBS_BATCH" ) {
-       $pbsqueue = $ENV{'PBS_O_QUEUE'};
-       if ( "$pbsqueue" eq "stage" ) {
+   #don't use job schooling if queue is stage. Maintain the same queue for future jobs when schooling.
+   my $schooling = 1;
+   my $pbsqueue = '';
+   my $pbsenv = $ENV{'PBS_ENVIRONMENT'};
+   if ( "$pbsenv" eq "PBS_BATCH" ) {
+      $pbsqueue = $ENV{'PBS_O_QUEUE'};
+      if ( "$pbsqueue" eq "stage" ) {
          $schooling = 0;
-       } elsif ( "$pbsqueue" eq "bigvftmp" ) {
+      } elsif ( "$pbsqueue" eq "bigvftmp" ) {
          unless ( "$opt_m" =~ m/-q bigvftmp/ or "$opt_m" =~ m/-q boost_bigvftmp/) {
-	   $opt_m .= " -q boost_bigvftmp";
+            $opt_m .= " -q boost_bigvftmp";
          }
-       } elsif ( "$pbsqueue" eq "boost_bigvftmp" ) {
+      } elsif ( "$pbsqueue" eq "boost_bigvftmp" ) {
          unless ( "$opt_m" =~ m/-q boost_bigvftmp/ ) {
-	   $opt_m .= " -q boost_bigvftmp";
+            $opt_m .= " -q boost_bigvftmp";
          }
-       } elsif ( "$pbsqueue" eq "batch" ) {
+      } elsif ( "$pbsqueue" eq "batch" ) {
          unless ( "$opt_m" =~ m/-q batch/ or "$opt_m" =~ m/-q boost_batch/) {
-	   $opt_m .= " -q boost_batch";
+            $opt_m .= " -q boost_batch";
          }
-       } elsif ( "$pbsqueue" eq "boost_batch" ) {
+      } elsif ( "$pbsqueue" eq "boost_batch" ) {
          unless ( "$opt_m" =~ m/-q boost_batch/ ) {
-	   $opt_m .= " -q boost_batch";
+            $opt_m .= " -q boost_batch";
          }
-       }
-     }
+      }
+   }
 
-     #get base number of pes, if specified
-     my $prodnpes = FREUtil::getxpathval('runtime/production/@npes');
-     #if ( $prodnpes > 512 ) {
-     #   $basenpes = 6;
-     #}
-     my $ppnpes = FREUtil::getxpathval('postProcess/@npes');
-     if ( "$ppnpes" ne '' and $ppnpes > 1 and $ppnpes <= 4 ) {
-       $basenpes = $ppnpes;
-     }
+   #get base number of pes, if specified
+   my $prodnpes = FREUtil::getxpathval('runtime/production/@npes');
+   #if ( $prodnpes > 512 ) {
+   #   $basenpes = 6;
+   #}
+   my $ppnpes = FREUtil::getxpathval('postProcess/@npes');
+   if ( "$ppnpes" ne '' and $ppnpes > 1 and $ppnpes <= 4 ) {
+      $basenpes = $ppnpes;
+   }
 
-     #if opt_m doesn't set a host, and we are currently on a pp node, use the current hostname for frepp submissions from this invocation
-     if ( $schooling ) {
-       unless ( "$opt_m" =~ m/-l host=.+/ ) {
+   #if opt_m doesn't set a host, and we are currently on a pp node, use the current hostname for frepp submissions from this invocation
+   if ( $schooling ) {
+      unless ( "$opt_m" =~ m/-l host=.+/ ) {
          my $hostname = $ENV{HOST};
          $opt_m .= " -l host=$hostname.princeton.rdhpcs.noaa.gov" if "$hostname" =~ m/^pp/;
-       }
-     }
+      }
+   }
 
-     if ( "$opt_m" =~ m/host=.+princeton\.rdhpcs\.noaa\.gov/
-	  and "$opt_m" !~ m/naccesspolicy=singlejob/
-	  and "$pbsqueue" =~ m/bigvftmp/ ) {
-       $opt_m =~ s/(princeton\.rdhpcs\.noaa\.gov)/$1,naccesspolicy=singlejob/;
-     }
+   if ( "$opt_m" =~ m/host=.+princeton\.rdhpcs\.noaa\.gov/
+            and "$opt_m" !~ m/naccesspolicy=singlejob/
+            and "$pbsqueue" =~ m/bigvftmp/ ) {
+      $opt_m =~ s/(princeton\.rdhpcs\.noaa\.gov)/$1,naccesspolicy=singlejob/;
+   }
 
-     #variables for timing statistics
-     if ( $opt_z ) {
-       $time_ncatted     = "$timecmd".' -f "     TIME for ncatted:   real %'."$timereal".' user %U sys %S"';
-       $time_ncks        = "$timecmd".' -f "     TIME for ncks:      real %'."$timereal".' user %U sys %S"';
-       $time_ncmerge     = "$timecmd".' -f "     TIME for ncmerge:   real %'."$timereal".' user %U sys %S"';
-       $time_ncrcat      = "$timecmd".' -f "     TIME for ncrcat:    real %'."$timereal".' user %U sys %S"';
-       $time_nccatm      = "$timecmd".' -f "     TIME for nccatm:    real %'."$timereal".' user %U sys %S"';
-       $time_plevel      = "$timecmd".' -f "     TIME for plevel:    real %'."$timereal".' user %U sys %S"';
-       $time_splitncvars = "$timecmd".' -f "     TIME for splitvars: real %'."$timereal".' user %U sys %S"';
-       $time_timavg      = "$timecmd".' -f "     TIME for timavg:    real %'."$timereal".' user %U sys %S"';
-       $time_uncpio      = "$timecmd".' -f "     TIME for uncpio:    real %'."$timereal".' user %U sys %S"';
-       $time_untar       = "$timecmd".' -f "     TIME for untar:     real %'."$timereal".' user %U sys %S"';
-       $time_mkcpio      = "$timecmd".' -f "     TIME for mkcpio:    real %'."$timereal".' user %U sys %S"';
-       $time_mktar       = "$timecmd".' -f "     TIME for mktar:     real %'."$timereal".' user %U sys %S"';
-       $time_taxis2mid   = "$timecmd".' -f "     TIME for taxis2mid: real %'."$timereal".' user %U sys %S"';
-       $time_mv          = "$timecmd".' -f "     TIME for move:      real %'."$timereal".' user %U sys %S"';
-       $time_rm          = "$timecmd".' -f "     TIME for remove:    real %'."$timereal".' user %U sys %S"';
-       $time_dmget       = "$timecmd".' -f "     TIME for dmget:     real %'."$timereal".' user %U sys %S"';
-       $time_ncap        = "$timecmd".' -f "     TIME for ncap:      real %'."$timereal".' user %U sys %S"';
-       $time_zgrid       = "$timecmd".' -f "     TIME for zgrid:     real %'."$timereal".' user %U sys %S"';
-       $time_dmput       = "$timecmd".' -f "     TIME for dmput:     real %'."$timereal".' user %U sys %S"';
-       $time_cp          = "$timecmd".' -f "     TIME for cp:        real %'."$timereal".' user %U sys %S"';
-       $time_fregrid     = "$timecmd".' -f "     TIME for fregrid:   real %'."$timereal".' user %U sys %S"';
-       $time_ncrename    = "$timecmd".' -f "     TIME for ncrename:  real %'."$timereal".' user %U sys %S"';
-       $time_hsmget      = "$timecmd".' -f "     TIME for hsmget:    real %'."$timereal".' user %U sys %S"';
-       $time_hsmput      = "$timecmd".' -f "     TIME for hsmput:    real %'."$timereal".' user %U sys %S"';
-       $time_combine     = "$timecmd".' -f "     TIME for combine:   real %'."$timereal".' user %U sys %S"';
-     }
+   #variables for timing statistics
+   if ( $opt_z ) {
+     $time_ncatted     = "$timecmd".' -f "     TIME for ncatted:   real %'."$timereal".' user %U sys %S"';
+     $time_ncks        = "$timecmd".' -f "     TIME for ncks:      real %'."$timereal".' user %U sys %S"';
+     $time_ncmerge     = "$timecmd".' -f "     TIME for ncmerge:   real %'."$timereal".' user %U sys %S"';
+     $time_ncrcat      = "$timecmd".' -f "     TIME for ncrcat:    real %'."$timereal".' user %U sys %S"';
+     $time_nccatm      = "$timecmd".' -f "     TIME for nccatm:    real %'."$timereal".' user %U sys %S"';
+     $time_plevel      = "$timecmd".' -f "     TIME for plevel:    real %'."$timereal".' user %U sys %S"';
+     $time_splitncvars = "$timecmd".' -f "     TIME for splitvars: real %'."$timereal".' user %U sys %S"';
+     $time_timavg      = "$timecmd".' -f "     TIME for timavg:    real %'."$timereal".' user %U sys %S"';
+     $time_uncpio      = "$timecmd".' -f "     TIME for uncpio:    real %'."$timereal".' user %U sys %S"';
+     $time_untar       = "$timecmd".' -f "     TIME for untar:     real %'."$timereal".' user %U sys %S"';
+     $time_mkcpio      = "$timecmd".' -f "     TIME for mkcpio:    real %'."$timereal".' user %U sys %S"';
+     $time_mktar       = "$timecmd".' -f "     TIME for mktar:     real %'."$timereal".' user %U sys %S"';
+     $time_taxis2mid   = "$timecmd".' -f "     TIME for taxis2mid: real %'."$timereal".' user %U sys %S"';
+     $time_mv          = "$timecmd".' -f "     TIME for move:      real %'."$timereal".' user %U sys %S"';
+     $time_rm          = "$timecmd".' -f "     TIME for remove:    real %'."$timereal".' user %U sys %S"';
+     $time_dmget       = "$timecmd".' -f "     TIME for dmget:     real %'."$timereal".' user %U sys %S"';
+     $time_ncap        = "$timecmd".' -f "     TIME for ncap:      real %'."$timereal".' user %U sys %S"';
+     $time_zgrid       = "$timecmd".' -f "     TIME for zgrid:     real %'."$timereal".' user %U sys %S"';
+     $time_dmput       = "$timecmd".' -f "     TIME for dmput:     real %'."$timereal".' user %U sys %S"';
+     $time_cp          = "$timecmd".' -f "     TIME for cp:        real %'."$timereal".' user %U sys %S"';
+     $time_fregrid     = "$timecmd".' -f "     TIME for fregrid:   real %'."$timereal".' user %U sys %S"';
+     $time_ncrename    = "$timecmd".' -f "     TIME for ncrename:  real %'."$timereal".' user %U sys %S"';
+     $time_hsmget      = "$timecmd".' -f "     TIME for hsmget:    real %'."$timereal".' user %U sys %S"';
+     $time_hsmput      = "$timecmd".' -f "     TIME for hsmput:    real %'."$timereal".' user %U sys %S"';
+     $time_combine     = "$timecmd".' -f "     TIME for combine:   real %'."$timereal".' user %U sys %S"';
+  }
 
-     my $version_info = "$version_head";
-     if ( $opt_f ) { $version_info .= "-f "; }
-     if ( $opt_P ) { $version_info .= "-P $opt_P "; }
-     if ( $opt_T ) { $version_info .= "-T $opt_T "; }
-     if ( $opt_D ) { $version_info .= "-D $opt_D "; }
-     if ( $opt_t ) { $version_info .= "-t $opt_t "; }
-     if ( $opt_p ) { $version_info .= "-p $opt_p "; }
-     if ( $opt_c ) { $version_info .= "-c $opt_c "; }
-     if ( $opt_d ) { $version_info .= "-d $opt_d "; }
-     if ( $opt_u ) { $version_info .= "-u $opt_u "; }
-     if ( $opt_r ) { $version_info .= "-r $opt_r "; }
-     if ( $opt_H ) { $version_info .= "-H "; }
-     if ( $opt_m ) { $version_info .= "-m '$opt_m' "; }
-     $version_info .= "$expt";
-     my $this_frepp_cmd = $version_info;
-     $this_frepp_cmd =~ s/.*# //smg;
-     my $outscript = "$outscriptdir/$expt"."_$opt_t";
-     my $pbs_job_name = "$expt"."_$opt_t";
-     if ( $opt_r ) {
-       $outscript = "$outscriptdir/$expt"."_$opt_r"."_$opt_t";
-       $maxruntime = "01:00:00";
-       $pbs_job_name = "$expt"."_$opt_r"."_$opt_t";
-     }
-     if ( $opt_D ) {
-       $outscript = "$outscriptdir/$expt"."_refineDiag_$opt_t";
-       $pbs_job_name = "$expt"."_refineDiag_$opt_t";
-     }
+   my $version_info = "$version_head";
+   if ( $opt_f ) { $version_info .= "-f "; }
+   if ( $opt_P ) { $version_info .= "-P $opt_P "; }
+   if ( $opt_T ) { $version_info .= "-T $opt_T "; }
+   if ( $opt_D ) { $version_info .= "-D $opt_D "; }
+   if ( $opt_t ) { $version_info .= "-t $hDate "; } # Using corrected $opt_t value
+   if ( $opt_p ) { $version_info .= "-p $opt_p "; }
+   if ( $opt_c ) { $version_info .= "-c $opt_c "; }
+   if ( $opt_d ) { $version_info .= "-d $opt_d "; }
+   if ( $opt_u ) { $version_info .= "-u $opt_u "; }
+   if ( $opt_r ) { $version_info .= "-r $opt_r "; }
+   if ( $opt_H ) { $version_info .= "-H "; }
+   if ( $opt_m ) { $version_info .= "-m '$opt_m' "; }
+   $version_info .= "$expt";
+   my $this_frepp_cmd = $version_info;
+   $this_frepp_cmd =~ s/.*# //smg;
+   my $outscript = "$outscriptdir/$expt"."_$hDate";
+   my $pbs_job_name = "$expt"."_$hDate";
+   if ( $opt_r ) {
+      $outscript = "$outscriptdir/$expt"."_$opt_r"."_$hDate";
+      $maxruntime = "01:00:00";
+      $pbs_job_name = "$expt"."_$opt_r"."_$hDate";
+   }
+   if ( $opt_D ) {
+      $outscript = "$outscriptdir/$expt"."_refineDiag_$hDate";
+      $pbs_job_name = "$expt"."_refineDiag_$hDate";
+   }
 
-     my $cshscripttmpl = getTemplate($platform);
+   my $cshscripttmpl = getTemplate($platform);
 
-     #environment setup for FRE
-     my $freCommandsHomeDir = FRE::home();
-     my $siteconfig = <<EOF;
+   #environment setup for FRE
+   my $freCommandsHomeDir = FRE::home();
+   my $siteconfig = <<EOF;
   setenv FRE_COMMANDS_HOME_FREPP $freCommandsHomeDir
 EOF
-     $cshscripttmpl =~ s/#get_site_config/$siteconfig/;
+   $cshscripttmpl =~ s/#get_site_config/$siteconfig/;
 
-     #platform_csh_from_xml and check for FRE version mismatch
-     if ( "$platformcsh" ne "" ) {
-       $platformcsh = <<EOF;
+   #platform_csh_from_xml and check for FRE version mismatch
+   if ( "$platformcsh" ne "" ) {
+      $platformcsh = <<EOF;
 #platform_csh_from_xml
 $platformcsh
 if ( "\$FRE_COMMANDS_HOME" != "\$FRE_COMMANDS_HOME_FREPP" ) then
-   echo "ERROR: FRE version mismatch:"
-   echo "       Frepp version: \$FRE_COMMANDS_HOME_FREPP"
-   echo "       XML loads version: \$FRE_COMMANDS_HOME"
-   exit 1
+  echo "ERROR: FRE version mismatch:"
+  echo "       Frepp version: \$FRE_COMMANDS_HOME_FREPP"
+  echo "       XML loads version: \$FRE_COMMANDS_HOME"
+  exit 1
 endif
 EOF
-       my $fremodule = `echo $ENV{LOADEDMODULES} | tr ':' '\n' | egrep '^fre/.+'`;
-       chomp $fremodule;
-       my $xmlfremodule = $platformcsh;
-       my @fremodulecsh = ();
-       # Loop through the CSH and remove all comments
-       foreach ( split (/\n/, $xmlfremodule )){
-	 if ( $_ =~ /#/ ){
-	   my $noncomment = (split( /#/, $_))[0];
-	   if ( $noncomment =~ /\S/ ){
-	     push @fremodulecsh, $noncomment;
-	   }
-	 } else {
-	   push @fremodulecsh, $_;
-	 }
-       }
-       $xmlfremodule = join( /\n/, @fremodulecsh );
-       $xmlfremodule =~ s/.*module load (fre\/\S+)\s*.*/$1/s;
-       if ( "$fremodule" ne "$xmlfremodule" ) {
+      my $fremodule = `echo $ENV{LOADEDMODULES} | tr ':' '\n' | egrep '^fre/.+'`;
+      chomp $fremodule;
+      my $xmlfremodule = $platformcsh;
+      my @fremodulecsh = ();
+      # Loop through the CSH and remove all comments
+      foreach ( split (/\n/, $xmlfremodule )){
+          if ( $_ =~ /#/ ){
+              my $noncomment = (split( /#/, $_))[0];
+              if ( $noncomment =~ /\S/ ){
+                  push @fremodulecsh, $noncomment;
+              }
+          } else {
+              push @fremodulecsh, $_;
+          }
+      }
+      $xmlfremodule = join( /\n/, @fremodulecsh );
+      $xmlfremodule =~ s/.*module load (fre\/\S+)\s*.*/$1/s;
+      if ( "$fremodule" ne "$xmlfremodule" ) {
          print STDERR "ERROR: FRE version mismatch. Must use the same version of FRE in the shell and XML.\n";
          print STDERR "       frepp version: $fremodule\n";
          print STDERR "         xml version: $xmlfremodule\n";
          exit 1;
-       }
-     }
-     $cshscripttmpl =~ s/#platform_csh_from_xml/$platformcsh/;
+      }
+   }
+   $cshscripttmpl =~ s/#platform_csh_from_xml/$platformcsh/;
 
-     if ( "$platform" eq 'ia64' ) {
-       $cshscripttmpl =~ s/#\$ -l h_cpu/#\$ -l h_cpu=$maxruntime/;
-       $cshscripttmpl =~ s/#\$ -o/#\$ -o $stdoutdir\/postProcess/;
-     } else {
-       $cshscripttmpl =~ s/#PBS -N/#PBS -N $pbs_job_name/;
-       $cshscripttmpl =~ s/#PBS -l walltime/#PBS -l walltime=$maxruntime/;
-       $cshscripttmpl =~ s/#PBS -o/#PBS -o $stdoutdir\/postProcess\//;
-       $cshscripttmpl =~ s/setenv FRE_STDOUT_PATH/setenv FRE_STDOUT_PATH $stdoutdir\/postProcess\/$pbs_job_name.o\$JOB_ID/;
-     }
-     $cshscripttmpl =~ s/(-soft -l fre_info=)/$1ppVersion\@$relfrepp -hard/;
-     $cshscripttmpl =~ s/version_info/$versionId\n$version_info/;
-     $cshscripttmpl =~ s/set name/set name = $expt/;
-     $cshscripttmpl =~ s/set rtsxml/set rtsxml = $abs_xml_path/;
-     $cshscripttmpl =~ s/set work/set work = $workdir/;
-     $cshscripttmpl =~ s/set tempCache/set tempCache = $tempCache/;
-     $cshscripttmpl =~ s/set root/set root = $rootdir/;
-     $cshscripttmpl =~ s/set archive/set archive = $archivedir/;
-     $cshscripttmpl =~ s/set scriptName/set scriptName = $outscript/;
-     $cshscripttmpl =~ s/set oname/set oname = $opt_t/;
-     $cshscripttmpl =~ s/set histDir/set histDir = $opt_d/;
-     $cshscripttmpl =~ s/set ptmpDir/set ptmpDir = $ptmpDir/;
-     $cshscripttmpl =~ s/set platform/set platform = $opt_P/;
-     $cshscripttmpl =~ s/set target/set target = $opt_T/;
+   if ( "$platform" eq 'ia64' ) {
+      $cshscripttmpl =~ s/#\$ -l h_cpu/#\$ -l h_cpu=$maxruntime/;
+      $cshscripttmpl =~ s/#\$ -o/#\$ -o $stdoutdir\/postProcess/;
+   } else {
+      $cshscripttmpl =~ s/#PBS -N/#PBS -N $pbs_job_name/;
+      $cshscripttmpl =~ s/#PBS -l walltime/#PBS -l walltime=$maxruntime/;
+      $cshscripttmpl =~ s/#PBS -o/#PBS -o $stdoutdir\/postProcess\//;
+      $cshscripttmpl =~ s/setenv FRE_STDOUT_PATH/setenv FRE_STDOUT_PATH $stdoutdir\/postProcess\/$pbs_job_name.o\$JOB_ID/;
+   }
+   $cshscripttmpl =~ s/(-soft -l fre_info=)/$1ppVersion\@$relfrepp -hard/;
+   $cshscripttmpl =~ s/version_info/$versionId\n$version_info/;
+   $cshscripttmpl =~ s/set name/set name = $expt/;
+   $cshscripttmpl =~ s/set rtsxml/set rtsxml = $abs_xml_path/;
+   $cshscripttmpl =~ s/set work/set work = $workdir/;
+   $cshscripttmpl =~ s/set tempCache/set tempCache = $tempCache/;
+   $cshscripttmpl =~ s/set root/set root = $rootdir/;
+   $cshscripttmpl =~ s/set archive/set archive = $archivedir/;
+   $cshscripttmpl =~ s/set scriptName/set scriptName = $outscript/;
+   $cshscripttmpl =~ s/set oname/set oname = $hDate/;
+   $cshscripttmpl =~ s/set histDir/set histDir = $opt_d/;
+   $cshscripttmpl =~ s/set ptmpDir/set ptmpDir = $ptmpDir/;
+   $cshscripttmpl =~ s/set platform/set platform = $opt_P/;
+   $cshscripttmpl =~ s/set target/set target = $opt_T/;
 
-     if ( $opt_r ) {  #if a regression test, no further postprocessing
-       $cshscripttmpl =~ s/(-soft -l fre_info=)/$1ppYears\@$maxyrs+/;
-       writescript($cshscripttmpl,$outscript,"$batchSubmit$opt_w $opt_m",$statefile);
-       $opt_w = '';
-       next;
-     }
-     my $ppNode = FREUtil::getppNode($expt);
-     unless ( $opt_f ) {
-       unless ( $ppNode ) {  #if no pp node, no further postprocessing
-	 if ( "$platform" eq 'ia64' ) {
-	   $cshscripttmpl =~ s/#\$ -l h_cpu.*/#\$ -l h_cpu=01:00:00/;
-	 } else {
-	   $cshscripttmpl =~ s/#PBS -l walltime.*/#PBS -l walltime=01:00:00/;
-	 }
-	 $cshscripttmpl =~ s/(-soft -l fre_info=)/$1ppYears\@$maxyrs+/;
-	 writescript($cshscripttmpl,$outscript,"$batchSubmit$opt_w $opt_m",$statefile);
-	 $opt_w = '';
-	 next;
-       }
-     }
-     if ( "$opt_M" ne "" ) {
-       $cshscripttmpl =~ s/#\$ -r y/#\$ -r y\n$opt_M/;
-     }
+   if ( $opt_r ) {  #if a regression test, no further postprocessing
+      $cshscripttmpl =~ s/(-soft -l fre_info=)/$1ppYears\@$maxyrs+/;
+      writescript($cshscripttmpl,$outscript,"$batchSubmit$opt_w $opt_m",$statefile);
+      $opt_w = '';
+      next;
+   }
+   my $ppNode = FREUtil::getppNode($expt);
+   unless ( $opt_f ) {
+   unless ( $ppNode ) {  #if no pp node, no further postprocessing
+      if ( "$platform" eq 'ia64' ) {
+         $cshscripttmpl =~ s/#\$ -l h_cpu.*/#\$ -l h_cpu=01:00:00/;
+      } else {
+         $cshscripttmpl =~ s/#PBS -l walltime.*/#PBS -l walltime=01:00:00/;
+      }
+      $cshscripttmpl =~ s/(-soft -l fre_info=)/$1ppYears\@$maxyrs+/;
+      writescript($cshscripttmpl,$outscript,"$batchSubmit$opt_w $opt_m",$statefile);
+      $opt_w = '';
+      next;
+   }
+   }
+   if ( "$opt_M" ne "" ) {
+      $cshscripttmpl =~ s/#\$ -r y/#\$ -r y\n$opt_M/;
+   }
 
-     #calendar
-     if ( $opt_C ) {
-       $caltype = $opt_C;
-     } else {
-       if ( $opt_v ) { print "Getting namelists...\n"; }
-       $nml = $exp->extractNamelists();
-       $caltype = $nml->namelistSingleQuotedStringGet("coupler_nml", "calendar") || "julian";
-       print STDERR "caltype = $caltype\n" if $opt_v;
-     }
+   #calendar
+   if ( $opt_C ) {
+      $caltype = $opt_C;
+   } else {
+      if ( $opt_v ) { print "Getting namelists...\n"; }
+         $nml = $exp->extractNamelists();
+         $caltype = $nml->namelistSingleQuotedStringGet("coupler_nml", "calendar") || "julian";
+         print STDERR "caltype = $caltype\n" if $opt_v;
+   }
 
-     #diag table date -> sim0 (simulation begin date)
-     my $basedate = "";
-     my @diagtablecontent = split('\n',$exp->extractTable('diagTable'));
-     if ( $opt_B ) {
-       $basedate = $opt_B;
-     } else {
-       #look in coupler_nml if basedate set to $baseDate
-       chomp( $basedate = $diagtablecontent[1] );
-       $basedate =~ s/^\s*//g;
-       if( "$basedate" eq "\$baseDate" ) {
+   #diag table date -> sim0 (simulation begin date)
+   my $basedate = "";
+   my @diagtablecontent = split('\n',$exp->extractTable('diagTable'));
+   if ( $opt_B ) {
+      $basedate = $opt_B;
+   } else {
+      #look in coupler_nml if basedate set to $baseDate
+      chomp( $basedate = $diagtablecontent[1] );
+      $basedate =~ s/^\s*//g;
+      if( "$basedate" eq "\$baseDate" ) {
          #$basedate = $nml->namelistSingleQuotedStringGet("coupler_nml", "current_date") || "0 0 0 0 0 0";
 
          $basedate = $nml->namelistGet("coupler_nml");
          if( "$basedate" eq "" ) {
-	   $basedate = "0 0 0 0 0 0";
+            $basedate = "0 0 0 0 0 0";
          } else {
-	   $basedate =~ s/.*current_date\s*=\s*(\d+\s*,\s*\d+\s*,\s*\d+\s*,\s*\d+\s*,\s*\d+\s*,\s*\d+)\s*(.*)/$1/s;
-	   chomp $basedate;
-	   $basedate =~ s/^\s*//g;
+            $basedate =~ s/.*current_date\s*=\s*(\d+\s*,\s*\d+\s*,\s*\d+\s*,\s*\d+\s*,\s*\d+\s*,\s*\d+)\s*(.*)/$1/s;
+            chomp $basedate;
+            $basedate =~ s/^\s*//g;
          }
-       }
-     }
-     print "basedate = $basedate\n" if $opt_v;
+      }
+   }
+   print "basedate = $basedate\n" if $opt_v;
 
-     my $gridspec = $exp->extractVariableFile('gridSpec');
-     if ( "$gridspec" eq '' ) {
-       die "ERROR: gridSpec for platform $opt_P was not found in $opt_x.\n";
-     } elsif (! -e $gridspec) {
-       die "ERROR: gridSpec file does not exist: $gridspec\n";
-     } else {
-       print STDERR "NOTE: Using gridSpec $gridspec\n" if $opt_v;
-     }
+   my $gridspec = $exp->extractVariableFile('gridSpec');
+   if ( "$gridspec" eq '' ) {
+      die "ERROR: gridSpec for platform $opt_P was not found in $opt_x.\n";
+   } elsif (! -e $gridspec) {
+      die "ERROR: gridSpec file does not exist: $gridspec\n";
+   } else {
+      print STDERR "NOTE: Using gridSpec $gridspec\n" if $opt_v;
+   }
 
-     #if refineDiag run, insert refineDiag csh here
-     if ( $opt_D ) {
-       $cshscripttmpl .= refineDiag($tmphistdir,$stdoutdir,$ptmpDir,$basedate,$refinedir,$gridspec);
-     }
+   #if refineDiag run, insert refineDiag csh here
+   if ( $opt_D ) {
+      $cshscripttmpl .= refineDiag($tmphistdir,$stdoutdir,$ptmpDir,$basedate,$refinedir,$gridspec);
+   }
 
-     if ( $opt_f or $opt_D ) {
-       #separate mppnccombine from rest of script due to splitting components
-       unless ( $opt_H ) {
-         $cshscripttmpl .= "\n/usr/bin/perl $absfrepp -x $abs_xml_path -t $opt_t -s -v ";
+   if ( $opt_f or $opt_D ) {
+      #separate mppnccombine from rest of script due to splitting components
+      unless ( $opt_H ) {
+	 $cshscripttmpl .= "\n/usr/bin/perl $absfrepp -x $abs_xml_path -t $hDate -s -v ";
          if ( $opt_P ) { $cshscripttmpl .= "-P $opt_P "; }
          if ( $opt_T ) { $cshscripttmpl .= "-T $opt_T "; }
          if ( $opt_d ) { $cshscripttmpl .= "-d $opt_d "; }
@@ -763,66 +777,66 @@ EOF
          #   $cshscripttmpl .= "-w $expt"."_$prev ";
          #}
          $cshscripttmpl .= "$expt\n";
-         $cshscripttmpl .= errorstr("$relfrepp had a problem creating next script $expt"."_$opt_t");
-       }
+	 $cshscripttmpl .= errorstr("$relfrepp had a problem creating next script $expt"."_$hDate");
+      }
 
-       if ( $opt_f ) {
-	 my @hf = ();
-	 my @hsmf = ();
-	 opendir(DIR, $opt_d) or die $!;
-	 @hf = grep { /\.raw\.nc\.tar$/ && -f "$opt_d/$_" } readdir(DIR);
-	 closedir(DIR);
-	 my $hsmget_history = hsmget_history_csh($ptmpDir,$tmphistdir,$refinedir,$this_frepp_cmd,join(' ',@hf),join(' ',@hsmf));
-	 $cshscripttmpl =~ s/#hsmget_history_files/$hsmget_history/;
-	 my @sorted = sort { $a cmp $b } @hf;
-	 my $check_history = checkHistComplete($tmphistdir,$sorted[0],$this_frepp_cmd,\@hsmf,\@diagtablecontent);
-	 $cshscripttmpl =~ s/#check_history_files/$check_history/;
-       }
+      if ( $opt_f ) {
+            my @hf = ();
+            my @hsmf = ();
+            opendir(DIR, $opt_d) or die $!;
+            @hf = grep { /\.raw\.nc\.tar$/ && -f "$opt_d/$_" } readdir(DIR);
+            closedir(DIR);
+            my $hsmget_history = hsmget_history_csh($ptmpDir,$tmphistdir,$refinedir,$this_frepp_cmd,join(' ',@hf),join(' ',@hsmf));
+            $cshscripttmpl =~ s/#hsmget_history_files/$hsmget_history/;
+            my @sorted = sort { $a cmp $b } @hf;
+            my $check_history = checkHistComplete($tmphistdir,$sorted[0],$this_frepp_cmd,\@hsmf,\@diagtablecontent);
+            $cshscripttmpl =~ s/#check_history_files/$check_history/;
+      }
 
-       if ( $opt_D and $opt_p ) {
+      if ( $opt_D and $opt_p ) {
          $cshscripttmpl .= call_frepp($abs_xml_path, $outscript, $opt_c, "");
-         $cshscripttmpl .= errorstr("$relfrepp had a problem creating next script $expt"."_$opt_t");
-       }
+	 $cshscripttmpl .= errorstr("$relfrepp had a problem creating next script $expt"."_$hDate");
+      }
 
-       $cshscripttmpl .= mailerrors($outscript);
-       if ( "$platform" eq 'ia64' ) {
+      $cshscripttmpl .= mailerrors($outscript);
+      if ( "$platform" eq 'ia64' ) {
          $cshscripttmpl =~ s/#\$ -l h_cpu.*/#\$ -l h_cpu=$maxruntime/;
-       } else {
+      } else {
          $cshscripttmpl =~ s/#PBS -l walltime.*/#PBS -l walltime=$maxruntime/;
-       }
-       $cshscripttmpl =~ s/(-soft -l fre_info=)/$1ppYears\@$maxyrs+/;
-       writescript($cshscripttmpl,$outscript,"$batchSubmit$opt_w $opt_m",$statefile);
-       $opt_w = '';
-       next;
-     } else {
-       $cshscripttmpl =~ s/set histDir = .*/set histDir = $tmphistdir/;
-     }
+      }
+      $cshscripttmpl =~ s/(-soft -l fre_info=)/$1ppYears\@$maxyrs+/;
+      writescript($cshscripttmpl,$outscript,"$batchSubmit$opt_w $opt_m",$statefile);
+      $opt_w = '';
+      next;
+   } else {
+      $cshscripttmpl =~ s/set histDir = .*/set histDir = $tmphistdir/;
+   }
 
-     $writestate = '';
-     unless ( $opt_A ) {
-       my $writeIDorINTER = <<EOF;
+   $writestate = '';
+   unless ( $opt_A ) {
+      my $writeIDorINTER = <<EOF;
 if ( "\$JOB_ID" != '' ) then
-   echo \$PBS_JOBID > \$statefile
+ echo \$PBS_JOBID > \$statefile
 else
-   echo INTERACTIVE > \$statefile
-   set PBS_JOBID = INTERACTIVE
+ echo INTERACTIVE > \$statefile
+ set PBS_JOBID = INTERACTIVE
 endif
 EOF
-       $cshscripttmpl =~ s/#write_to_statefile/$writeIDorINTER/;
+      $cshscripttmpl =~ s/#write_to_statefile/$writeIDorINTER/;
 
-       $writestate = <<EOF;
+      $writestate = <<EOF;
   if ( "\$prevjobstate" == "ERROR" ) then
      echo FATAL > \$statefile
   else
      echo ERROR > \$statefile
   endif
 EOF
-     }
+   }
 
-     $checktransfer = <<EOF;
+   $checktransfer = <<EOF;
 if ( \$status ) then
-   echo ERROR: data transfer attempt failed twice, exiting.
-   Mail -s "\$name year \$historyyear cannot be postprocessed" \$USER <<END
+         echo ERROR: data transfer attempt failed twice, exiting.
+         Mail -s "\$name year \$historyyear cannot be postprocessed" \$USER <<END
 Your FRE post-processing job ( \$JOB_ID ) has exited because of a data transfer failure.
 
 This job can be resubmitted via:
@@ -837,8 +851,8 @@ END
 
 $writestate
 
-   sleep 30
-   exit 7
+         sleep 30
+         exit 7
 endif
 EOF
 
@@ -935,20 +949,20 @@ unset echo
 EOF
       $call_tile_fregrid .= <<EOF;
 if ( -e $ppRootDir/.non_default_interp_method ) then
-   source $ppRootDir/.non_default_interp_method
+  source $ppRootDir/.non_default_interp_method
 endif
 EOF
       $call_tile_fregrid .= <<'EOF';
 foreach order1var ( $order1 )
-   foreach modelvar ( `echo $interpvars | sed -e "s/,/ /g"` )
-      if ( $modelvar == $order1var ) then
-         if ( `ncexists -f $fregrid_in.tile1.nc -v $order1var` ) then
-            if ( ! `ncexists -f $fregrid_in.tile1.nc -v $order1var -a interp_method` ) then
-               set attCmds = ( $attCmds -a interp_method,$order1var,a,c,"conserve_order1" )
-            endif
-         endif
+  foreach modelvar ( `echo $interpvars | sed -e "s/,/ /g"` )
+    if ( $modelvar == $order1var ) then
+      if ( `ncexists -f $fregrid_in.tile1.nc -v $order1var` ) then
+        if ( ! `ncexists -f $fregrid_in.tile1.nc -v $order1var -a interp_method` ) then
+          set attCmds = ( $attCmds -a interp_method,$order1var,a,c,"conserve_order1" )
+        endif
       endif
-   end
+    endif
+  end
 end
 set echo
 EOF
@@ -963,7 +977,7 @@ if (\$#attCmds > 0) then
 endif
 
 if ( "\$fregrid_wt" != '' ) then
-   set fregrid_yr = `echo \$fregrid_in_date | cut -c 1-4`
+   set fregrid_yr = `echo \$fregrid_in_date | sed 's/[0-9][0-9][0-9][0-9]$//'`
    foreach fregridwtfile ( `ls $opt_d/\${fregrid_yr}????.nc.*` )
       set fregridwtfile = \$fregridwtfile:t:r
       $time_hsmget \$hsmget -a $opt_d -p $ptmpDir/history -w $tmphistdir \$fregridwtfile/\\*land_static\\*
@@ -974,11 +988,11 @@ if ( "\$fregrid_wt" != '' ) then
       endif
    end
    ln -s \$histDir/\${fregrid_yr}????.nc/*land_static* .
-   foreach fregrid_mo ( 02 03 04 05 06 07 08 09 10 11 12 )
-      if ( ! -e \${fregrid_yr}\${fregrid_mo}01.land_static.nc ) then
-         ln -s \${fregrid_yr}0101.land_static.nc \${fregrid_yr}\${fregrid_mo}01.land_static.nc
-      endif
-   end
+      foreach fregrid_mo ( 02 03 04 05 06 07 08 09 10 11 12 )
+        if ( ! -e \${fregrid_yr}\${fregrid_mo}01.land_static.nc ) then
+           ln -s \${fregrid_yr}0101.land_static.nc \${fregrid_yr}\${fregrid_mo}01.land_static.nc
+        endif
+      end
 endif
 EOF
       $call_tile_fregrid .= <<EOF;
@@ -993,7 +1007,7 @@ if (\$#attCmds > 0) then
 endif
 
 if ( "\$fregrid_wt" != '' ) then
-   set fregrid_yr = `echo \$fregrid_in_date | cut -c 1-4`
+   set fregrid_yr = `echo \$fregrid_in_date | sed 's/[0-9][0-9][0-9][0-9]$//'`
    foreach fregridwtfile ( `ls $opt_d/\${fregrid_yr}????.nc.*` )
       set fregridwtfile = \$fregridwtfile:t:r
       $time_hsmget \$hsmget -a $opt_d -p $ptmpDir/history -w $tmphistdir \$fregridwtfile/\\*land_static\\*
@@ -1006,9 +1020,9 @@ if ( "\$fregrid_wt" != '' ) then
    ln -s \$histDir/\${fregrid_yr}????.nc/*land_static* .
    foreach i ( 1 2 3 4 5 6 )
       foreach fregrid_mo ( 02 03 04 05 06 07 08 09 10 11 12 )
-         if ( ! -e \${fregrid_yr}\${fregrid_mo}01.land_static.tile\$i.nc ) then
-            ln -s \${fregrid_yr}0101.land_static.tile\$i.nc \${fregrid_yr}\${fregrid_mo}01.land_static.tile\$i.nc
-         endif
+        if ( ! -e \${fregrid_yr}\${fregrid_mo}01.land_static.tile\$i.nc ) then
+           ln -s \${fregrid_yr}0101.land_static.tile\$i.nc \${fregrid_yr}\${fregrid_mo}01.land_static.tile\$i.nc
+        endif
       end
    end
 endif
@@ -1115,8 +1129,8 @@ EOF
       $this_component_cmd =~ s/ -c split / -c $component /;
       $checktransfer = <<EOF;
 if ( \$status ) then
-   echo ERROR: data transfer attempt failed twice, exiting.
-   Mail -s "\$name year \$historyyear component $component cannot be postprocessed" \$USER <<END
+         echo ERROR: data transfer attempt failed twice, exiting.
+         Mail -s "\$name year \$historyyear component $component cannot be postprocessed" \$USER <<END
 Your FRE post-processing job ( \$JOB_ID ) has exited because of a data transfer failure.
 
 This job can be resubmitted via:
@@ -1129,9 +1143,9 @@ Batch job stdout:
   \$FRE_STDOUT_PATH
 END
 
-   $writestate
-   sleep 30
-   exit 7
+         $writestate
+         sleep 30
+         exit 7
 endif
 EOF
 
@@ -1140,15 +1154,15 @@ EOF
          $cshscript = $cshscripttmpl;
          my $origoutscript = $outscript;
          my $orig_pbs_job_name = $pbs_job_name;
-         $outscript = "$outscriptdir/$expt"."_$component"."_$opt_t";
-         $pbs_job_name = "$expt"."_$component"."_$opt_t";
+	 $outscript = "$outscriptdir/$expt"."_$component"."_$hDate";
+	 $pbs_job_name = "$expt"."_$component"."_$hDate";
          $cshscript =~ s/set scriptName = .*/set scriptName = $outscript/;
          $cshscript =~ s/#PBS -N .*/#PBS -N $pbs_job_name/;
          $cshscript =~ s/setenv FRE_STDOUT_PATH.*/setenv FRE_STDOUT_PATH $stdoutdir\/postProcess\/$pbs_job_name.o\$JOB_ID/;
          $cshscript =~ s/(-w $expt)/$1_$component/;
          $cshscript =~ s/(-soft -l fre_info=)/$1ppComponent\@$component+/;
          $opt_w =~ s/( -hold_jid $expt)(.*)(_\d\d\d\d\d\d\d\d)/$1_$component$3/;
-         $statefile = "$statedir/$component.".substr($opt_t,0,4);
+	 $statefile = "$statedir/$component.".$userstartyear;
 
          #check status of this frepp year
          unless ( $opt_A ) {
@@ -1156,25 +1170,25 @@ EOF
                open( STATEFILE, "<$statefile") or die $!;
                $state = FREUtil::cleanstr( <STATEFILE> );
                close STATEFILE;
-               print "This year ($opt_t) has a state file with state '$state' for $component.\n";
+	       print "This year ($hDate) has a state file with state '$state' for $component.\n";
                if ("$state" eq "OK") {
                   if ( $opt_o ) {
                      print "Redoing anyway because 'overwrite state files' was specified...\n";
                   } else {
-                     print "This year ($opt_t) has already been completed for $component.\n";
+		     print "This year ($hDate) has already been completed for $component.\n";
                      #should we continue here in case of opt_p?
                      next;
                   }
                } elsif ("$state" eq "FATAL") {
-                  print "This year ($opt_t) got an error in multiple attempts, skipping this component.  To retry $component processing, delete the state file $statefile\n";
+		  print "This year ($hDate) got an error in multiple attempts, skipping this component.  To retry $component processing, delete the state file $statefile\n";
                   #what if this is the -c split job? continue to other components
                   next;
                } elsif ("$state" eq "INTERACTIVE") {
-                  print "This year ($opt_t) was partially run interactively but not completed, resubmitting $component...\n";
+		  print "This year ($hDate) was partially run interactively but not completed, resubmitting $component...\n";
                } elsif ("$state" eq "ERROR") {
-                  print "This year ($opt_t) got an error in the last frepp attempt, resubmitting $component...\n";
+		  print "This year ($hDate) got an error in the last frepp attempt, resubmitting $component...\n";
                } elsif ("$state" eq "HISTORYDATAERROR") {
-                  print "This year ($opt_t) got an error in the last frepp attempt due to missing history data, resubmitting $component...\n";
+		  print "This year ($hDate) got an error in the last frepp attempt due to missing history data, resubmitting $component...\n";
                } elsif ( "$state" eq '' ) {
                   print "ERROR: statefile $statefile exists but is empty, exiting.\n";
                   #what if this is the -c split job? continue to other components
@@ -1184,10 +1198,10 @@ EOF
                   my $jobrunning = isjobrunning( $state );
                   print "Checking state in $statefile: $state: jobrunning: $jobrunning\n";
                   if ( $jobrunning ) {
-                     print "Previous frepp job ($state) for $opt_t still running for $component, exiting.\n";
+		     print "Previous frepp job ($state) for $hDate still running for $component, exiting.\n";
                      next;
                   } else {
-                     print "Previous frepp job for $opt_t was lost, resubmitting $component...\n";
+		     print "Previous frepp job for $hDate was lost, resubmitting $component...\n";
                   }
                }
             }
@@ -1312,9 +1326,12 @@ EOF
       my $run0 = &FREUtil::parseFortranDate($basedate);
       if ( "$startdate" ne "" ) {
          $startdate = FREUtil::padzeros($startdate);
-         $sim0 = &ParseDate($startdate);
-         if ( "$startdate" eq '0001' ) {$sim0='0001010100:00:00';}
-         if ( "$sim0" ne "" and &Date_Cmp($run0,$sim0) == 1 ) {
+	 $sim0 = FREUtil::parseDate($startdate);
+	 if ($sim0 == undef) {
+	   print STDERR "ERROR: The start date specified in the XML postProcess/component tag is not a valid date.\n";
+	   exit 1;
+	 }
+	 if ( "$sim0" ne "" and FREUtil::dateCmp($run0,$sim0) == 1 ) {
             mailuser("the $component postprocessing start attribute ($sim0) must be equal to or later than the start of the run ($run0). The default value of the start attribute is the start of the run.  Setting the start attribute to a later date provides the ability to skip years of data at the beginning of a run.  Please check the start attribute of all postprocessing components.");
             print STDERR "WARNING: the $component postprocessing start attribute ($sim0) must be equal to or later than the start of the run ($run0).  The default value of the start attribute is the start of the run.  Setting the start attribute to a later date provides the ability to skip years of data at the beginning of a run.  Please check the start attribute of all postprocessing components.";
          } else {
@@ -1329,7 +1346,7 @@ EOF
          sysmailuser();
          die "ERROR: $relfrepp had a problem calculating sim0.  Please contact Amy.\n";
       }
-      my $startflag = &Date_Cmp($t0,$sim0);
+      my $startflag = FREUtil::dateCmp($t0,$sim0);
       my $startofrun = 0;
       if ( $startflag eq 0 ) {
          print "NOTE: This is the first postprocessing of the simulation for $component\n" if $opt_v;
@@ -1358,7 +1375,7 @@ EOF
 
       if ( $simEND < $tEND and ! $opt_A) {
          if ( $simEND < $t0 ) {
-            print "WARNING: The simulation time calculated from the basedate in your diag_table ($basedate) and the simulation length from the xml ($simTime $simUnits) ends before this year of postprocessing ($opt_t).\n";
+	    print "WARNING: The simulation time calculated from the basedate in your diag_table ($basedate) and the simulation length from the xml ($simTime $simUnits) ends before this year of postprocessing ($hDate).\n";
             $simEND = $tEND; #simEND not currently used for anything else
          } else {
             $tEND = $simEND;
@@ -1419,7 +1436,7 @@ EOF
                                   scriptDir => $aoutscriptdir,
                                   workDir => $workdir,
                                   archDir => $archivedir,
-                                  opt_t => $opt_t,
+				  opt_t => $hDate,
                                   opt_O => $opt_O,
                                   opt_Y => $opt_Y,
                                   opt_Z => $opt_Z,
@@ -1466,7 +1483,7 @@ EOF
                                      scriptDir => $aoutscriptdir,
                                      workDir => $workdir,
                                      archDir => $archivedir,
-                                     opt_t => $opt_t,
+				     opt_t => $hDate,
                                      opt_O => $opt_O,
                                      opt_Y => $opt_Y,
                                      opt_Z => $opt_Z,
@@ -1512,7 +1529,7 @@ EOF
                                   scriptDir => $aoutscriptdir,
                                   workDir => $workdir,
                                   archDir => $archivedir,
-                                  opt_t => $opt_t,
+				  opt_t => $hDate,
                                   opt_O => $opt_O,
                                   opt_Y => $opt_Y,
                                   opt_Z => $opt_Z,
@@ -1560,7 +1577,7 @@ EOF
                                   scriptDir => $aoutscriptdir,
                                   workDir => $workdir,
                                   archDir => $archivedir,
-                                  opt_t => $opt_t,
+				  opt_t => $hDate,
                                   opt_O => $opt_O,
                                   opt_Y => $opt_Y,
                                   opt_Z => $opt_Z,
@@ -1614,7 +1631,7 @@ EOF
                                      scriptDir => $aoutscriptdir,
                                      workDir => $workdir,
                                      archDir => $archivedir,
-                                     opt_t => $opt_t,
+				     opt_t => $hDate,
                                      opt_O => $opt_O,
                                      opt_Y => $opt_Y,
                                      opt_Z => $opt_Z,
@@ -1666,7 +1683,7 @@ EOF
                                   scriptDir => $aoutscriptdir,
                                   workDir => $workdir,
                                   archDir => $archivedir,
-                                  opt_t => $opt_t,
+				  opt_t => $hDate,
                                   opt_O => $opt_O,
                                   opt_Y => $opt_Y,
                                   opt_Z => $opt_Z,
@@ -1717,7 +1734,7 @@ EOF
                                   scriptDir => $aoutscriptdir,
                                   workDir => $workdir,
                                   archDir => $archivedir,
-                                  opt_t => $opt_t,
+				  opt_t => $hDate,
                                   opt_O => $opt_O,
                                   opt_Y => $opt_Y,
                                   opt_Z => $opt_Z,
@@ -1768,7 +1785,7 @@ EOF
                                   scriptDir => $aoutscriptdir,
                                   workDir => $workdir,
                                   archDir => $archivedir,
-                                  opt_t => $opt_t,
+				  opt_t => $hDate,
                                   opt_O => $opt_O,
                                   opt_Y => $opt_Y,
                                   opt_Z => $opt_Z,
@@ -1819,7 +1836,7 @@ EOF
                                   scriptDir => $aoutscriptdir,
                                   workDir => $workdir,
                                   archDir => $archivedir,
-                                  opt_t => $opt_t,
+				  opt_t => $hDate,
                                   opt_O => $opt_O,
                                   opt_Y => $opt_Y,
                                   opt_Z => $opt_Z,
@@ -1840,7 +1857,7 @@ EOF
       if ( $didsomething ) {
          $didsomething = 0;
       } else {
-         print STDERR "NOTE: No calculations necessary for year $opt_t for $component.\n\n";
+	 print STDERR "NOTE: No calculations necessary for year $hDate for $component.\n\n";
          next;
       }
 
@@ -1872,7 +1889,7 @@ EOF
                      $redothisyear = 1;
                   }
                } else {
-                  #print "Required year ($opt_t) has already been completed for $component.\n";
+		  #print "Required year ($hDate) has already been completed for $component.\n";
                }
             } elsif ("$depstate" eq "FATAL") {
                print "Required year $depyear got an error in multiple attempts, exiting.  To retry, delete the state file $depfile\n";
@@ -1970,15 +1987,15 @@ EOF
       }
       #I'm not sure whether "redothisyear" means that old dependencies in the current list could be wrong? -arl
       if ( $redothisyear and ! $opt_A ) {
-         print "This year ($opt_t) has unmet dependencies for $component, submitting with holds.\n";
+	 print "This year ($hDate) has unmet dependencies for $component, submitting with holds.\n";
       } else {
-         print "All dependencies met or known for $opt_t for $component.\n" if $opt_v;
+	 print "All dependencies met or known for $hDate for $component.\n" if $opt_v;
       }
 
       if ( "$depholds" ne "" ) {
          chop $depholds;
          $opt_w = " -l depend=afterok:$depholds";
-         print "Setting holds for $opt_t: $opt_w\n";
+	 print "Setting holds for $hDate: $opt_w\n";
       }
 
 
@@ -2112,71 +2129,71 @@ sub hsmget_history_csh {
 
    #check for and combine raw history files online
 
-   my @histfiles = split " ",$hf;
-   #print "histfiles:".join(", ",@histfiles)."\n";
-   #print "hsmf $hsmf\n";
+  my @histfiles = split " ",$hf;
+  #print "histfiles:".join(", ",@histfiles)."\n";
+  #print "hsmf $hsmf\n";
 
-   foreach my $h ( @histfiles ) {
-      chdir $opt_d;
-      my $year = substr($h,0,4);
-      #print "\nyear:$year\n";
-      my @availraw = split /\n/,`ls -1 | egrep "$year....\.raw\.nc\.cpio\$|$year....\.raw\.nc\.tar\$"`;
-      #print "availraw:".join(", ", @availraw)."\n";
-      my @availhf = split /\n/,`ls -1 | egrep "$year....\.nc\.cpio\$|$year....\.nc\.tar\$"`;
-      #print "availhf:".join(", ", @availhf)."\n";
+  foreach my $h ( @histfiles ) {
+    chdir $opt_d;
+    my ($year) = $h =~ /(\d{4,})\d{4}\./;
+    #print "\nyear:$year\n";
+    my @availraw = split /\n/,`ls -1 | egrep "$year....\.raw\.nc\.cpio\$|$year....\.raw\.nc\.tar\$"`;
+    #print "availraw:".join(", ", @availraw)."\n";
+    my @availhf = split /\n/,`ls -1 | egrep "$year....\.nc\.cpio\$|$year....\.nc\.tar\$"`;
+    #print "availhf:".join(", ", @availhf)."\n";
 
-      #if both raw and combined data exist, and raw is newer, replace. Otherwise exit on error.
-      if ( @availraw and @availhf ) {
-         my %count = ();
-         my @modavailraw = @availraw;
-         s/\.raw\.nc/\.nc/ for @modavailraw;
-         #print "modavailraw:".join(", ", @modavailraw)."\n";
-         foreach my $file (@modavailraw, @availhf) { $count{$file}++ }
-	 foreach my $file (keys %count) {
-	    if ( $count{$file} > 1 ) {
-               my $combinedate = (stat($file))[9];
-               my $rawfile = $file;
-               $rawfile =~ s/\.nc\./\.raw\.nc\./;
-               my $rawdate = (stat($rawfile))[9];
-               #print "combined=$combinedate raw=$rawdate\n";
-               if ( $combinedate > $rawdate ) {
-                  mailuser("Date of uncombined (raw) history file is older than date of combined history file for $file. This may indicate a problem; please remove the incorrect history file and relaunch frepp with the following command, using '-s' to submit:\n\n$this_frepp_cmd");
-                  sysmailuser();
-                  die "ERROR: Date of uncombined (raw) history file is older than date of combined history file for $file. This may indicate a problem; please remove the incorrect history file and relaunch frepp.\n";
-               }
-	    }
-	 }
-      } elsif ( ! @availraw and ! @availhf ) {
-	 mailuser("No history data found for year $year in $opt_d\n\nTo resubmit this frepp job when the data is available, run the following command with '-s' to submit:\n\n$this_frepp_cmd");
-	 sysmailuser();
-	 die "ERROR: No history data found for year $year in $opt_d\n";
-      }
-      #combine raw data
-      my $PBS_JOBID = "$ENV{PBS_JOBID}";
-      my $wallTime = 0;
-      if ("$PBS_JOBID" ne '') {
-	 #chomp($wallTime = `checkjob -A $PBS_JOBID | tr ';' '\n' | grep WCLIMIT | cut -d'=' -f2`);
-	 chomp($wallTime = `$ENV{FRE_COMMANDS_HOME}/site/$ENV{FRE_SYSTEM_SITE}/bin/batch.scheduler.time -t $PBS_JOBID`);
-	 my $shreturn = $? >> 8;
-	 if ( $shreturn != 0 ) {
-	    print "ERROR: Could not obtain wallclock time\n";
-	    exit $shreturn;
-	 }
-	 print "NOTE: Requested walltime is $wallTime sec\n";
-      }
+    #if both raw and combined data exist, and raw is newer, replace. Otherwise exit on error.
+    if ( @availraw and @availhf ) {
+      my %count = ();
+      my @modavailraw = @availraw;
+      s/\.raw\.nc/\.nc/ for @modavailraw;
+      #print "modavailraw:".join(", ", @modavailraw)."\n";
+      foreach my $file (@modavailraw, @availhf) { $count{$file}++ }
+      foreach my $file (keys %count) {
+         if ( $count{$file} > 1 ) {
+            my $combinedate = (stat($file))[9];
+            my $rawfile = $file;
+            $rawfile =~ s/\.nc\./\.raw\.nc\./;
+            my $rawdate = (stat($rawfile))[9];
+            #print "combined=$combinedate raw=$rawdate\n";
+            if ( $combinedate > $rawdate ) {
+               mailuser("Date of uncombined (raw) history file is older than date of combined history file for $file. This may indicate a problem; please remove the incorrect history file and relaunch frepp with the following command, using '-s' to submit:\n\n$this_frepp_cmd");
+               sysmailuser();
+               die "ERROR: Date of uncombined (raw) history file is older than date of combined history file for $file. This may indicate a problem; please remove the incorrect history file and relaunch frepp.\n";
+            }
+         }
+       }
+    } elsif ( ! @availraw and ! @availhf ) {
+       mailuser("No history data found for year $year in $opt_d\n\nTo resubmit this frepp job when the data is available, run the following command with '-s' to submit:\n\n$this_frepp_cmd");
+       sysmailuser();
+       die "ERROR: No history data found for year $year in $opt_d\n";
+    }
+    #combine raw data
+    my $PBS_JOBID = "$ENV{PBS_JOBID}";
+    my $wallTime = 0;
+    if ("$PBS_JOBID" ne '') {
+       #chomp($wallTime = `checkjob -A $PBS_JOBID | tr ';' '\n' | grep WCLIMIT | cut -d'=' -f2`);
+       chomp($wallTime = `$ENV{FRE_COMMANDS_HOME}/site/$ENV{FRE_SYSTEM_SITE}/bin/batch.scheduler.time -t $PBS_JOBID`);
+       my $shreturn = $? >> 8;
+       if ( $shreturn != 0 ) {
+         print "ERROR: Could not obtain wallclock time\n";
+         exit $shreturn;
+       }
+       print "NOTE: Requested walltime is $wallTime sec\n";
+    }
 
-      foreach my $file ( @availraw ) {
-	 my $histdate = $file;
-	 $histdate =~ s/(\d+)\..*/$1/;
-	 $histdate .= '.nc';
-	 my $combinedir = File::Temp->newdir( 'combinehistXXXXX', DIR => $ENV{TMPDIR}, CLEANUP => 1);
-	 #my $combinedir = File::Temp->tempdir( 'combinehistXXXXX', DIR => $ENV{TMPDIR});
-	 mkdir "$combinedir/$histdate";
-	 chdir "$combinedir/$histdate";
-	 print "\nNOTE: Copying to $combinedir, combining, and archiving file $file\n";
-	 #set initial timing stats
-	 chomp( my $segmentStart = `date +\%s` );
-	 my $combine = <<EOF;
+    foreach my $file ( @availraw ) {
+       my $histdate = $file;
+       $histdate =~ s/(\d+)\..*/$1/;
+       $histdate .= '.nc';
+       my $combinedir = File::Temp->newdir( 'combinehistXXXXX', DIR => $ENV{TMPDIR}, CLEANUP => 1);
+       #my $combinedir = File::Temp->tempdir( 'combinehistXXXXX', DIR => $ENV{TMPDIR});
+       mkdir "$combinedir/$histdate";
+       chdir "$combinedir/$histdate";
+       print "\nNOTE: Copying to $combinedir, combining, and archiving file $file\n";
+       #set initial timing stats
+       chomp( my $segmentStart = `date +\%s` );
+       my $combine = <<EOF;
 $time_cp $cp $opt_d/$file .
 MYSTATUS=\$?
 if [ \$MYSTATUS -ne 0 ]; then
@@ -2207,45 +2224,45 @@ fi
 $time_hsmput hsmput -v -t -s tar -a $opt_d -p $ptmpDir/history -w $combinedir $histdate
 MYSTATUS=\$?
 if [ \$MYSTATUS -eq 0 ]; then
-   if [ -f $opt_d/$file ] && [ -f $opt_d/$histdate.tar ]; then
-      $time_rm rm $opt_d/$file
-   fi
+ if [ -f $opt_d/$file ] && [ -f $opt_d/$histdate.tar ]; then
+ $time_rm rm $opt_d/$file
+ fi
 fi
 
 EOF
-	 system("$combine");
-	 my $shreturn = $? >> 8;
-	 if ( $shreturn != 0 ) {
-	    print "ERROR: Could not combine history data\n";
-	    exit $shreturn;
-	 }
-	 #calculate timings, resubmit if necessary
-	 chomp( my $segmentEnd = `date +\%s` );
-	 my $timeSoFar = $segmentEnd - $beginCombineTime;
-	 print "NOTE: Finished a segment, timeSoFar = $timeSoFar\n";
-	 my $segmentTime = $segmentEnd - $segmentStart;
-	 #if not enough time for 2 x segmentTime, resubmit
-	 $segmentTime *= 2;
-	 if ( $wallTime > 0 ) {
-	    my $timeRemaining = $wallTime - $timeSoFar;
-	    if ( $segmentTime > $timeRemaining ) {
-	       print "NOTE: Only $timeRemaining seconds left, resubmitting.\n";
-	       sleep 2;
-	       exit 99;
-	    }
-	 }
-      }
-   }
+       system("$combine");
+       my $shreturn = $? >> 8;
+       if ( $shreturn != 0 ) {
+         print "ERROR: Could not combine history data\n";
+         exit $shreturn;
+       }
+       #calculate timings, resubmit if necessary
+       chomp( my $segmentEnd = `date +\%s` );
+       my $timeSoFar = $segmentEnd - $beginCombineTime;
+       print "NOTE: Finished a segment, timeSoFar = $timeSoFar\n";
+       my $segmentTime = $segmentEnd - $segmentStart;
+       #if not enough time for 2 x segmentTime, resubmit
+       $segmentTime *= 2;
+       if ( $wallTime > 0 ) {
+          my $timeRemaining = $wallTime - $timeSoFar;
+          if ( $segmentTime > $timeRemaining ) {
+             print "NOTE: Only $timeRemaining seconds left, resubmitting.\n";
+             sleep 2;
+             exit 99;
+          }
+       }
+    }
+  }
 
 
    #gets all avail hist files
    my $hsmget_history = <<EOF;
 cd $opt_d
 foreach h ( $hf )
-   set historyyear = `echo \$h | cut -c 1-4`
-   set availhf = ( `ls \$historyyear????.nc.cpio \$historyyear????.nc.tar` )
-   if ( "\$availhf" == "" ) then
-      Mail -s "\$name year \$historyyear cannot be postprocessed" \$USER <<END
+ set historyyear = `echo \$h | sed 's/[0-9][0-9][0-9][0-9].nc.tar//'`
+ set availhf = ( `ls \$historyyear????.nc.cpio \$historyyear????.nc.tar` )
+ if ( "\$availhf" == "" ) then
+   Mail -s "\$name year \$historyyear cannot be postprocessed" \$USER <<END
 Your FRE post-processing job ( \$JOB_ID ) has exited because no history files
 were found for year \$historyyear in directory:
 $opt_d
@@ -2265,46 +2282,46 @@ Batch job stdout:
   \$FRE_STDOUT_PATH
 END
 
-      echo HISTORYDATAERROR > \$statefile
-      sleep 30
-      exit 6
-   endif
+    echo HISTORYDATAERROR > \$statefile
+    sleep 30
+    exit 6
+ endif
 
-   foreach historyfile ( \$availhf )
-      foreach hsmsrc ( $hsmf )
-         set hsmdate = \$historyfile:r
-         $time_hsmget \$hsmget -a $opt_d -p $ptmpDir/history -w $tmphistdir \$hsmdate/\\*.\$hsmsrc.\\*
-         if ( \$status ) then
-            echo "WARNING: hsmget reported failure, retrying..."
-            $time_hsmget \$hsmget -a $opt_d -p $ptmpDir/history -w $tmphistdir \$hsmdate/\\*.\$hsmsrc.\\*
+ foreach historyfile ( \$availhf )
+ foreach hsmsrc ( $hsmf )
+  set hsmdate = \$historyfile:r
+  $time_hsmget \$hsmget -a $opt_d -p $ptmpDir/history -w $tmphistdir \$hsmdate/\\*.\$hsmsrc.\\*
+  if ( \$status ) then
+      echo "WARNING: hsmget reported failure, retrying..."
+      $time_hsmget \$hsmget -a $opt_d -p $ptmpDir/history -w $tmphistdir \$hsmdate/\\*.\$hsmsrc.\\*
 $checktransfer
-         endif
+  endif
          # Get files listed as associated_files
          foreach hsmsrcfile ( $tmphistdir/\$hsmdate/*.\$hsmsrc.* )
             # Get a list of all associated files
             set assocFiles = `ncdump -h \$hsmsrcfile | grep ':associated_files' | cut -d '"' -f2 | sed "s/\\w*://g"`
             foreach assocFile ( \$assocFiles )
                $time_hsmget \$hsmget -a $opt_d -p $ptmpDir/history -w $tmphistdir \$hsmdate/\\*\${assocFile:r}.\\*
-            end
-         end
+ end
+ end
       end
    end
 #end loop over history year
 end
 
 if ( -d $refinedir ) then
-   cd $refinedir
-   foreach h ( $hf )
-      foreach hsmsrc ( $hsmf )
-         set historyyear = `echo \$h | cut -c 1-4`
-         foreach historyfile ( `ls \$historyyear????.nc.cpio \$historyyear????.nc.tar`)
-            set hsmdate = \$historyfile:r
-            $time_hsmget \$hsmget -a $refinedir -p $ptmpDir/history_refineDiag -w $tmphistdir \$hsmdate/\\*.\$hsmsrc.\\*
-            if ( \$status ) then
-               echo "WARNING: hsmget reported failure, retrying..."
-               $time_hsmget \$hsmget -a $refinedir -p $ptmpDir/history_refineDiag -w $tmphistdir \$hsmdate/\\*.\$hsmsrc.\\*
+  cd $refinedir
+  foreach h ( $hf )
+  foreach hsmsrc ( $hsmf )
+   set historyyear = `echo \$h | sed 's/[0-9][0-9][0-9][0-9].nc.tar//'`
+   foreach historyfile ( `ls \$historyyear????.nc.cpio \$historyyear????.nc.tar`)
+    set hsmdate = \$historyfile:r
+    $time_hsmget \$hsmget -a $refinedir -p $ptmpDir/history_refineDiag -w $tmphistdir \$hsmdate/\\*.\$hsmsrc.\\*
+    if ( \$status ) then
+        echo "WARNING: hsmget reported failure, retrying..."
+        $time_hsmget \$hsmget -a $refinedir -p $ptmpDir/history_refineDiag -w $tmphistdir \$hsmdate/\\*.\$hsmsrc.\\*
 $checktransfer
-            endif
+    endif
             # Get files listed as associated_files
             foreach hsmsrcfile ( $tmphistdir/\$hsmdate/*.\$hsmsrc.* )
                # Get a list of all associated files
@@ -2312,9 +2329,9 @@ $checktransfer
                foreach assocFile ( \$assocFiles )
                   $time_hsmget \$hsmget -a $refinedir -p $ptmpDir/history -w $tmphistdir \$hsmdate/\\*\${assocFile:r}.\\*
                end
-            end
-         end
-      end
+   end
+  end
+  end
    end
 endif
 EOF
@@ -2327,17 +2344,16 @@ sub checkHistComplete {
    my ($dir, $hf, $frepp_cmd, $usedfiles, $diagtablecontent) = @_;
    my $script = "cd $dir\n";
 
-   my $firsthisty = substr($hf,0,4);
+   my ($firsthisty) = $hf =~ /(\d{4,})\d{4}\./;
    my $firsthistm = substr($userstartmo,0,2);
    my $firsthistd = substr($userstartmo,2,2);
-   my $tENDy = substr($tEND,0,4);
-   my $tENDm = substr($tEND,4,2);
-   my $tENDd = substr($tEND,6,2);
-   my $days_firsthist = Date_DaysSince1BC($firsthistm,$firsthistd,$firsthisty);
-   my $days_tEND = Date_DaysSince1BC($tENDm,$tENDd,$tENDy);
+   my ($tENDy, $tENDm, $tENDd) = $tEND =~ /^(\d{4,})(\d{2})(\d{2})(?:\d{2}:\d{2}:\d{2})?$/;
 
-   my $firsthist = &ParseDate( substr($hf,0,4).$userstartmo );
-   my $delta = &DateCalc($firsthist,FREUtil::modifydate($tEND,"+1 sec"),\$err,1);
+   my $days_firsthist = FREUtil::daysSince1BC($firsthistm,$firsthistd,$firsthisty);
+   my $days_tEND = FREUtil::daysSince1BC($tENDm,$tENDd,$tENDy);
+
+   my $firsthist = FREUtil::parseDate( $firsthisty.$userstartmo );
+   my $delta = FREUtil::dateCalc($firsthist,FREUtil::modifydate($tEND,"+1 sec"));
 
    foreach (@$diagtablecontent) {
       if ( /"(\w*)"\s*,\s*(\d*)\s*,\s*"(\w*)"\s*,.*,.*,.*,?/ and not /^#/ ) {
@@ -2677,7 +2693,7 @@ sub mailcomponent {
 if ( -e \$work/.errorssend ) then
 set errorlines = `cat \$work/.errorssend | wc -l`
 if ( \$errorlines ) then
-Mail -s "$relfrepp CSH ERROR: $expt $component $opt_t" $username < \$work/.errorssend
+Mail -s "$relfrepp CSH ERROR: $expt $component $hDate" $username < \$work/.errorssend
 $writestate
 sleep 30
 endif
@@ -2707,9 +2723,9 @@ sub sysmailuser {
          $jobid =~ s/(\d+)\..*/$1/;
          $outpath .= "/$jobname.o$jobid";
          my $str = <<EOF;
-Mail -s "$relfrepp PERL ERROR: $expt $opt_t" $username <<END
+Mail -s "$relfrepp PERL ERROR: $expt $hDate" $username <<END
 Error message(s) have been reported by $relfrepp while
-creating postprocessing scripts for year $opt_t of the
+creating postprocessing scripts for year $hDate of the
 experiment $expt, in the stdout file
 
 $outpath
@@ -3225,8 +3241,8 @@ sub get_subint {
 
    #get dependant years
    my @depyears = ();
-   my $thisyear = substr($t0,0,4);
-   my $simstart = substr($sim0,0,4);
+   my ($thisyear) = FREUtil::splitDate($t0);
+   my ($simstart) = FREUtil::splitDate($sim0);
 
    #print "in get_subint with thisyear=$thisyear, simstart=$simstart, interval=$interval, subint=$subint\n";
 
@@ -3491,7 +3507,7 @@ sub annualTS {
    }
 
    my $tmp = FREUtil::modifydate($tEND,"+1 sec");
-   my $yrsSoFar = &Delta_Format( &DateCalc($sim0,$tmp,\$err,1) ,0,"%yd");
+   my $yrsSoFar = &Delta_Format( FREUtil::dateCalc($sim0,$tmp) ,0,"%yd");
    my $int = $TSchunkLength;
    $int =~ s/yr//;
    my $mod = $yrsSoFar % $int;
@@ -3686,7 +3702,7 @@ sub seasonalTS {
    }
    if ($opt_v) {print "      TSchunkLength is $TSchunkLength\n";}
    my $tmp = FREUtil::modifydate($tEND,"+1 sec");
-   my $yrsSoFar = &Delta_Format( &DateCalc($sim0,$tmp,\$err,1) ,0,"%yd");
+   my $yrsSoFar = &Delta_Format( FREUtil::dateCalc($sim0,$tmp) ,0,"%yd");
    my $int = $TSchunkLength;
    $int =~ s/yr//;
    my $cl = $chunkLength;
@@ -3757,20 +3773,20 @@ EOF
    if ($opt_z) { $csh .= begin_systime(); }
    my $totalseasons = 4 * $lcmchunk;
    my $startseason = 1;
-   my $startflag = &Date_Cmp($tBEG,$sim0);
+   my $startflag = FREUtil::dateCmp($tBEG,$sim0);
 
    foreach my $season ($startseason .. $totalseasons) {
       my $nummonths = $season * 3 - 4;
       my $tSEASON = FREUtil::modifydate($tBEG,"+ $nummonths months");
       my $tSEASONf = FREUtil::graindate($tSEASON,'seasonal');
-      my $year = substr($tSEASONf,0,4);
+      my ($year) = $tSEASONf =~ /(\d{4,})\./;
       my $catfiles = "";
       my $makecpio = "";
       my $tmp = FREUtil::graindate($sim0,'annual');
       #if it is time, chunk the files.  only put chunked files into archive now.
       if ( ($year-$tmp + 1) % $cl == 0 ) {
          $tmp = $year-$tmp + 1;
-         my $abbrev = substr($tSEASONf,5,4);
+	 my ($abbrev) = $tSEASONf =~ /\d{4,}\.(\w{3})/;
          my $begin = FREUtil::padzeros($year - $cl + 1);
          my $chunkedoutfile = "$component.$begin-$year.$abbrev.\$var";
          my $filelist = "";
@@ -3996,7 +4012,7 @@ sub monthlyAVfromhist {
    my $outdir = "$ppRootDir/$component/av/$src"."_$interval";
    my $chunkLength = $_[0]->findvalue('@chunkLength');
    my $tmp = FREUtil::modifydate($tEND,"+ 1 sec");
-   my $yrsSoFar = &Delta_Format( &DateCalc($sim0,$tmp,\$err,1) ,0,"%yd");
+   my $yrsSoFar = &Delta_Format( FREUtil::dateCalc($sim0,$tmp) ,0,"%yd");
    my $int = $interval;
    $int =~ s/yr//;
    my $mod = $yrsSoFar % $int;
@@ -4004,7 +4020,7 @@ sub monthlyAVfromhist {
    $mkdircommand .= "$outdir ";
    if( $int > $maxyrs ) { $maxyrs = $int; }
 
-   my $hDateyr = substr($hDate,0,4);
+   my $hDateyr = $userstartyear;
    my @hDates = ( FREUtil::padzeros($hDateyr-$int+1) .. "$hDateyr" );
 
    my $sim0f = FREUtil::graindate($sim0,$src);
@@ -4077,9 +4093,9 @@ while ( \$i <= 6 )
    set monthf = `echo \$month | sed 's/.*/0&/;s/.\\(..\\)/\\1/'`
    set histmonth = "\$monthf"
 
-   $time_ncrcat ncrcat \$ncrcatopt ????\${histmonth}01.$diag_source$tile.nc month.nc
+   $time_ncrcat ncrcat \$ncrcatopt *\${histmonth}01.$diag_source$tile.nc month.nc
    $check_ncrcat
-   $time_rm rm -f ????\${histmonth}01.$diag_source$tile.nc
+   $time_rm rm -f *\${histmonth}01.$diag_source$tile.nc
 EOF
 
    if ( $do_zInterp ) {
@@ -4181,9 +4197,9 @@ while (\$month <= 12)
    set histmonth = "\$monthf"
 
    if ( -e month.nc ) rm -f month.nc
-   $time_ncrcat ncrcat \$ncrcatopt ????\${histmonth}01.$diag_source.nc month.nc
+   $time_ncrcat ncrcat \$ncrcatopt *\${histmonth}01.$diag_source.nc month.nc
    $check_ncrcat
-   $time_rm rm -f ????\${histmonth}01.$diag_source.nc
+   $time_rm rm -f *\${histmonth}01.$diag_source.nc
 EOF
 
       if ( $do_zInterp ) {
@@ -4268,15 +4284,15 @@ sub annualAV1yrfromhist {
    my $interval = $_[0]->findvalue('@interval');
    my $chunkLength = $_[0]->findvalue('@chunkLength');
 
-   if ( "$yr2do" eq '' ) { $yr2do = $opt_t; }
-   my $yr2do0 = &ParseDate($yr2do);
+   if ( "$yr2do" eq '' ) { $yr2do = $hDate; }
+   my $yr2do0 = FREUtil::parseDate($yr2do);
    my $sim0f = FREUtil::graindate($sim0,$src);
    my $t0f = FREUtil::graindate($yr2do0,$src);
    my $yr2doEND = FREUtil::modifydate($yr2do0,'+1 year -1 sec');
    my $tENDf = FREUtil::graindate($yr2doEND,$src);
    if ( "$yr2do" eq "00010101" ) { $tENDf = "0001" }
 #print "annualAV1yrfromhist yr2do $yr2do yr2do0 $yr2do0 yr2doEND $yr2doEND tENDf $tENDf\n";
-   my $hDateyr = substr($yr2do,0,4);
+   my ($hDateyr) = FREUtil::splitDate($yr2do);
 
    my $diag_source = $_[0]->findvalue('@diagSource');
    my @monthnodes = $ppcNode->findnodes('timeSeries[@freq="monthly"]');
@@ -4523,7 +4539,7 @@ sub annualAVxyrfromann {
    my $outdirpath = "$component/av/$src"."_$interval";
    my $outdir = "$ppRootDir/$outdirpath";
    my $tmp = FREUtil::modifydate($tEND,"+ 1 sec");
-   my $yrsSoFar = &Delta_Format( &DateCalc($sim0,$tmp,\$err,1) ,0,"%yd");
+   my $yrsSoFar = &Delta_Format( FREUtil::dateCalc($sim0,$tmp) ,0,"%yd");
    my $int = $interval;
    $int =~ s/yr//;
    my $mod = $yrsSoFar % $int;
@@ -4552,7 +4568,7 @@ sub annualAVxyrfromann {
    $ppcNode->appendChild($newnode);
    my $annNode = $ppcNode->findnodes('timeAverage[@source="annual" and @interval="1yr"]')->get_node(1);
    foreach my $i ( 0 .. ($int-1) ) {
-      my $annyr = substr($opt_t,0,4);
+      my $annyr = $userstartyear;
       $annyr -= $i;
       $annyr = FREUtil::padzeros($annyr)."0101";
       #print "\nNOTE: Calling annualAV1yrfromhist( $annNode, $sim0, $annavnodes, $annyr )\n\n";
@@ -4697,13 +4713,13 @@ sub monthlyTSfromdailyTS {
    }
    my $outdir = "$ppRootDir/$component/ts/$freq/$chunkLength";
    $chunkLength =~ s/yr//;
-   my $yrsSoFar=&Delta_Format( &DateCalc($sim0,$t0,\$err,1) ,0,"%yd");
+   my $yrsSoFar=&Delta_Format( FREUtil::dateCalc($sim0,$t0) ,0,"%yd");
    my $mod = ($yrsSoFar+1) % $chunkLength;
    if( $mod != 0 ) { return ""; } #don't do any calculations until a chunk is ready to go.
    $mkdircommand .= "$outdir ";
    if( $chunkLength > $maxyrs ) { $maxyrs = $chunkLength; }
    my $indir = "$ppRootDir/$component/ts/$avgatt/$chunkLength"."yr";
-   my $hDateyr = substr($hDate,0,4);
+   my $hDateyr = $userstartyear;
    my @hDates = ( FREUtil::padzeros($hDateyr-$chunkLength+1) .. "$hDateyr" );
    my $in_start = FREUtil::graindate(FREUtil::modifydate($tEND,"-$chunkLength yr +1 sec"),$avgatt);
    my $in_end = FREUtil::graindate($tEND,$avgatt);
@@ -4809,7 +4825,7 @@ foreach var ( $variables )
    end
 
    if ( -e \$out.\$var.nc ) rm -f \$out.\$var.nc
-   $time_ncrcat ncrcat \$ncrcatopt ??????.\$var.nc \$out.\$var.nc
+   $time_ncrcat ncrcat \$ncrcatopt *??.\$var.nc \$out.\$var.nc
    $check_ncrcat
    $time_ncatted ncatted -h -O -a filename,global,m,c,"\$out.\$var.nc" \$out.\$var.nc
    $check_ncatted
@@ -4821,7 +4837,7 @@ foreach var ( $variables )
       $checktransfer
    endif
    $time_rm rm \$out.\$var.nc
-   $time_rm rm -f ??????.\$var.nc
+   $time_rm rm -f *??.\$var.nc
    @ len = \$#tmpstring - 1
    set length = `echo \$tmpstring[\$len] | cut -c2-`
    test \$length = $numtimelevels
@@ -4870,17 +4886,14 @@ sub directTS{
    }
    $chunkLength =~ s/mo//;
 
-   my $yrsSoFar=&Delta_Format( &DateCalc($sim0,$t0,\$err,1) ,0,"%yd");
-#print "yrsSoFar=$yrsSoFar, chunkLength=$chunkLength, err=$err\n";
-   $yrsSoFar=&Delta_Format( FREUtil::cmpdate($sim0,$t0) ,0,"%yd");
-#print "yrsSoFar=$yrsSoFar, chunkLength=$chunkLength, err=$err\n";
+   my $yrsSoFar=&Delta_Format( FREUtil::dateCalc($sim0,$t0) ,0,"%yd");
    my $mod = ($yrsSoFar+1) % $chunkLength;
    if( $mod != 0 and "$iunit" eq "years") { return ""; } #don't do any calculations until a chunk is ready to go.
    $mkdircommand .= "$outdir ";
    if( $chunkLength > $maxyrs ) { $maxyrs = $chunkLength; }
 
-   my $hDateyr = substr($hDate,0,4);
-   my $hDatemo = substr($hDate,4,2);
+   my $hDateyr = $userstartyear;
+   my $hDatemo = substr($userstartmo,2,2);
    my @hDates = ();
    my $start = '';
    if ( "$iunit" eq "years" ) {
@@ -5220,7 +5233,7 @@ sub monthlyAVfromav {
    my $chunkLength = $_[0]->findvalue('@chunkLength');
 
    my $tmp = FREUtil::modifydate($tEND,"+ 1 sec");
-   my $yrsSoFar = &Delta_Format( &DateCalc($sim0,$tmp,\$err,1) ,0,"%yd");
+   my $yrsSoFar = &Delta_Format( FREUtil::dateCalc($sim0,$tmp) ,0,"%yd");
    my $int = $interval;
    $int =~ s/yr//;
    my $mod = $yrsSoFar % $int;
@@ -5347,7 +5360,7 @@ sub annualAVfromav {
    my $outdir = "$ppRootDir/$component/av/$src"."_$interval";
    my $srcdir = "$ppRootDir/$component/av/$src"."_$subint"."yr";
    my $tmp = FREUtil::modifydate($tEND,"+ 1 sec");
-   my $yrsSoFar = &Delta_Format( &DateCalc($sim0,$tmp,\$err,1) ,0,"%yd");
+   my $yrsSoFar = &Delta_Format( FREUtil::dateCalc($sim0,$tmp) ,0,"%yd");
    my $int = $interval;
    $int =~ s/yr//;
    my $mod = $yrsSoFar % $int;
@@ -5476,7 +5489,7 @@ if ( ! -e $ppRootDir/$component/$component.static.nc ) then
    if ( \$status ) then
       echo "WARNING: hsmget reported failure, retrying..."
       $time_hsmget \$hsmget -a $opt_d -p $ptmpDir/history -w $tmphistdir $hDate.nc/\\*$diag_source\\*
- $checktransfer
+      $checktransfer
    endif
    # Get files listed as associated_files
    foreach file ( $tmphistdir/$hDate.nc/*$diag_source* )
@@ -5503,7 +5516,7 @@ $checktransfer
    end
 
    foreach file ( `ls \$histDir/*/*nc`)
-      ln -s \$file .
+     ln -s \$file .
    end
    set output_files = ( )
 EOF
@@ -5555,7 +5568,7 @@ $checktransfer
 EOF
 
       foreach my $i ( 1 .. 6 ) {
-	 $csh .= <<EOF;
+      $csh .= <<EOF;
    set files = (`ls $hDate.$diag_source*tile$i.nc | grep -v grid_spec`)
    set static = (`\$NCVARS -s012 \$files`) # only support up to 2D static fields
    if ( "\$static" != "" ) then
@@ -5590,31 +5603,31 @@ EOF
    set output_files = ( )
    set tiles = (`ls $hDate.$diag_source*.tile1.nc | grep -v grid_spec`)
    foreach tfile ( \$tiles )
-      if ( ! -w \$tfile ) then
-         set i = 1
-         while ( \$i <= 6 )
-            set tf = \$tfile:r:r.tile\$i.nc
-            $time_cp cp \$tf copy
-            $time_rm rm -f \$tf
-            $time_mv $mv copy \$tf
-            chmod 644 \$tf
-            @ i ++
-         end
-      endif
-      set fregrid_wt = "$fregrid_wt"
-      set fregrid_in_date = $hDate
-      set fregrid_in = \$tfile:r:r
-      set nlat = $nlat ; set nlon = $nlon
-      set interp_method = $interpMethod
-      set ncvars_arg = -s2
-      set variables = ( )
-      set fregrid_remap_file = $ppRootDir/$component/.fregrid_remap_file_\${nlon}_by_\${nlat}.nc
+     if ( ! -w \$tfile ) then
+      set i = 1
+      while ( \$i <= 6 )
+        set tf = \$tfile:r:r.tile\$i.nc
+        $time_cp cp \$tf copy
+        $time_rm rm -f \$tf
+        $time_mv $mv copy \$tf
+        chmod 644 \$tf
+        @ i ++
+      end
+     endif
+     set fregrid_wt = "$fregrid_wt"
+     set fregrid_in_date = $hDate
+     set fregrid_in = \$tfile:r:r
+     set nlat = $nlat ; set nlon = $nlon
+     set interp_method = $interpMethod
+     set ncvars_arg = -s2
+     set variables = ( )
+     set fregrid_remap_file = $ppRootDir/$component/.fregrid_remap_file_\${nlon}_by_\${nlat}.nc
 
-      set onedvars = `\$NCVARS -s01 \$fregrid_in.tile1.nc`
-      if ( "\$onedvars" != "" ) then
-         set onedvarlist = `echo \$onedvars | tr ' ' ','`
-         $time_splitncvars \$SPLITNCVARS -s -v \$onedvarlist -f $ppRootDir/$component/$component.static.nc \$fregrid_in.tile1.nc
-      endif
+     set onedvars = `\$NCVARS -s01 \$fregrid_in.tile1.nc`
+     if ( "\$onedvars" != "" ) then
+        set onedvarlist = `echo \$onedvars | tr ' ' ','`
+        $time_splitncvars \$SPLITNCVARS -s -v \$onedvarlist -f $ppRootDir/$component/$component.static.nc \$fregrid_in.tile1.nc
+     endif
 
 # call and check fregrid start
 $call_and_check_fregrid
@@ -5622,7 +5635,7 @@ set output_files = (\$output_files \$fregrid_in.nc)
 endif
 # call and check fregrid end
 
-   end
+     end
 EOF
       $csh .= $cubiccsh;
    } else {
@@ -5657,10 +5670,8 @@ EOF
            $call_and_check_fregrid
 
            set output_files = (\$output_files \$fregrid_in.nc)
-         # sdu:: I think the end/endif here are reversed, but b/c I am unsure what call_and_check_fregrid
-         # sdu:: will actually put here, I am reluctant to change anything.
-         end
          endif
+         end
 
 EOF
       } else {
@@ -5710,7 +5721,7 @@ sub TSfromts {
    my $subchunkyr = "$subchunk"."yr";
    my $reqpath = "$ppRootDir/$component/ts/$freq/$subchunk"."yr";
    my $tmp = FREUtil::modifydate($tEND,"+1 sec");
-   my $yrsSoFar = &Delta_Format( &DateCalc($sim0,$tmp,\$err,1) ,0,"%yd");
+   my $yrsSoFar = &Delta_Format( FREUtil::dateCalc($sim0,$tmp) ,0,"%yd");
    my $cl = $chunkLength;
    $cl =~ s/yr//;
    my $mod = $yrsSoFar % $cl;
@@ -5901,7 +5912,7 @@ sub seaTSfromts {
    my $reqpath = "$ppRootDir/$component/ts/$freq/$subchunk"."yr";
    my $req = "$component/ts/$freq/$subchunk"."yr";
    my $tmp = FREUtil::modifydate($tEND,"+1 sec");
-   my $yrsSoFar = &Delta_Format( &DateCalc($sim0,$tmp,\$err,1) ,0,"%yd");
+   my $yrsSoFar = &Delta_Format( FREUtil::dateCalc($sim0,$tmp) ,0,"%yd");
    my $cl = $chunkLength;
    $cl =~ s/yr//;
    my $mod = $yrsSoFar % $cl;
@@ -6079,14 +6090,14 @@ sub seasonalAVfromhist {
    my $outdir = "$ppRootDir/$component/av/$src"."_$interval";
    my $chunkLength = $_[0]->findvalue('@chunkLength');
    my $tmp = FREUtil::modifydate($tEND,"+ 1 sec");
-   my $yrsSoFar = &Delta_Format( &DateCalc($sim0,$tmp,\$err,1) ,0,"%yd");
+   my $yrsSoFar = &Delta_Format( FREUtil::dateCalc($sim0,$tmp) ,0,"%yd");
    my $int = $interval;
    $int =~ s/yr//;
    my $mod = $yrsSoFar % $int;
    unless( $mod == 0 ) { return ""; }
    $mkdircommand .= "$outdir ";
    if( $int > $maxyrs ) { $maxyrs = $int; }
-   my $hDateyr = substr($hDate,0,4);
+   my $hDateyr = $userstartyear;
    my @hDates = ( FREUtil::padzeros($hDateyr-$int+1) .. "$hDateyr" );
    my $tBEG = FREUtil::modifydate($tEND,"- $int years + 1 sec");
    my $range = FREUtil::graindate($tEND,'year');
@@ -6168,8 +6179,8 @@ EOF
       my $tSEASON = FREUtil::modifydate($tBEG,"+ $startmo months");
       my $seahist = FREUtil::graindate($tSEASON,'day');
       my $tSEASONf = FREUtil::graindate($tSEASON,'seasonal');
-      my $year = substr($tSEASONf,0,4);
-      my $prevyear = substr($seahist,0,4);
+      my ($year) = $tSEASONf =~ /(\d{4,})\./;
+      my ($prevyear) = $seahist =~ /(\d{4,})\d{4}/;
       my $prevhistcpio = "$prevyear".$decSeg.".nc.cpio";
       my $prevhisttar = "$prevyear".$decSeg.".nc.tar";
       my $nextd = FREUtil::modifydate($tSEASON, "+ 12 months");
@@ -6374,11 +6385,11 @@ EOF
       my $dates = "$range".".$season";
       $csh .= <<EOF;
 echo season $season =========================================================
-test $int = `ls -1 $component.????.$season.tile1.nc | wc -l`
+test $int = `ls -1 $component.*.$season.tile1.nc | wc -l`
 $check_numfiles
 set i = 1
 while ( \$i <= 6 )
-  set list = `ls -1 $component.????.$season.tile\$i.nc`
+  set list = `ls -1 $component.*.$season.tile\$i.nc`
   if ( -e sea\$i.nc ) $time_rm rm -f sea\$i.nc
   $time_ncrcat ncrcat \$ncrcatopt \$list sea\$i.nc
   $check_ncrcat
@@ -6465,8 +6476,8 @@ EOF
       my $tSEASON = FREUtil::modifydate($tBEG,"$plus $startmo months");
       my $seahist = FREUtil::graindate($tSEASON,'day');
       my $tSEASONf = FREUtil::graindate($tSEASON,'seasonal');
-      my $year = substr($tSEASONf,0,4);
-      my $prevyear = substr($seahist,0,4);
+      my ($year) = $tSEASONf =~ /(\d{4,})\./;
+      my ($prevyear) = $seahist =~ /(\d{4,})\d{4}/;
       my $prevhistcpio = "$prevyear".$decSeg.".nc.cpio";
       my $prevhisttar = "$prevyear".$decSeg.".nc.tar";
       my $nextd = FREUtil::modifydate($tSEASON, "+ 12 months");
@@ -6600,9 +6611,9 @@ EOF
       my $dates = "$range".".$season";
       $csh .= <<EOF;
 echo season $season =========================================================
-test $int = `ls -1 $component.????.$season.nc | wc -l`
+test $int = `ls -1 $component.*.$season.nc | wc -l`
 $check_numfiles
-set list = `ls -1 $component.????.$season.nc`
+set list = `ls -1 $component.*.$season.nc`
 if ( -e sea.nc ) $time_rm rm -f sea.nc
 $time_ncrcat ncrcat \$ncrcatopt \$list sea.nc
 $check_ncrcat
@@ -6666,7 +6677,7 @@ sub seasonalAVfromav {
    my $srcdir = "$ppRootDir/$component/av/$src"."_$subint"."yr";
    my $chunkLength = $_[0]->findvalue('@chunkLength');
    my $tmp = FREUtil::modifydate($tEND,"+ 1 sec");
-   my $yrsSoFar = &Delta_Format( &DateCalc($sim0,$tmp,\$err,1) ,0,"%yd");
+   my $yrsSoFar = &Delta_Format( FREUtil::dateCalc($sim0,$tmp) ,0,"%yd");
    my $int = $interval;
    $int =~ s/yr//;
    my $mod = $yrsSoFar % $int;
@@ -6784,7 +6795,7 @@ set refineError = 0
 set basedate = '$basedate'
 set gridspec = '$gridspec'
 
-set historyyear = `echo $opt_t | cut -c 1-4`
+set historyyear = `echo $hDate | sed 's/[0-9][0-9][0-9][0-9]$//'`
 cd \$histDir
 foreach historyfile ( `ls \$historyyear????.nc.cpio \$historyyear????.nc.tar`)
    set hsmdate = \$historyfile:r
@@ -6920,7 +6931,7 @@ sub writescript {
          $newjobid =~ s/Previous frepp job \((.*)\).*/$1/ if $newjobid =~ /still running for /;
          #print "New jobid='$newjobid'\n";
          if ( "$newjobid" eq '' ) {
-            print "No jobid resulted from the Moab job submission of $opt_t.\n";
+	    print "No jobid resulted from the Moab job submission of $hDate.\n";
             print "ERROR: Unable to submit job, exiting.\n";
             exit 1;
          } elsif ( "$newjobid" !~ /gfdl.\d+/ ) {
@@ -7024,8 +7035,8 @@ set hsmget = "hsmget -v -m $FRE_COMMANDS_HOME/site/gfdl/hsmget.mk -t";
 set hsmput = "hsmput -v -m $FRE_COMMANDS_HOME/site/gfdl/hsmput.mk -t";
 if ( $?HSM_HOME ) then
    if ( -d $HSM_HOME ) then
-      set hsmget = 'hsmget -v -t';
-      set hsmput = 'hsmput -v -t';
+     set hsmget = 'hsmget -v -t';
+     set hsmput = 'hsmput -v -t';
    endif
 endif
 
@@ -7033,11 +7044,11 @@ endif
 set options = ( )
 set argv = (`getopt g: $*`)
 while ("$argv[1]" != "--")
-   switch ($argv[1])
-      case -g:
-         set checkpt = $argv[2]; shift argv; breaksw
-   endsw
-   shift argv
+    switch ($argv[1])
+        case -g:
+            set checkpt = $argv[2]; shift argv; breaksw
+    endsw
+    shift argv
 end
 shift argv
 
