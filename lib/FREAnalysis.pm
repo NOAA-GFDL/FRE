@@ -23,7 +23,7 @@ sub analysis {
    my $opt_O = $args->{opt_O};
    my $opt_Y = $args->{opt_Y};
    my $opt_Z = $args->{opt_Z};
-   my $opt_v = $args->{opt_v};
+   my $opt_V = $args->{opt_V};
    my $opt_u = $args->{opt_u};
    my $sim0 = $args->{sim0};
    my $opt_R = $args->{opt_R};
@@ -42,7 +42,7 @@ sub analysis {
    #$opt_v=1;
 
 #----list inputs
-   if($opt_v) {
+   if($opt_V) {
                print "node: $tsORav\n";
                print "component: $component\n";
                print "expt: $expt\n";
@@ -59,17 +59,17 @@ sub analysis {
       $freq = $ts_av_Node->findvalue('@freq');
       $cl = $ts_av_Node->findvalue('@chunkLength');
       $asrcdir = "$ppRootDir/$component/ts/$freq/$cl";
-      if($opt_v) {print "freq: $freq\nchunkLength: $cl\n";}
+      if($opt_V) {print "freq: $freq\nchunkLength: $cl\n";}
    }elsif($tsORav eq "timeAverage") {
       $freq = $ts_av_Node->findvalue('@source');
       $cl = $ts_av_Node->findvalue('@interval');
       $asrcdir = "$ppRootDir/$component/av/$freq"."_$cl";
-      if($opt_v) {print "source: $freq\ninterval: $cl\n";}
+      if($opt_V) {print "source: $freq\ninterval: $cl\n";}
    }else{
    print STDERR "ERROR from analysis.PM: timeSeries or timeAverage must be specified. Skip analysis\n";return;
    }
 
-      if($opt_v) {
+      if($opt_V) {
                print "gridspec: $gridspec\n";
                print "staticfile: $staticfile\n";
                print "diagfile: $diagfile\n";
@@ -83,7 +83,7 @@ sub analysis {
                print "\$opt_O: $opt_O\n";
                print "\$opt_Y: $opt_Y\n";
                print "\$opt_Z: $opt_Z\n";
-               print "\$opt_v: $opt_v\n";
+               print "\$opt_V: $opt_V\n";
                print "\$opt_s: $opt_s\n";
                print "sim0: $sim0\n";
                print "hist_dir: $hist_dir\n";
@@ -91,7 +91,7 @@ sub analysis {
                }
 
 
-   if( $opt_v ) {print STDERR "ANALYSIS: Found $anum analysis scripts for $asrcdir\n";}
+   if( $opt_V ) {print STDERR "ANALYSIS: Found $anum analysis scripts for $asrcdir\n";}
 
    my $clnumber = $cl;
    $clnumber =~ s/yr$//;
@@ -108,7 +108,7 @@ sub analysis {
       print STDERR "ANALYSIS: No data available for analysis figures in $asrcdir\n\n";
       return;}
 
-   if ($opt_v) {print STDERR "availablechunks start= @availablechunksfirst\n";
+   if ($opt_V) {print STDERR "availablechunks start= @availablechunksfirst\n";
                 print STDERR "availablechunks end  = @availablechunkslast\n";
    }
 
@@ -211,7 +211,7 @@ sub analysis {
            $asrcdir_addexpt = "$ppRootDir/$component/av/$freq"."_$addexptcl";
        }
 
-       if($opt_v) {
+       if($opt_V) {
        print " addexpt $iExpt xmlfile   = $xmlfile \n";
        print " addexpt $iExpt exptname  = $exptname \n";
        print " addexpt $iExpt ppRootDir = $ppRootDir \n";
@@ -239,12 +239,12 @@ sub analysis {
        my ($flag, $astartYear, $aendYear, $databegyr, $dataendyr,@missing) = start_end_date($astart,$aend,$astart, $aend,\@addavailablechunksfirst, \@addavailablechunkslast,$clnumber);
        if ($flag eq "bad" or ($tsORav eq "timeSeries" and @missing > 0) ) {
            print STDERR "ANALYSIS:   files are not complete for addexpt $iExpt. Skipped. \n";
-           if ($opt_v) {print STDERR "ANALYSIS: Missing chunks: \n @missing \n"};
+           if ($opt_V) {print STDERR "ANALYSIS: Missing chunks: \n @missing \n"};
            $myflag = -1; last; }
 
        if ($astartYear and $aendYear) {$addexptyrstr = $astartYear."-".$aendYear}
 
-       if($opt_v) {print STDERR " addexpt $iExpt astartYear: $astartYear aendYear: $aendYear databegyr: $databegyr dataendyr: $dataendyr\n";
+       if($opt_V) {print STDERR " addexpt $iExpt astartYear: $astartYear aendYear: $aendYear databegyr: $databegyr dataendyr: $dataendyr\n";
                    print STDERR " addexpt $iExpt missing: @missing\n";
                   }
        #
@@ -282,7 +282,7 @@ sub analysis {
      $aScript =~ s/"//g;
      $aScript =~ s/\$\(name\)/$expt/g;
      my @afile = split('\/',$aScript);
-     if ( $opt_v ) {
+     if ( $opt_V ) {
         print  STDERR "###analysis script $aScript\n";
         print  STDERR "###analysis### argu," ,@aargu,"\n";
      }
@@ -290,7 +290,7 @@ sub analysis {
      ### find the cksum CRC number of the @aargu
      my @cksumCRC = (-1);
      if (@aargu gt 0) { @cksumCRC = split("\ ",`echo "@aargu" | cksum`)};
-     if ( $opt_v ) { "The cksumCRC of aargu array = $cksumCRC[0] \n   "};
+     if ( $opt_V ) { "The cksumCRC of aargu array = $cksumCRC[0] \n   "};
 
 
      ### define where to put the figures: $figureDir
@@ -308,10 +308,10 @@ sub analysis {
      $figureDir =~ s/\$addexptName/$arrayofExptsH[1]{exptname}/;
      $figureDir =~ s/"//g;
      $figureDir =~ s/\/$//g;
-     print "ANALYSIS: Figures will be written to $figureDir\n" if $opt_v;
+     print "ANALYSIS: Figures will be written to $figureDir\n" if $opt_V;
      #might be in /net, so can't mkdir directly, analysis scripts must create this.
      #unless (-d "$figureDir") {
-     #   print "ANALYSIS: Creating output dir $figureDir\n";# if $opt_v;
+     #   print "ANALYSIS: Creating output dir $figureDir\n";# if $opt_V;
      #   if ( substr($figureDir,0,8) eq '/archive' ) {
      #       acarch("mkdir -p $figureDir ");
      #   } else {
@@ -348,7 +348,7 @@ sub analysis {
           $aScriptout = "$aoutscriptdir_final/$afile[$#afile].$availablechunk$unique";
         }
         if ( -e $aScriptout and ! $opt_R ) { print STDERR "ANALYSIS: $aScriptout already exists, SKIP\n"; next;}
-        filltemplate(\@arrayofExptsH,cleanpath($figureDir),$aScript,\@aargu,cleanpath($aScriptout),$iExpt,cleanpath($workdir),$mode,cleanpath($asrcfile),$opt_s,$opt_u,$opt_v,cleanpath($frexml),cleanpath($stdoutdir),$opt_P,$opt_T);
+        filltemplate(\@arrayofExptsH,cleanpath($figureDir),$aScript,\@aargu,cleanpath($aScriptout),$iExpt,cleanpath($workdir),$mode,cleanpath($asrcfile),$opt_s,$opt_u,$opt_V,cleanpath($frexml),cleanpath($stdoutdir),$opt_P,$opt_T);
      #
      } else {
 
@@ -358,7 +358,7 @@ sub analysis {
        if ($tsORav eq "timeAverage") { $cumulative = $arrayofExptsH[0]{cumulative}||"no";}
 
        if ($cumulative eq "yes" or $cumulative eq "YES") {
-         if ($opt_v) {print "accumulative mode \n";}
+         if ($opt_V) {print "accumulative mode \n";}
          my $availablechunk = "$arrayofExptsH[0]{astartYear}-$arrayofExptsH[0]{aendYear}";
          if ($arrayofExptsH[0]{specify1year}) {$availablechunk = $arrayofExptsH[0]{specify1year};}
          if ($cksumCRC[0] gt 0) {
@@ -379,20 +379,20 @@ sub analysis {
          $tt =~ s/\,\}$/\}/;
          $tt =~ s/\ //g;
          my $asrcfile = "$component.$tt.$ssn.nc";
-         if ($opt_v) {print "asrcfile:: $asrcfile\n"};
+         if ($opt_V) {print "asrcfile:: $asrcfile\n"};
 
 
         #----#---- fill the variables in the template
-        #if ($opt_v) {print STDERR "fill these vars: @arrayofExptsH\n,$figureDir\n,$aScript\n,$aScriptout\n,$iExpt\n,$workdir\n,$mode\n"; }
+        #if ($opt_V) {print STDERR "fill these vars: @arrayofExptsH\n,$figureDir\n,$aScript\n,$aScriptout\n,$iExpt\n,$workdir\n,$mode\n"; }
          if ($tsORav eq "timeAverage") {
-           filltemplate(\@arrayofExptsH,cleanpath($figureDir),$aScript,\@aargu,cleanpath($aScriptout),$iExpt,cleanpath($workdir),$mode,cleanpath($asrcfile),$opt_s,$opt_u,$opt_v,cleanpath($frexml),cleanpath($stdoutdir),$opt_P,$opt_T);
+           filltemplate(\@arrayofExptsH,cleanpath($figureDir),$aScript,\@aargu,cleanpath($aScriptout),$iExpt,cleanpath($workdir),$mode,cleanpath($asrcfile),$opt_s,$opt_u,$opt_V,cleanpath($frexml),cleanpath($stdoutdir),$opt_P,$opt_T);
          } else {
-           filltemplate(\@arrayofExptsH,cleanpath($figureDir),$aScript,\@aargu,cleanpath($aScriptout),$iExpt,cleanpath($workdir),$mode,"",$opt_s,$opt_u,$opt_v,cleanpath($frexml),cleanpath($stdoutdir),$opt_P,$opt_T);
+           filltemplate(\@arrayofExptsH,cleanpath($figureDir),$aScript,\@aargu,cleanpath($aScriptout),$iExpt,cleanpath($workdir),$mode,"",$opt_s,$opt_u,$opt_V,cleanpath($frexml),cleanpath($stdoutdir),$opt_P,$opt_T);
          }
 
        } else { #if ($cumulative
 
-       if ($opt_v) {print "non-accumulative mode \n"; }
+       if ($opt_V) {print "non-accumulative mode \n"; }
        # loop through each available chunk
        my $afreq = $arrayofExptsH[0]{afreq};
        for (my $n = 0; $n<@availablechunksfirst;$n=$n+$afreq) {
@@ -421,11 +421,11 @@ sub analysis {
          }
 
          #----#---- fill the variables in the template
-         #if ($opt_v) {print STDERR "fill these vars: @arrayofExptsH\n,$figureDir\n,$aScript\n,$aScriptout\n,$iExpt\n,$workdir\n,$mode\n";}
+         #if ($opt_V) {print STDERR "fill these vars: @arrayofExptsH\n,$figureDir\n,$aScript\n,$aScriptout\n,$iExpt\n,$workdir\n,$mode\n";}
          if ($tsORav eq "timeAverage") {
-           filltemplate(\@arrayofExptsH,cleanpath($figureDir),$aScript,\@aargu,cleanpath($aScriptout),$iExpt,cleanpath($workdir),$mode,cleanpath($asrcfile),$opt_s,$opt_u,$opt_v,cleanpath($frexml),cleanpath($stdoutdir),$opt_P,$opt_T);
+           filltemplate(\@arrayofExptsH,cleanpath($figureDir),$aScript,\@aargu,cleanpath($aScriptout),$iExpt,cleanpath($workdir),$mode,cleanpath($asrcfile),$opt_s,$opt_u,$opt_V,cleanpath($frexml),cleanpath($stdoutdir),$opt_P,$opt_T);
          } else {
-           filltemplate(\@arrayofExptsH,cleanpath($figureDir),$aScript,\@aargu,cleanpath($aScriptout),$iExpt,cleanpath($workdir),$mode,"",$opt_s,$opt_u,$opt_v,cleanpath($frexml),cleanpath($stdoutdir),$opt_P,$opt_T);
+           filltemplate(\@arrayofExptsH,cleanpath($figureDir),$aScript,\@aargu,cleanpath($aScriptout),$iExpt,cleanpath($workdir),$mode,"",$opt_s,$opt_u,$opt_V,cleanpath($frexml),cleanpath($stdoutdir),$opt_P,$opt_T);
          }
        }  #for (my $n = 0 ...
      } #if ($cumulative ..
@@ -452,7 +452,7 @@ sub graindate {
    } elsif ( "$freq" =~ /season/ ) {
       my $month = substr($date,4,2);
       unless ( $month==12 or $month==3 or $month==6 or $month==9  ) {
-         if ($opt_v) {print STDERR "WARNING: graindate: $month is not the beginning of a known season.\n";}
+         if ($opt_V) {print STDERR "WARNING: graindate: $month is not the beginning of a known season.\n";}
       }
       my $year = substr($date,0,4);
       if ( $month == 12 ) {
@@ -626,9 +626,9 @@ sub checkmissingchunks {
 sub filltemplate {
 
 # fill the template with the passing variables
-    my ($arrayofExptsH_ref,$figureDir,$aScript,$aargu,$aScriptout,$iExpt,$workdir,$mode,$asrcfile,$opt_s,$opt_u,$opt_v,$frexml,$stdoutdir,$platform,$target) = @_;
+    my ($arrayofExptsH_ref,$figureDir,$aScript,$aargu,$aScriptout,$iExpt,$workdir,$mode,$asrcfile,$opt_s,$opt_u,$opt_V,$frexml,$stdoutdir,$platform,$target) = @_;
 
-    #if ( $opt_v ) {
+    #if ( $opt_V ) {
     #   for(my $j=0; $j<2;$j++) {
     #      while(($key,$value) = each %{$arrayofExptsH_ref->[$j]} ) {
     #         print STDERR "$key -- $value\n";
@@ -888,7 +888,7 @@ sub start_end_date {
       $astartYear = substr($astartYear,0,4);
       $aendYear = substr($aendYear,0,4);
 
-      if ($opt_v) {print STDERR "ANALYSIS: user specified start and end year: $astartYear - $aendYear\n";}
+      if ($opt_V) {print STDERR "ANALYSIS: user specified start and end year: $astartYear - $aendYear\n";}
 
 
      # user specified years do not have to be on the begin or end of data chunks
@@ -931,7 +931,7 @@ sub start_end_date {
      #   print STDERR "Analysis: cannot process timeSeries, missing these chunks: @themissing. \n";
      #}
 
-     if ( $opt_v) {print STDERR "ANALYSIS: data needed for the start year and end year: $databegyr - $dataendyr\n";}
+     if ( $opt_V) {print STDERR "ANALYSIS: data needed for the start year and end year: $databegyr - $dataendyr\n";}
 
      return $flag,$astartYear,$aendYear,$databegyr,$dataendyr,@themissing;
 }
