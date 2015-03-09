@@ -395,18 +395,18 @@ sub graindate {
 
    if ($freq =~ /(?>day|daily)/i) {
      # Return yyyymmdd
-     ($formatstr) = $date =~ /^(\d{4,}\d{2}\d{2})\d{2}:\d{2}:\d{2}$/;
+     ($formatstr) = parseDate($date) =~ /^(\d{4,}\d{2}\d{2})\d{2}:\d{2}:\d{2}$/;
    } elsif ($freq =~ /(?>mon|month|monthly)/i) {
      # Return yyyymm
-     ($formatstr) = $date =~ /^(\d{4,}\d{2})\d{2}\d{2}:\d{2}:\d{2}$/;
+     ($formatstr) = parseDate($date) =~ /^(\d{4,}\d{2})\d{2}\d{2}:\d{2}:\d{2}$/;
    } elsif ($freq =~ /(?>ann|annual|yr|year)/i) {
      # Return yyyy
-     ($formatstr) = $date =~ /^(\d{4,})\d{2}\d{2}\d{2}:\d{2}:\d{2}$/;
+     ($formatstr) = parseDate($date) =~ /^(\d{4,})\d{2}\d{2}\d{2}:\d{2}:\d{2}$/;
    } elsif ($freq =~ /(?>hr|hour)/i) {
      # Return yyyymmddhh
-     ($formatstr) = $date =~ /^(\d{4,}\d{2}\d{2}\d{2}):\d{2}:\d{2}$/;
+     ($formatstr) = parseDate($date) =~ /^(\d{4,}\d{2}\d{2}\d{2}):\d{2}:\d{2}$/;
    } elsif ($freq =~ /season/i) {
-     my ($year, $month) = $date =~ /^(\d{4,})(\d{2})\d{2}\d{2}:\d{2}:\d{2}$/;
+     my ($year, $month) = parseDate($date) =~ /^(\d{4,})(\d{2})\d{2}\d{2}:\d{2}:\d{2}$/;
      unless (int($month)%3==0) {
        if ($::opt_v) {print STDERR "WARNING: graindate: $month is not the beginning of a known season in date $date.\n";}
      }
@@ -425,12 +425,12 @@ sub graindate {
      } else {
        print STDERR "WARNING: graindate: month $month not recognized";
        # Return yyyymm
-       ($formatstr) = $date =~ /^(\d{4,}\d{2})\d{2}\d{2}:\d{2}:\d{2}$/;
+       ($formatstr) = parseDate($date) =~ /^(\d{4,}\d{2})\d{2}\d{2}:\d{2}:\d{2}$/;
      }
    } else {
      print STDERR "WARNING: frequency not recognized in graindate\n";
      # Return yyyymmddhh
-     ($formatstr) = $date =~ /^(\d{4,}\d{2}\d{2}\d{2}):\d{2}:\d{2}$/;
+     ($formatstr) = parseDate($date) =~ /^(\d{4,}\d{2}\d{2}\d{2}):\d{2}:\d{2}$/;
    }
 
    return $formatstr;
