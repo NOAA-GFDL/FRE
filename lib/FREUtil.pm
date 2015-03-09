@@ -135,6 +135,7 @@ sub parseDate {
   # Variables to hold year and mmdd to allow for date verification
   my $year = "";
   my $mmdd = "";
+  my $hhmmss = "00:00:00";
 
   if (length($date) < 8) {
     # Assume only a year has been passed in, and the month/day/time is
@@ -144,6 +145,9 @@ sub parseDate {
     # cases is a good assumption.
     $year = $date;
     $mmdd = "0101";
+  } elsif ($date =~ /^(\d{4,}\d{2}\d{2})(\d{2}:\d{2}:\d{2})$/) {
+    ( $year, $mmdd ) = splitDate($1);
+    $hhmmss = $2;
   } else {
     ( $year, $mmdd ) = splitDate($date);
   }
@@ -156,11 +160,11 @@ sub parseDate {
     # Date::Manip cannot handle certain dates, we force to use a date
     # between years 2000 and 2999.
     my $vYear = 2000 + int($year)%2000;
-    my $vDate = sprintf("%04d%04d",$vYear,$mmdd);
+    my $vDate = sprintf("%04d%04d%8s",$vYear,$mmdd,$hhmmss);
     if (Date::Manip::ParseDate($vDate) eq '') {
       print STDERR "ERROR: Date '$date' is not a valid date.\n";
     } else {
-      $return_date = sprintf("%04d%04d00:00:00",$year,$mmdd);
+      $return_date = sprintf("%04d%04d%8s",$year,$mmdd,$hhmmss);
     }
   }
   return $return_date;
