@@ -506,55 +506,50 @@ EOF
    }
 
 
-   #don't use job schooling if queue is stage. Maintain the same queue for future jobs when schooling.
-   my $schooling = 1;
+   # Job schooling is only available if queue is not stage
+   #
+   # If queue is one of the bigvftmp, the request the entire node, and tell
+   # moab to use all the physical cores
    my $pbsqueue = '';
    my $pbsenv = $ENV{'PBS_ENVIRONMENT'};
-   if ( "$pbsenv" eq "PBS_BATCH" ) {
-      $pbsqueue = $ENV{'PBS_O_QUEUE'};
-      if ( "$pbsqueue" eq "stage" ) {
-         $schooling = 0;
-      } elsif ( "$pbsqueue" eq "bigvftmp" ) {
-         unless ( "$opt_m" =~ m/-q bigvftmp/ or "$opt_m" =~ m/-q boost_bigvftmp/) {
-            $opt_m .= " -q boost_bigvftmp";
-         }
-      } elsif ( "$pbsqueue" eq "boost_bigvftmp" ) {
-         unless ( "$opt_m" =~ m/-q boost_bigvftmp/ ) {
-            $opt_m .= " -q boost_bigvftmp";
-         }
-      } elsif ( "$pbsqueue" eq "batch" ) {
-         unless ( "$opt_m" =~ m/-q batch/ or "$opt_m" =~ m/-q boost_batch/) {
-            $opt_m .= " -q boost_batch";
-         }
-      } elsif ( "$pbsqueue" eq "boost_batch" ) {
-         unless ( "$opt_m" =~ m/-q boost_batch/ ) {
-            $opt_m .= " -q boost_batch";
-         }
-      }
+   if ($pbsenv =~ m/^PBS_BATCH$/) {
+     $pbsqueue = $ENV{'PBS_O_QUEUE'};
+   } else {
+     # get queue information from $opt_m
+     ( $pbsqueue ) = $opt_m =~ m/-q +(\S+)/;
    }
 
-   #get base number of pes, if specified
-   my $prodnpes = FREUtil::getxpathval('runtime/production/@npes');
-   #if ( $prodnpes > 512 ) {
-   #   $basenpes = 6;
-   #}
-   my $ppnpes = FREUtil::getxpathval('postProcess/@npes');
-   if ( "$ppnpes" ne '' and $ppnpes > 1 and $ppnpes <= 4 ) {
-      $basenpes = $ppnpes;
-   }
+   if ($pbsqueue =~ m/batch|bigvftmp/) {
+     # Use job schooling
+     # The moab -l options control the schooling and how many ppn are requested
+     # ppn will be based on he queue requested.
+     my $moab_lopt = '';
+     ( $moab_lopt ) = $opt_m =~ m/-l *(\S+)/;
+     my @moab_lopts = split(',',$moab_lopt);
 
-   #if opt_m doesn't set a host, and we are currently on a pp node, use the current hostname for frepp submissions from this invocation
-   if ( $schooling ) {
-      unless ( "$opt_m" =~ m/-l host=.+/ ) {
-         my $hostname = $ENV{HOST};
-         $opt_m .= " -l host=$hostname.princeton.rdhpcs.noaa.gov" if "$hostname" =~ m/^pp/;
-      }
-   }
+     my $hostname = $ENV{HOST};
+     if ($hostname =~ m/^pp/ and !grep(/host=/,@moab_lopts)) {
+       # if on one of the pp nodes, then set the -lhost moab option to the current
+       # pp host, to continue the job schooling
+       push @moab_lopts,"host=$hostname.princeton.rdhpcs.noaa.gov";
+     }
 
-   if ( "$opt_m" =~ m/host=.+princeton\.rdhpcs\.noaa\.gov/
-            and "$opt_m" !~ m/naccesspolicy=singlejob/
-            and "$pbsqueue" =~ m/bigvftmp/ ) {
-      $opt_m =~ s/(princeton\.rdhpcs\.noaa\.gov)/$1,naccesspolicy=singlejob/;
+     if ($pbsqueue =~ m/bigvftmp/) {
+       $opt_m .= " -q boost_bigvftmp" unless ($opt_m =~ m/-q +\b.*bigvftmp\b/);
+       push @moab_lopts,"naccesspolicy=singlejob" unless grep(/naccesspolicy=singlejob/,@moab_lopts);
+       $basenpes = $fre->property('FRE.scheduler.bigvftmp.coresPerJob.max');
+     } elsif ($pbsqueue =~ m/batch/) {
+       unless ($opt_m =~ m/-q +\b.*batch\b/) {
+	 $opt_m .= " -q boost_batch";
+       }
+     }
+     # Now reset the moab -l option
+     if (scalar(@moab_lopts)>0) {
+       # Remove any -l options already part of opt_m
+       $opt_m =~ s/-l *\S+//;
+       # put -l options back in
+       $opt_m .= " -l ".join(',',@moab_lopts);
+     }
    }
 
    #variables for timing statistics
