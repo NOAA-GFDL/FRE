@@ -248,7 +248,7 @@ sub curator($$$)
   print "Please consult documentation on the wiki for more information\n";
   print "NOTE: 'realization' is the only required tag for ingestion into the curator database,\n";
   print "      other tags will be populated with the defaults found in the curator documentation.\n";
-  print "Documentation: http://wiki.gfdl.noaa.gov/index.php/Curator_MDBI\n";
+  print "Documentation: http://wiki.gfdl.noaa.gov/images/d/dc/CommunityMetadataTags.pdf\n";
   print "**************************************************************************************************\n";
   print "Curator tags for $expName:\n";
 
