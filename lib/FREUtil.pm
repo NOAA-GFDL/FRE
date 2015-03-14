@@ -263,7 +263,9 @@ sub modifydate {
     # Force the date to be 0000010100:00:00 if $date is empty
     $date = "0000010100:00:00"
   }
-  #print "modifydate date '$date' str '$str': \n";
+
+  # Force the date to be in the correct format
+  $date = parseDate($date);
 
   # Date::Manip handles dates in the range 01 Feb, 0001 to 30 Nov, 9999.  Because we could deal
   # with dates outside that range, we force all dates to be within the years 2000-2999 to overcome
@@ -356,7 +358,7 @@ sub daysSince1BC($$$) {
 
 # Wrapper for Date::Manip::Date_Cmp.  As Date_Cmp for DM5 "does little
 # more than use 'cmp'." However, since cmp will not work as required if
-# the two strings have different lengths, this wrapper uses cmp on the 
+# the two strings have different lengths, this wrapper uses cmp on the
 # separate date components.
 sub dateCmp ($$) {
   my ($date1, $date2) = @_;
