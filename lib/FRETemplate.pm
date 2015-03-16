@@ -151,7 +151,14 @@ my $schedulerSize = sub($$$$$$)
       {
 	# One node will not be fully utilized.
 	# It has the extra processors.
-	return ($nodesM, $procsM, 1, $np - $nodesM * $procsM)
+        if ($nodesM > 0)
+	{
+	  return ($nodesM, $procsM, 1, $np - $nodesM * $procsM);
+	}
+        else
+	{
+          return (1, $np);
+	}
       }
       else
       {
