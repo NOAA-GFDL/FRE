@@ -175,6 +175,14 @@ sub parseFortranDate {
    my $date = $_[0];
    my @tmparray = split(',|\s+',$date);
 
+   if (scalar(@tmparray) == 0 and $date =~ /^$/) {
+     # $date is blank, set a valid date
+     @tmparray = ( 1,1,1,0,0,0 );
+   } elsif (scalar(@tmparray) != 6) {
+     print STDERR "ERROR: Date '$date' is not a valid Fortran date string.\n";
+     exit 1;
+   }
+
    return sprintf("%04d%02d%02d%02d:%02d:%02d", @tmparray);
 }
 
@@ -260,8 +268,8 @@ sub modifydate {
   my $str = $_[1];
   my $err;
   if ( "$date" eq '' ) {
-    # Force the date to be 0000010100:00:00 if $date is empty
-    $date = "0000010100:00:00"
+    # Force the date to be 0001010100:00:00 if $date is empty
+    $date = "0001010100:00:00";
   }
 
   # Force the date to be in the correct format

@@ -294,28 +294,34 @@ $version_head .= "-x $abs_xml_path ";
    my $time_hsmput = "";
    my $time_combine = "";
 
-#clean up opt_t
-#
-# opt_t should be of the form \d{4,}\d{2}\d{2}.  It is possible a user
-# will pass in only a year (\d{4}).  As we move forward to allow for
-# years past 9999, we need to set some guidance on how opt_t is
-# interpreted.  Thus, we somewhat arbitrarily decide that if
-# length($opt_t) < 7, we assume a year has been passed in, 8 and
-# beyond, assume the from above.
-#
-# There should also be a method to correctly know how many digits are
-# in a year, when the year is needed later on in the script.
-#
-# $t0 holds $opt_t in the Date::Manip date format 'yyyymmddhh:mm:ss'
-$t0 = FREUtil::parseDate($opt_t);
-if ($t0 == undef) {
-  print STDERR "ERROR: The date passed in via the '-t' option is not a valid date.\n";
-  exit 1;
-}
-# Hold required information in the correct format in these three variables
-# should not use $opt_t anywhere as it may not have the correct format.
-($userstartyear, $userstartmo) = $t0 =~ /(\d{4,})(\d{2}\d{2})\d{2}:\d{2}:\d{2}/;
-($hDate) = $t0 =~ /(\d{4,}\d{4})\d{2}:\d{2}:\d{2}/;
+   # When frepp is run with -A option, the -t option is not required.
+   # Then set the date to a valid date.  This isn't really ideal, but
+   # this is how frepp did it in the past.
+   if ($opt_t =~ /^$/ and $opt_A) {
+     $opt_t = '00010101';
+   }
+   #clean up opt_t
+   #
+   # opt_t should be of the form \d{4,}\d{2}\d{2}.  It is possible a user
+   # will pass in only a year (\d{4}).  As we move forward to allow for
+   # years past 9999, we need to set some guidance on how opt_t is
+   # interpreted.  Thus, we somewhat arbitrarily decide that if
+   # length($opt_t) < 7, we assume a year has been passed in, 8 and
+   # beyond, assume the from above.
+   #
+   # There should also be a method to correctly know how many digits are
+   # in a year, when the year is needed later on in the script.
+   #
+   # $t0 holds $opt_t in the Date::Manip date format 'yyyymmddhh:mm:ss'
+   $t0 = FREUtil::parseDate($opt_t);
+   if ($t0 == undef) {
+     print STDERR "ERROR: The date passed in via the '-t' option ('$opt_t') is not a valid date.\n";
+     exit 1;
+   }
+   # Hold required information in the correct format in these three variables
+   # should not use $opt_t anywhere as it may not have the correct format.
+   ($userstartyear, $userstartmo) = $t0 =~ /(\d{4,})(\d{2}\d{2})\d{2}:\d{2}:\d{2}/;
+   ($hDate) = $t0 =~ /(\d{4,}\d{4})\d{2}:\d{2}:\d{2}/;
 
    #assume we are processing 1 year
    $tEND = FREUtil::modifydate($t0,'+1 year -1 sec');
@@ -323,6 +329,7 @@ if ($t0 == undef) {
      print "t0 is $t0 (from -t argument)\n";
      print "tEND is $tEND (from t0 + 1 year)\n";
    }
+
 
    #set default platform to ia64 for hpcs.*, x86_64 for gfdl.*
    $platform = 'ia64';
@@ -540,7 +547,7 @@ EOF
        $basenpes = $fre->property('FRE.scheduler.bigvftmp.coresPerJob.max');
      } elsif ($pbsqueue =~ m/batch/) {
        unless ($opt_m =~ m/-q +\b.*batch\b/) {
-	 $opt_m .= " -q boost_batch";
+         $opt_m .= " -q boost_batch";
        }
      }
      # Now reset the moab -l option
@@ -755,7 +762,7 @@ EOF
    if ( $opt_f or $opt_D ) {
       #separate mppnccombine from rest of script due to splitting components
       unless ( $opt_H ) {
-	 $cshscripttmpl .= "\n/usr/bin/perl $absfrepp -x $abs_xml_path -t $hDate -s -v ";
+         $cshscripttmpl .= "\n/usr/bin/perl $absfrepp -x $abs_xml_path -t $hDate -s -v ";
          if ( $opt_P ) { $cshscripttmpl .= "-P $opt_P "; }
          if ( $opt_T ) { $cshscripttmpl .= "-T $opt_T "; }
          if ( $opt_d ) { $cshscripttmpl .= "-d $opt_d "; }
@@ -772,7 +779,7 @@ EOF
          #   $cshscripttmpl .= "-w $expt"."_$prev ";
          #}
          $cshscripttmpl .= "$expt\n";
-	 $cshscripttmpl .= errorstr("$relfrepp had a problem creating next script $expt"."_$hDate");
+         $cshscripttmpl .= errorstr("$relfrepp had a problem creating next script $expt"."_$hDate");
       }
 
       if ( $opt_f ) {
@@ -790,7 +797,7 @@ EOF
 
       if ( $opt_D and $opt_p ) {
          $cshscripttmpl .= call_frepp($abs_xml_path, $outscript, $opt_c, "");
-	 $cshscripttmpl .= errorstr("$relfrepp had a problem creating next script $expt"."_$hDate");
+         $cshscripttmpl .= errorstr("$relfrepp had a problem creating next script $expt"."_$hDate");
       }
 
       $cshscripttmpl .= mailerrors($outscript);
@@ -1149,15 +1156,15 @@ EOF
          $cshscript = $cshscripttmpl;
          my $origoutscript = $outscript;
          my $orig_pbs_job_name = $pbs_job_name;
-	 $outscript = "$outscriptdir/$expt"."_$component"."_$hDate";
-	 $pbs_job_name = "$expt"."_$component"."_$hDate";
+         $outscript = "$outscriptdir/$expt"."_$component"."_$hDate";
+         $pbs_job_name = "$expt"."_$component"."_$hDate";
          $cshscript =~ s/set scriptName = .*/set scriptName = $outscript/;
          $cshscript =~ s/#PBS -N .*/#PBS -N $pbs_job_name/;
          $cshscript =~ s/setenv FRE_STDOUT_PATH.*/setenv FRE_STDOUT_PATH $stdoutdir\/postProcess\/$pbs_job_name.o\$JOB_ID/;
          $cshscript =~ s/(-w $expt)/$1_$component/;
          $cshscript =~ s/(-soft -l fre_info=)/$1ppComponent\@$component+/;
          $opt_w =~ s/( -hold_jid $expt)(.*)(_\d\d\d\d\d\d\d\d)/$1_$component$3/;
-	 $statefile = "$statedir/$component.".$userstartyear;
+         $statefile = "$statedir/$component.".$userstartyear;
 
          #check status of this frepp year
          unless ( $opt_A ) {
@@ -1165,25 +1172,25 @@ EOF
                open( STATEFILE, "<$statefile") or die $!;
                $state = FREUtil::cleanstr( <STATEFILE> );
                close STATEFILE;
-	       print "This year ($hDate) has a state file with state '$state' for $component.\n";
+               print "This year ($hDate) has a state file with state '$state' for $component.\n";
                if ("$state" eq "OK") {
                   if ( $opt_o ) {
                      print "Redoing anyway because 'overwrite state files' was specified...\n";
                   } else {
-		     print "This year ($hDate) has already been completed for $component.\n";
+                     print "This year ($hDate) has already been completed for $component.\n";
                      #should we continue here in case of opt_p?
                      next;
                   }
                } elsif ("$state" eq "FATAL") {
-		  print "This year ($hDate) got an error in multiple attempts, skipping this component.  To retry $component processing, delete the state file $statefile\n";
+                  print "This year ($hDate) got an error in multiple attempts, skipping this component.  To retry $component processing, delete the state file $statefile\n";
                   #what if this is the -c split job? continue to other components
                   next;
                } elsif ("$state" eq "INTERACTIVE") {
-		  print "This year ($hDate) was partially run interactively but not completed, resubmitting $component...\n";
+                  print "This year ($hDate) was partially run interactively but not completed, resubmitting $component...\n";
                } elsif ("$state" eq "ERROR") {
-		  print "This year ($hDate) got an error in the last frepp attempt, resubmitting $component...\n";
+                  print "This year ($hDate) got an error in the last frepp attempt, resubmitting $component...\n";
                } elsif ("$state" eq "HISTORYDATAERROR") {
-		  print "This year ($hDate) got an error in the last frepp attempt due to missing history data, resubmitting $component...\n";
+                  print "This year ($hDate) got an error in the last frepp attempt due to missing history data, resubmitting $component...\n";
                } elsif ( "$state" eq '' ) {
                   print "ERROR: statefile $statefile exists but is empty, exiting.\n";
                   #what if this is the -c split job? continue to other components
@@ -1193,10 +1200,10 @@ EOF
                   my $jobrunning = isjobrunning( $state );
                   print "Checking state in $statefile: $state: jobrunning: $jobrunning\n";
                   if ( $jobrunning ) {
-		     print "Previous frepp job ($state) for $hDate still running for $component, exiting.\n";
+                     print "Previous frepp job ($state) for $hDate still running for $component, exiting.\n";
                      next;
                   } else {
-		     print "Previous frepp job for $hDate was lost, resubmitting $component...\n";
+                     print "Previous frepp job for $hDate was lost, resubmitting $component...\n";
                   }
                }
             }
@@ -1266,17 +1273,17 @@ EOF
          ($nlat,$nlon) = split(',',$xyInterp);
          print STDERR "$sourceGrid data will be converted to (nlat,nlon)=($nlat,$nlon)\n" if $opt_v;
          $cshscript .= "#Grid type: $sourceGrid will be converted to latlon (nlat,nlon)=($nlat,$nlon)\n";
-	 # Check for a xyInterpRegridFile defined in the XML
-	 my @xyInterpRegridFiles = $fre->dataFiles($ppcNode,'xyInterpRegridFile');
-	 # dataFiles returns a file/target type array, we only care about the file
-	 if (scalar(@xyInterpRegridFiles)>0) {
-	   $xyInterpRegridFile = $xyInterpRegridFiles[0];
-	   if (!-e $xyInterpRegridFile && !-w dirname($xyInterpRegridFile)) {
-	     die "ERROR: xyInterpRegridFile '$xyInterpRegridFile' is specified for '$component', but doesn't exist and user will be unable to write to it's final location";
-	   }
-	 } else {
-	   $xyInterpRegridFile = "$ppRootDir/$component/.fregrid_remap_file_\${nlon}_by_\${nlat}.nc";
-	 }
+         # Check for a xyInterpRegridFile defined in the XML
+         my @xyInterpRegridFiles = $fre->dataFiles($ppcNode,'xyInterpRegridFile');
+         # dataFiles returns a file/target type array, we only care about the file
+         if (scalar(@xyInterpRegridFiles)>0) {
+           $xyInterpRegridFile = $xyInterpRegridFiles[0];
+           if (!-e $xyInterpRegridFile && !-w dirname($xyInterpRegridFile)) {
+             die "ERROR: xyInterpRegridFile '$xyInterpRegridFile' is specified for '$component', but doesn't exist and user will be unable to write to it's final location";
+           }
+         } else {
+           $xyInterpRegridFile = "$ppRootDir/$component/.fregrid_remap_file_\${nlon}_by_\${nlat}.nc";
+         }
       } else {
          die "ERROR: xyInterp must specify a 'lat,lon' for regridding\n";
       }
@@ -1332,12 +1339,12 @@ EOF
       my $run0 = &FREUtil::parseFortranDate($basedate);
       if ( "$startdate" ne "" ) {
          $startdate = FREUtil::padzeros($startdate);
-	 $sim0 = FREUtil::parseDate($startdate);
-	 if ($sim0 == undef) {
-	   print STDERR "ERROR: The start date specified in the XML postProcess/component tag is not a valid date.\n";
-	   exit 1;
-	 }
-	 if ( "$sim0" ne "" and FREUtil::dateCmp($run0,$sim0) == 1 ) {
+         $sim0 = FREUtil::parseDate($startdate);
+         if ($sim0 == undef) {
+           print STDERR "ERROR: The start date specified in the XML postProcess/component tag is not a valid date.\n";
+           exit 1;
+         }
+         if ( "$sim0" ne "" and FREUtil::dateCmp($run0,$sim0) == 1 ) {
             mailuser("the $component postprocessing start attribute ($sim0) must be equal to or later than the start of the run ($run0). The default value of the start attribute is the start of the run.  Setting the start attribute to a later date provides the ability to skip years of data at the beginning of a run.  Please check the start attribute of all postprocessing components.");
             print STDERR "WARNING: the $component postprocessing start attribute ($sim0) must be equal to or later than the start of the run ($run0).  The default value of the start attribute is the start of the run.  Setting the start attribute to a later date provides the ability to skip years of data at the beginning of a run.  Please check the start attribute of all postprocessing components.";
          } else {
@@ -1377,11 +1384,12 @@ EOF
          if ( "$segUnits" eq "month" ) { $segUnits="months"; }
          if ( "$segUnits" eq "year" ) { $segUnits="years"; }
       }
+
       my $simEND = FREUtil::modifydate($run0,"+ $simTime $simUnits - 1 sec");
 
       if ( $simEND < $tEND and ! $opt_A) {
          if ( $simEND < $t0 ) {
-	    print "WARNING: The simulation time calculated from the basedate in your diag_table ($basedate) and the simulation length from the xml ($simTime $simUnits) ends before this year of postprocessing ($hDate).\n";
+            print "WARNING: The simulation time calculated from the basedate in your diag_table ($basedate) and the simulation length from the xml ($simTime $simUnits) ends before this year of postprocessing ($hDate).\n";
             $simEND = $tEND; #simEND not currently used for anything else
          } else {
             $tEND = $simEND;
@@ -1442,7 +1450,7 @@ EOF
                                   scriptDir => $aoutscriptdir,
                                   workDir => $workdir,
                                   archDir => $archivedir,
-				  opt_t => $hDate,
+                                  opt_t => $hDate,
                                   opt_O => $opt_O,
                                   opt_Y => $opt_Y,
                                   opt_Z => $opt_Z,
@@ -1489,7 +1497,7 @@ EOF
                                      scriptDir => $aoutscriptdir,
                                      workDir => $workdir,
                                      archDir => $archivedir,
-				     opt_t => $hDate,
+                                     opt_t => $hDate,
                                      opt_O => $opt_O,
                                      opt_Y => $opt_Y,
                                      opt_Z => $opt_Z,
@@ -1535,7 +1543,7 @@ EOF
                                   scriptDir => $aoutscriptdir,
                                   workDir => $workdir,
                                   archDir => $archivedir,
-				  opt_t => $hDate,
+                                  opt_t => $hDate,
                                   opt_O => $opt_O,
                                   opt_Y => $opt_Y,
                                   opt_Z => $opt_Z,
@@ -1583,7 +1591,7 @@ EOF
                                   scriptDir => $aoutscriptdir,
                                   workDir => $workdir,
                                   archDir => $archivedir,
-				  opt_t => $hDate,
+                                  opt_t => $hDate,
                                   opt_O => $opt_O,
                                   opt_Y => $opt_Y,
                                   opt_Z => $opt_Z,
@@ -1637,7 +1645,7 @@ EOF
                                      scriptDir => $aoutscriptdir,
                                      workDir => $workdir,
                                      archDir => $archivedir,
-				     opt_t => $hDate,
+                                     opt_t => $hDate,
                                      opt_O => $opt_O,
                                      opt_Y => $opt_Y,
                                      opt_Z => $opt_Z,
@@ -1689,7 +1697,7 @@ EOF
                                   scriptDir => $aoutscriptdir,
                                   workDir => $workdir,
                                   archDir => $archivedir,
-				  opt_t => $hDate,
+                                  opt_t => $hDate,
                                   opt_O => $opt_O,
                                   opt_Y => $opt_Y,
                                   opt_Z => $opt_Z,
@@ -1740,7 +1748,7 @@ EOF
                                   scriptDir => $aoutscriptdir,
                                   workDir => $workdir,
                                   archDir => $archivedir,
-				  opt_t => $hDate,
+                                  opt_t => $hDate,
                                   opt_O => $opt_O,
                                   opt_Y => $opt_Y,
                                   opt_Z => $opt_Z,
@@ -1791,7 +1799,7 @@ EOF
                                   scriptDir => $aoutscriptdir,
                                   workDir => $workdir,
                                   archDir => $archivedir,
-				  opt_t => $hDate,
+                                  opt_t => $hDate,
                                   opt_O => $opt_O,
                                   opt_Y => $opt_Y,
                                   opt_Z => $opt_Z,
@@ -1842,7 +1850,7 @@ EOF
                                   scriptDir => $aoutscriptdir,
                                   workDir => $workdir,
                                   archDir => $archivedir,
-				  opt_t => $hDate,
+                                  opt_t => $hDate,
                                   opt_O => $opt_O,
                                   opt_Y => $opt_Y,
                                   opt_Z => $opt_Z,
@@ -1863,7 +1871,7 @@ EOF
       if ( $didsomething ) {
          $didsomething = 0;
       } else {
-	 print STDERR "NOTE: No calculations necessary for year $hDate for $component.\n\n";
+         print STDERR "NOTE: No calculations necessary for year $hDate for $component.\n\n";
          next;
       }
 
@@ -1895,7 +1903,7 @@ EOF
                      $redothisyear = 1;
                   }
                } else {
-		  #print "Required year ($hDate) has already been completed for $component.\n";
+                  #print "Required year ($hDate) has already been completed for $component.\n";
                }
             } elsif ("$depstate" eq "FATAL") {
                print "Required year $depyear got an error in multiple attempts, exiting.  To retry, delete the state file $depfile\n";
@@ -1993,15 +2001,15 @@ EOF
       }
       #I'm not sure whether "redothisyear" means that old dependencies in the current list could be wrong? -arl
       if ( $redothisyear and ! $opt_A ) {
-	 print "This year ($hDate) has unmet dependencies for $component, submitting with holds.\n";
+         print "This year ($hDate) has unmet dependencies for $component, submitting with holds.\n";
       } else {
-	 print "All dependencies met or known for $hDate for $component.\n" if $opt_v;
+         print "All dependencies met or known for $hDate for $component.\n" if $opt_v;
       }
 
       if ( "$depholds" ne "" ) {
          chop $depholds;
          $opt_w = " -l depend=afterok:$depholds";
-	 print "Setting holds for $hDate: $opt_w\n";
+         print "Setting holds for $hDate: $opt_w\n";
       }
 
 
@@ -3792,7 +3800,7 @@ EOF
       #if it is time, chunk the files.  only put chunked files into archive now.
       if ( ($year-$tmp + 1) % $cl == 0 ) {
          $tmp = $year-$tmp + 1;
-	 my ($abbrev) = $tSEASONf =~ /\d{4,}\.(\w{3})/;
+         my ($abbrev) = $tSEASONf =~ /\d{4,}\.(\w{3})/;
          my $begin = FREUtil::padzeros($year - $cl + 1);
          my $chunkedoutfile = "$component.$begin-$year.$abbrev.\$var";
          my $filelist = "";
@@ -6937,7 +6945,7 @@ sub writescript {
          $newjobid =~ s/Previous frepp job \((.*)\).*/$1/ if $newjobid =~ /still running for /;
          #print "New jobid='$newjobid'\n";
          if ( "$newjobid" eq '' ) {
-	    print "No jobid resulted from the Moab job submission of $hDate.\n";
+            print "No jobid resulted from the Moab job submission of $hDate.\n";
             print "ERROR: Unable to submit job, exiting.\n";
             exit 1;
          } elsif ( "$newjobid" !~ /gfdl.\d+/ ) {
