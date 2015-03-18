@@ -38,7 +38,7 @@ use vars qw( $analysisdir $absfrepp $relfrepp $perlerrors );
 use vars qw( $archivedir $rootdir $workdir $tempCache $rtsVersion $platform $versionId $batchSubmit );
 use vars qw( $maxyrs $maxdisk $cubic $nlat $nlon $interpMethod $getgridspec $basenpes $call_fregrid );
 use vars qw( $checktransfer $statefile $state $writestate $didsomething $userstartyear $userstartmo $call_tile_fregrid );
-use vars qw( $mosaic_type $sourceGrid $xyInterp );
+use vars qw( $mosaic_type $sourceGrid $xyInterp $xyInterpRegridFile );
 
 {
 
@@ -1271,6 +1271,17 @@ EOF
          ($nlat,$nlon) = split(',',$xyInterp);
          print STDERR "$sourceGrid data will be converted to (nlat,nlon)=($nlat,$nlon)\n" if $opt_v;
          $cshscript .= "#Grid type: $sourceGrid will be converted to latlon (nlat,nlon)=($nlat,$nlon)\n";
+	 # Check for a xyInterpRegridFile defined in the XML
+	 my @xyInterpRegridFiles = $fre->dataFiles($ppcNode,'xyInterpRegridFile');
+	 # dataFiles returns a file/target type array, we only care about the file
+	 if (scalar(@xyInterpRegridFiles)>0) {
+	   $xyInterpRegridFile = $xyInterpRegridFiles[0];
+	   if (!-e $xyInterpRegridFile && !-w dirname($xyInterpRegridFile)) {
+	     die "ERROR: xyInterpRegridFile '$xyInterpRegridFile' is specified for '$component', but doesn't exist and user will be unable to write to it's final location";
+	   }
+	 } else {
+	   $xyInterpRegridFile = "$ppRootDir/$component/.fregrid_remap_file_\${nlon}_by_\${nlat}.nc";
+	 }
       } else {
          die "ERROR: xyInterp must specify a 'lat,lon' for regridding\n";
       }
@@ -4140,7 +4151,7 @@ end
    set interp_method = $interpMethod
    set ncvars_arg = -st23
    set variables = ( $variables )
-   set fregrid_remap_file = $ppRootDir/$component/.fregrid_remap_file_\${nlon}_by_\${nlat}.nc
+   set fregrid_remap_file = $xyInterpRegridFile
    $call_and_check_fregrid
 
    mv \$fregrid_in.nc $component.$range.\$monthf.nc
@@ -4238,7 +4249,7 @@ EOF
     set interp_method = $interpMethod
     set ncvars_arg = -st23
     set variables = ( $variables )
-    set fregrid_remap_file = $ppRootDir/$component/.fregrid_remap_file_\${nlon}_by_\${nlat}.nc
+    set fregrid_remap_file = $xyInterpRegridFile
     $call_and_check_fregrid
 
 EOF
@@ -4402,7 +4413,7 @@ end
     set interp_method = $interpMethod
     set ncvars_arg = -st23
     set variables = ( $variables )
-    set fregrid_remap_file = $ppRootDir/$component/.fregrid_remap_file_\${nlon}_by_\${nlat}.nc
+    set fregrid_remap_file = $xyInterpRegridFile
     $call_and_check_fregrid
 
 mv \$fregrid_in.nc $component.$tENDf.ann.nc
@@ -4494,7 +4505,7 @@ EOF
     set interp_method = $interpMethod
     set ncvars_arg = -st23
     set variables = ( $variables )
-    set fregrid_remap_file = $ppRootDir/$component/.fregrid_remap_file_\${nlon}_by_\${nlat}.nc
+    set fregrid_remap_file = $xyInterpRegridFile
     $call_and_check_fregrid
 
 EOF
@@ -5028,7 +5039,7 @@ EOF
     set interp_method = $interpMethod
     set ncvars_arg = -st23
     set variables = ( $variables )
-    set fregrid_remap_file = $ppRootDir/$component/.fregrid_remap_file_\${nlon}_by_\${nlat}.nc
+    set fregrid_remap_file = $xyInterpRegridFile
     $call_and_check_fregrid
 
 mv \$fregrid_in.nc all.nc
@@ -5063,7 +5074,7 @@ EOF
     set interp_method = $interpMethod
     set ncvars_arg = -st23
     set variables = ( $variables )
-    set fregrid_remap_file = $ppRootDir/$component/.fregrid_remap_file_\${nlon}_by_\${nlat}.nc
+    set fregrid_remap_file = $xyInterpRegridFile
     $call_and_check_fregrid
 
 EOF
@@ -5100,7 +5111,7 @@ EOF
     set interp_method = $interpMethod
     set ncvars_arg = -st23
     set variables = ( $variables )
-    set fregrid_remap_file = $ppRootDir/$component/.fregrid_remap_file_\${nlon}_by_\${nlat}.nc
+    set fregrid_remap_file = $xyInterpRegridFile
     $call_and_check_fregrid
 
 mv \$fregrid_in.nc all.nc
@@ -5135,7 +5146,7 @@ EOF
     set interp_method = $interpMethod
     set ncvars_arg = -st23
     set variables = ( $variables )
-    set fregrid_remap_file = $ppRootDir/$component/.fregrid_remap_file_\${nlon}_by_\${nlat}.nc
+    set fregrid_remap_file = $xyInterpRegridFile
     $call_and_check_fregrid
 
 EOF
@@ -5621,7 +5632,7 @@ EOF
      set interp_method = $interpMethod
      set ncvars_arg = -s2
      set variables = ( )
-     set fregrid_remap_file = $ppRootDir/$component/.fregrid_remap_file_\${nlon}_by_\${nlat}.nc
+     set fregrid_remap_file = $xyInterpRegridFile
 
      set onedvars = `\$NCVARS -s01 \$fregrid_in.tile1.nc`
      if ( "\$onedvars" != "" ) then
@@ -5665,7 +5676,7 @@ EOF
            set interp_method = $interpMethod
            set ncvars_arg = -s2
            set variables = ( )
-           set fregrid_remap_file = $ppRootDir/$component/.fregrid_remap_file_\${nlon}_by_\${nlat}.nc
+           set fregrid_remap_file = $xyInterpRegridFile
 
            $call_and_check_fregrid
 
@@ -6335,7 +6346,7 @@ EOF
     set interp_method = $interpMethod
     set ncvars_arg = -st23
     set variables = ( $variables )
-    set fregrid_remap_file = $ppRootDir/$component/.fregrid_remap_file_\${nlon}_by_\${nlat}.nc
+    set fregrid_remap_file = $xyInterpRegridFile
     $call_and_check_fregrid
 
     $time_ncatted ncatted -h -O -a filename,global,m,c,"$component.$tSEASONf.nc" $component.$tSEASONf.nc
@@ -6433,7 +6444,7 @@ end
     set interp_method = $interpMethod
     set ncvars_arg = -st23
     set variables = ( $variables )
-    set fregrid_remap_file = $ppRootDir/$component/.fregrid_remap_file_\${nlon}_by_\${nlat}.nc
+    set fregrid_remap_file = $xyInterpRegridFile
     $call_and_check_fregrid
 
     $time_ncatted ncatted -h -O -a filename,global,m,c,"$component.$dates.nc" $component.$dates.nc
