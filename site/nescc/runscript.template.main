@@ -317,6 +317,7 @@
   alias outputStager `which output.stager`
 
   set -r outputStager = `alias outputStager`
+  @ outputStagerErrors = 0
 
   # ---------------- batch scheduler submit command
 
@@ -1180,6 +1181,7 @@
           echo "<NOTE> : The ascii directory '$asciiArchDir' has been processed successfully"
           if ( $echoOn ) set echo
         else
+          @ outputStagerErrors += 1
           if ( $echoOn ) unset echo
           set msg = "*WARNING*: Can't process the ascii directory '$asciiArchDir'\n"
           set msg = "${msg}*WARNING*: ascii files have not been saved, you may need to transfer them manually.\n\n"
@@ -1211,6 +1213,7 @@
             set saveJobIds = ( $saveJobIds `echo $asciiResult | sed -r "$patternJobNumber"` )
             set argFiles = ( $argFiles $asciiArgFile:t )
           else
+            @ outputStagerErrors += 1
             if ( $echoOn ) unset echo
             set msg = "*WARNING*: Can't submit the output stager job to process the '$asciiArchDir' (saving)\n"
             set msg = "${msg}*WARNING*: ascii files have not been saved, you may need to transfer them manually.\n\n"
@@ -1237,6 +1240,7 @@
             echo "<NOTE> : The output stager job '$asciiResult' to process the '$asciiArchDir' (transfer) has been submitted successfully"
             if ( $echoOn ) set echo
           else
+            @ outputStagerErrors += 1
             if ( $echoOn ) unset echo
             set msg = "*WARNING*: Can't submit the output stager job to process the '$asciiArchDir' (transfer)\n"
             set msg = "${msg}*WARNING*: ascii files have not been saved, you may need to transfer them manually.\n\n"
@@ -1267,6 +1271,7 @@
             set saveJobIds = ( $saveJobIds `echo $asciiResult | sed -r "$patternJobNumber"` )
             set argFiles = ( $argFiles $asciiArgFile:t )
           else
+            @ outputStagerErrors += 1
             if ( $echoOn ) unset echo
             set msg = "*WARNING*: Can't submit the output stager job to process the '$asciiArchDir'\n"
             set msg = "${msg}*WARNING*: ascii files have not been saved, you may need to transfer them manually.\n\n"
@@ -1482,6 +1487,7 @@
           echo "<NOTE> : The restart directory '$restartArchDir' has been processed successfully"
           if ( $echoOn ) set echo
         else
+          @ outputStagerErrors += 1
           if ( $echoOn ) unset echo
           set msg = "*WARNING*: Can't save the restart directory '$restartArchDir'\n"
           set msg = "${msg}*WARNING*: restart files have not been saved, you may need to transfer them manually.\n\n"
@@ -1513,6 +1519,7 @@
             set saveJobIds = ( $saveJobIds `echo $restartResult | sed -r "$patternJobNumber"` )
             set argFiles = ( $argFiles $restartArgFile:t )
           else
+            @ outputStagerErrors += 1
             if ( $echoOn ) unset echo
             set msg = "*WARNING*: Can't submit the output stager job to process the '$restartArchDir' (saving)\n"
             set msg = "${msg}*WARNING*: restart files have not been saved, you may need to transfer them manually.\n\n"
@@ -1539,6 +1546,7 @@
             echo "<NOTE> : The output stager job '$restartResult' to process the '$restartArchDir' (transfer) has been submitted successfully"
             if ( $echoOn ) set echo
           else
+            @ outputStagerErrors += 1
             if ( $echoOn ) unset echo
             set msg = "*WARNING*: Can't submit the output stager job to process the '$restartArchDir' (transfer)\n"
             set msg = "${msg}*WARNING*: restart files have not been saved, you may need to transfer them manually.\n\n"
@@ -1569,6 +1577,7 @@
             set saveJobIds = ( $saveJobIds `echo $restartResult | sed -r "$patternJobNumber"` )
             set argFiles = ( $argFiles $restartArgFile:t )
           else
+            @ outputStagerErrors += 1
             if ( $echoOn ) unset echo
             set msg = "*WARNING*: Can't submit the output stager job to process the '$restartArchDir'\n"
             set msg = "${msg}*WARNING*: restart files have not been saved, you may need to transfer them manually.\n\n"
@@ -1812,6 +1821,7 @@
           echo "<NOTE> : The history directory '$historyArchDir' has been processed successfully"
           if ( $echoOn ) set echo
         else
+          @ outputStagerErrors += 1
           if ( $echoOn ) unset echo
           set msg = "*WARNING*: Can't process the history directory '$historyArchDir'\n"
           set msg = "${msg}*WARNING*: history files have not been saved, you may need to transfer them manually.\n\n"
@@ -1843,6 +1853,7 @@
             set saveJobIds = ( $saveJobIds `echo $historyResult | sed -r "$patternJobNumber"` )
             set argFiles = ( $argFiles $historyArgFile:t )
           else
+            @ outputStagerErrors += 1
             if ( $echoOn ) unset echo
             set msg = "*WARNING*: Can't submit the output stager job to process the '$historyArchDir' (saving)\n"
             set msg = "${msg}*WARNING*: history files have not been saved, you may need to transfer them manually.\n\n"
@@ -1869,6 +1880,7 @@
             echo "<NOTE> : The output stager job '$historyResult' to process the '$historyArchDir' (transfer) has been submitted successfully"
             if ( $echoOn ) set echo
           else
+            @ outputStagerErrors += 1
             if ( $echoOn ) unset echo
             set msg = "*WARNING*: Can't submit the output stager job to process the '$historyArchDir' (transfer)\n"
             set msg = "${msg}*WARNING*: history files have not been saved, you may need to transfer them manually.\n\n"
@@ -1899,6 +1911,7 @@
             set saveJobIds = ( $saveJobIds `echo $historyResult | sed -r "$patternJobNumber"` )
             set argFiles = ( $argFiles $historyArgFile:t )
           else
+            @ outputStagerErrors += 1
             if ( $echoOn ) unset echo
             set msg = "*WARNING*: Can't submit the output stager job to process the '$historyArchDir'\n"
             set msg = "${msg}*WARNING*: history files have not been saved, you may need to transfer them manually.\n\n"
@@ -2100,7 +2113,7 @@
 
   # ---------------- working directory cleaning
 
-  if ( $?flagWorkDirCleanOn ) then
+  if ( $?flagWorkDirCleanOn && $outputStagerErrors == 0 ) then
 
     if ( $?flagOutputStagingTypeOnline ) then
 
@@ -2160,6 +2173,12 @@
       unset inx
 
     endif
+
+  else if ( $?flagWorkDirCleanOn && $outputStagerErrors != 0 ) then
+
+    if ( $echoOn ) unset echo
+    echo "WARNING: Output stager errors ($outputStagerErrors) were encountered.  Unable to clean $workDir."
+    if ( $echoOn ) set echo
 
   endif
 
