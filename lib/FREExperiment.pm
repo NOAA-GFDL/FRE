@@ -78,7 +78,7 @@ use List::Util();
 
 use FREDefaults();
 use FREMsg();
-use FRENamelists(); 
+use FRENamelists();
 use FRETargets();
 use FREUtil();
 
@@ -225,17 +225,22 @@ $experimentCreate = sub($$$)
       }
       # ------------------------------------------------------------- find and create the parent if needed
       my $expParentName = $r->experimentValue('@inherit');
-      if ($expParentName)
+      if ($expParentName eq $e)
       {
-	if (scalar(grep($_ eq $expParentName, @experiments)) > 0)
-	{
+        $fre->out(FREMsg::FATAL, "The experiment '$e' cannot inherit itself");
+        return '';
+      }
+      elsif ($expParentName)
+      {
+        if (scalar(grep($_ eq $expParentName, @experiments)) > 0)
+        {
           $r->{parent} = $experimentCreate->($c, $fre, $expParentName);
-	}
-	else
-	{
-	  $fre->out(FREMsg::FATAL, "The experiment '$e' inherits from non-existent experiment '$expParentName'");
-	  return '';
-	}
+        }
+        else
+        {
+          $fre->out(FREMsg::FATAL, "The experiment '$e' inherits from non-existent experiment '$expParentName'");
+          return '';
+        }
       }
       else
       {
@@ -281,7 +286,7 @@ my $strRemoveWS = sub($)
 
 my $rankSet;
 $rankSet = sub($$$)
-# ------ arguments: $refToComponentHash $refToComponent $depth 
+# ------ arguments: $refToComponentHash $refToComponent $depth
 # ------ recursively set and return the component rank
 # ------ return -1 if loop is found
 {
@@ -291,7 +296,7 @@ $rankSet = sub($$$)
     my @requires = split(' ', $c->{requires});
     if (scalar(@requires) > 0)
     {
-      my $rank = 0; 
+      my $rank = 0;
       foreach my $required (@requires)
       {
         my $refReq = $h->{$required};
@@ -320,7 +325,7 @@ $rankSet = sub($$$)
     return -1;
   }
 };
-    
+
 my $regressionLabels = sub($)
 # ------ arguments: $object
 {
@@ -347,7 +352,7 @@ my $productionRunNode = sub($)
 };
 
 my $extractOverrideParams = sub($$$)
-# ------ arguments: $exp $mamelistsHandle $runNode 
+# ------ arguments: $exp $mamelistsHandle $runNode
 {
 
   my ($r, $h, $n) = @_;
@@ -428,7 +433,7 @@ my $overrideRegressionNamelists = sub($$$)
 
   my ($r, $h, $n) = @_;
   my $fre = $r->fre();
-  
+
   my $overrideTypeless = sub($$$)
   {
     my ($l, $v, $x) = @_;
@@ -508,7 +513,7 @@ my $MPISizeCompatible = sub($$)
   my @compatibleComponents = ('atmos', 'ocean');
   foreach my $component (@components)
   {
-    unless (scalar(grep($_ eq $component, @compatibleComponents)) > 0) 
+    unless (scalar(grep($_ eq $component, @compatibleComponents)) > 0)
     {
       if (defined(FRENamelists::namelistBooleanGet($h, 'coupler_nml', "do_$component")))
       {
@@ -525,10 +530,10 @@ my $MPISizeParametersCompatible = sub($$$$)
 {
 
   my ($r, $n, $h, $s) = @_;
-  
+
   my ($fre, $concurrent) = ($r->fre(), $h->namelistBooleanGet('coupler_nml', 'concurrent'));
   $concurrent = 1 unless defined($concurrent);
-  
+
   my ($atmosNP, $atmosNT) = ($h->namelistIntegerGet('coupler_nml', 'atmos_npes') || 0, 1);
   my ($oceanNP, $oceanNT) = ($h->namelistIntegerGet('coupler_nml', 'ocean_npes') || 0, 1);
 
@@ -580,11 +585,11 @@ my $MPISizeParametersCompatible = sub($$$$)
       return undef;
     }
   }
-  
+
   if ($atmosNP > 0 || $oceanNP > 0)
   {
     my $ok = 1;
-    my @npes = (); 
+    my @npes = ();
     my @ntds = ($atmosNT, $oceanNT);
     if ($atmosNP < $n && $oceanNP == 0)
     {
@@ -592,15 +597,15 @@ my $MPISizeParametersCompatible = sub($$$$)
     }
     elsif ($atmosNP == 0 && $oceanNP < $n)
     {
-      @npes = ($concurrent) ? (($n - $oceanNP) * $s, $oceanNP * $s) : ($n * $s, 0); 
+      @npes = ($concurrent) ? (($n - $oceanNP) * $s, $oceanNP * $s) : ($n * $s, 0);
     }
     elsif ($atmosNP == $n && $oceanNP == 0)
     {
-      @npes = ($atmosNP * $s, 0); 
+      @npes = ($atmosNP * $s, 0);
     }
     elsif ($atmosNP == 0 && $oceanNP == $n)
     {
-      @npes = (0, $oceanNP * $s); 
+      @npes = (0, $oceanNP * $s);
     }
     elsif ($atmosNP == $n || $oceanNP == $n)
     {
@@ -616,20 +621,20 @@ my $MPISizeParametersCompatible = sub($$$$)
     }
     elsif ($atmosNP + $oceanNP == $n)
     {
-      @npes = ($atmosNP * $s, $oceanNP * $s); 
+      @npes = ($atmosNP * $s, $oceanNP * $s);
     }
     else
     {
       $fre->out(FREMsg::FATAL, "Total number '$n' of MPI processes isn't equal to the sum of '$atmosNP' atmospheric and '$oceanNP' oceanic ones");
       $ok = 0;
-    }   
+    }
     return ($ok) ? {npes => $n * $s, coupler => 1, npesList => \@npes, ntdsList => \@ntds} : undef;
   }
   else
   {
     return {npes => $n * $s};
   }
-  
+
 };
 
 my $MPISizeComponentEnabled = sub($$$)
@@ -669,7 +674,7 @@ my $MPISizeParametersGeneric = sub($$$$)
   my @components = split(';', $fre->property('FRE.mpi.component.names'));
   my $openMPEnabled = FRETargets::containsOpenMP($fre->target());
   my $coresPerNode = ($openMPEnabled) ? $fre->property('FRE.scheduler.run.coresPerJob.inc') : undef;
-  # ------------------------------------------------------------------------- determine component sizes 
+  # ------------------------------------------------------------------------- determine component sizes
   for (my $inx = 0; $inx < scalar(@components); $inx++)
   {
     my $component = $components[$inx];
@@ -679,17 +684,17 @@ my $MPISizeParametersGeneric = sub($$$$)
     {
       if (my $npes = $h->namelistIntegerGet('coupler_nml', "${component}_npes"))
       {
-	$sizes{"${component}_npes"} = $npes * $s; 
+	$sizes{"${component}_npes"} = $npes * $s;
 	if ($openMPEnabled)
 	{
           my $ntds = $h->namelistIntegerGet('coupler_nml', "${component}_nthreads");
 	  unless (defined($ntds))
 	  {
-	    $sizes{"${component}_ntds"} = 1; 
+	    $sizes{"${component}_ntds"} = 1;
 	  }
 	  elsif (0 < $ntds && $ntds <= $coresPerNode)
 	  {
-	    $sizes{"${component}_ntds"} = $ntds; 
+	    $sizes{"${component}_ntds"} = $ntds;
 	  }
 	  elsif ($ntds <= 0)
 	  {
@@ -704,7 +709,7 @@ my $MPISizeParametersGeneric = sub($$$$)
 	}
 	else
 	{
-	  $sizes{"${component}_ntds"} = 1; 
+	  $sizes{"${component}_ntds"} = 1;
 	}
       }
       else
@@ -719,7 +724,7 @@ my $MPISizeParametersGeneric = sub($$$$)
       $sizes{"${component}_ntds"} = 1;
     }
   }
-  # --------------------------------------------------- select enabled components (with positive sizes)  
+  # --------------------------------------------------- select enabled components (with positive sizes)
   if (my @componentsEnabled = grep($sizes{"${_}_npes"} > 0, @components))
   {
     my %pairs = ();
@@ -738,7 +743,7 @@ my $MPISizeParametersGeneric = sub($$$$)
 	    foreach my $pair (keys %pairs)
 	    {
 	      my ($componentLExisting, $componentRExisting) = $pairSplit->($pair);
-	      $componentLExtra = $componentLExisting if $componentRExisting eq $componentR; 
+	      $componentLExtra = $componentLExisting if $componentRExisting eq $componentR;
 	    }
 	    unless ($componentLExtra)
 	    {
@@ -755,7 +760,7 @@ my $MPISizeParametersGeneric = sub($$$$)
             $fre->out(FREMsg::FATAL, "Components '$componentL' and '$componentR' aren't allowed to run serially");
 	    return undef;
 	  }
-	} 
+	}
       }
     }
     # ----------------------------------------------- modify component sizes according to their pairing
@@ -775,8 +780,8 @@ my $MPISizeParametersGeneric = sub($$$$)
       }
     }
     # ----------------------------------------------- normal return
-    my @npes = map($sizes{"${_}_npes"}, @components); 
-    my @ntds = map($sizes{"${_}_ntds"}, @components); 
+    my @npes = map($sizes{"${_}_npes"}, @components);
+    my @ntds = map($sizes{"${_}_ntds"}, @components);
     return {npes => $n * $s, coupler => 1, npesList => \@npes, ntdsList => \@ntds};
   }
   else
@@ -796,7 +801,7 @@ my $MPISizeParameters = sub($$$)
 
   my $ensembleSize = $h->namelistIntegerGet('ensemble_nml', 'ensemble_size');
   $ensembleSize = 1 unless defined($ensembleSize);
-  
+
   if ($ensembleSize > 0)
   {
     if ($h->namelistExists('coupler_nml'))
@@ -823,7 +828,7 @@ my $MPISizeParameters = sub($$$)
 };
 
 my $regressionPostfix = sub($$$$$$$$$)
-# ------ arguments: $exp $label $runNo $hoursFlag $segmentsNmb $monthsNmb $daysNmb $hoursNmb $mpiInfo 
+# ------ arguments: $exp $label $runNo $hoursFlag $segmentsNmb $monthsNmb $daysNmb $hoursNmb $mpiInfo
 {
   my ($r, $l, $i, $hf, $sn, $mn, $dn, $hn, $h) = @_;
   my ($fre, $timing, $size) = ($r->fre(), $sn . 'x' . $mn . 'm' . $dn . 'd', '');
@@ -834,7 +839,7 @@ my $regressionPostfix = sub($$$$$$$$$)
     my @suffixes = split(';', $fre->property('FRE.mpi.component.suffixes'));
     for (my $inx = 0; $inx < scalar(@{$refNPes}); $inx++)
     {
-      $size .= '_' . $refNPes->[$inx] . 'x' . $refNTds->[$inx] . $suffixes[$inx] if $refNPes->[$inx] > 0; 
+      $size .= '_' . $refNPes->[$inx] . 'x' . $refNTds->[$inx] . $suffixes[$inx] if $refNPes->[$inx] > 0;
     }
   }
   else
@@ -851,7 +856,7 @@ my $regressionPostfix = sub($$$$$$$$$)
 sub new($$$)
 # ------ arguments: $className $fre $expName
 # ------ called as class method
-# ------ creates an object and populates it 
+# ------ creates an object and populates it
 {
   my ($c, $fre, $e) = @_;
   return $experimentCreate->($c, $fre, $e);
@@ -1029,7 +1034,7 @@ sub property($$)
 sub nodeValue($$$)
 # ------ arguments: $object $node $xPath
 # ------ called as object method
-# ------ return $xPath value relative to the given $node 
+# ------ return $xPath value relative to the given $node
 {
   my ($r, $n, $x) = @_;
   return $r->placeholdersExpand($r->fre()->nodeValue($n, $x));
@@ -1038,7 +1043,7 @@ sub nodeValue($$$)
 sub experimentValue($$)
 # ------ arguments: $object $xPath
 # ------ called as object method
-# ------ return $xPath value relative to the experiment node 
+# ------ return $xPath value relative to the experiment node
 {
   my ($r, $x) = @_;
   return $r->nodeValue($r->node(), $x);
@@ -1082,7 +1087,7 @@ sub executableCanBeBuilt($)
     $r->experimentValue('*/compile/pathNames') ne ''
     ||
     $r->experimentValue('*/compile/csh') ne ''
-  );       
+  );
 }
 
 # //////////////////////////////////////////////////////////////////////////////
@@ -1214,7 +1219,7 @@ sub extractMkmfTemplate($$)
     foreach my $node (@nodes) {push @results, $fre->dataFilesMerged($node, 'mkmfTemplate', 'file');}
     $exp = $exp->parent();
   }
-  
+
   $fre->out(FREMsg::WARNING, "The '$c' component mkmf template is defined more than once - all the extra definitions are ignored") if scalar(@results) > 1;
   return @results[0];
 
@@ -1276,7 +1281,7 @@ sub extractDatasets($)
     }
     # ---------------------------- repeat for the parent
     $exp = $exp->parent();
-  } 
+  }
 
   return @results;
 
@@ -1293,7 +1298,7 @@ sub extractNamelists($)
   my ($exp, $fre, $nmls) = ($r, $r->fre(), FRENamelists->new());
 
   $fre->out(FREMsg::NOTE, "Extracting namelists...");
-  
+
   while ($exp)
   {
     # -------------------------------------------- get the input node
@@ -1302,7 +1307,7 @@ sub extractNamelists($)
     if ($inputNode)
     {
       # ----------------------------------- get inline namelists (they take precedence)
-      my @inlineNmlNodes = $inputNode->findnodes('namelist[@name]');        
+      my @inlineNmlNodes = $inputNode->findnodes('namelist[@name]');
       foreach my $inlineNmlNode (@inlineNmlNodes)
       {
 	my $name = FREUtil::cleanstr($exp->nodeValue($inlineNmlNode, '@name'));
@@ -1364,7 +1369,7 @@ sub extractNamelists($)
 sub extractTable($$)
 # ------ arguments: $object $label
 # ------ called as object method
-# ------ returns data, corresponding to the $label table, following inherits 
+# ------ returns data, corresponding to the $label table, following inherits
 {
 
   my ($r, $l) = @_;
@@ -1454,10 +1459,10 @@ sub extractShellCommands($$%)
     }
     $exp = $exp->parent();
   }
-    
+
   return $value;
 
-}  
+}
 
 sub extractVariableFile($$)
 # ------ arguments: $object $label
@@ -1473,7 +1478,7 @@ sub extractVariableFile($$)
     my $inputNode = $exp->node()->findnodes('input')->get_node(1);
     push @results, $fre->dataFilesMerged($inputNode, $l, 'file') if $inputNode;
     $exp = $exp->parent();
-  } 
+  }
 
   $fre->out(FREMsg::WARNING, "The variable '$l' is defined more than once - all the extra definitions are ignored") if scalar(@results) > 1;
   return @results[0];
@@ -1495,7 +1500,7 @@ sub extractReferenceFiles($)
     push @results, $fre->dataFilesMerged($runTimeNode, 'reference', 'restart') if $runTimeNode;
     $exp = $exp->parent();
   }
-  
+
   return @results;
 
 }
@@ -1514,7 +1519,7 @@ sub extractReferenceExperiments($)
 sub extractPPRefineDiagScripts($)
 # ------ arguments: $object
 # ------ called as object method
-# ------ return list of postprocessing refine diagnostics scriptnames, following inherits 
+# ------ return list of postprocessing refine diagnostics scriptnames, following inherits
 {
   my ($r, @results) = (shift, ());
   my @nodes = $r->extractNodes('postProcess', 'refineDiag/@script');
@@ -1530,7 +1535,7 @@ sub extractCheckoutInfo($)
 
   my $r = shift;
   my ($fre, $expName, @componentNodes) = ($r->fre(), $r->name(), $r->node()->findnodes('component'));
-  
+
   if (scalar(@componentNodes) > 0)
   {
     my %components;
@@ -1542,7 +1547,7 @@ sub extractCheckoutInfo($)
 	$fre->out(FREMsg::NOTE, "COMPONENTLOOP ((($name)))");
 	if (!exists($components{$name}))
 	{
-	  # ------------------------------------- get and check library data; skip the component if the library defined  
+	  # ------------------------------------- get and check library data; skip the component if the library defined
 	  my $libraryPath = $r->extractComponentValue('library/@path', $name);
 	  if ($libraryPath)
 	  {
@@ -1572,7 +1577,7 @@ sub extractCheckoutInfo($)
 	    {
               $fre->out(FREMsg::FATAL, "Component '$name' specifies non-existent library '$libraryPath'");
 	      return 0;
-	    }	 
+	    }
 	  }
 	  # ------------------------------------------------------------------------------- get and check component data for sources checkout
 	  my $codeBase = $strMergeWS->($r->extractSourceValue('codeBase', $name));
@@ -1645,7 +1650,7 @@ sub extractCheckoutInfo($)
 	return 0;
       }
     }
-    return \%components;  
+    return \%components;
   }
   else
   {
@@ -1663,7 +1668,7 @@ sub extractCompileInfo($)
 
   my $r = shift;
   my ($fre, $expName, @componentNodes) = ($r->fre(), $r->name(), $r->node()->findnodes('component'));
-  
+
   if (scalar(@componentNodes) > 0)
   {
     my %components;
@@ -1693,7 +1698,7 @@ sub extractCompileInfo($)
 		}
 	      }
 	    }
-	    # --------------------------------------------- get and check library data; skip the component if the library defined  
+	    # --------------------------------------------- get and check library data; skip the component if the library defined
 	    my $libPath = $strRemoveWS->($r->extractComponentValue('library/@path', $name));
             my $libHeaderDir = $strRemoveWS->($r->extractComponentValue('library/@headerDir', $name));
 	    if ($libPath)
@@ -1722,7 +1727,7 @@ sub extractCompileInfo($)
 	      {
         	$fre->out(FREMsg::FATAL, "Component '$name' specifies non-existent library '$libPath'");
 		return 0;
-	      }	 
+	      }
 	    }
 	    # ----------------------------------------------------------------------------------- save component data into the hash
             my %component = ();
@@ -1762,7 +1767,7 @@ sub extractCompileInfo($)
 	  else
 	  {
 	    $fre->out(FREMsg::FATAL, "Component '$name' doesn't specify the mandatory 'paths' attribute");
-	    return 0; 
+	    return 0;
 	  }
 	}
 	else
@@ -1789,8 +1794,8 @@ sub extractCompileInfo($)
 	  return 0;
 	}
       }
-    }      
-    # ------------------------------------------------------------------- compute components ranks      
+    }
+    # ------------------------------------------------------------------- compute components ranks
     foreach my $name (keys %components)
     {
       my $ref = $components{$name};
@@ -1811,7 +1816,7 @@ sub extractCompileInfo($)
     $fre->out(FREMsg::FATAL, "The experiment '$expName' doesn't contain any components");
     return 0;
   }
-     
+
 }
 
 sub extractRegressionLabels($$)
@@ -1849,7 +1854,7 @@ sub extractRegressionLabels($$)
 	{
 	  push @result, $expLabel if grep($_ eq $expLabel, @optLabels) > 0;
 	}
-      } 
+      }
       return @result;
     }
     else
@@ -1875,7 +1880,7 @@ sub extractRegressionRunInfo($$)
   my ($r, $l) = @_;
   my ($fre, $expName) = ($r->fre(), $r->name());
   if (my $nmls = $r->extractNamelists())
-  { 
+  {
     if (my $regNode = $regressionRunNode->($r, $l))
     {
       my @runNodes = $regNode->findnodes('run');
@@ -1920,19 +1925,19 @@ sub extractRegressionRunInfo($$)
 	      else
 	      {
         	$fre->out(FREMsg::FATAL, "The experiment '$expName', the regression test '$l', run '$i' - model size parameters are invalid");
-		$ok = 0; 
+		$ok = 0;
 	      }
 	    }
 	    else
 	    {
               $fre->out(FREMsg::FATAL, "The experiment '$expName', the regression test '$l', run '$i' - timing parameters must be defined");
-	      $ok = 0; 
+	      $ok = 0;
 	    }
 	  }
 	  else
 	  {
             $fre->out(FREMsg::FATAL, "The experiment '$expName', the regression test '$l', run '$i' - the running time '$srt' must be nonempty and have the HH:MM:SS format");
-	    $ok = 0; 
+	    $ok = 0;
 	  }
 	}
 	return ($ok) ? \%runs : 0;
@@ -2022,43 +2027,43 @@ sub extractProductionRunInfo($)
 		  else
 		  {
 		    $fre->out(FREMsg::FATAL, "The experiment '$expName' - model size parameters are invalid");
-		    return 0; 
+		    return 0;
 		  }
 		}
 		else
 		{
 		  $fre->out(FREMsg::FATAL, "The experiment '$expName' - the segment running time '$grtMinutes' must not exceed the maximum job running time allowed '$srtMinutes'");
-		  return 0; 
+		  return 0;
 		}
 	      }
 	      else
 	      {
         	$fre->out(FREMsg::FATAL, "The experiment '$expName' - the segment running time '$grt' must be nonempty and have the HH:MM:SS format");
-		return 0; 
+		return 0;
 	      }
 	    }
 	    else
 	    {
               $fre->out(FREMsg::FATAL, "The experiment '$expName' - the simulation running time '$srt' must be nonempty and have the HH:MM:SS format");
-	      return 0; 
+	      return 0;
 	    }
 	  }
 	  else
 	  {
 	    $fre->out(FREMsg::FATAL, "The experiment '$expName' - the segment model time '$gmt' must not exceed the simulation model time '$smt'");
-	    return 0; 
+	    return 0;
 	  }
 	}
 	else
 	{
           $fre->out(FREMsg::FATAL, "The experiment '$expName' - the segment model time '$gmt' must be nonempty and have one of (years|year|months|month) units defined");
-	  return 0; 
+	  return 0;
 	}
       }
       else
       {
         $fre->out(FREMsg::FATAL, "The experiment '$expName' - the simulation model time '$smt' must be nonempty and have one of (years|year|months|month) units defined");
-	return 0; 
+	return 0;
       }
     }
     else

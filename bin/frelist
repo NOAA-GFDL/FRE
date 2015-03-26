@@ -89,6 +89,7 @@ use FREUtil();
     'remote-user|R=s',
     'quiet|q',
     'validate|C',
+    'curator|c',
     'Xml|X',
     'help|h',
     'platform|p=s',
@@ -97,10 +98,10 @@ use FREUtil();
     'verbose|v+',
     'xmlfile|x=s'
   );
-  
+
   use constant DIRECTORIES => FREDefaults::ExperimentDirs();
   use constant INHERIT_DEFAULT => 1;
-  
+
 }
 
 # //////////////////////////////////////////////////////////////////////////////
@@ -109,7 +110,7 @@ use FREUtil();
 
 {
 
-  package frelist; 
+  package frelist;
 
   my $self = File::Basename::basename($0);
 
@@ -136,18 +137,19 @@ use FREUtil();
       "   -r STRING, --regression=STRING         use regression tests STRING (usable for --postfix and --namelist options only)\n",
       "   -R STRING, --remote-user=STRING        use the remote user STRING for inter-site directory listings\n",
       "   -C,        --validate                  validate (i.e. check) the FILE against the XML schema and exit\n",
+      "   -c,        --curator                   check that mandatory curator tags are included in the experiment\n",
       "   -X,        --Xml                       print the experiment suite XML configuration FILE with all expansions and exit\n\n",
       "   -h,        --help                      print help message and exit\n",
-      "   -p STRING, --platform=STRING           hardware and software platform STRING (default is '$pfm')\n", 
-      "   -t STRING, --target=STRING             use compilation directives, targeted by STRING (default is '$tgt')\n", 
-      "   -v,        --verbose                   get verbose messages (repeat the option to increase verbosity level)\n", 
+      "   -p STRING, --platform=STRING           hardware and software platform STRING (default is '$pfm')\n",
+      "   -t STRING, --target=STRING             use compilation directives, targeted by STRING (default is '$tgt')\n",
+      "   -v,        --verbose                   get verbose messages (repeat the option to increase verbosity level)\n",
       "   -V,        --version                   print the tool version and exit\n",
-      "   -x FILE,   --xmlfile=FILE              experiment suite XML configuration FILE (default is '$cwd/$xml')\n\n", 
+      "   -x FILE,   --xmlfile=FILE              experiment suite XML configuration FILE (default is '$cwd/$xml')\n\n",
       "  If no experiments defined on the command line, then all the experiments in the FILE will be processed.\n",
       "  Experiments are listed in their natural order (as in the FILE).\n\n"
     );
   }
-  
+
   sub Help()
   # ------ arguments: none
   {
@@ -185,22 +187,22 @@ use FREUtil();
       "      If you don't use the --regression option, then you will get namelists for the production run,\n",
       "      otherwise you will get namelists for a regression test(s).\n",
       "   Use --regression to select regression namelists instead of production ones.\n",
-      "      Regression namelists can be amended and/or overridden in the <runtime> portion of your XML file.\n", 
+      "      Regression namelists can be amended and/or overridden in the <runtime> portion of your XML file.\n",
       "      This option value can be a single regression test label, or a list of them, separated by comma.\n",
       "      Any number of regression tests can be requested. The keyword 'all' requests all of them,\n",
       "      The keyword 'suite' requests all available regression runs, labeled by 'basic', 'restarts' or 'scaling'.\n",
-      "   Use --platform to pick a platform for experiment(s).\n", 
-      "      The <platform> node in the experiment suite configuration file is used\n", 
+      "   Use --platform to pick a platform for experiment(s).\n",
+      "      The <platform> node in the experiment suite configuration file is used\n",
       "      to set platform-specific data and instructions.\n",
       "   Use --target to define compilation and linkage directives for experiment(s).\n",
       "      Predefined targets refer to groups of directives, existing in the 'mkmf' template file.\n",
       "      Possible predefined targets are: '$tgts'.\n",
       "      Any number of targets from this list can be used here, and you can also add your own target (but not more than one).\n",
-      "      Your own target should refer to a <compile> node with the corresponding value of its 'target' attribute.\n", 
-      "      Multiple targets are separated by comma or dash. All the directives, referred by multiple targets, are merged.\n\n" 
+      "      Your own target should refer to a <compile> node with the corresponding value of its 'target' attribute.\n",
+      "      Multiple targets are separated by comma or dash. All the directives, referred by multiple targets, are merged.\n\n"
     );
   }
-  
+
   sub execName($)
   # ------ arguments: $exp
   {
@@ -219,7 +221,7 @@ use FREUtil();
       return (undef, undef);
     }
   }
-  
+
   sub getRegressionPostfixes($$)
   # ------ arguments: $exp $regressionOption
   {
@@ -246,7 +248,7 @@ use FREUtil();
 	}
 	else
 	{
-          $fre->out(FREMsg::FATAL, "Unable to extract regression test '$regLabel' parameters from the XML file");
+	  $fre->out(FREMsg::FATAL, "Unable to extract regression test '$regLabel' parameters from the XML file");
 	  $ok = 0;
 	  last;
 	}
@@ -261,11 +263,11 @@ use FREUtil();
 	  my $postfix = $runInfo->{postfix};
 	  $runInfo->{dupe} = (exists($dupes{$postfix})) ? $dupes{$postfix} : '';
 	}
-        return \%allRuns;
+	return \%allRuns;
       }
       else
       {
-        $fre->out(FREMsg::FATAL, "Not all the regression tests have been processed");
+	$fre->out(FREMsg::FATAL, "Not all the regression tests have been processed");
 	return undef;
       }
     }
@@ -275,7 +277,7 @@ use FREUtil();
       return undef;
     }
   }
-  
+
   sub getRegressionNamelists($$)
   # ------ arguments: $exp $regressionOption
   {
@@ -299,18 +301,18 @@ use FREUtil();
 	}
 	else
 	{
-          $fre->out(FREMsg::FATAL, "Unable to extract regression test '$regLabel' parameters from the XML file");
+	  $fre->out(FREMsg::FATAL, "Unable to extract regression test '$regLabel' parameters from the XML file");
 	  $ok = 0;
 	  last;
-	} 
+	}
       }
       if ($ok)
       {
-        return \%allRuns;
+	return \%allRuns;
       }
       else
       {
-        $fre->out(FREMsg::FATAL, "Not all the regression tests have been processed");
+	$fre->out(FREMsg::FATAL, "Not all the regression tests have been processed");
 	return undef;
       }
     }
@@ -320,9 +322,9 @@ use FREUtil();
       return undef;
     }
   }
-  
+
   sub skipExp($)
-  # ------ arguments: $exp 
+  # ------ arguments: $exp
   {
     my $z = shift;
     my ($expName, $fre) = ($z->name(), $z->fre());
@@ -348,7 +350,7 @@ use FREUtil();
   Getopt::Long::GetOptions(\%opt, frelist::OPTLIST) or (print frelist::Usage() and exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM);
   if ($opt{version}) {print frelist::VERSION,"\n" and exit FREDefaults::STATUS_OK;}
   if ($opt{help}) {print frelist::Help() and exit FREDefaults::STATUS_OK;}
-  
+
   if ($opt{directory})
   {
     ($opt{directory}, my @messages) = FREUtil::optionValuesListParse('directory', $opt{directory}, frelist::DIRECTORIES);
@@ -358,7 +360,7 @@ use FREUtil();
       exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
     }
   }
-  
+
   if ($opt{evaluate})
   {
     if (substr($opt{evaluate}, 0, 1) eq '-')
@@ -367,7 +369,7 @@ use FREUtil();
       exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
     }
   }
-  
+
   if ($opt{regression})
   {
     if (substr($opt{regression}, 0, 1) eq '-')
@@ -376,7 +378,7 @@ use FREUtil();
       exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
     }
   }
-  
+
   if ($opt{'remote-user'})
   {
     if (substr($opt{'remote-user'}, 0, 1) eq '-')
@@ -385,7 +387,7 @@ use FREUtil();
       exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
     }
   }
-  
+
   if ($opt{platform})
   {
     if (substr($opt{platform}, 0, 1) eq '-')
@@ -394,7 +396,7 @@ use FREUtil();
       exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
     }
   }
-  
+
   if ($opt{target})
   {
     if (substr($opt{target}, 0, 1) eq '-')
@@ -403,7 +405,7 @@ use FREUtil();
       exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
     }
   }
-  
+
   if ($opt{xmlfile})
   {
     if (substr($opt{xmlfile}, 0, 1) eq '-')
@@ -411,8 +413,13 @@ use FREUtil();
       FREMsg::out($opt{verbose}, FREMsg::FATAL, "The --xmlfile option's value is missing");
       exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
     }
+    elsif (!-e $opt{xmlfile} || !-r $opt{xmlfile})
+    {
+      FREMsg::out($opt{verbose}, FREMsg::FATAL, "The xmlfile '$opt{xmlfile}' doesn't exist or isn't readable");
+      exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
+    }
   }
-  
+
   if ($opt{postfix})
   {
     unless ($opt{regression})
@@ -421,25 +428,25 @@ use FREUtil();
       exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
     }
   }
-  
+
   if ($opt{quiet})
   {
     FREMsg::out($opt{verbose}, FREMsg::WARNING, "The --quiet option is deprecated, consider the --noinherit option instead");
     delete $opt{inherit};
     delete $opt{quiet};
   }
-  
+
   {
 
     my $optionInheritIsNotDefault = (exists($opt{inherit}) and ($opt{inherit} != frelist::INHERIT_DEFAULT));
     my @options = ('validate', 'platform-csh', 'Xml', 'directory', 'evaluate', 'executable', 'postfix', 'namelist', 'description');
-    
+
     for (my $i = 0; $i < scalar(@options) - 1; $i++)
     {
       if ($opt{$options[$i]})
       {
 	my @extraOptions = ();
-        my $extraOptionsOn = $optionInheritIsNotDefault;
+	my $extraOptionsOn = $optionInheritIsNotDefault;
 	for (my $j = $i + 1; $j < scalar(@options); $j++)
 	{
 	  push @extraOptions, $options[$j];
@@ -448,13 +455,13 @@ use FREUtil();
 	if ($extraOptionsOn)
 	{
 	  my $extraOptionsAsString = '--' . join(', --', @extraOptions) . ', --inherit';
-          FREMsg::out($opt{verbose}, FREMsg::WARNING, "The --$options[$i] option makes other options ignored: $extraOptionsAsString");
+	  FREMsg::out($opt{verbose}, FREMsg::WARNING, "The --$options[$i] option makes other options ignored: $extraOptionsAsString");
 	}
       }
     }
-    
+
   }
-  
+
   if ($opt{validate})
   {
     if (FRE::validate($opt{xmlfile}, $opt{verbose}))
@@ -468,14 +475,26 @@ use FREUtil();
       exit FREDefaults::STATUS_XML_NOT_VALID;
     }
   }
-  
+  if ($opt{curator})
+  {
+    my @expNamesRequested = FREUtil::listUnique(@ARGV);
+    my $expName = @expNamesRequested[0];
+    if ( $expName ){
+	FRE::curator($opt{xmlfile}, $expName, $opt{verbose});
+	exit FREDefaults::STATUS_OK;
+    } else {
+	FREMsg::out($opt{verbose}, FREMsg::FATAL, "No experiment name specified");
+	exit FREDefaults::STATUS_FRE_GENERIC_PROBLEM;
+    }
+  }
+
   my $fre = FRE->new('frelist', %opt) or exit FREDefaults::STATUS_FRE_GENERIC_PROBLEM;
-  
+
   if ($opt{'platform-csh'})
   {
     print ($fre->baseCsh(), "\n") and exit FREDefaults::STATUS_OK;
   }
-  
+
   if ($opt{Xml})
   {
     print ($fre->xmlAsString(), "\n") and exit FREDefaults::STATUS_OK;
@@ -492,13 +511,13 @@ use FREUtil();
   }
 
   my $status = FREDefaults::STATUS_OK;
-  
+
   foreach my $exp (@exps)
   {
 
     my ($expName, $expParent) = ($exp->name(), $exp->parent());
     my $expNamePrefix = (scalar(@expNamesRequested) == 1) ? '' : "$expName ";
-    
+
     $fre->setCurrentExperimentName($expName);
 
     if ($opt{directory})
@@ -506,11 +525,11 @@ use FREUtil();
       my @dirList = split(',', $opt{directory});
       if (scalar(@dirList) > 1)
       {
-        foreach my $dir (@dirList) {print $expNamePrefix, $dir, ': ', $exp->dir($dir), "\n";}
+	foreach my $dir (@dirList) {print $expNamePrefix, $dir, ': ', $exp->dir($dir), "\n";}
       }
       else
       {
-        print $expNamePrefix, $exp->dir($dirList[0]), "\n";
+	print $expNamePrefix, $exp->dir($dirList[0]), "\n";
       }
     }
     elsif ($opt{evaluate})
@@ -526,20 +545,20 @@ use FREUtil();
       }
       else
       {
-        $fre->out(FREMsg::FATAL, "Unable to retrieve an executable pathname for the experiment '$expName'");
-        frelist::skipExp($exp) if scalar(@exps) > 1;
-        $status = FREDefaults::STATUS_FRE_GENERIC_PROBLEM;
+	$fre->out(FREMsg::FATAL, "Unable to retrieve an executable pathname for the experiment '$expName'");
+	frelist::skipExp($exp) if scalar(@exps) > 1;
+	$status = FREDefaults::STATUS_FRE_GENERIC_PROBLEM;
       }
     }
     elsif ($opt{postfix})
     {
       if (my $allRegInfo = frelist::getRegressionPostfixes($exp, $opt{regression}))
       {
-        print "\n/// $expName\n";
-        print "/////////////////////////////////////////////////////////////////////////////////////////////////////\n";
-        print "LABEL      RUN#  DUPE  POSTFIX                                                                       \n";
-        print "-----------------------------------------------------------------------------------------------------\n";
-        foreach my $runNo (sort keys %{$allRegInfo})
+	print "\n/// $expName\n";
+	print "/////////////////////////////////////////////////////////////////////////////////////////////////////\n";
+	print "LABEL      RUN#  DUPE  POSTFIX                                                                       \n";
+	print "-----------------------------------------------------------------------------------------------------\n";
+	foreach my $runNo (sort keys %{$allRegInfo})
 	{
 	  my $runInfo = $allRegInfo->{$runNo};
 	  printf
@@ -549,15 +568,15 @@ use FREUtil();
 	    $runInfo->{number},
 	    $runInfo->{dupe},
 	    $runInfo->{postfix}
-	  ); 
+	  );
 	}
-        print "-----------------------------------------------------------------------------------------------------\n";
+	print "-----------------------------------------------------------------------------------------------------\n";
       }
       else
       {
-        $fre->out(FREMsg::FATAL, "Unable to select regression tests to process");
-        frelist::skipExp($exp) if scalar(@exps) > 1;
-        $status = FREDefaults::STATUS_FRE_GENERIC_PROBLEM;
+	$fre->out(FREMsg::FATAL, "Unable to select regression tests to process");
+	frelist::skipExp($exp) if scalar(@exps) > 1;
+	$status = FREDefaults::STATUS_FRE_GENERIC_PROBLEM;
       }
     }
     elsif ($opt{namelist})
@@ -566,7 +585,7 @@ use FREUtil();
       {
 	if (my $allRegInfo = frelist::getRegressionNamelists($exp, $opt{regression}))
 	{
-          foreach my $runNo (sort keys %{$allRegInfo})
+	  foreach my $runNo (sort keys %{$allRegInfo})
 	  {
 	    my $runInfo = $allRegInfo->{$runNo};
 	    print "<!-- experiment='$expName' test='$runInfo->{label}' run='$runInfo->{number}' -->\n";
@@ -575,9 +594,9 @@ use FREUtil();
 	}
 	else
 	{
-          $fre->out(FREMsg::FATAL, "Unable to select regression tests to process");
-          frelist::skipExp($exp) if scalar(@exps) > 1;
-          $status = FREDefaults::STATUS_FRE_GENERIC_PROBLEM;
+	  $fre->out(FREMsg::FATAL, "Unable to select regression tests to process");
+	  frelist::skipExp($exp) if scalar(@exps) > 1;
+	  $status = FREDefaults::STATUS_FRE_GENERIC_PROBLEM;
 	}
       }
       elsif (my $prdInfo = $exp->extractProductionRunInfo())
@@ -587,20 +606,20 @@ use FREUtil();
       }
       else
       {
-        $fre->out(FREMsg::FATAL, "Unable to extract production parameters from the XML file");
-        frelist::skipExp($exp) if scalar(@exps) > 1;
-        $status = FREDefaults::STATUS_FRE_GENERIC_PROBLEM;
+	$fre->out(FREMsg::FATAL, "Unable to extract production parameters from the XML file");
+	frelist::skipExp($exp) if scalar(@exps) > 1;
+	$status = FREDefaults::STATUS_FRE_GENERIC_PROBLEM;
       }
     }
     else
     {
       if ($expParent and $opt{inherit})
       {
-        print $expName, ' INHERITS FROM ', $expParent->name(), "\n";
+	print $expName, ' INHERITS FROM ', $expParent->name(), "\n";
       }
       else
       {
-        print $expName, "\n";
+	print $expName, "\n";
       }
       if ($opt{description})
       {
