@@ -232,6 +232,7 @@
   # ---------------- FRE runscript site-dependent helper scripts
 
   alias outputStager `which output.stager`
+  @ outputStagerErrors = 0
 
 ################################################################################
 #--------------------------------- environment ---------------------------------
@@ -899,6 +900,7 @@
         echo "<NOTE> : The ascii directory '$asciiArchDir' has been processed successfully"
         if ( $echoOn ) set echo
       else
+        @ outputStagerErrors += 1
         if ( $echoOn ) unset echo
         set msg = "*WARNING*: Can't submit the output stager job to process the '$asciiArchDir'\n"
         set msg = "${msg}*WARNING*: ascii files have not been saved, you may need to transfer them manually.\n\n"
@@ -1008,6 +1010,7 @@
         echo "<NOTE> : The restart directory '$restartArchDir' has been processed successfully"
         if ( $echoOn ) set echo
       else
+        @ outputStagerErrors += 1
         if ( $echoOn ) unset echo
         set msg = "*WARNING*: Can't submit the output stager job to process the '$restartArchDir'\n"
         set msg = "${msg}*WARNING*: restart files have not been saved, you may need to transfer them manually.\n\n"
@@ -1127,6 +1130,7 @@
         echo "<NOTE> : The history directory '$historyArchDir' has been processed successfully"
         if ( $echoOn ) set echo
       else
+        @ outputStagerErrors += 1
         if ( $echoOn ) unset echo
         set msg = "*WARNING*: Can't submit the output stager job to process the '$historyArchDir'\n"
         set msg = "${msg}*WARNING*: history files have not been saved, you may need to transfer them manually.\n\n"
@@ -1276,7 +1280,7 @@
 
   # ---------------- working directory cleaning
 
-  if ( $?flagWorkDirCleanOn ) then
+  if ( $?flagWorkDirCleanOn && $outputStagerErrors == 0 ) then
 
     workDirCleaner $workDir
 
@@ -1289,6 +1293,12 @@
       echo "WARNING: Can't clean the working directory"
       if ( $echoOn ) set echo
     endif
+
+  else if ( $?flagWorkDirCleanOn && $outputStagerErrors != 0 ) then
+
+    if ( $echoOn ) unset echo
+    echo "WARNING: Output stager errors ($outputStagerErrors) were encountered.  Unable to clean $workDir."
+    if ( $echoOn ) set echo
 
   endif
 
