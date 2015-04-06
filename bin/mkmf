@@ -29,7 +29,7 @@ use strict;
 use File::Basename;
 use Getopt::Long qw(:config posix_default bundling no_ignore_case);
 use Config;			# use to put in platform-specific stuff
-use vars qw( $opt_a $opt_c $opt_d $opt_f $opt_I $opt_l $opt_m $opt_o $opt_p $opt_t $opt_v $opt_x ); # declare these global to be shared with Getopt:Std
+use vars qw( $opt_a $opt_b $opt_c $opt_d $opt_f $opt_I $opt_l $opt_m $opt_o $opt_p $opt_t $opt_v $opt_x ); # declare these global to be shared with Getopt:Std
 
 #subroutines
 sub ensureTrailingSlash {
@@ -41,6 +41,7 @@ my $version = '$Id: mkmf,v 18.0.18.4.2.1.2.3 2013/08/21 15:04:06 Seth.Underwood 
 
 # initialize variables: use getopts for these
 GetOptions("abspath|a=s" => \$opt_a,
+           "blddir|b=s" => \$opt_b,
 	   "cppdefs|c=s" => \$opt_c,
 	   "debug|d" => \$opt_d,
 	   "f" => \$opt_f,
@@ -63,6 +64,7 @@ my @targets = '.';		# current working directory is always included in targets
 push @targets, @ARGV;		# then add remaining arguments on command line
 
 ensureTrailingSlash($opt_a) if $opt_a;
+ensureTrailingSlash($opt_b) if $opt_b;
 
 #some generic declarations
 my( $file, $include, $line, $module, $name, $object, $path, $source, $suffix, $target, $word );
@@ -101,6 +103,8 @@ sub print_formatted_list{
 # it is currently used to break up the potentially long defs of SRC, OBJ, CPPDEFS, etc.
 # not used for the dependency lists
    $line = "@_";
+   $line =~ s/$opt_a/\$\(SRCROOT\)/g if ( $opt_a );
+   $line =~ s/$opt_b/\$\(BUILDROOT\)/g if ( $opt_b );
    local $: = " \t\n";		# the default formatting word boundary includes the hyphen, but not here
    while ( $opt_f && length $line > 254 ) {
       write MAKEFILE, $line;
@@ -113,6 +117,7 @@ sub print_formatted_list{
 open MAKEFILE, ">$mkfile" or die "\aERROR opening file $mkfile for writing: $!\n";
 printf MAKEFILE "# Makefile created by %s $version\n\n", basename($0);
 print  MAKEFILE "SRCROOT = $opt_a\n\n" if $opt_a; # make abspath a variable
+print  MAKEFILE "BUILDROOT = $opt_b\n\n" if $opt_b; # make build path a variable
 if ( $opt_c ) {
    $opt_c =~ s/\s+$//;
    if ( $Config{osname} eq 'aix' ) {
@@ -127,9 +132,17 @@ if ( $opt_c ) {
    }
    &print_formatted_list("CPPDEFS = $opt_c") if $opt_c;
 }
-print MAKEFILE "\nOTHERFLAGS = $opt_o" if $opt_o;
+if ( $opt_o ) {
+  $opt_o =~ s/$opt_a/\$\(SRCROOT\)/g if ( $opt_a );
+  $opt_o =~ s/$opt_b/\$\(BUILDROOT\)/g if ( $opt_b );
+  print MAKEFILE "\nOTHERFLAGS = $opt_o\n" if $opt_o;
+}
+
 #vb 2009-12-17, include now comes after vardefs, so that it can modify make variables
-print MAKEFILE "\n\ninclude $opt_t\n\n" if $opt_t; #include template if supplied
+if ( $opt_t ) {
+  print MAKEFILE "\nMK_TEMPLATE = $opt_t\n";
+  print MAKEFILE "include \$(MK_TEMPLATE)\n\n";
+}
 print MAKEFILE "\n.DEFAULT:\n\t-echo \$@ does not exist.\n";
 print MAKEFILE "all: $opt_p\n"; # first target should be program, so you can type just 'make'
 
@@ -387,6 +400,11 @@ foreach $object ( sort @objects ) {
    my %obj_of_include;		# hash of includes for current object
    $is_used{$object} = 1;	# initialize with current object so as to avoid recursion
    print "Collecting dependencies for $object ...\n" if $opt_v;
+
+   # Replace opt_a in source_of if found
+   $source_of{$object} =~ s/$opt_a/\$\(SRCROOT\)/g if ( $opt_a );
+   $source_of{$object} =~ s/$opt_b/\$\(BUILDROOT\)/g if ( $opt_b );
+
    @cmdline = "$object: $source_of{$object}";
    ( $name, $path, $suffix ) = fileparse( $actual_source_of{$object}, @src_suffixes );
    $off_sources{$source_of{$object}} = 1 unless( $path eq './' or $path eq '' );
@@ -444,6 +462,8 @@ foreach $object ( sort @objects ) {
                if ( $opt_a and ( substr($newincpath,0,1) ne '/' ) ) {
                   $newincpath = '$(SRCROOT)' . $newincpath;
                }
+	       $newincpath =~ s/$opt_a/\$\(SRCROOT\)/g if ( $opt_a );
+	       $newincpath =~ s/$opt_b/\$\(BUILDROOT\)/g if ( $opt_b );
 	       print "DEBUG: checking for $incfile in $_ ...\n" if $opt_d;
 	       if ( -f $incfile and $obj_of_include{$incfile} ne $object ) {
 		  print "   found $incfile ...\n" if $opt_v;
@@ -468,8 +488,11 @@ foreach $object ( sort @objects ) {
 #commented out because it makes make default rules kick in
 foreach ( keys %off_sources ) {
    my $file = basename($_);
+   my $file2 = $_;
+   $file2 =~ s/$opt_a/\$\(SRCROOT\)/g if ( $opt_a );
+   $file2 =~ s/$opt_b/\$\(BUILDROOT\)/g if ( $opt_b );
    $file =~ s/\$\(SRCROOT\)//;
-   print MAKEFILE "./$file: $_\n\tcp $_ .\n";
+   print MAKEFILE "./$file: $file2\n\tcp $file2 .\n";
 }
 
 #objects not used by other objects
@@ -488,17 +511,17 @@ my $noff = scalar keys %off_sources;
 &print_formatted_list( "OFF =", keys %off_sources ) if $noff > 0;
 
 #write targets
-print MAKEFILE "clean: neat\n\t-rm -f .$opt_p.cppdefs \$(OBJ) $opt_p\n";
-print MAKEFILE "neat:\n\t-rm -f \$(TMPFILES)\n";
-print MAKEFILE "localize: \$(OFF)\n\tcp \$(OFF) .\n" if $noff > 0;
-print MAKEFILE "TAGS: \$(SRC)\n\tetags \$(SRC)\n";
-print MAKEFILE "tags: \$(SRC)\n\tctags \$(SRC)\n";
+print MAKEFILE "clean: neat\n\t-rm -f .$opt_p.cppdefs \$(OBJ) $opt_p\n\n";
+print MAKEFILE "neat:\n\t-rm -f \$(TMPFILES)\n\n";
+print MAKEFILE "localize: \$(OFF)\n\tcp \$(OFF) .\n\n" if $noff > 0;
+print MAKEFILE "TAGS: \$(SRC)\n\tetags \$(SRC)\n\n";
+print MAKEFILE "tags: \$(SRC)\n\tctags \$(SRC)\n\n";
 ( $name, $path, $suffix ) = fileparse( $opt_p, @tgt_suffixes );
 if( $suffix eq '.a' ) {
-   print MAKEFILE "$opt_p: \$(OBJ)\n\t\$(AR) \$(ARFLAGS) $opt_p \$(OBJ)\n";
+   print MAKEFILE "$opt_p: \$(OBJ)\n\t\$(AR) \$(ARFLAGS) $opt_p \$(OBJ)\n\n";
 } else {
 # opt_l is a new flag added to take care of libraries
-   print MAKEFILE "$opt_p: \$(OBJ) $opt_l\n\t\$(LD) \$(OBJ) -o $opt_p $opt_l \$(LDFLAGS)\n";
+   print MAKEFILE "$opt_p: \$(OBJ) $opt_l\n\t\$(LD) \$(OBJ) -o $opt_p $opt_l \$(LDFLAGS)\n\n";
 }
 close MAKEFILE;
 print " $mkfile is ready.\n";

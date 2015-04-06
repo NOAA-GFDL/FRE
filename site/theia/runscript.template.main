@@ -1,316 +1,83 @@
 #!/bin/csh -fx
 #FRE scheduler-options
-#
-# $Id: runscript.template.main,v 1.1.4.115.2.5.2.1.4.3.2.1 2014/12/05 17:00:23 sdu Exp $
+# 
+# $Id: runscript.template.main,v 1.1.2.30.2.4.4.4.2.2 2014/05/09 18:32:13 sdu Exp $
 # ------------------------------------------------------------------------------
-# FMS/FRE Project: Runscript Template - NCRC Version
+# FMS/FRE Project: Runscript Template - NESCC Version
 # ------------------------------------------------------------------------------
-# arl    Ver   1.00  Copied from the NCCS version                   July 10
-# afy -------------- Branch 1.1.4 --------------------------------- August 10
-# afy    Ver   1.00  Cosmetics                                      August 10
-# afy    Ver   1.01  Fix check for 'fre-transfer' module            August 10
-# afy    Ver   1.02  Fix check for 'fre-nctools' module             August 10
-# afy    Ver   1.03  Revive sending ascii/restarts to the GFDL      August 10
-# afy    Ver   2.00  Balance 'set echo'/'unset echo'                August 10
-# afy    Ver   2.01  Make online combining similar to the GFDL one  August 10
-# afy    Ver   2.02  Modify alias 'send_file'                       August 10
-# afy    Ver   2.03  Rename alias 'qsub' => 'submit'                August 10
-# afy    Ver   2.04  Modify alias 'submit' (add option -V)          August 10
-# afy    Ver   2.05  Modify call to 'combine*' (add 'stdout')       August 10
-# afy    Ver   2.06  Add alias 'tar'                                August 10
-# afy    Ver   3.00  Add flagOutputCheck settable constant          August 10
-# afy    Ver   3.01  Add constant 'patternSedRestartProduction'     August 10
-# afy    Ver   3.02  Add constant 'patternSedRestartRegression'     August 10
-# afy    Ver   3.03  Add restart archives checking                  August 10
-# afy    Ver   3.04  New pragmas for flags/constants/variables      August 10
-# afy    Ver   3.05  Merge flagTransfer* settable constants         August 10
-# afy    Ver   3.06  Fix ascii/restart directories creation         August 10
-# afy    Ver   3.07  Fix multi-segment restarts/history creation    August 10
-# afy    Ver   3.08  Remove combineList variable                    August 10
-# afy    Ver   4.00  Rename combine_parallel.csh => fresavehist     August 10
-# afy    Ver   5.00  Fix a problem with flagOutputTransfer          August 10
-# afy    Ver   5.01  Cosmetics in the output stager call            August 10
-# afy    Ver   6.00  Add refine diagnostics scripts processing      August 10
-# afy    Ver   6.01  Cosmetics in file sender calls                 August 10
-# afy    Ver   6.02  Revive combineList variable                    August 10
-# afy    Ver   6.03  Modify region files combining (use children)   August 10
-# afy    Ver   6.04  Modify online combining (exit, send, frepp)    August 10
-# afy    Ver   6.05  Modify staged combining (check, frepp)         August 10
-# afy    Ver   6.06  Add offline/bySegment combining (stub for now) August 10
-# afy    Ver   7.00  Fix constant 'patternSedRestartProduction'     August 10
-# afy    Ver   7.01  Fix constant 'patternSedRestartRegression'     August 10
-# afy    Ver   7.02  Add alias 'ardiff'                             August 10
-# afy    Ver   7.03  Unique filenames to avoid partial comparison   August 10
-# afy    Ver   7.04  Add alias 'unique'                             August 10
-# afy    Ver   7.05  Modify restarts checking (add polling/delay)   August 10
-# afy    Ver   7.06  Fix staged combining (frepp condition)         August 10
-# afy    Ver   7.07  Fix output stager calls (frepp parameter)      August 10
-# afy    Ver   8.00  Modify alias 'submit' (use msub!)              September 10
-# afy    Ver   8.01  Add alias 'submitFileSender'                   September 10
-# afy    Ver   9.00  Add a check for the PBS_O_WORKDIR presence     September 10
-# afy    Ver   9.01  Remove all the references to the PBS_QUEUE     September 10
-# afy    Ver   9.02  Add default PBS_JOBNAME, adjust it later       September 10
-# afy    Ver   9.03  Modify alias 'submitFileSender' (use qsub!)    September 10
-# afy    Ver  10.00  Modify alias 'submitFileSender' (msub -q ldtn) September 10
-# afy    Ver  11.00  Modify alias 'submitFileSender' (gaea!, size)  September 10
-# afy    Ver  11.01  Add alias 'submitOutputStager'                 September 10
-# afy    Ver  12.00  Add constants 'fileSender(Partition|Queue)'    October 10
-# afy    Ver  12.01  Modify alias 'submitFileSender' (use ^)        October 10
-# afy    Ver  12.02  Add constants 'outputStager(Partition|Queue)'  October 10
-# afy    Ver  12.03  Modify alias 'submitOutputStager' (use ^)      October 10
-# afy    Ver  13.00  Modify 'npes' type (const => var)              October 10
-# afy    Ver  13.01  Add settable constants 'outputStager*'         October 10
-# afy    Ver  13.02  Add settable constants 'fileSender*'           October 10
-# afy    Ver  13.03  Don't adjust 'ptmpDir' from FRE_INPUT_DIR      October 10
-# afy    Ver  13.04  Add branch for FRE_STAGE == CHAIN              October 10
-# afy    Ver  13.05  Add alias 'frepp'                              October 10
-# afy    Ver  13.06  Modify alias 'submit' (remove option -V)       October 10
-# afy    Ver  13.07  Use shortened PBS_JOBID in filenames           October 10
-# afy    Ver  14.00  Modify gridSpec/initCond loading (branch 'nc') October 10
-# afy    Ver  14.01  Remove work directory in staging mode          October 10
-# afy    Ver  14.02  Modify all 'find' calls (no -exec/-regex)      October 10
-# afy    Ver  14.03  Add alias 'find' (= lfs find)                  October 10
-# afy    Ver  14.04  Modify submitOutputStager (size: 1 => 48)      October 10
-# afy    Ver  15.00  Add settable constant 'platform'               October 10
-# afy    Ver  15.01  Modify output stager submitting (parameters)   October 10
-# afy    Ver  16.00  Modify restarts combining (check, pattern)     October 10
-# afy    Ver  17.00  Add settable constant 'target'                 October 10
-# afy    Ver  17.01  Adjust OMP_NUM_THREADS based on target         October 10
-# afy    Ver  18.00  Add 'unsetenv PBS_SERVER' (to fix Moab bug)    November 10
-# afy    Ver  18.01  Modify submitOutputStager (walltime: 4 => 16)  November 10
-# afy    Ver  19.00  Maximize the walltime for all file senders     November 10
-# afy    Ver  19.01  Modify submitOutputStager (size => nodes:ppn)  November 10
-# afy    Ver  20.00  Rename flag*CombineType => flag*StagingType    November 10
-# afy    Ver  20.01  Rename flag*Combine => flag*CombineHistory     November 10
-# afy    Ver  20.02  Use hsmget to copy the executable              November 10
-# afy    Ver  20.03  Use compare_dual.csh to check restarts         November 10
-# afy    Ver  20.04  Use compare_dual.csh to check history (new!)   November 10
-# afy    Ver  20.05  Add banners (prologue/irun/epilogue)           November 10
-# afy    Ver  20.06  Use 'hsmput' to save ascii/restarts/history    November 10
-# afy    Ver  20.07  Add alias 'aprun' (temporarily)                November 10
-# afy    Ver  21.00  Rename alias 'aprun' => 'runCommand'           November 10
-# afy    Ver  22.00  Modify alias 'submitOutputStager' (16 => 12)   November 10
-# afy    Ver  22.01  Modify banners (prologue => PBS_JOBNAME)       November 10
-# afy    Ver  23.00  Modify fileSenderTime* constants (16 => 12)    November 10
-# afy    Ver  24.00  Modify aliases 'submit*' (add -m abe)          November 10
-# afy    Ver  25.00  Standardize the script beginning               December 10
-# afy    Ver  25.01  Make all the '*Time' constants settable        December 10
-# afy    Ver  25.02  Add settable constant 'mailMode'               December 10
-# afy    Ver  26.00  Don't check presence of refine scripts         January 11
-# afy    Ver  27.00  Improve the 'reload_commands' file handling    February 11
-# afy    Ver  27.01  Add the 'queue_commands' file processing       February 11
-# afy    Ver  28.00  Fix loop counters incrementing                 February 11
-# afy    Ver  28.01  Don't remove state files                       February 11
-# afy    Ver  29.00  Add alias 'submitNext'                         March 11
-# afy    Ver  30.00  Add settable alias 'runCommand'                March 11
-# afy    Ver  31.00  Prepend 'cp -p' calls by 'ln -f' calls         March 11
-# afy    Ver  31.01  Remove 'fre-transfer' submodule                March 11
-# afy    Ver  31.02  Remove 'FREROOT' environment variable          March 11
-# afy    Ver  31.03  Add aliases '(set|get)StripingMode'            March 11
-# afy    Ver  32.00  Modify alias 'mppnccombine' (aprun)            May 11
-# afy    Ver  32.01  Modify alias 'slmnccombine' (aprun)            May 11
-# afy    Ver  33.00  Revamping to adapt to the new output stager    May 11
-# afy    Ver  33.01  Add work directory cleaner call/submitting     May 11
-# afy    Ver  33.02  Remove Globus settings (!?)                    May 11
-# afy    Ver  33.03  Absolute segment number printing               May 11
-# afy    Ver  33.04  Call the script with -fx options               May 11
-# afy    Ver  33.05  Conditional unset echo/set echo                May 11
-# afy    Ver  33.06  Standardize jobName/jobNameFull determination  May 11
-# afy    Ver  33.07  Redesign post-processing starter submitting    May 11
-# afy    Ver  34.00  Add settable constant 'stateDir'               May 11
-# afy    Ver  34.01  Use new 'prepare_dir.csh' helper script        May 11
-# afy    Ver  34.02  Add alias 'gcp'                                May 11
-# afy    Ver  35.00  Use new 'output.stager' (saveOn => ptmpOn)     May 11
-# afy    Ver  35.01  Elaborate restarts saving                      May 11
-# afy    Ver  35.02  Don't chmod the stdout file                    May 11
-# afy    Ver  35.03  Simplify aliases 'submit*'                     May 11
-# afy    Ver  36.00  Use dummy file to create the remote stdoutDir  May 11
-# afy    Ver  36.01  Copy the XML file with mirroring               May 11
-# afy    Ver  37.00  More careful XML file copying (with backup)    May 11
-# afy    Ver  38.00  Modify alias 'gcp' (no --create-dirs)          May 11
-# afy    Ver  39.00  Clarifications in the XML copying              May 11
-# afy    Ver  40.00  Don't copy the XML file (temporarily?)         May 11
-# afy    Ver  41.00  Modify patternSed(Home|FS|LTFS) (destination)  May 11
-# afy    Ver  41.01  Replicate the XML file (rather sync?)          May 11
-# afy    Ver  42.00  Modify pp.starter submission (add target)      May 11
-# afy    Ver  43.00  New constant FRE_JOBID (used in workDir)       June 11
-# afy    Ver  44.00  New separator '&' for PP refine diag scripts   June 11
-# afy    Ver  45.00  Add settable constant 'project'                June 11
-# afy    Ver  45.01  Revamp all the Moab submission options         June 11
-# afy    Ver  45.02  Use the wrapper 'batch.scheduler.submit' (!)   June 11
-# afy    Ver  45.03  Make pp.starter depend on ALL history jobs     June 11
-# afy    Ver  45.04  Make next job depend on the last restart       June 11
-# afy    Ver  45.05  Check status after ALL submissions             June 11
-# afy    Ver  46.00  Fix job id assigment after the 'msub' fail     June 11
-# afy    Ver  46.01  Load module XML-LibXML (for helper scripts)    June 11
-# afy    Ver  47.00  Get remote environment string in two steps     June 11
-# afy    Ver  48.00  Fix the 'ppOptions' variable evaluation        June 11
-# afy    Ver  49.00  Add 'DEBUG' input staging                      June 11
-# afy    Ver  49.01  Move the input staging control section         June 11
-# afy    Ver  50.00  Split restarts output staging into two steps   June 11
-# afy    Ver  50.01  Save 'reload_commands' in the job end only     June 11
-# afy    Ver  50.02  Fix the remote environment packing             June 11
-# afy    Ver  50.03  Rename output stager jobs                      June 11
-# afy    Ver  51.00  Protect 'msub' options by combined quotes      June 11
-# afy    Ver  51.01  Modify the after-MPI-crash section             June 11
-# afy    Ver  52.00  Files/dirs for pp starter in a separate job    June 11
-# afy    Ver  53.00  Save unexpanded namelists, then expand them    June 11
-# afy    Ver  53.01  Process the *OutputHashing* flag               June 11
-# afy    Ver  53.02  Redesign constants 'patternGrep*'              June 11
-# afy    Ver  53.03  Modify patternGrepAscii (add three patterns)   June 11
-# afy    Ver  53.04  Modify patternGrepRestart (add pattern)        June 11
-# afy    Ver  54.00  Rename 'flagOutputHashing' => 'flagCheckSum'   June 11
-# afy    Ver  55.00  Split ascii/history outstaging in two steps    June 11
-# afy    Ver  55.01  Don't use the Moab option -V                   June 11
-# afy    Ver  55.02  Add delay before the second $envFile update    June 11
-# afy    Ver  55.03  Modify the $envFile location                   June 11
-# afy    Ver  55.04  Modify remote output directory after crash     June 11
-# afy    Ver  56.00  Don't pass the whole PATH to subjobs           July 11
-# afy    Ver  56.01  Don't use the HOSTNAME variable                July 11
-# afy    Ver  56.02  Process multi-part XML files                   July 11
-# afy    Ver  57.00  Don't prepend the PERL5LIB variable            July 11
-# afy    Ver  57.01  Don't load module XML-LibXML                   July 11
-# afy    Ver  57.02  Add saving 'set -r' into the $envFile          July 11
-# afy    Ver  57.03  Add settable constant 'flagArgFiles'           July 11
-# afy    Ver  57.04  Add settable constants 'flagOutputCache*'      July 11
-# afy    Ver  57.05  Add settable constants 'flagOutputCompress*'   July 11
-# afy    Ver  57.06  Implement arguments passing via argFiles       July 11
-# afy    Ver  57.07  Set remote output directories based on flags   July 11
-# afy    Ver  58.00  Fix a bug with 'set -r'                        July 11
-# afy    Ver  59.00  Allow caching for history only                 July 11
-# afy    Ver  60.00  Don't exit after fail to submit pp.starter     August 11
-# afy    Ver  61.00  Add settable constant 'hourslist'              August 11
-# afy    Ver  61.01  Rename 'timeStampFormat' => 'timeStampOptions' August 11
-# afy    Ver  61.02  Remove settable constant 'flagArgFiles'        August 11
-# afy    Ver  61.03  Save intermediate restarts                     August 11
-# afy    Ver  61.04  Simplify the irunNext logic                    August 11
-# afy    Ver  62.00  Remove separate region files processing        August 11
-# afy    Ver  62.01  Redesign logics after the aprun fail           August 11
-# afy    Ver  62.02  Call output stager with argfile in online mode August 11
-# afy    Ver  62.03  Pass the compress option to the output stager  August 11
-# afy    Ver  62.04  Don't pass the user path to the output stager  August 11
-# afy    Ver  62.05  Don't pass the user path to the pp preparer    August 11
-# afy    Ver  63.00  Fix emailing from the runscript                September 11
-# afy    Ver  64.00  Fix emailing from the runscript (printf)       September 11
-# arl    Ver  65.00  Better wording for after-the-crash email       September 11
-# arl    Ver  66.00  Add stdout to the after-crash email            September 11
-# arl    Ver  67.00  Modify the 'patternGrepAscii' (more files)     September 11
-# afy    Ver  68.00  Fix emailing from the runscript                September 11
-# afy    Ver  68.01  Rename 'combineFreq' => 'segmentsPerPPCall'    September 11
-# afy    Ver  68.02  Rename '*Transfer*' => '*Xfer*'                September 11
-# afy    Ver  68.03  Tweak the 'gcpInfo' (use 'find_module_info')   September 11
-# afy    Ver  68.04  Tweak the 'envRemote' (prepend $ by backslash) September 11
-# afy    Ver  68.05  Modify the ppRefineDiag* separator (& => +)    September 11
-# afy    Ver  68.06  Move the ppPreparer logics to the outStager    September 11
-# afy    Ver  68.07  Implement the 'chained' output staging (!)     September 11
-# afy    Ver  68.08  Add the $freCommandsHomeDir/sbin to the PATH   September 11
-# afy    Ver  68.09  More strict condition to post-process          September 11
-# afy    Ver  69.00  Remove striping parameters/commands            October 11
-# afy    Ver  69.01  Add settable constant 'modulesHomeDir'         October 11
-# afy    Ver  69.02  Add settable constant 'stdoutDirRemote'        October 11
-# afy    Ver  69.03  Add settable constant 'stmpDirRemote'          October 11
-# afy    Ver  69.04  Add settable constant 'archiveDirRemote'       October 11
-# afy    Ver  69.05  Add settable constant 'platformRemote'         October 11
-# afy    Ver  69.06  Add settable constant 'envRemote'              October 11
-# afy    Ver  69.07  Don't call 'frelist' to get remote settings    October 11
-# afy    Ver  69.08  Replace 'setenv' by 'env --unset=TERMCAP'      October 11
-# afy    Ver  69.09  Rename region files separately                 October 11
-# afy    Ver  70.00  Rename 'gcpModule*' => 'xferToolModule*'       October 11
-# afy    Ver  70.01  Switch to 'stdoutDir' before submission        October 11
-# afy    Ver  71.00  Rename 'xferTool*Dir' => 'xferTool*FilesDir'   November 11
-# afy    Ver  71.01  Add settable constant 'freModuleFilesDir'      November 11
-# afy    Ver  71.02  Cosmetics in messages                          November 11
-# afy    Ver  72.00  Load 'XML-LibXML' (for the msub wrapper)       November 11
-# afy    Ver  73.00  Add the 'freTempDir' argument for outstager    January 12
-# afy    Ver  73.01  Add settable flag 'flagWorkDirClean'           January 12
-# afy    Ver  74.00  Don't remove the output stager tempDir         January 12
-# afy    Ver  74.01  Add checkpointing into the loop beginning      January 12
-# afy    Ver  74.02  Improve after-the-MPI-crash message            January 12
-# afy    Ver  74.03  Don't echo history files moving                January 12
-# afy    Ver  74.04  Add version string to the first message        January 12
-# afy    Ver  75.00  Remove version string from the first message   January 12
-# afy    Ver  76.00  Fix version string in the first message        January 12
-# afy    Ver  76.01  Don't start post-processing after crash        January 12
-# afy    Ver  77.00  Set memory option (-l mem) for saving jobs     February 12
-# afy    Ver  77.01  Improve after-the-MPI-crash message            February 12
-# afy    Ver  78.00  Don't checkpoint in interactive mode           February 12
-# afy    Ver  79.00  Fix a typo in checkpointing                    February 12
-# afy    Ver  80.00  Use xargs to hardlink restarts                 February 12
-# afy    Ver  80.01  Use xargs to move history files                February 12
-# afy    Ver  81.00  Use hsmput to save end-of-job restarts         February 12
-# afy    Ver  81.01  Add modulefiles directory for 'banner'         February 12
-# afy    Ver  82.00  Modify 'submitOptionsCommon' (add -S)          February 12
-# afy    Ver  83.00  Modify project/partition/queue initialization  February 12
-# afy    Ver  83.01  Add settable constant 'stdoutTmpDir'           February 12
-# afy    Ver  83.02  Add settable constants 'finisher*'             February 12
-# afy    Ver  83.03  Move constants/aliases to the beginning        February 12
-# afy    Ver  83.04  Add (conditional) finisher submission          February 12
-# afy    Ver  83.05  Don't pushd into stdoutDir before submission   February 12
-# afy    Ver  84.00  Recreate INPUT/RESTART for doublestarts        February 12
-# afy    Ver  85.00  Make 'workDir.cleaner' site-independent        March 12
-# afy    Ver  85.01  Make 'finisher' site-independent               March 12
-# afy    Ver  85.02  Fix a bug in 'hours' assignment                March 12
-# afy    Ver  86.00  Keep all current files after MPI crash         April 12
-# afy    Ver  86.01  Rename intermediate arguments for outstager    April 12
-# afy    Ver  87.00  Refactor end-of-job restarts saving            April 12
-# afy    Ver  87.01  Generalize memory options settings             April 12
-# afy    Ver  88.00  Add settable variables 'atmos*'/'ocean*'       April 12
-# afy    Ver  89.00  Load 'File-NFSLock' (for hsmget/hsmput)        May 12
-# afy    Ver  90.00  Don't pass 'project' to service jobs           June 12
-# afy    Ver  91.00  Remove settable constant 'freModuleFilesDir'   June 12
-# afy    Ver  91.01  Remove settable constant 'freCommandsHomeDir'  June 12
-# afy    Ver  91.02  Add settable constants 'freCommands*'          June 12
-# afy    Ver  91.03  Preload the fre-commands module                June 12
-# afy    Ver  91.04  Use 'which' to locate executables              June 12
-# afy    Ver  91.05  Use 'findModuleInfo' to locate 'fre-nctools'   June 12
-# afy    Ver  91.06  Don't load the 'File-NFSLock' module           June 12
-# afy    Ver  91.07  Don't pass 'freTempDir' to outstager           June 12
-# afy    Ver  91.08  Pass '*(ModuleFilesDir|Version)*' to outstager June 12
-# afy    Ver  91.09  Improve 'workDir.cleaner' dependencies         June 12
-# afy    Ver  91.10  Simplify 'project' handling                    June 12
-# afy    Ver  92.00  Rollback the 'project' handling                June 12
-# afy    Ver  93.00  Don't transfer internal restarts               June 12
-# afy    Ver  93.01  Standardize FRE placeholders                   July 12
-# afy    Ver  94.00  Unload 'fre-commands' before its loading       July 12
-# afy    Ver  95.00  Postload the 'fre-commands' for protection     July 12
-# afy    Ver  96.00  Look for 'fre-combiners' before 'fre-nctools'  July 12
-# afy    Ver  97.00  Add 'freNCToolsModuleName' argument            July 12
-# afy    Ver  98.00  Process the case when <project> is missed      August 12
-# afy    Ver  99.00  Load default version of 'banner'               August 12
-# afy    Ver 100.00  Add settable variables 'max_npes/max_nthreads' August 12
-# afy    Ver 101.00  Add settable constants '*Init'                 October 12
-# afy    Ver 101.01  Add settable constants 'outputStager*Retries'  October 12
-# afy    Ver 101.02  Rationalize the 'queue_commands' handling      October 12
-# afy    Ver 101.03  Refactor the work directory cleaning           October 12
-# afy    Ver 101.04  Add 'action*|*Retry' arguments into argfiles   October 12
-# sdu    Ver 102.00  Init only 'continueFlag' in 'queue_commands'   October 12
-# sdu    Ver 102.01  Use 'project'/'queue' from #PBS as defaults    October 12
-# sdu    Ver 102.02  Don't set partition for the next job           October 12
-# afy    Ver 103.00  Replace MOAB_BATCH => PBS_ENVIRONMENT          November 12
-# afy    Ver 103.01  Recognize the 'hsm' module                     November 12
-# afy    Ver 103.02  Add settable flag 'flagVerbosity'              November 12
-# afy    Ver 104.00  Add 'actionRetryOn' argument (history only)    December 12
-# afy    Ver 105.00  Add settable constants 'windfall*'             December 12
-# afy    Ver 105.01  Add variable 'windfallFlag'                    December 12
-# afy    Ver 105.02  Add variable 'submitOptionsWindfall'           December 12
-# afy    Ver 106.00  Add 'raw' into uncombined history name         January 13
-# afy    Ver 107.00  Add 'ww3' into restart/history output          February 13
-# afy    Ver 108.00  Modify '*GrepAscii' (add 'log')                February 13
-# afy    Ver 108.01  Modify '*GrepRestartNextMove' (add 'ww3$')     February 13
-# afy    Ver 109.00  Remove '*npes/*nthreads' placeholders          February 13
-# afy    Ver 109.01  Add pragma '#FRE run-command-size'             February 13
-# afy    Ver 110.00  Cosmetics in comments                          February 13
-# afy    Ver 111.00  Use new utility 'memory_limit.csh'             March 13
-# afy    Ver 112.00  Don't estimate memory to combine               March 13
-# afy    Ver 112.01  Check for 'hsm' module, exit if not available  March 13
-# afy    Ver 112.02  Save 'saveJobIds/argFiles' between segments    March 13
-# afy    Ver 112.03  Always save 'saveJobIds/argFiles'              March 13
-# afy    Ver 112.04  Add settable constants 'ppStarter*'            March 13
-# afy    Ver 112.05  Modify constants 'submitOptions*' (umask)      March 13
-# afy    Ver 112.06  Dynamically set 'ppStarter' queue/runtime      March 13
-# afy    Ver 113.00  Explicitly set block size for 'du'             March 13
-# afy    Ver 114.00  Allways combine restarts for regression runs   April 13
-# afy    Ver 115.00  Fix restarts processing                        April 13
+# afy    Ver   1.00  Initial version                                April 12
+# afy    Ver   2.00  Fix memory option for saving jobs              April 12
+# afy    Ver   3.00  Simplify end-of-job restarts saving            April 12
+# afy    Ver   3.01  Generalize memory options settings             April 12
+# afy    Ver   3.02  Add settable variables 'atmos*'/'ocean*'       April 12
+# afy    Ver   4.00  Load 'banner' (from /contrib/gfdl)             May 12
+# afy    Ver   4.01  Load 'File-NFSLock' (for hsmget/hsmput)        May 12
+# afy    Ver   4.02  Adaptively set up working directory structure  May 12
+# afy    Ver   4.03  Don't merge Torque resources into lists        May 12
+# afy    Ver   5.00  Add remote dirs (settable constants)           May 12
+# afy    Ver   5.01  Add output stager params (settable constants)  May 12
+# afy    Ver   5.02  Add 'flagOutputXfer' settable constant         May 12
+# afy    Ver   5.03  Add transfer parameters for the outstager      May 12
+# afy    Ver   6.00  Set 'anyerror' variable (thanks to Seth)       May 12
+# afy    Ver   7.00  Remove settable constant 'freModuleFilesDir'   June 12
+# afy    Ver   7.01  Remove settable constant 'freCommandsHomeDir'  June 12
+# afy    Ver   7.02  Add settable constants 'freCommands*'          June 12
+# afy    Ver   7.03  Add settable constant 'segmentsPerPPCall'      June 12
+# afy    Ver   7.04  Add settable constant 'platformRemote'         June 12
+# afy    Ver   7.05  Add settable constant 'envRemote'              June 12
+# afy    Ver   7.06  Add settable constants 'ppStarter*'            June 12
+# afy    Ver   7.07  Add settable constant 'flagOutputPostProcess'  June 12
+# afy    Ver   7.08  Pre/post-load the fre-commands module          June 12
+# afy    Ver   7.09  Use 'which' to locate executables              June 12
+# afy    Ver   7.10  Use 'findModuleInfo' to locate 'fre-nctools'   June 12
+# afy    Ver   7.11  Don't load the 'File-NFSLock' module           June 12
+# afy    Ver   7.12  Add variable 'combineList'                     June 12
+# afy    Ver   7.13  Add variables 'xmlFiles'/'xmlFilesRemote'      June 12
+# afy    Ver   7.14  Don't pass 'freTempDir' to outstager           June 12
+# afy    Ver   7.15  Pass '*(ModuleFilesDir|Version)*' to outstager June 12
+# afy    Ver   7.16  Pass post-processing info to outstager         June 12
+# afy    Ver   8.00  Don't 'module unuse'/'module unload'           June 12
+# afy    Ver   8.01  Don't post-load the fre-commands module        June 12
+# afy    Ver   9.00  Improve 'workDir.cleaner' dependencies         June 12
+# afy    Ver  10.00  Don't transfer internal restarts               July 12
+# afy    Ver  10.01  Standardize FRE placeholders                   July 12
+# afy    Ver  11.00  Unload 'fre-commands' before its loading       July 12
+# afy    Ver  11.01  Postload the 'fre-commands' for protection     July 12
+# afy    Ver  11.02  Look for 'fre-combiners' before 'fre-nctools'  July 12
+# afy    Ver  12.00  Add 'freNCToolsModuleName' argument            July 12
+# afy    Ver  13.00  Add settable variables 'max_npes/max_nthreads' August 12
+# afy    Ver  14.00  Don't use any memory options in submissions    September 12
+# afy    Ver  15.00  Add settable constant 'projectInit'            November 12
+# afy    Ver  15.01  Add settable constants 'outputStager*Retries'  November 12
+# afy    Ver  15.02  Rationalize the 'queue_commands' handling      November 12
+# afy    Ver  15.03  Refactor the work directory cleaning           November 12
+# afy    Ver  15.04  Add 'action*|*Retry' arguments into argfiles   November 12
+# sdu    Ver  15.05  Init only 'continueFlag' in 'queue_commands'   November 12
+# sdu    Ver  15.06  Use 'project'/'queue' from #PBS as defaults    November 12
+# afy    Ver  15.07  Use 'projectInit' in all the service jobs      November 12
+# afy    Ver  15.08  Move 'submitOptions(Project|Queue)' down       November 12
+# afy    Ver  16.00  Recognize the 'hsm' module                     November 12
+# afy    Ver  16.01  Add settable flag 'flagVerbosity'              November 12
+# afy    Ver  16.02  Add data transfer checkpointing                November 12
+# afy    Ver  17.00  Add 'gcp' locating/passing to the outstager    December 12
+# afy    Ver  17.01  Modify submission stdout umask (026 => 022)    December 12
+# afy    Ver  18.00  Add 'actionRetryOn' argument (history only)    December 12
+# afy    Ver  19.00  Add 'raw' into uncombined history name         January 13
+# afy    Ver  20.00  Add 'ww3' into restart/history output          February 13
+# afy    Ver  21.00  Modify '*GrepAscii' (add 'log')                February 13
+# afy    Ver  21.01  Modify '*GrepRestartNextMove' (add 'ww3$')     February 13
+# afy    Ver  22.00  Remove '*npes/*nthreads' placeholders          February 13
+# afy    Ver  22.01  Add pragma '#FRE run-command-size'             February 13
+# afy    Ver  23.00  Use new utility 'memory_limit.csh'             March 13
+# afy    Ver  24.00  Don't estimate memory to combine               March 13
+# afy    Ver  24.01  Check for 'hsm' module, exit if not available  March 13
+# afy    Ver  25.00  Save 'saveJobIds/argFiles' between segments    March 13
+# afy    Ver  26.00  Always save 'saveJobIds/argFiles'              March 13
+# afy    Ver  27.00  Add settable constants 'ppStarter*'            March 13
+# afy    Ver  27.01  Dynamically set 'ppStarter' queue/runtime      March 13
+# afy    Ver  28.00  Explicitly set block size for 'du'             March 13
+# afy    Ver  29.00  Allways combine restarts for regression runs   April 13
+# afy    Ver  30.00  Fix restarts processing                        April 13
 # ------------------------------------------------------------------------------
 # Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2000-2013
 # Designed and written by V. Balaji, Amy Langenhorst and Aleksey Yakovlev
@@ -320,11 +87,12 @@
 #FRE version-info
 #===============================================================================
 
+  set -r anyerror
   set -r echoOn = $?echo
   set -r runtimeBeg = `date "+%s"`
 
   if ( $echoOn ) unset echo
-  echo '<NOTE> : ====== FRE RUNSCRIPT $Id: runscript.template.main,v 1.1.4.115.2.5.2.1.4.3.2.1 2014/12/05 17:00:23 sdu Exp $ ======'
+  echo '<NOTE> : ====== FRE RUNSCRIPT $Id: runscript.template.main,v 1.1.2.30.2.4.4.4.2.2 2014/05/09 18:32:13 sdu Exp $ ======'
   echo "<NOTE> : Starting at $HOST on `date`"
   if ( $echoOn ) set echo
 
@@ -335,6 +103,7 @@
   if ( $echoOn ) unset echo
   #FRE const(modulesHomeDir)
   source $modulesHomeDir/init/tcsh
+  module use /contrib/gfdl/modulefiles
   module load banner
   setenv COLUMNS 148
   if ( $echoOn ) set echo
@@ -344,10 +113,10 @@
   if ( $?PBS_ENVIRONMENT ) then
     if ( $PBS_ENVIRONMENT == 'PBS_BATCH' ) then
       set -r FRE_JOBID = $PBS_JOBNAME:t.o`echo $PBS_JOBID | sed -r 's/^([0-9]+).*$/\1/'`
-      set -r batch
+      set -r batch 
     else
       set -r FRE_JOBID = $0:t.o`date +%s`
-    endif
+    endif 
   else
     set -r FRE_JOBID = $0:t.o`date +%s`
   endif
@@ -364,14 +133,12 @@
   #FRE const(freCommandsVersion)
 
   #FRE const(projectInit)
-  #FRE const(windfallFlagInit)
 
   #FRE const(platform)
   #FRE const(target)
   #FRE const(name)
   #FRE const(rtsxml)
   #FRE const(stdoutDir)
-  #FRE const(stdoutTmpDir)
   #FRE const(stateDir)
   #FRE const(workDir)
   #FRE const(ptmpDir)
@@ -388,16 +155,15 @@
   #FRE const(timeStampOptions)
   #FRE const(baseDate)
   #FRE const(mailMode)
-  #FRE const(windfallOptionsSet)
-  #FRE const(windfallOptionsUnset)
 
   #FRE const(platformRemote)
   #FRE const(stdoutDirRemote)
   #FRE const(stmpDirRemote)
   #FRE const(archiveDirRemote)
+  #FRE const(freCommandsModuleFilesDirRemote)
+  #FRE const(freCommandsVersionRemote)
   #FRE const(envRemote)
 
-  #FRE const(outputStagerSavePartition)
   #FRE const(outputStagerSaveQueue)
   #FRE const(outputStagerSaveCoreSpec)
   #FRE const(outputStagerSaveRuntimeAscii)
@@ -405,7 +171,6 @@
   #FRE const(outputStagerSaveRuntimeHistory)
   #FRE const(outputStagerSaveRetries)
 
-  #FRE const(outputStagerXferPartition)
   #FRE const(outputStagerXferQueue)
   #FRE const(outputStagerXferCoreSpec)
   #FRE const(outputStagerXferRuntimeAscii)
@@ -413,17 +178,10 @@
   #FRE const(outputStagerXferRuntimeHistory)
   #FRE const(outputStagerXferRetries)
 
-  #FRE const(workDirCleanerPartition)
   #FRE const(workDirCleanerQueue)
   #FRE const(workDirCleanerCoreSpec)
   #FRE const(workDirCleanerRuntime)
 
-  #FRE const(finisherPartition)
-  #FRE const(finisherQueue)
-  #FRE const(finisherCoreSpec)
-  #FRE const(finisherRuntime)
-
-  #FRE const(ppStarterPartition)
   #FRE const(ppStarterCoreSpec)
   #FRE const(ppStarterCombineOffLargeOffQueue)
   #FRE const(ppStarterCombineOffLargeOffRuntime)
@@ -499,13 +257,13 @@
 
   set -r hsmDir = $workDir/hsm
 
-  # ---------------- top directory for all the temporary output files
+  # ---------------- top directory for all the temporary output files 
 
   set -r tmpOutputDir = $workDir/output.stager
 
   # ---------------- checkpointing directory
 
-  set -r checkPointDir = /usw/checkpoint
+  set -r checkPointDir = /contrib/gfdl/tools
 
   # ---------------- file to save shell plus environment variables
 
@@ -522,10 +280,10 @@
   set -r patternGrepRegion = '^rregion'
 
   # ---------------- search and replacement patterns for sed
-
-  set -r patternSedHome = 's/^\/(autofs|ncrc)\/.+\/'$USER'\//\/home\/'$USER'\/ncrc\//'
-  set -r patternSedCTMP = 's/^\/lustre\/f1\/'$USER'\//\/home\/'$USER'\/ncrc\//'
-  set -r patternSedCPERM = 's/^\/lustre\/f1\/unswept\/'$USER'\//\/home\/'$USER'\/ncrc\//'
+  
+  set -r patternJobNumber = 's/^([0-9]+).*/\1/'
+  set -r patternSedHome = 's/^\/home\/'$USER'\//\/home\/'$USER'\/nescc\//'
+  set -r patternSedScratch = 's/^\/scratch[0-9]\/.+\/'$USER'\//\/home\/'$USER'\/nescc\//'
 
   # ---------------- archive extension
 
@@ -533,12 +291,11 @@
 
   # ---------------- batch scheduler output staging options
 
-  set -r submitOptionsCommon = ( -m $mailMode -j oe -r y -S /bin/tcsh )
-  set -r submitOptionsOutputStagerSave = ( $submitOptionsCommon -W umask=026 -d $stdoutDir -o $stdoutDir/ -l partition=$outputStagerSavePartition -q $outputStagerSaveQueue )
-  set -r submitOptionsOutputStagerXfer = ( $submitOptionsCommon -W umask=026 -d $stdoutDir -o $stdoutDir/ -l partition=$outputStagerXferPartition -q $outputStagerXferQueue )
-  set -r submitOptionsWorkDirCleaner = ( $submitOptionsCommon -W umask=026 -d $stdoutDir -o $stdoutDir/ -l partition=$workDirCleanerPartition -q $workDirCleanerQueue )
-  set -r submitOptionsFinisher = ( $submitOptionsCommon -W umask=026 -d $stdoutDir -o $stdoutDir/ -l partition=$finisherPartition -q $finisherQueue )
-  set -r submitOptionsPPStarter = ( $submitOptionsCommon -W umask=022 -l partition=$ppStarterPartition )
+  set -r submitOptionsCommon = ( -m $mailMode -j oe -r y -W umask=022 -S /bin/tcsh )
+  set -r submitOptionsOutputStagerSave = ( $submitOptionsCommon -d $stdoutDir -o $stdoutDir/ -q $outputStagerSaveQueue -A $projectInit )
+  set -r submitOptionsOutputStagerXfer = ( $submitOptionsCommon -d $stdoutDir -o $stdoutDir/ -q $outputStagerXferQueue -A $projectInit )
+  set -r submitOptionsWorkDirCleaner = ( $submitOptionsCommon -d $stdoutDir -o $stdoutDir/ -q $workDirCleanerQueue -A $projectInit )
+  set -r submitOptionsPPStarter = ( $submitOptionsCommon )
 
   # ---------------- output staging type as a string
 
@@ -549,53 +306,26 @@
   alias expandVariables `which expand_variables` --verbose
   alias findModuleInfo `which find_module_info` --verbose
   alias findXIncludes `which find_xincludes` --verbose
-  alias finisher `which batch_copy.csh`
   alias prepareDir `which prepare_dir.csh`
   alias timeStamp `which time_stamp.csh` $timeStampOptions
   alias workDirCleaner `which batch_rmdir.csh`
 
   set -r workDirCleaner = `alias workDirCleaner`
-  set -r finisher = `alias finisher`
 
   # ---------------- FRE runscript site-dependent helper scripts
 
-  alias submit `which batch.scheduler.submit` --verbose
   alias outputStager `which output.stager`
 
   set -r outputStager = `alias outputStager`
   @ outputStagerErrors = 0
 
+  # ---------------- batch scheduler submit command
+
+  alias submit `which qsub`
+
   # ---------------- finding command
 
   alias find `which lfs` find
-
-################################################################################
-#---------------------------------- finisher -----------------------------------
-################################################################################
-
-  if ( $?batch && ! $?FRE_STAGE && ( "$stdoutDir" != "$stdoutTmpDir" ) ) then
-
-    set finisherOptions = ( $submitOptionsFinisher -N $FRE_JOBID.finisher)
-    set finisherOptions = ( $finisherOptions -l walltime=$finisherRuntime,$finisherCoreSpec )
-    set finisherOptions = ( $finisherOptions -v src=$stdoutTmpDir/$FRE_JOBID,dstDir=$stdoutDir )
-    set finisherOptions = ( $finisherOptions -l depend=afterany:$MOAB_JOBID )
-
-    set finisherResult = `submit -O "$finisherOptions" $finisher`
-
-    if ( $status == 0 ) then
-      if ( $echoOn ) unset echo
-      echo "<NOTE> : The finisher job '$finisherResult' has been submitted successfully"
-      if ( $echoOn ) set echo
-    else
-      if ( $echoOn ) unset echo
-      echo "WARNING: Can't submit the finisher job"
-      if ( $echoOn ) set echo
-    endif
-
-    unset finisherResult
-    unset finisherOptions
-
-  endif
 
 ################################################################################
 #--------------------------------- environment ---------------------------------
@@ -689,7 +419,7 @@
   limit stacksize unlimited
   limit coredumpsize unlimited
   limit
-
+      
   # ---------------- exit if not running on right machine architecture
 
   set machine = `uname -m`
@@ -769,9 +499,6 @@
   set submitOptionsProject = ( )
   set submitOptionsQueue = ( )
 
-  set windfallFlag = $windfallFlagInit
-  set submitOptionsWindfall = ( )
-
   set combineList = ( )
   set saveJobIds = ( )
   set argFiles = ( )
@@ -797,18 +524,18 @@
 
     if ( -f $reload_file ) then
       if ( -r $reload_file ) then
-        source $reload_file
-        if ( $#argFiles > 0 ) then
-          if ( `echo $argFiles | tr ' ' "\n" | grep --count "^$FRE_JOBID"` != $#argFiles ) then
-            set saveJobIds = ( )
-            set argFiles = ( )
-          endif
-        endif
+	source $reload_file
+	if ( $#argFiles > 0 ) then
+	  if ( `echo $argFiles | tr ' ' "\n" | grep --count "^$FRE_JOBID"` != $#argFiles ) then
+	    set saveJobIds = ( )
+	    set argFiles = ( )
+	  endif
+	endif
       else
-        if ( $echoOn ) unset echo
-        echo "*ERROR*: The reload file '$reload_file' is not readable"
+	if ( $echoOn ) unset echo
+	echo "*ERROR*: The reload file '$reload_file' is not readable"
         if ( $echoOn ) set echo
-        exit 1
+	exit 1
       endif
     endif
 
@@ -816,25 +543,24 @@
 
     if ( -f $queue_file ) then
       if ( -r $queue_file ) then
-        source $queue_file
+	source $queue_file
       else
-        if ( $echoOn ) unset echo
-        echo "*ERROR*: The queue file '$queue_file' is not readable"
+	if ( $echoOn ) unset echo
+	echo "*ERROR*: The queue file '$queue_file' is not readable"
         if ( $echoOn ) set echo
-        exit 1
+	exit 1
       endif
     else
       touch $queue_file
       if ( $status == 0 ) then
-        if ( $echoOn ) unset echo
-        echo "<NOTE> : Writing queue information to the queue file '$queue_file' at `date +%s`"
-        if ( $echoOn ) set echo
+	if ( $echoOn ) unset echo
+	echo "<NOTE> : Writing queue information to the queue file '$queue_file' at `date +%s`"
+	if ( $echoOn ) set echo
         echo "set continueFlag = $continueFlag" >> $queue_file
-        echo "set windfallFlag = $windfallFlag" >> $queue_file
         chmod 644 $queue_file
       else
-        if ( $echoOn ) unset echo
-        echo "*ERROR*: The queue file '$queue_file' can't be saved"
+	if ( $echoOn ) unset echo
+	echo "*ERROR*: The queue file '$queue_file' can't be saved"
         if ( $echoOn ) set echo
         exit 1
       endif
@@ -849,21 +575,13 @@
 
     if ( $?project ) then
       if ( "$project" != "" ) then
-        set submitOptionsProject = ( -A $project )
+	set submitOptionsProject = ( -A $project )
       endif
     endif
 
     if ( $?queue ) then
       if ( "$queue" != "" ) then
-        set submitOptionsQueue = ( -q $queue )
-      endif
-    endif
-
-    if ( $windfallFlag != $windfallFlagInit ) then
-      if ( $windfallFlag ) then
-        set submitOptionsWindfall = ( $windfallOptionsSet )
-      else
-        set submitOptionsWindfall = ( $windfallOptionsUnset )
+	set submitOptionsQueue = ( -q $queue )
       endif
     endif
 
@@ -885,7 +603,7 @@
   endif
 
   # ---------------- backward compatible for segment number
-
+  
   if ( $?ireload ) then
     # Using old way to calculate currentSeg
     # Get best guess --- may not be correct if user changed number of segments
@@ -898,21 +616,21 @@
   if ( -e $workDir ) then
     if ( -d $workDir ) then
       if ( -r $workDir ) then
-        if ( -w $workDir ) then
+	if ( -w $workDir ) then
           ls -1 --directory --file-type $workDir/* | grep --fixed-strings --invert-match $tmpOutputDir | xargs rm --force --recursive
-          prepareDir $workDir/INPUT 'clean'     || exit 1
-          prepareDir $workDir/RESTART 'clean'   || exit 1
-        else
-          if ( $echoOn ) unset echo
-          echo "*ERROR*: The directory '$workDir' exists, but is not writable"
-          if ( $echoOn ) set echo
-          exit 1
-        endif
+          prepareDir $workDir/INPUT 'clean'	|| exit 1
+          prepareDir $workDir/RESTART 'clean'	|| exit 1
+	else
+	  if ( $echoOn ) unset echo
+	  echo "*ERROR*: The directory '$workDir' exists, but is not writable"
+	  if ( $echoOn ) set echo
+	  exit 1
+	endif
       else
-        if ( $echoOn ) unset echo
-        echo "*ERROR*: The directory '$workDir' exists, but is not readable"
-        if ( $echoOn ) set echo
-        exit 1
+	if ( $echoOn ) unset echo
+	echo "*ERROR*: The directory '$workDir' exists, but is not readable"
+	if ( $echoOn ) set echo
+	exit 1
       endif
     else
       if ( $echoOn ) unset echo
@@ -921,9 +639,9 @@
       exit 1
     endif
   else
-    prepareDir $workDir         || exit 1
-    prepareDir $workDir/INPUT   || exit 1
-    prepareDir $workDir/RESTART || exit 1
+    prepareDir $workDir		|| exit 1
+    prepareDir $workDir/INPUT	|| exit 1
+    prepareDir $workDir/RESTART	|| exit 1
   endif
 
   # ---------------- input data loading
@@ -975,9 +693,9 @@
     exit 1
   endif
 
-  unset gridSpecStatus
+  unset gridSpecStatus 
 
-  @ initCondStatus = 0
+  @ initCondStatus = 0 
 
   if ( ( $initCond:e == 'cpio' || $initCond:e == 'tar' ) && $initCond:r:e == 'nc' ) then
     hsmget $initCond:r:r:s+/++/\* && \
@@ -1052,7 +770,7 @@
 
   #FRE namelists
 
-  # ---------------- expand namelists
+  # ---------------- expand namelists 
 
   set months = $monthslist[1]
   set days = $dayslist[1]
@@ -1071,42 +789,7 @@
   # ---------------- normal exit if in the input data staging mode
 
   if ( $?FRE_STAGE ) then
-    if ( $FRE_STAGE == 'CHAIN' ) then
-      if ( -f $scriptName ) then
-        if ( -r $scriptName ) then
-          set result = `submit $scriptName`
-          if ( $status == 0 ) then
-            if ( $echoOn ) unset echo
-            echo "<NOTE> : The job '$result' to run the '$scriptName' has been submitted successfully"
-            if ( $echoOn ) set echo
-            workDirCleaner $workDir
-            if ( $echoOn ) unset echo
-            echo "<NOTE> : Natural end-of-input-chaining for '$scriptName'"
-            if ( $echoOn ) set echo
-            exit 0
-          else
-            workDirCleaner $workDir
-            if ( $echoOn ) unset echo
-            echo "*ERROR*: Can't submit the '$scriptName'"
-            if ( $echoOn ) set echo
-            exit 1
-          endif
-          unset result
-        else
-          workDirCleaner $workDir
-          if ( $echoOn ) unset echo
-          echo "*ERROR*: The script '$scriptName' exists, but is not readable - it can't be submitted"
-          if ( $echoOn ) set echo
-          exit 1
-        endif
-      else
-        workDirCleaner $workDir
-        if ( $echoOn ) unset echo
-        echo "*ERROR*: The script '$scriptName' does not exist - it can't be submitted"
-        if ( $echoOn ) set echo
-        exit 1
-      endif
-    else if ( $FRE_STAGE == 'DEBUG' ) then
+    if ( $FRE_STAGE == 'DEBUG' ) then
       if ( $echoOn ) unset echo
       echo "<NOTE> : The working directory '$workDir' is ready for debugging"
       echo "<NOTE> : Natural end-of-debug-staging for '$scriptName'"
@@ -1119,7 +802,7 @@
       if ( $echoOn ) set echo
       exit 0
     endif
-  endif
+  endif 
 
   # ---------------- prepare list of refine diagnostics scripts
 
@@ -1141,11 +824,11 @@
   endif
 
   # ---------------- remote XML files for post-processing
-
+    
   if ( $?flagOutputXferOn && $?flagOutputPostProcessOn ) then
     set xmlFilesRemote = ( )
     foreach xmlFile ( $xmlFiles )
-      set xmlFileRemote = `echo $xmlFile | sed -r "$patternSedHome;$patternSedCTMP;$patternSedCPERM"`
+      set xmlFileRemote = `echo $xmlFile | sed -r "$patternSedHome;$patternSedScratch"` 
       if ( $echoOn ) unset echo
       echo "<NOTE> : The file '$xmlFile' will be copied to the file '$xmlFileRemote' @ GFDL to be used in the post-processing..."
       if ( $echoOn ) set echo
@@ -1165,82 +848,46 @@
 
     banner $currentSeg/$segmentsPerSimulation
 
-    # ---------------- test checkpointing conditions and exit if it has been requested
-
-    if ( $?batch ) then
-      if ( -e $checkPointDir/all ) then
-        if ( $echoOn ) unset echo
-        echo "<NOTE> : The checkpointing condition 'all' is on - exiting..."
-        if ( $echoOn ) set echo
-        exit 99
-      else if ( -e $checkPointDir/$MOAB_PARTITION ) then
-        if ( $echoOn ) unset echo
-        echo "<NOTE> : The checkpointing condition '$MOAB_PARTITION' is on - exiting..."
-        if ( $echoOn ) set echo
-        exit 99
-      else if ( -e $checkPointDir/$MOAB_PARTITION-$MOAB_CLASS ) then
-        if ( $echoOn ) unset echo
-        echo "<NOTE> : The checkpointing condition '$MOAB_PARTITION-$MOAB_CLASS' is on - exiting..."
-        if ( $echoOn ) set echo
-        exit 99
-      else if ( -e $checkPointDir/$MOAB_USER ) then
-        if ( $echoOn ) unset echo
-        echo "<NOTE> : The checkpointing condition '$MOAB_USER' is on - exiting..."
-        if ( $echoOn ) set echo
-        exit 99
-      endif
-    endif
-
     # ---------------- reload the queue file and exit if it has been requested
 
     if ( $?flagRunTypeProduction ) then
 
       if ( -f $queue_file ) then
-        if ( -r $queue_file ) then
-          source $queue_file
-        else
-          if ( $echoOn ) unset echo
-          echo "*ERROR*: The queue file '$queue_file' is not readable"
+	if ( -r $queue_file ) then
+	  source $queue_file
+	else
+	  if ( $echoOn ) unset echo
+	  echo "*ERROR*: The queue file '$queue_file' is not readable"
           if ( $echoOn ) set echo
-          exit 1
-        endif
+	  exit 1
+	endif
       endif
 
       if ( ! $continueFlag ) then
-        if ( $echoOn ) unset echo
-        echo "<NOTE> : Stopping execution"
-        if ( $echoOn ) set echo
-        exit 0
+	if ( $echoOn ) unset echo
+	echo "<NOTE> : Stopping execution"
+	if ( $echoOn ) set echo
+	exit 0
       endif
 
       if ( $?project ) then
-        if ( "$project" != "" ) then
-          set submitOptionsProject = ( -A $project )
-        else
-          set submitOptionsProject = ( )
-        endif
+	if ( "$project" != "" ) then
+	  set submitOptionsProject = ( -A $project )
+	else
+	  set submitOptionsProject = ( )
+	endif
       else
-        set submitOptionsProject = ( )
+	set submitOptionsProject = ( )
       endif
 
       if ( $?queue ) then
-        if ( "$queue" != "" ) then
-          set submitOptionsQueue = ( -q $queue )
-        else
-          set submitOptionsQueue = ( )
-        endif
+	if ( "$queue" != "" ) then
+	  set submitOptionsQueue = ( -q $queue )
+	else
+	  set submitOptionsQueue = ( )
+	endif
       else
-        set submitOptionsQueue = ( )
-      endif
-
-      if ( $windfallFlag != $windfallFlagInit ) then
-        if ( $windfallFlag ) then
-          set submitOptionsWindfall = ( $windfallOptionsSet )
-        else
-          set submitOptionsWindfall = ( $windfallOptionsUnset )
-        endif
-      else
-        set submitOptionsWindfall = ( )
+	set submitOptionsQueue = ( )
       endif
 
     endif
@@ -1273,9 +920,9 @@
       if ( ! $?OMP_NUM_THREADS ) setenv OMP_NUM_THREADS 1
     else
       unsetenv OMP_NUM_THREADS
-    endif
+    endif 
 
-    echo "Time before runCommand"
+    echo "Time before runCommand" 
     date
 
     runCommand |& tee fms.out
@@ -1325,7 +972,7 @@
 
       if ( $#coreFiles > 0 ) then
 
-        if ( ! $?MPI_COREDUMP_DEBUGGER ) setenv MPI_COREDUMP_DEBUGGER 'gdb -batch'
+	if ( ! $?MPI_COREDUMP_DEBUGGER ) setenv MPI_COREDUMP_DEBUGGER 'gdb -batch'
         echo 'where' > .gdbinit
 
         set coreFileFirst = $coreFiles[1]
@@ -1390,7 +1037,7 @@
 
     endif
 
-    echo "Time after runCommand"
+    echo "Time after runCommand" 
     date
 
     # ---------------- generate date for file names
@@ -1427,22 +1074,22 @@
 
         ls -1 | egrep "$patternGrepAscii" | xargs -I'{}' mv --force '{}' $asciiWorkDir/$begindate.'{}'
 
-        if ( $?flagOutputXferOn ) then
-          if ( $?flagRunTypeRegression || $?flagOutputTypeUnique ) then
+	if ( $?flagOutputXferOn ) then
+	  if ( $?flagRunTypeRegression || $?flagOutputTypeUnique ) then
             set asciiOutputDirRemote = $outputDirRemoteAscii/$outputDir:t/$asciiSuffix
           else
             set asciiOutputDirRemote = $outputDirRemoteAscii/$asciiSuffix
           endif
-        else
+	else
           set asciiOutputDirRemote = ""
-        endif
+	endif
 
-        set actionSaveOn        = 1
-        set actionXferOn        = $?flagOutputXferOn
-        set paramArchiveOn      = $?flagOutputArchiveOn
-        @   paramPtmpOn         = ! $?flagOutputArchiveOn
-        set paramCheckSumOn     = $?flagCheckSumOn
-        set paramCompressOn     = $?flagOutputCompressAsciiOn
+        set actionSaveOn	= 1
+        set actionXferOn	= $?flagOutputXferOn
+        set paramArchiveOn	= $?flagOutputArchiveOn
+        @   paramPtmpOn		= ! $?flagOutputArchiveOn
+        set paramCheckSumOn	= $?flagCheckSumOn
+        set paramCompressOn	= $?flagOutputCompressAsciiOn
 
       else
 
@@ -1450,12 +1097,12 @@
 
         set asciiOutputDirRemote = ""
 
-        set actionSaveOn        = 1
-        set actionXferOn        = 0
-        set paramArchiveOn      = 1
-        set paramPtmpOn         = 0
-        set paramCheckSumOn     = 0
-        set paramCompressOn     = 0
+        set actionSaveOn	= 1
+        set actionXferOn	= 0
+        set paramArchiveOn	= 1
+        set paramPtmpOn		= 0
+        set paramCheckSumOn	= 0
+        set paramCompressOn	= 0
 
       endif
 
@@ -1470,36 +1117,55 @@
       set asciiXferOptions = ( $asciiXferOptions -N ${asciiJobName}T )
       set asciiXferOptions = ( $asciiXferOptions -l walltime=$outputStagerXferRuntimeAscii,$outputStagerXferCoreSpec )
 
-      echo "set expName                         =   $name"                       > $asciiArgFile
-      echo "set type                            =   ascii"                      >> $asciiArgFile
-      echo "set stagingType                     =   $outputStagingType"         >> $asciiArgFile
-      echo "set actionCombineOn                 =   0"                          >> $asciiArgFile
-      echo "set actionCheckOn                   =   0"                          >> $asciiArgFile
-      echo "set actionSaveOn                    =   $actionSaveOn"              >> $asciiArgFile
-      echo "set actionXferOn                    =   $actionXferOn"              >> $asciiArgFile
-      echo "set actionPPStartOn                 =   0"                          >> $asciiArgFile
-      echo "set paramArchiveOn                  =   $paramArchiveOn"            >> $asciiArgFile
-      echo "set paramPtmpOn                     =   $paramPtmpOn"               >> $asciiArgFile
-      echo "set paramCheckSumOn                 =   $paramCheckSumOn"           >> $asciiArgFile
-      echo "set paramCompressOn                 =   $paramCompressOn"           >> $asciiArgFile
-      echo "set paramVerbosityOn                =   $?flagVerbosityOn"          >> $asciiArgFile
-      echo "set workDir                         =   $tmpOutputDir"              >> $asciiArgFile
-      echo "set ptmpDir                         =   $ptmpDir"                   >> $asciiArgFile
-      echo "set archDir                         =   $asciiArchDir"              >> $asciiArgFile
-      echo "set outputDirRemote                 =   $asciiOutputDirRemote"      >> $asciiArgFile
-      echo "set saveOptions                     = ( $asciiSaveOptions )"        >> $asciiArgFile
-      echo "set xferOptions                     = ( $asciiXferOptions )"        >> $asciiArgFile
-      echo "set saveRetries                     =   $outputStagerSaveRetries"   >> $asciiArgFile
-      echo "set xferRetries                     =   $outputStagerXferRetries"   >> $asciiArgFile
-      echo "set saveRetry                       =   0"                          >> $asciiArgFile
-      echo "set xferRetry                       =   0"                          >> $asciiArgFile
-      echo "set freCommandsModuleFilesDir       =   $freCommandsModuleFilesDir" >> $asciiArgFile
-      echo "set freCommandsVersion              =   $freCommandsVersion"        >> $asciiArgFile
-      echo "set hsmModuleFilesDir               =   $hsmModuleFilesDir"         >> $asciiArgFile
-      echo "set hsmVersion                      =   $hsmVersion"                >> $asciiArgFile
-      echo "set xferToolModuleFilesDir          =   $xferToolModuleFilesDir"    >> $asciiArgFile
-      echo "set xferToolVersion                 =   $xferToolVersion"           >> $asciiArgFile
-      echo "set modulesHomeDir                  =   $modulesHomeDir"            >> $asciiArgFile
+      if ( $actionXferOn ) then
+	if ( -e $checkPointDir/transfers.paused.all ) then
+          if ( $echoOn ) unset echo
+          echo "WARNING: The global 'transfers.paused.all' condition is on - ascii data transfer job will be on hold"
+          if ( $echoOn ) set echo
+          set asciiXferOptions = ( $asciiXferOptions -h )
+	else if ( -e $checkPointDir/transfers.paused.$USER ) then
+          if ( $echoOn ) unset echo
+          echo "WARNING: The global 'transfers.paused.$USER' condition is on - ascii data transfer job will be on hold"
+          if ( $echoOn ) set echo
+          set asciiXferOptions = ( $asciiXferOptions -h )
+	else if ( -e $HOME/.fre/transfers.paused.all ) then
+          if ( $echoOn ) unset echo
+          echo "WARNING: The user 'transfers.paused.all' condition is on - ascii data transfer job will be on hold"
+          if ( $echoOn ) set echo
+          set asciiXferOptions = ( $asciiXferOptions -h )
+	endif
+      endif
+
+      echo "set expName				=   $name"			 > $asciiArgFile
+      echo "set type				=   ascii"			>> $asciiArgFile
+      echo "set stagingType			=   $outputStagingType"		>> $asciiArgFile
+      echo "set actionCombineOn			=   0"				>> $asciiArgFile
+      echo "set actionCheckOn			=   0"				>> $asciiArgFile
+      echo "set actionSaveOn			=   $actionSaveOn"		>> $asciiArgFile
+      echo "set actionXferOn			=   $actionXferOn"		>> $asciiArgFile
+      echo "set actionPPStartOn			=   0"				>> $asciiArgFile
+      echo "set paramArchiveOn			=   $paramArchiveOn"		>> $asciiArgFile
+      echo "set paramPtmpOn			=   $paramPtmpOn"		>> $asciiArgFile
+      echo "set paramCheckSumOn			=   $paramCheckSumOn"		>> $asciiArgFile
+      echo "set paramCompressOn			=   $paramCompressOn"		>> $asciiArgFile
+      echo "set paramVerbosityOn		=   $?flagVerbosityOn"		>> $asciiArgFile
+      echo "set workDir				=   $tmpOutputDir"		>> $asciiArgFile
+      echo "set ptmpDir				=   $ptmpDir"			>> $asciiArgFile
+      echo "set archDir				=   $asciiArchDir"		>> $asciiArgFile
+      echo "set outputDirRemote			=   $asciiOutputDirRemote"	>> $asciiArgFile
+      echo "set saveOptions			= ( $asciiSaveOptions )"	>> $asciiArgFile
+      echo "set xferOptions			= ( $asciiXferOptions )"	>> $asciiArgFile
+      echo "set saveRetries			=   $outputStagerSaveRetries"	>> $asciiArgFile 
+      echo "set xferRetries			=   $outputStagerXferRetries"	>> $asciiArgFile 
+      echo "set saveRetry			=   0"				>> $asciiArgFile 
+      echo "set xferRetry			=   0"				>> $asciiArgFile 
+      echo "set freCommandsModuleFilesDir       =   $freCommandsModuleFilesDir"	>> $asciiArgFile
+      echo "set freCommandsVersion		=   $freCommandsVersion"	>> $asciiArgFile
+      echo "set hsmModuleFilesDir		=   $hsmModuleFilesDir"		>> $asciiArgFile
+      echo "set hsmVersion			=   $hsmVersion"		>> $asciiArgFile
+      echo "set xferToolModuleFilesDir		=   $xferToolModuleFilesDir"	>> $asciiArgFile
+      echo "set xferToolVersion			=   $xferToolVersion"		>> $asciiArgFile
+      echo "set modulesHomeDir			=   $modulesHomeDir"		>> $asciiArgFile
 
       if ( $?flagOutputStagingTypeOnline ) then
 
@@ -1510,7 +1176,7 @@
 
         outputStager $asciiArgFile
 
-        if ( $status == 0 ) then
+	if ( $status == 0 ) then
           if ( $echoOn ) unset echo
           echo "<NOTE> : The ascii directory '$asciiArchDir' has been processed successfully"
           if ( $echoOn ) set echo
@@ -1538,13 +1204,13 @@
 
         if ( $actionSaveOn ) then
 
-          set asciiResult = `submit -O "$asciiSaveOptions -v argFile=$asciiArgFile" $outputStager`
+	  set asciiResult = `submit $asciiSaveOptions -v argFile=$asciiArgFile $outputStager`
 
-          if ( $status == 0 ) then
+	  if ( $status == 0 ) then
             if ( $echoOn ) unset echo
             echo "<NOTE> : The output stager job '$asciiResult' to process the '$asciiArchDir' (saving) has been submitted successfully"
             if ( $echoOn ) set echo
-            set saveJobIds = ( $saveJobIds $asciiResult )
+            set saveJobIds = ( $saveJobIds `echo $asciiResult | sed -r "$patternJobNumber"` )
             set argFiles = ( $argFiles $asciiArgFile:t )
           else
             @ outputStagerErrors += 1
@@ -1567,22 +1233,22 @@
 
         if ( $actionXferOn ) then
 
-          set asciiResult = `submit -O "$asciiXferOptions -v argFile=$asciiArgFile -l depend=afterok:$saveJobIds[$#saveJobIds]" $outputStager`
+	  set asciiResult = `submit $asciiXferOptions -v argFile=$asciiArgFile -W depend=afterok:$saveJobIds[$#saveJobIds] $outputStager`
 
-          if ( $status == 0 ) then
+	  if ( $status == 0 ) then
             if ( $echoOn ) unset echo
             echo "<NOTE> : The output stager job '$asciiResult' to process the '$asciiArchDir' (transfer) has been submitted successfully"
             if ( $echoOn ) set echo
           else
             @ outputStagerErrors += 1
             if ( $echoOn ) unset echo
-            set msg = "*WARNING*: Can't submit the output stager job to process the '$asciiArchDir' (saving)\n"
+            set msg = "*WARNING*: Can't submit the output stager job to process the '$asciiArchDir' (transfer)\n"
             set msg = "${msg}*WARNING*: ascii files have not been saved, you may need to transfer them manually.\n\n"
             set msg = "${msg}*WARNING*: The ascii ArgFile has been saved at $asciiArgFile.  You may be able\n"
             set msg = "${msg}*WARNING*: use the following command:\n\n"
             set msg = "${msg}*WARNING*: $outputStager $asciiArgFile\n"
             if ( $?batch ) then
-              printf "$msg" | mailx -s "Can't submit the output stager job to process the '$asciiArchDir' (saving)" $USER@noaa.gov
+              printf "$msg" | mailx -s "Can't submit the output stager job to process the '$asciiArchDir' (transfer)" $USER@noaa.gov
             endif
             printf "$msg"
             if ( $echoOn ) set echo
@@ -1596,13 +1262,13 @@
 
         if ( $actionSaveOn || $actionXferOn ) then
 
-          set asciiResult = `submit -O "$asciiSaveOptions -v argFile=$asciiArgFile" $outputStager`
+	  set asciiResult = `submit $asciiSaveOptions -v argFile=$asciiArgFile $outputStager`
 
-          if ( $status == 0 ) then
+	  if ( $status == 0 ) then
             if ( $echoOn ) unset echo
             echo "<NOTE> : The output stager job '$asciiResult' to process the '$asciiArchDir' has been submitted successfully"
             if ( $echoOn ) set echo
-            set saveJobIds = ( $saveJobIds $asciiResult )
+            set saveJobIds = ( $saveJobIds `echo $asciiResult | sed -r "$patternJobNumber"` )
             set argFiles = ( $argFiles $asciiArgFile:t )
           else
             @ outputStagerErrors += 1
@@ -1663,42 +1329,42 @@
 
       ls -1 | egrep "$patternGrepRestart" | xargs ln --force --target-directory=$restartWorkDir
 
-      cp --force --preserve=mode,ownership,timestamps $workDir/input.nml        $restartWorkDir
-      cp --force --preserve=mode,ownership,timestamps $workDir/*_table          $restartWorkDir
-      cp --force --preserve=mode,ownership,timestamps $rtsxml                   $restartWorkDir
-      cp --force --preserve=mode,ownership,timestamps $scriptName               $restartWorkDir
+      cp --force --preserve=mode,ownership,timestamps $workDir/input.nml	$restartWorkDir
+      cp --force --preserve=mode,ownership,timestamps $workDir/*_table		$restartWorkDir
+      cp --force --preserve=mode,ownership,timestamps $rtsxml			$restartWorkDir
+      cp --force --preserve=mode,ownership,timestamps $scriptName		$restartWorkDir
 
       if ( ! $?MPI_FAIL ) then
 
         if ( $?flagOutputXferOn ) then
-          if ( $?flagRunTypeRegression || $?flagOutputTypeUnique  ) then
+	  if ( $?flagRunTypeRegression || $?flagOutputTypeUnique  ) then
             set restartOutputDirRemote = $outputDirRemoteRestart/$outputDir:t/$restartSuffix
-          else
+	  else
             set restartOutputDirRemote = $outputDirRemoteRestart/$restartSuffix
-          endif
+	  endif
         else
           set restartOutputDirRemote = ""
         endif
 
-        if ( $currentSeg < $segmentsPerSimulation && $irun < $segmentsPerJob ) then
+	if ( $currentSeg < $segmentsPerSimulation && $irun < $segmentsPerJob ) then
 
           find $workDir/INPUT   -maxdepth 1 -type f | egrep "$patternGrepRestartNextDrop" | xargs --no-run-if-empty rm --force
           find $workDir/RESTART -maxdepth 1 -type f | egrep "$patternGrepRestartNextMove" | xargs --no-run-if-empty mv --force --target-directory ../INPUT
 
-          set actionCombineOn   = $?flagRunTypeRegression
-          set actionCheckOn     = $?flagOutputCheckOn
-          set actionSaveOn      = 1
-          set actionXferOn      = 0
-          set paramArchiveOn    = $?flagOutputArchiveOn
-          set paramPtmpOn       = 1
-          set paramCheckSumOn   = $?flagCheckSumOn
-          set paramCompressOn   = $?flagOutputCompressRestartOn
+          set actionCombineOn	= $?flagRunTypeRegression
+          set actionCheckOn	= $?flagOutputCheckOn
+          set actionSaveOn	= 1
+          set actionXferOn	= 0
+          set paramArchiveOn	= $?flagOutputArchiveOn
+          set paramPtmpOn	= 1
+          set paramCheckSumOn	= $?flagCheckSumOn
+          set paramCompressOn	= $?flagOutputCompressRestartOn
 
-        else
+	else
 
           if ( $currentSeg < $segmentsPerSimulation && ( $?flagOutputStagingTypeStaged || $?flagOutputStagingTypeChained ) ) then
             hsmput $restartArchDir:s+/++
-            if ( $status == 0 ) then
+	    if ( $status == 0 ) then
               if ( $echoOn ) unset echo
               echo "<NOTE> : The restart directory '$restartArchDir' has been saved successfully"
               if ( $echoOn ) set echo
@@ -1726,20 +1392,20 @@
           set paramCheckSumOn   = $?flagCheckSumOn
           set paramCompressOn   = $?flagOutputCompressRestartOn
 
-        endif
+	endif
 
       else
 
         set restartOutputDirRemote = ""
 
-        set actionCombineOn     = 0
-        set actionCheckOn       = 0
-        set actionSaveOn        = 1
-        set actionXferOn        = 0
-        set paramArchiveOn      = 1
-        set paramPtmpOn         = 0
-        set paramCheckSumOn     = 0
-        set paramCompressOn     = 0
+        set actionCombineOn	= 0
+        set actionCheckOn	= 0
+        set actionSaveOn	= 1
+        set actionXferOn	= 0
+        set paramArchiveOn	= 1
+        set paramPtmpOn		= 0
+        set paramCheckSumOn	= 0
+        set paramCompressOn 	= 0
 
       endif
 
@@ -1754,39 +1420,58 @@
       set restartXferOptions = ( $restartXferOptions -N ${restartJobName}T )
       set restartXferOptions = ( $restartXferOptions -l walltime=$outputStagerXferRuntimeRestart,$outputStagerXferCoreSpec )
 
-      echo "set expName                         =   $name"                       > $restartArgFile
-      echo "set type                            =   restart"                    >> $restartArgFile
-      echo "set stagingType                     =   $outputStagingType"         >> $restartArgFile
-      echo "set actionCombineOn                 =   $actionCombineOn"           >> $restartArgFile
-      echo "set actionCheckOn                   =   $actionCheckOn"             >> $restartArgFile
-      echo "set actionSaveOn                    =   $actionSaveOn"              >> $restartArgFile
-      echo "set actionXferOn                    =   $actionXferOn"              >> $restartArgFile
-      echo "set actionPPStartOn                 =   0"                          >> $restartArgFile
-      echo "set paramArchiveOn                  =   $paramArchiveOn"            >> $restartArgFile
-      echo "set paramPtmpOn                     =   $paramPtmpOn"               >> $restartArgFile
-      echo "set paramCheckSumOn                 =   $paramCheckSumOn"           >> $restartArgFile
-      echo "set paramCompressOn                 =   $paramCompressOn"           >> $restartArgFile
-      echo "set paramVerbosityOn                =   $?flagVerbosityOn"          >> $restartArgFile
-      echo "set workDir                         =   $tmpOutputDir"              >> $restartArgFile
-      echo "set ptmpDir                         =   $ptmpDir"                   >> $restartArgFile
-      echo "set archDir                         =   $restartArchDir"            >> $restartArgFile
-      echo "set outputDirRemote                 =   $restartOutputDirRemote"    >> $restartArgFile
-      echo "set saveOptions                     = ( $restartSaveOptions )"      >> $restartArgFile
-      echo "set xferOptions                     = ( $restartXferOptions )"      >> $restartArgFile
-      echo "set saveRetries                     =   $outputStagerSaveRetries"   >> $restartArgFile
-      echo "set xferRetries                     =   $outputStagerXferRetries"   >> $restartArgFile
-      echo "set saveRetry                       =   0"                          >> $restartArgFile
-      echo "set xferRetry                       =   0"                          >> $restartArgFile
-      echo "set freCommandsModuleFilesDir       =   $freCommandsModuleFilesDir" >> $restartArgFile
-      echo "set freCommandsVersion              =   $freCommandsVersion"        >> $restartArgFile
-      echo "set freNCToolsModuleFilesDir        =   $freNCToolsModuleFilesDir"  >> $restartArgFile
-      echo "set freNCToolsModuleName            =   $freNCToolsModuleName"      >> $restartArgFile
-      echo "set freNCToolsVersion               =   $freNCToolsVersion"         >> $restartArgFile
-      echo "set hsmModuleFilesDir               =   $hsmModuleFilesDir"         >> $restartArgFile
-      echo "set hsmVersion                      =   $hsmVersion"                >> $restartArgFile
-      echo "set xferToolModuleFilesDir          =   $xferToolModuleFilesDir"    >> $restartArgFile
-      echo "set xferToolVersion                 =   $xferToolVersion"           >> $restartArgFile
-      echo "set modulesHomeDir                  =   $modulesHomeDir"            >> $restartArgFile
+      if ( $actionXferOn ) then
+	if ( -e $checkPointDir/transfers.paused.all ) then
+          if ( $echoOn ) unset echo
+          echo "WARNING: The global 'transfers.paused.all' condition is on - restart data transfer job will be on hold"
+          if ( $echoOn ) set echo
+          set restartXferOptions = ( $restartXferOptions -h )
+	else if ( -e $checkPointDir/transfers.paused.$USER ) then
+          if ( $echoOn ) unset echo
+          echo "WARNING: The global 'transfers.paused.$USER' condition is on - restart data transfer job will be on hold"
+          if ( $echoOn ) set echo
+          set restartXferOptions = ( $restartXferOptions -h )
+	else if ( -e $HOME/.fre/transfers.paused.all ) then
+          if ( $echoOn ) unset echo
+          echo "WARNING: The user 'transfers.paused.all' condition is on - restart data transfer job will be on hold"
+          if ( $echoOn ) set echo
+          set restartXferOptions = ( $restartXferOptions -h )
+	endif
+      endif
+
+      echo "set expName				=   $name"			 > $restartArgFile 
+      echo "set type				=   restart"			>> $restartArgFile 
+      echo "set stagingType			=   $outputStagingType"		>> $restartArgFile
+      echo "set actionCombineOn			=   $actionCombineOn"		>> $restartArgFile
+      echo "set actionCheckOn			=   $actionCheckOn"		>> $restartArgFile
+      echo "set actionSaveOn			=   $actionSaveOn"		>> $restartArgFile 
+      echo "set actionXferOn			=   $actionXferOn"		>> $restartArgFile
+      echo "set actionPPStartOn			=   0"				>> $restartArgFile
+      echo "set paramArchiveOn			=   $paramArchiveOn"		>> $restartArgFile
+      echo "set paramPtmpOn			=   $paramPtmpOn"		>> $restartArgFile 
+      echo "set paramCheckSumOn			=   $paramCheckSumOn"		>> $restartArgFile
+      echo "set paramCompressOn			=   $paramCompressOn"		>> $restartArgFile
+      echo "set paramVerbosityOn		=   $?flagVerbosityOn"		>> $restartArgFile
+      echo "set workDir				=   $tmpOutputDir"		>> $restartArgFile 
+      echo "set ptmpDir				=   $ptmpDir"			>> $restartArgFile 
+      echo "set archDir				=   $restartArchDir"		>> $restartArgFile 
+      echo "set outputDirRemote			=   $restartOutputDirRemote"	>> $restartArgFile
+      echo "set saveOptions			= ( $restartSaveOptions )"	>> $restartArgFile
+      echo "set xferOptions			= ( $restartXferOptions )"	>> $restartArgFile
+      echo "set saveRetries			=   $outputStagerSaveRetries"	>> $restartArgFile 
+      echo "set xferRetries			=   $outputStagerXferRetries"	>> $restartArgFile 
+      echo "set saveRetry			=   0"				>> $restartArgFile 
+      echo "set xferRetry			=   0"				>> $restartArgFile 
+      echo "set freCommandsModuleFilesDir       =   $freCommandsModuleFilesDir"	>> $restartArgFile
+      echo "set freCommandsVersion		=   $freCommandsVersion"	>> $restartArgFile
+      echo "set freNCToolsModuleFilesDir	=   $freNCToolsModuleFilesDir"	>> $restartArgFile
+      echo "set freNCToolsModuleName		=   $freNCToolsModuleName"	>> $restartArgFile
+      echo "set freNCToolsVersion		=   $freNCToolsVersion"		>> $restartArgFile
+      echo "set hsmModuleFilesDir		=   $hsmModuleFilesDir"		>> $restartArgFile
+      echo "set hsmVersion			=   $hsmVersion"		>> $restartArgFile
+      echo "set xferToolModuleFilesDir		=   $xferToolModuleFilesDir"	>> $restartArgFile
+      echo "set xferToolVersion			=   $xferToolVersion"		>> $restartArgFile
+      echo "set modulesHomeDir			=   $modulesHomeDir"		>> $restartArgFile
 
       if ( $?flagOutputStagingTypeOnline ) then
 
@@ -1796,8 +1481,8 @@
         endif
 
         outputStager $restartArgFile
-
-        if ( $status == 0 ) then
+ 
+	if ( $status == 0 ) then
           if ( $echoOn ) unset echo
           echo "<NOTE> : The restart directory '$restartArchDir' has been processed successfully"
           if ( $echoOn ) set echo
@@ -1825,13 +1510,13 @@
 
         if ( $actionCombineOn || $actionSaveOn || $actionCheckOn ) then
 
-          set restartResult = `submit -O "$restartSaveOptions -v argFile=$restartArgFile" $outputStager`
+	  set restartResult = `submit $restartSaveOptions -v argFile=$restartArgFile $outputStager`
 
-          if ( $status == 0 ) then
+	  if ( $status == 0 ) then
             if ( $echoOn ) unset echo
             echo "<NOTE> : The output stager job '$restartResult' to process the '$restartArchDir' (saving) has been submitted successfully"
             if ( $echoOn ) set echo
-            set saveJobIds = ( $saveJobIds $restartResult )
+            set saveJobIds = ( $saveJobIds `echo $restartResult | sed -r "$patternJobNumber"` )
             set argFiles = ( $argFiles $restartArgFile:t )
           else
             @ outputStagerErrors += 1
@@ -1854,9 +1539,9 @@
 
         if ( $actionXferOn ) then
 
-          set restartResult = `submit -O "$restartXferOptions -v argFile=$restartArgFile -l depend=afterok:$saveJobIds[$#saveJobIds]" $outputStager`
+	  set restartResult = `submit $restartXferOptions -v argFile=$restartArgFile -W depend=afterok:$saveJobIds[$#saveJobIds] $outputStager`
 
-          if ( $status == 0 ) then
+	  if ( $status == 0 ) then
             if ( $echoOn ) unset echo
             echo "<NOTE> : The output stager job '$restartResult' to process the '$restartArchDir' (transfer) has been submitted successfully"
             if ( $echoOn ) set echo
@@ -1883,13 +1568,13 @@
 
         if ( $actionCombineOn || $actionSaveOn || $actionCheckOn || $actionXferOn ) then
 
-          set restartResult = `submit -O "$restartSaveOptions -v argFile=$restartArgFile" $outputStager`
+	  set restartResult = `submit $restartSaveOptions -v argFile=$restartArgFile $outputStager`
 
-          if ( $status == 0 ) then
+	  if ( $status == 0 ) then
             if ( $echoOn ) unset echo
             echo "<NOTE> : The output stager job '$restartResult' to process the '$restartArchDir' has been submitted successfully"
             if ( $echoOn ) set echo
-            set saveJobIds = ( $saveJobIds $restartResult )
+            set saveJobIds = ( $saveJobIds `echo $restartResult | sed -r "$patternJobNumber"` )
             set argFiles = ( $argFiles $restartArgFile:t )
           else
             @ outputStagerErrors += 1
@@ -1942,9 +1627,9 @@
     if ( $#regionHistoryFiles > 0 ) then
 
       if ( ! $?MPI_FAIL ) then
-        foreach file ( $regionHistoryFiles )
+	foreach file ( $regionHistoryFiles )
           mv -f $file `echo $file | sed -r "s/$patternGrepRegion//"`
-        end
+	end
       endif
 
     endif
@@ -1967,87 +1652,87 @@
       set historyWorkDir = $tmpOutputDir$historyArchDir
 
       prepareDir $historyWorkDir 'clean' || exit 1
-
+      
       if ( ! $?MPI_FAIL ) then
 
-        ls -1 | egrep "^[0-9][0-9][0-9][0-9][0-9][0-9].+$patternGrepHistory" | xargs -I'{}' mv --force '{}' $historyWorkDir/'{}'
-        ls -1 | egrep "$patternGrepHistory" | xargs -I'{}' mv --force '{}' $historyWorkDir/$begindate.'{}'
+	ls -1 | egrep "^[0-9][0-9][0-9][0-9][0-9][0-9].+$patternGrepHistory" | xargs -I'{}' mv --force '{}' $historyWorkDir/'{}'
+	ls -1 | egrep "$patternGrepHistory" | xargs -I'{}' mv --force '{}' $historyWorkDir/$begindate.'{}'
 
-        if ( $?flagOutputXferOn ) then
-          if ( $?flagRunTypeRegression || $?flagOutputTypeUnique  ) then
+	if ( $?flagOutputXferOn ) then
+	  if ( $?flagRunTypeRegression || $?flagOutputTypeUnique  ) then
             set historyOutputDirRemote = $outputDirRemoteHistory/$outputDir:t/$historySuffix
-          else
+	  else
             set historyOutputDirRemote = $outputDirRemoteHistory/$historySuffix
-          endif
-        else
+	  endif
+	else
           set historyOutputDirRemote = ""
-        endif
+	endif
 
-        set actionCombineOn     = $?flagOutputCombineHistoryOn
-        set actionCheckOn       = $?flagOutputCheckOn
-        set actionSaveOn        = 1
-        set actionXferOn        = $?flagOutputXferOn
+        set actionCombineOn	= $?flagOutputCombineHistoryOn
+        set actionCheckOn	= $?flagOutputCheckOn
+        set actionSaveOn	= 1
+        set actionXferOn	= $?flagOutputXferOn
 
-        set combineList = ( $combineList $historyArchDir:t.tar )
+	set combineList = ( $combineList $historyArchDir:t.tar )
 
-        if ( $?flagOutputPostProcessOn && $?flagOutputXferOn && $segmentsPerPPCall > 0 && $#combineList == $segmentsPerPPCall ) then
+	if ( $?flagOutputPostProcessOn && $?flagOutputXferOn && $segmentsPerPPCall > 0 && $#combineList == $segmentsPerPPCall ) then
           set actionPPStartOn = 1
-          if ( $#combineList > 0 ) then
+	  if ( $#combineList > 0 ) then
             set firstDate = `echo $combineList[1] | awk -F . '{print $1}'`
-          else
+	  else
             set firstDate = $begindate
-          endif
-          set historySize = `du --block-size=1000000 --summarize $historyWorkDir | sed -r 's/^([0-9]+).*$/\1/'`
-          if ( $?flagOutputCombineHistoryOn ) then
-            if ( $historySize / $monthslist[$irun] > $ppStarterHistorySizeThreshold ) then
+	  endif
+	  set historySize = `du --block-size=1000000 --summarize $historyWorkDir | sed -r 's/^([0-9]+).*$/\1/'`
+	  if ( $?flagOutputCombineHistoryOn ) then
+	    if ( $historySize / $monthslist[$irun] > $ppStarterHistorySizeThreshold ) then
               set ppStarterOptionsQueueAndRuntime = ( -q $ppStarterCombineOnLargeOnQueue -l walltime=$ppStarterCombineOnLargeOnRuntime )
-            else
+	    else
               set ppStarterOptionsQueueAndRuntime = ( -q $ppStarterCombineOnLargeOffQueue -l walltime=$ppStarterCombineOnLargeOffRuntime )
-            endif
-          else
-            if ( $historySize / $monthslist[$irun] > $ppStarterHistorySizeThreshold ) then
+	    endif	    
+	  else
+	    if ( $historySize / $monthslist[$irun] > $ppStarterHistorySizeThreshold ) then
               set ppStarterOptionsQueueAndRuntime = ( -q $ppStarterCombineOffLargeOnQueue -l walltime=$ppStarterCombineOffLargeOnRuntime )
-            else
+	    else
               set ppStarterOptionsQueueAndRuntime = ( -q $ppStarterCombineOffLargeOffQueue -l walltime=$ppStarterCombineOffLargeOffRuntime )
-            endif
-          endif
-          set ppStarterOptions = ( $submitOptionsPPStarter $submitOptionsProject )
+	    endif	    
+	  endif
+          set ppStarterOptions = ( $submitOptionsPPStarter )
           set ppStarterOptions = ( $ppStarterOptions -N $FRE_JOBID.pp.starter.$firstDate )
           set ppStarterOptions = ( $ppStarterOptions $ppStarterOptionsQueueAndRuntime -l $ppStarterCoreSpec )
           set ppStarterOptions = ( $ppStarterOptions -v expName=$name,xmlFile=$xmlFilesRemote[1],platform=$platformRemote,target=$target,dir=$historyOutputDirRemote:h,firstDate=$firstDate,refineDiagList="'$ppRefineDiagScriptNamesList'",ppEnv="'$envRemote'" )
           set combineList = ( )
-          unset ppStarterOptionsQueueAndRuntime
-          unset historySize
+	  unset ppStarterOptionsQueueAndRuntime
+	  unset historySize
           unset firstDate
-        else
+	else
           set actionPPStartOn = 0
           set ppStarterOptions = ( )
-        endif
+	endif
 
-        set actionRetryOn       = 1
-        set paramArchiveOn      = $?flagOutputArchiveOn
-        @   paramPtmpOn         = ! $?flagOutputArchiveOn
-        set paramCheckSumOn     = $?flagCheckSumOn
-        set paramCompressOn     = $?flagOutputCompressHistoryOn
+        set actionRetryOn	= 1
+        set paramArchiveOn	= $?flagOutputArchiveOn
+        @   paramPtmpOn		= ! $?flagOutputArchiveOn
+        set paramCheckSumOn	= $?flagCheckSumOn
+        set paramCompressOn 	= $?flagOutputCompressHistoryOn
 
       else
 
-        ls -1 | egrep "^[0-9][0-9][0-9][0-9][0-9][0-9].+$patternGrepHistory" | xargs -I'{}' mv --force '{}' $historyWorkDir/$begindate.'{}'
-        ls -1 | egrep "$patternGrepHistory" | xargs -I'{}' ln --force '{}' $historyWorkDir/$begindate.'{}'
+	ls -1 | egrep "^[0-9][0-9][0-9][0-9][0-9][0-9].+$patternGrepHistory" | xargs -I'{}' mv --force '{}' $historyWorkDir/'{}'
+	ls -1 | egrep "$patternGrepHistory" | xargs -I'{}' ln --force '{}' $historyWorkDir/$begindate.'{}'
 
         set historyOutputDirRemote = ""
 
-        set actionCombineOn     = 0
-        set actionCheckOn       = 0
-        set actionSaveOn        = 1
-        set actionXferOn        = 0
-        set actionPPStartOn     = 0
-        set actionRetryOn       = 0
-        set ppStarterOptions    = ( )
-        set paramArchiveOn      = 1
-        set paramPtmpOn         = 0
-        set paramCheckSumOn     = 0
-        set paramCompressOn     = 0
+        set actionCombineOn	= 0
+        set actionCheckOn	= 0
+        set actionSaveOn	= 1
+        set actionXferOn	= 0
+        set actionPPStartOn	= 0
+        set actionRetryOn	= 0
+        set ppStarterOptions	= ( )
+        set paramArchiveOn	= 1
+        set paramPtmpOn		= 0
+        set paramCheckSumOn	= 0
+        set paramCompressOn 	= 0
 
       endif
 
@@ -2062,44 +1747,65 @@
       set historyXferOptions = ( $historyXferOptions -N ${historyJobName}T )
       set historyXferOptions = ( $historyXferOptions -l walltime=$outputStagerXferRuntimeHistory,$outputStagerXferCoreSpec )
 
-      echo "set expName                         =   $name"                       > $historyArgFile
-      echo "set type                            =   history"                    >> $historyArgFile
-      echo "set stagingType                     =   $outputStagingType"         >> $historyArgFile
-      echo "set actionCombineOn                 =   $actionCombineOn"           >> $historyArgFile
-      echo "set actionCheckOn                   =   $actionCheckOn"             >> $historyArgFile
-      echo "set actionSaveOn                    =   $actionSaveOn"              >> $historyArgFile
-      echo "set actionXferOn                    =   $actionXferOn"              >> $historyArgFile
-      echo "set actionPPStartOn                 =   $actionPPStartOn"           >> $historyArgFile
-      echo "set actionRetryOn                   =   $actionRetryOn"             >> $historyArgFile
-      echo "set paramArchiveOn                  =   $paramArchiveOn"            >> $historyArgFile
-      echo "set paramPtmpOn                     =   $paramPtmpOn"               >> $historyArgFile
-      echo "set paramCheckSumOn                 =   $paramCheckSumOn"           >> $historyArgFile
-      echo "set paramCompressOn                 =   $paramCompressOn"           >> $historyArgFile
-      echo "set paramVerbosityOn                =   $?flagVerbosityOn"          >> $historyArgFile
-      echo "set workDir                         =   $tmpOutputDir"              >> $historyArgFile
-      echo "set ptmpDir                         =   $ptmpDir"                   >> $historyArgFile
-      echo "set archDir                         =   $historyArchDir"            >> $historyArgFile
-      echo "set outputDirRemote                 =   $historyOutputDirRemote"    >> $historyArgFile
-      echo "set saveOptions                     = ( $historySaveOptions )"      >> $historyArgFile
-      echo "set xferOptions                     = ( $historyXferOptions )"      >> $historyArgFile
-      echo "set saveRetries                     =   $outputStagerSaveRetries"   >> $historyArgFile
-      echo "set xferRetries                     =   $outputStagerXferRetries"   >> $historyArgFile
-      echo "set saveRetry                       =   0"                          >> $historyArgFile
-      echo "set xferRetry                       =   0"                          >> $historyArgFile
-      echo "set xmlFiles                        = ( $xmlFiles )"                >> $historyArgFile
-      echo "set xmlFilesRemote                  = ( $xmlFilesRemote )"          >> $historyArgFile
-      echo "set ppStarterOptions                = ( $ppStarterOptions )"        >> $historyArgFile
-      echo "set stdoutDirRemote                 =   $stdoutDirRemote"           >> $historyArgFile
-      echo "set freCommandsModuleFilesDir       =   $freCommandsModuleFilesDir" >> $historyArgFile
-      echo "set freCommandsVersion              =   $freCommandsVersion"        >> $historyArgFile
-      echo "set freNCToolsModuleFilesDir        =   $freNCToolsModuleFilesDir"  >> $historyArgFile
-      echo "set freNCToolsModuleName            =   $freNCToolsModuleName"      >> $historyArgFile
-      echo "set freNCToolsVersion               =   $freNCToolsVersion"         >> $historyArgFile
-      echo "set hsmModuleFilesDir               =   $hsmModuleFilesDir"         >> $historyArgFile
-      echo "set hsmVersion                      =   $hsmVersion"                >> $historyArgFile
-      echo "set xferToolModuleFilesDir          =   $xferToolModuleFilesDir"    >> $historyArgFile
-      echo "set xferToolVersion                 =   $xferToolVersion"           >> $historyArgFile
-      echo "set modulesHomeDir                  =   $modulesHomeDir"            >> $historyArgFile
+      if ( $actionXferOn ) then
+	if ( -e $checkPointDir/transfers.paused.all ) then
+          if ( $echoOn ) unset echo
+          echo "WARNING: The global 'transfers.paused.all' condition is on - history data transfer job will be on hold"
+          if ( $echoOn ) set echo
+          set historyXferOptions = ( $historyXferOptions -h )
+	else if ( -e $checkPointDir/transfers.paused.$USER ) then
+          if ( $echoOn ) unset echo
+          echo "WARNING: The global 'transfers.paused.$USER' condition is on - history data transfer job will be on hold"
+          if ( $echoOn ) set echo
+          set historyXferOptions = ( $historyXferOptions -h )
+	else if ( -e $HOME/.fre/transfers.paused.all ) then
+          if ( $echoOn ) unset echo
+          echo "WARNING: The user 'transfers.paused.all' condition is on - history data transfer job will be on hold"
+          if ( $echoOn ) set echo
+          set historyXferOptions = ( $historyXferOptions -h )
+	endif
+      endif
+
+      echo "set expName				=   $name"				 > $historyArgFile
+      echo "set type				=   history"				>> $historyArgFile
+      echo "set stagingType			=   $outputStagingType"			>> $historyArgFile
+      echo "set actionCombineOn			=   $actionCombineOn"			>> $historyArgFile
+      echo "set actionCheckOn			=   $actionCheckOn"			>> $historyArgFile
+      echo "set actionSaveOn			=   $actionSaveOn"			>> $historyArgFile
+      echo "set actionXferOn			=   $actionXferOn"			>> $historyArgFile
+      echo "set actionPPStartOn			=   $actionPPStartOn"			>> $historyArgFile
+      echo "set actionRetryOn			=   $actionRetryOn"			>> $historyArgFile
+      echo "set paramArchiveOn			=   $paramArchiveOn"			>> $historyArgFile
+      echo "set paramPtmpOn			=   $paramPtmpOn"			>> $historyArgFile
+      echo "set paramCheckSumOn			=   $paramCheckSumOn"			>> $historyArgFile
+      echo "set paramCompressOn			=   $paramCompressOn"			>> $historyArgFile
+      echo "set paramVerbosityOn		=   $?flagVerbosityOn"			>> $historyArgFile
+      echo "set workDir				=   $tmpOutputDir"			>> $historyArgFile
+      echo "set ptmpDir				=   $ptmpDir"				>> $historyArgFile
+      echo "set archDir				=   $historyArchDir"			>> $historyArgFile
+      echo "set outputDirRemote			=   $historyOutputDirRemote"		>> $historyArgFile
+      echo "set saveOptions			= ( $historySaveOptions )"		>> $historyArgFile
+      echo "set xferOptions			= ( $historyXferOptions )"		>> $historyArgFile
+      echo "set saveRetries			=   $outputStagerSaveRetries"		>> $historyArgFile 
+      echo "set xferRetries			=   $outputStagerXferRetries"		>> $historyArgFile 
+      echo "set saveRetry			=   0"					>> $historyArgFile 
+      echo "set xferRetry			=   0"					>> $historyArgFile 
+      echo "set xmlFiles			= ( $xmlFiles )"			>> $historyArgFile
+      echo "set xmlFilesRemote			= ( $xmlFilesRemote )"			>> $historyArgFile
+      echo "set ppStarterOptions		= ( $ppStarterOptions )"		>> $historyArgFile
+      echo "set stdoutDirRemote			=   $stdoutDirRemote"			>> $historyArgFile
+      echo "set freCommandsModuleFilesDir       =   $freCommandsModuleFilesDir"		>> $historyArgFile
+      echo "set freCommandsVersion		=   $freCommandsVersion"		>> $historyArgFile
+      echo "set freCommandsModuleFilesDirRemote =   $freCommandsModuleFilesDirRemote"	>> $historyArgFile
+      echo "set freCommandsVersionRemote	=   $freCommandsVersionRemote"		>> $historyArgFile
+      echo "set freNCToolsModuleFilesDir	=   $freNCToolsModuleFilesDir"		>> $historyArgFile
+      echo "set freNCToolsModuleName		=   $freNCToolsModuleName"		>> $historyArgFile
+      echo "set freNCToolsVersion		=   $freNCToolsVersion"			>> $historyArgFile
+      echo "set hsmModuleFilesDir		=   $hsmModuleFilesDir"			>> $historyArgFile
+      echo "set hsmVersion			=   $hsmVersion"			>> $historyArgFile
+      echo "set xferToolModuleFilesDir		=   $xferToolModuleFilesDir"		>> $historyArgFile
+      echo "set xferToolVersion			=   $xferToolVersion"			>> $historyArgFile
+      echo "set modulesHomeDir			=   $modulesHomeDir"			>> $historyArgFile
 
       if ( $?flagOutputStagingTypeOnline ) then
 
@@ -2110,7 +1816,7 @@
 
         outputStager $historyArgFile
 
-        if ( $status == 0 ) then
+	if ( $status == 0 ) then
           if ( $echoOn ) unset echo
           echo "<NOTE> : The history directory '$historyArchDir' has been processed successfully"
           if ( $echoOn ) set echo
@@ -2138,13 +1844,13 @@
 
         if ( $actionCombineOn || $actionSaveOn || $actionCheckOn ) then
 
-          set historyResult = `submit -O "$historySaveOptions -v argFile=$historyArgFile" $outputStager`
+	  set historyResult = `submit $historySaveOptions -v argFile=$historyArgFile $outputStager`
 
-          if ( $status == 0 ) then
+	  if ( $status == 0 ) then
             if ( $echoOn ) unset echo
             echo "<NOTE> : The output stager job '$historyResult' to process the '$historyArchDir' (saving) has been submitted successfully"
             if ( $echoOn ) set echo
-            set saveJobIds = ( $saveJobIds $historyResult )
+            set saveJobIds = ( $saveJobIds `echo $historyResult | sed -r "$patternJobNumber"` )
             set argFiles = ( $argFiles $historyArgFile:t )
           else
             @ outputStagerErrors += 1
@@ -2167,9 +1873,9 @@
 
         if ( $actionXferOn || $actionPPStartOn ) then
 
-          set historyResult = `submit -O "$historyXferOptions -v argFile=$historyArgFile -l depend=afterok:$saveJobIds[$#saveJobIds]" $outputStager`
+	  set historyResult = `submit $historyXferOptions -v argFile=$historyArgFile -W depend=afterok:$saveJobIds[$#saveJobIds] $outputStager`
 
-          if ( $status == 0 ) then
+	  if ( $status == 0 ) then
             if ( $echoOn ) unset echo
             echo "<NOTE> : The output stager job '$historyResult' to process the '$historyArchDir' (transfer) has been submitted successfully"
             if ( $echoOn ) set echo
@@ -2196,13 +1902,13 @@
 
         if ( $actionCombineOn || $actionSaveOn || $actionCheckOn || $actionXferOn || $actionPPStartOn ) then
 
-          set historyResult = `submit -O "$historySaveOptions -v argFile=$historyArgFile" $outputStager`
+	  set historyResult = `submit $historySaveOptions -v argFile=$historyArgFile $outputStager`
 
-          if ( $status == 0 ) then
+	  if ( $status == 0 ) then
             if ( $echoOn ) unset echo
             echo "<NOTE> : The output stager job '$historyResult' to process the '$historyArchDir' has been submitted successfully"
             if ( $echoOn ) set echo
-            set saveJobIds = ( $saveJobIds $historyResult )
+            set saveJobIds = ( $saveJobIds `echo $historyResult | sed -r "$patternJobNumber"` )
             set argFiles = ( $argFiles $historyArgFile:t )
           else
             @ outputStagerErrors += 1
@@ -2287,19 +1993,19 @@
       touch $reload_file
 
       if ( $status == 0 ) then
-        if ( $echoOn ) unset echo
-        echo "<NOTE> : Writing reload information to the reload file '$reload_file' at `date +%s`"
-        if ( $echoOn ) set echo
-        echo "@ currentSeg    =   $nextSeg"                     >> $reload_file
-        echo "set initCond    =   $restartArchDir.$archExt"     >> $reload_file
-        echo "set combineList = ( $combineList )"               >> $reload_file
-        echo "set saveJobIds  = ( $saveJobIds )"                >> $reload_file
-        echo "set argFiles    = ( $argFiles )"                  >> $reload_file
-        echo "set fyear       =   $fyear"                       >> $reload_file
+	if ( $echoOn ) unset echo
+	echo "<NOTE> : Writing reload information to the reload file '$reload_file' at `date +%s`"
+	if ( $echoOn ) set echo
+	echo "@ currentSeg    =   $nextSeg"                     >> $reload_file
+	echo "set initCond    =   $restartArchDir.$archExt"	>> $reload_file
+	echo "set combineList = ( $combineList )"		>> $reload_file
+	echo "set saveJobIds  = ( $saveJobIds )"		>> $reload_file
+	echo "set argFiles    = ( $argFiles )"			>> $reload_file
+	echo "set fyear       =   $fyear"			>> $reload_file
         chmod 644 $reload_file
       else
-        if ( $echoOn ) unset echo
-        echo "*ERROR*: The reload file '$reload_file' can't be saved"
+	if ( $echoOn ) unset echo
+	echo "*ERROR*: The reload file '$reload_file' can't be saved"
         if ( $echoOn ) set echo
         exit 1
       endif
@@ -2333,81 +2039,71 @@
     if ( $currentSeg <= $segmentsPerSimulation ) then
 
       if ( -f $queue_file ) then
-        if ( -r $queue_file ) then
-          source $queue_file
-        else
-          if ( $echoOn ) unset echo
-          echo "*ERROR*: The queue file '$queue_file' is not readable"
+	if ( -r $queue_file ) then
+	  source $queue_file
+	else
+	  if ( $echoOn ) unset echo
+	  echo "*ERROR*: The queue file '$queue_file' is not readable"
           if ( $echoOn ) set echo
-          exit 1
-        endif
+	  exit 1
+	endif
       endif
 
       if ( ! $continueFlag ) then
-        if ( $echoOn ) unset echo
-        echo "<NOTE> : Stopping execution"
-        if ( $echoOn ) set echo
-        exit 0
+	if ( $echoOn ) unset echo
+	echo "<NOTE> : Stopping execution"
+	if ( $echoOn ) set echo
+	exit 0
       endif
 
       if ( $?project ) then
-        if ( "$project" != "" ) then
-          set submitOptionsProject = ( -A $project )
-        else
-          set submitOptionsProject = ( )
-        endif
+	if ( "$project" != "" ) then
+	  set submitOptionsProject = ( -A $project )
+	else
+	  set submitOptionsProject = ( )
+	endif
       else
-        set submitOptionsProject = ( )
+	set submitOptionsProject = ( )
       endif
 
       if ( $?queue ) then
-        if ( "$queue" != "" ) then
-          set submitOptionsQueue = ( -q $queue )
-        else
-          set submitOptionsQueue = ( )
-        endif
+	if ( "$queue" != "" ) then
+	  set submitOptionsQueue = ( -q $queue )
+	else
+	  set submitOptionsQueue = ( )
+	endif
       else
-        set submitOptionsQueue = ( )
-      endif
-
-      if ( $windfallFlag != $windfallFlagInit ) then
-        if ( $windfallFlag ) then
-          set submitOptionsWindfall = ( $windfallOptionsSet )
-        else
-          set submitOptionsWindfall = ( $windfallOptionsUnset )
-        endif
-      else
-        set submitOptionsWindfall = ( )
+	set submitOptionsQueue = ( )
       endif
 
       if ( -f $scriptName ) then
         if ( -r $scriptName ) then
-          set nextOptions = ( $submitOptionsProject $submitOptionsQueue $submitOptionsWindfall )
-          set result = `submit -O "$nextOptions" $scriptName`
-          if ( $status == 0 ) then
+          set nextOptions = ( $submitOptionsProject $submitOptionsQueue )
+          set result = `submit $nextOptions $scriptName`
+	  if ( $status == 0 ) then
             if ( $echoOn ) unset echo
             echo "<NOTE> : The job '$result' to run the '$scriptName' has been submitted successfully"
             if ( $echoOn ) set echo
-          else
+	  else
             if ( $echoOn ) unset echo
             echo "*ERROR*: Can't submit the '$scriptName'"
             if ( $echoOn ) set echo
             exit 1
-          endif
+	  endif
           unset result
           unset nextOptions
         else
-          if ( $echoOn ) unset echo
-          @ lastSeg = $currentSeg - 1
-          echo "WARNING: The script '$scriptName' exists, but is not readable (run $lastSeg) - it can't be resubmitted"
-          unset lastSeg
+	  if ( $echoOn ) unset echo
+	  @ lastSeg = $currentSeg - 1
+	  echo "WARNING: The script '$scriptName' exists, but is not readable (run $lastSeg) - it can't be resubmitted"
+	  unset lastSeg
           if ( $echoOn ) set echo
         endif
       else
-        if ( $echoOn ) unset echo
-        @ lastSeg = $currentSeg - 1
-        echo "WARNING: The script '$scriptName' does not exist (run $lastSeg) - it can't be resubmitted"
-        unset lastSeg
+	if ( $echoOn ) unset echo
+	@ lastSeg = $currentSeg - 1
+	echo "WARNING: The script '$scriptName' does not exist (run $lastSeg) - it can't be resubmitted"
+	unset lastSeg
         if ( $echoOn ) set echo
       endif
 
@@ -2424,13 +2120,13 @@
       workDirCleaner $workDir
 
       if ( $status == 0 ) then
-        if ( $echoOn ) unset echo
-        echo "<NOTE> : The working directory has been cleaned successfully"
-        if ( $echoOn ) set echo
+	if ( $echoOn ) unset echo
+	echo "<NOTE> : The working directory has been cleaned successfully"
+	if ( $echoOn ) set echo
       else
-        if ( $echoOn ) unset echo
-        echo "WARNING: Can't clean the working directory"
-        if ( $echoOn ) set echo
+	if ( $echoOn ) unset echo
+	echo "WARNING: Can't clean the working directory"
+	if ( $echoOn ) set echo
       endif
 
     else if ( $?flagOutputStagingTypeStaged || $?flagOutputStagingTypeChained ) then
@@ -2455,20 +2151,20 @@
 
       if ( $#saveJobList > 0 ) then
         set saveJobListAsString = `echo $saveJobList | tr ' ' ':'`
-        set workDirCleanerOptions = ( $workDirCleanerOptions -l depend=afterok:$saveJobListAsString )
+        set workDirCleanerOptions = ( $workDirCleanerOptions -W depend=afterok:$saveJobListAsString )
         unset saveJobListAsString
       endif
 
-      set workDirCleanerResult = `submit -O "$workDirCleanerOptions -v dir=$workDir" $workDirCleaner`
+      set workDirCleanerResult = `submit $workDirCleanerOptions -v dir=$workDir $workDirCleaner`
 
       if ( $status == 0 ) then
-        if ( $echoOn ) unset echo
-        echo "<NOTE> : The working directory cleaning job '$workDirCleanerResult' has been submitted successfully"
-        if ( $echoOn ) set echo
+	if ( $echoOn ) unset echo
+	echo "<NOTE> : The working directory cleaning job '$workDirCleanerResult' has been submitted successfully"
+	if ( $echoOn ) set echo
       else
-        if ( $echoOn ) unset echo
-        echo "WARNING: Can't submit the working directory cleaning job"
-        if ( $echoOn ) set echo
+	if ( $echoOn ) unset echo
+	echo "WARNING: Can't submit the working directory cleaning job"
+	if ( $echoOn ) set echo
       endif
 
       unset workDirCleanerResult
@@ -2486,7 +2182,7 @@
 
   endif
 
-  # ---------------- normal end of script
+  # ---------------- normal end of script 
 
   set -r runtimeEnd = `date "+%s"`
   set -r runtime = `echo "$runtimeEnd - $runtimeBeg" | bc -l`

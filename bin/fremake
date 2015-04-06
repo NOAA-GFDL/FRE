@@ -694,7 +694,7 @@ use FREXML();
 	$includeDirs{$dir} = 1 if $dir;
       }
     }
-
+    
 #    my $includeDirsList = join(' ', map {s/^$srcDir\///; $_} sort keys %includeDirs);
     my $includeDirsList = join(' ', map {s/^$srcDir\///; '-I'.$_} sort keys %includeDirs);
     # ---------------------------------------------- create a list of libraries in the linking order
@@ -725,7 +725,11 @@ use FREXML();
 
     my ($Makefile, $tab) = ('', fremake::TAB);
     $Makefile .= "# Makefile for Experiment '$expName'\n\n";
-    $Makefile .= "include $mkmfTemplate\n\n";
+    $Makefile .= "SRCROOT = \$src_dir/\n";
+    $Makefile .= "BUILDROOT = \$bld_dir/\n";
+    $Makefile .= "STAGEDIR = \$ptmp_dir/\$bld_dir/\n\n";
+    $Makefile .= "MK_TEMPLATE = \$mkmf_template\n";
+    $Makefile .= "include \\\$(MK_TEMPLATE)\n\n";
     $Makefile .= "fms_$expName.x: $libList\n";
     $Makefile .= "${tab}\\\$(LD) \\\$\^ \\\$(LDFLAGS) -o \\\$\@ \n" if $o{link};
     $Makefile .= "\n";
@@ -749,21 +753,21 @@ use FREXML();
 	  }
 	}
 	$Makefile .= "$name/lib$name.a: " . join(' ', sort {$requiredLibs{$b} <=> $requiredLibs{$a}} keys %requiredLibs) . " FORCE\n";
-	$Makefile .= "${tab}make $makeOverrides $ref->{makeOverrides} --directory=$name \\\$(\@F) \n\n";
+	$Makefile .= "${tab}\\\$(MAKE) SRCROOT=\\\$(SRCROOT) BUILDROOT=\\\$(BUILDROOT) MK_TEMPLATE=\\\$(MK_TEMPLATE) $ref->{makeOverrides} --directory=$name \\\$(\@F) \n\n";
       }
     }
 
     $Makefile .= "FORCE:\n\n";
 
     $Makefile .= "stage:\n";
-    $Makefile .= "${tab}install -d $ptmpDir$execDir\n";
-    $Makefile .= "${tab}install -m 555 fms_$expName.x $ptmpDir$execDir\n\n";
+    $Makefile .= "${tab}install -d \\\$(STAGEDIR)\n";
+    $Makefile .= "${tab}install -m 555 fms_$expName.x \\\$(STAGEDIR)\n\n";
 
     $Makefile .= "clean:\n";
     foreach my $name (@names)
     {
       my $ref = $r->{$name};
-      $Makefile .= "${tab}make $makeOverrides $ref->{makeOverrides} --directory=$name clean\n";
+      $Makefile .= "${tab}\\\$(MAKE) --directory=$name clean\n";
     }
     $Makefile .= "\n";
 
@@ -771,7 +775,7 @@ use FREXML();
     foreach my $name (@names)
     {
       my $ref = $r->{$name};
-      $Makefile .= "${tab}make $makeOverrides $ref->{makeOverrides} --directory=$name localize\n";
+      $Makefile .= "${tab}\\\$(MAKE) -f \\\$(BUILDROOT)$name/Makefile localize\n";
     }
     $Makefile .= "\n";
 
@@ -779,9 +783,10 @@ use FREXML();
     foreach my $name (@names)
     {
       my $ref = $r->{$name};
-      $Makefile .= "${tab}rm -rf $name\n";
+      $Makefile .= "${tab}\\\$(RM) -r $name\n";
     }
-    $Makefile .= "${tab}rm -f Makefile\n";
+    $Makefile .= "${tab}\\\$(RM) fms_$expName.x\n";
+    $Makefile .= "${tab}\\\$(RM) Makefile\n";
 
     # ---------------------------------------------------------------------------------------- get FRE parameters
 
@@ -811,6 +816,7 @@ use FREXML();
 
     my $cmpScript = '';
     my $envScriptName = fremake::envScriptName($z);
+    $envScriptName =~ s/$execDir/\$bld_dir/;
 
     $cmpScript .= "#!/bin/tcsh -fx\n";
     $cmpScript .= "#FRE scheduler-options\n\n";
@@ -818,12 +824,20 @@ use FREXML();
     $cmpScript .= "# ------------------------------------------------------------------------------\n";
     $cmpScript .= "#FRE version-info\n";
     $cmpScript .= "# ------------------------------------------------------------------------------\n\n";
-    
+
     $cmpScript .= "set -r echoOn = \$?echo\n\n";
     $cmpScript .= "if ( \$echoOn ) unset echo\n";
     $cmpScript .= "echo \"<NOTE> : Starting at \$HOST on `date`\"\n";
     $cmpScript .= "if ( \$echoOn ) set echo\n\n";
     $cmpScript .= "unalias *\n\n";
+
+    $cmpScript .= "# ---------------- Set build, src and stage directories\n\n";
+    $cmpScript .= "set src_dir = $srcDir\n";
+    $cmpScript .= "set bld_dir = $execDir\n";
+    $cmpScript .= "set ptmp_dir = $ptmpDir\n\n";
+
+    $cmpScript .= "# ---------------- Make template\n\n";
+    $cmpScript .= "set mkmf_template = $mkmfTemplate\n\n";
 
     $cmpScript .= "# ---------------- set environment\n\n";
     $cmpScript .= "if ( \$echoOn ) unset echo\n";
@@ -831,7 +845,7 @@ use FREXML();
     $cmpScript .= "if ( \$echoOn ) set echo\n\n";
 
     $cmpScript .= "# ---------------- write main Makefile\n\n";
-    $cmpScript .= "cat >$execDir/Makefile <<END\n";
+    $cmpScript .= "sed -e 's/<TAB>/\\t/' >\$bld_dir/Makefile <<END\n";
     $cmpScript .= "$Makefile\n";
     $cmpScript .= "END\n\n";
 
@@ -852,28 +866,31 @@ use FREXML();
 	  }
 	  else
 	  {
-	    $requiredDirs{"$execDir/$required"} = $refRequired->{rank};
+	    $requiredDirs{"\$bld_dir/$required"} = $refRequired->{rank};
 	  }
 	}
 	my $otherFlags = join(' ', map {'-I' . $_} sort {$requiredDirs{$b} <=> $requiredDirs{$a}} keys %requiredDirs);
 	my $pathNames = $ref->{pathNames} || "pathnames_$name";
-	$cmpScript .= "cd $srcDir\n";
-	$cmpScript .= "list_paths -o $pathNames $ref->{paths}\n";
+#	$cmpScript .= "cd \$src_dir\n";
+	$cmpScript .= "mkdir -p \$bld_dir/$name\n";
+	$cmpScript .= "list_paths -o \$bld_dir/$name/$pathNames ";
+	foreach my $path ( split(/\s+/,$ref->{paths}) ) {
+	  $cmpScript .= "\$src_dir/$path ";
+	}
+	$cmpScript .= "\n";
 	$cmpScript .= "$ref->{compileCsh}\n" if $ref->{compileCsh};
-	$cmpScript .= "cd $execDir\n";
-	$cmpScript .= "mkdir -p $name && pushd $name\n";
-	$cmpScript .= "mkmf -m Makefile -a $srcDir -p lib$name.a -t $ref->{mkmfTemplate}";
+	$cmpScript .= "cd \$bld_dir\n";
+	$cmpScript .= "pushd $name\n";
+	$cmpScript .= "mkmf -m Makefile -a \$src_dir -b \$bld_dir -p lib$name.a -t \$mkmf_template";
 	$cmpScript .= " -c \"$ref->{cppDefs}\"" if $ref->{cppDefs};
 	$cmpScript .= " -o \"$otherFlags\"" if $otherFlags;
 	$cmpScript .= " $includeDirsList" if $includeDirsList;
 	$cmpScript .= " $ref->{srcList}" if $ref->{srcList};
-	$cmpScript .= " $pathNames";
+	$cmpScript .= " \$bld_dir/$name/$pathNames"; 
 	$cmpScript .= "\npopd\n\n";
       }
     }
 
-    $cmpScript .= "# ---------------- adjust the main Makefile\n\n";
-    $cmpScript .= "cat Makefile | sed -e 's/${tab}/\\t/' > Makefile.\$\$ && mv -f Makefile.\$\$ Makefile\n\n";
     $cmpScript .= "# ---------------- call make on the main Makefile\n\n";
     $cmpScript .= "make $makeOverrides fms_$expName.x\n\n";
     $cmpScript .= "if ( \$status == 0 ) then\n";
