@@ -59,7 +59,7 @@
             <xs:documentation>An experiments component defines the CVS paths through which the component may be acquired. The 'requires' attribute lists dependencies for that component. The 'paths' attribute lists the directory that will be search after CVS checkout.</xs:documentation>
           </xs:annotation>
           <xs:complexType>
-            <xs:sequence>
+            <xs:choice minOccurs="0" maxOccurs="unbounded">
               <xs:element name="description" minOccurs="0">
                 <xs:annotation>
                   <xs:documentation>A description of the component.</xs:documentation>
@@ -74,7 +74,7 @@
               <xs:element minOccurs="0" ref="source"/>
               <xs:element minOccurs="0" maxOccurs="unbounded" ref="compile"/>
               <xs:element minOccurs="0" ref="library"/>
-            </xs:sequence>
+            </xs:choice>
             <xs:attribute name="includeDir" type="xs:string"/>
             <xs:attribute name="name" type="xs:string"/>
             <xs:attribute name="paths" type="xs:string"/>
@@ -230,6 +230,11 @@
             <xs:choice minOccurs="0" maxOccurs="unbounded">
               <xs:element ref="timeSeries"/>
               <xs:element ref="timeAverage"/>
+              <xs:element ref="dataFile">
+                <xs:annotation>
+                  <xs:documentation>This dataFile tag is used to define the xyInterp regrid file location to use for this component.  The type for this file must be 'xyInterpRegridFile'.</xs:documentation>
+                </xs:annotation>
+              </xs:element>
             </xs:choice>
             <xs:attribute name="cubicToLatLon" type="xs:string"/>
             <xs:attribute name="sourceGrid" type="srcGrd"/>
@@ -404,6 +409,7 @@
     <xs:complexType>
       <xs:sequence>
         <xs:element minOccurs="0" maxOccurs="1" ref="fmsRelease"/>
+        <xs:element minOccurs="0" maxOccurs="1" ref="freVersion"/>
         <xs:element minOccurs="0" maxOccurs="1" ref="getFmsData"/>
         <xs:element minOccurs="1" maxOccurs="unbounded" ref="platform"/>
       </xs:sequence>
@@ -413,6 +419,12 @@
   <xs:element name="getFmsData" type="xs:string">
     <xs:annotation>
       <xs:documentation>Specifies which fms release was used to generate the data.</xs:documentation>
+    </xs:annotation>
+  </xs:element>
+
+  <xs:element name="freVersion" type="xs:string">
+    <xs:annotation>
+      <xs:documentation>Specifies which fre version that was used to generate the data.</xs:documentation>
     </xs:annotation>
   </xs:element>
 
@@ -677,17 +689,12 @@
       <xs:documentation>Contains the compiler options tag.</xs:documentation>
     </xs:annotation>
     <xs:complexType>
-      <xs:choice>
-        <xs:element ref="srcList"/>
-        <xs:element ref="csh"/>
-        <xs:sequence>
-          <xs:element ref="cppDefs"/>
-          <xs:choice minOccurs="0">
-            <xs:element ref="csh"/>
-            <xs:element ref="makeOverrides"/>
-          </xs:choice>
-        </xs:sequence>
-      </xs:choice>
+      <xs:all>
+        <xs:element ref="srcList" minOccurs="0"/>
+        <xs:element ref="csh" minOccurs="0"/>
+        <xs:element ref="cppDefs" minOccurs="0"/>
+        <xs:element ref="makeOverrides" minOccurs="0"/>
+      </xs:all>
       <xs:attribute name="target" type="xs:string"/>
     </xs:complexType>
   </xs:element>
