@@ -88,7 +88,8 @@ use vars qw( $mosaic_type $sourceGrid $xyInterp $xyInterpRegridFile );
       'Basedate|B=s',
       'Segment|S=s',
       'oldStyleTimestamps|e',
-      'statistics|z'
+      'statistics|z',
+      'mppnccombine-opt-string|m=s'
   );
 
 }
@@ -157,6 +158,7 @@ Usage:    $relfrepp [ -AB:C:O:RY:Z:c:d:f:hlmMp:oqr:S:st:u:vx:z ] experiment [ ex
 
           OPTIONS FOR COMBINING MULTIPROCESSOR HISTORY FILES
           -f           = force combine of all "raw" history data and then exit
+          -m STRING, --mppnccombine-opt-string=STRING  Default is '-64 -h 16384 -m' Recommended: '-n4 -d 2 -s -h 16384 -m' for better compression
 
           OPTIONS FOR REFINING HISTORY FILES BEFORE POSTPROCESSING
           -D script    = comma separated list of scripts to run on history data
@@ -2226,7 +2228,7 @@ if [ \$MYSTATUS -ne 0 ]; then
 fi
 $time_rm rm $file
 
-$time_combine $ENV{FRE_COMMANDS_HOME}/site/$ENV{FRE_SYSTEM_SITE}/bin/combinehist
+setenv mppnccombineOptString $opt{'mppnccombine-opt-string'} && $time_combine $ENV{FRE_COMMANDS_HOME}/site/$ENV{FRE_SYSTEM_SITE}/bin/combinehist
 MYSTATUS=\$?
 if [ \$MYSTATUS -ne 0 ]; then
    echo ERROR: combining history files failed for $file, exiting.
