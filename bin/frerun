@@ -362,6 +362,7 @@ use FREUtil();
       "   -C,        --checksum                  compute checking sums for all the output data archives to enable their verification\n",
       "   -M,        --combine-history           combine history files after each segment run (negatable, default is on)\n",
       "   -z STRING, --compress=STRING           compress model output of type STRING (list of 'ascii', 'restart', 'history' or 'all')\n",
+      "   -Z,        --compress-netcdf           compress history data using netcdf deflation and shuffle",
       "   -m STRING, --mppnccombine-opts=STRING  Defaults to \"-64 -h 16384 -m\". See mppnccombine --help for available options.\n",
       "   -D,        --dual                      create a pair of runscripts - the main one and the dual one (negatable, default depends on site)\n",
       "   -e,        --extend                    extend default run of existing experiment\n",
@@ -864,27 +865,24 @@ use FREUtil();
       FRETemplate::setList($fre, \$s, 'ppRefineDiagScriptNames', $z->extractPPRefineDiagScripts());
       FRETemplate::setList($fre, \$s, 'getFmsData', @getFmsData);
 
-      my $combiner_string = "";
+      my $mppnccombineOptsDefault = "'-64 -h 16384 -m '";
+      my $mppnccombineOptsRestart = $mppnccombineOptsDefault;
+      my $mppnccombineOptsHistory = $mppnccombineOptsDefault;
 
       # If the developer passes in a mppnccombine combiner string, use it. (This overrides any default behavior)
       if ( $o{'mppnccombine-opts'} )
       {
-	  $combiner_string = "'$o{'mppnccombine-opts'}'";
+	  $mppnccombineOptsHistory = "'$o{'mppnccombine-opts'}'";
       }
 
       # If the user checks off the (?compression) flag or if hdf5 is a target, use a vetted default (?compression) of deflation 2 with shuffling netcdf4 format
-      elsif ( FRETargets::containsHDF5($fre->target()) || 0 ) #TODO: change the zero to the boolean flag for (?compression)
+      elsif ( $o{'compress-netcdf'} )
       {
-	  $combiner_string = "'-n4 -d 2 -s -h 16384 -m'";
+	  $mppnccombineOptsHistory = "'-n4 -d 2 -s -h 16384 -m'";
       }
 
-      # Otherwise, use the default 64 bit uncompressed format for the combiner.
-      else
-      {
-	  $combiner_string = "'-64 -h 16384 -m'";
-      }
-
-      FRETemplate::setVariable($fre, \$s, 'mppnccombineOptString', $combiner_string );
+      FRETemplate::setVariable($fre, \$s, 'mppnccombineOptsHistory', $mppnccombineOptsHistory );
+      FRETemplate::setVariable($fre, \$s, 'mppnccombineOptsRestart', $mppnccombineOptsRestart );
 
       # ------------------------------------------ normal return
 
