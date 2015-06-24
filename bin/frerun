@@ -2033,7 +2033,18 @@ use FREUtil();
 
   if ( "$ENV{NiNaC_PATH}" )
   {
-    system( "$ENV{'NiNaC_XmlRx'}" );
+    # Find where the xml file lives
+    my $xmlfile = File::Basename::basename("$opt{'xmlfile'}");
+    my $xmldir = File::Basename::dirname("$opt{'xmlfile'}");
+
+    # If the xml file path is relative prepend the current working directory
+    if ( substr("$xmlfile", 0, 1) ne '\\' )
+    {
+	$xmldir = Cwd::getcwd() . '/' . "$xmldir";
+    }
+
+    # Get the xml dir signature
+    system( "$ENV{'NiNaC_XmlRx'}", "$xmlfile", "$xmldir" );
   }
 
   exit $status;
