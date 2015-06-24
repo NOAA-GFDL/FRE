@@ -931,8 +931,21 @@ use FREXML();
 
     if ( "$ENV{'NiNaC_PATH'}" )
     {
+      # Get the source dir signature
       system( "$ENV{'NiNaC_SrcRx'}", "${\$z->srcDir()}" );
-      system( "$ENV{'NiNaC_XmlRx'}", "$o{'xmlfile'}" );
+
+      # Find where the xml file lives
+      my $xmlfile = File::Basename::basename("$o{'xmlfile'}");
+      my $xmldir = File::Basename::dirname("$o{'xmlfile'}");
+
+      # If the xml file path is relative, prepend the current working directory
+      if ( substr("$xmlfile", 0, 1) ne '\\' )
+      {
+        $xmldir = Cwd::getcwd() . '/' . "$xmldir";
+      }
+
+      # Get the xml dir signature
+      system( "$ENV{'NiNaC_XmlRx'}", "$xmlfile", "$xmldir" );
     }
 
     if ($o{execute})
