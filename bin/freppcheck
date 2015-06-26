@@ -578,6 +578,8 @@ sub check_ppnodes {
                }
            }
            if( @checkvars <= 0 and $e->{dtvars}->{$srcfile} ) { @checkvars = split(/,/, $e->{dtvars}->{$srcfile} ); }
+           
+           if( @checkvars <= 0 and $e->{dtvars}->{"all_$srcfile"} ) { @checkvars = split(/,/, $e->{dtvars}->{"all_$srcfile"} ); }
            #print "$srcfile============$e->{dtvars}->{$srcfile}\n" if $e->{verbose};
            if (@checkvars <= 0) {
               print "WARNING: Cannot find a variable to check for $c data, not checking\n";
@@ -750,8 +752,16 @@ my %opt =
       push @dts, "$component"."_month";
       my @dtsources = ();
       my %seen = ();
-      foreach (@dts) {
-         push(@dtsources, $_) unless ($_=~/monthly/ or $_=~/annual/ or $_=~/seasonal/ or $seen{$_}++);
+      foreach my $d (@dts) {
+         #push(@dtsources, $_) unless ($_=~/monthly/ or $_=~/annual/ or $_=~/seasonal/ or $seen{$_}++);
+         unless ($d=~/^monthly$/ or $d=~/^annual$/ or $d=~/^seasonal$/ or $seen{$d}++) {
+            foreach (@diagtablecontent) {
+            if ( /.*,.*,\s*"(\w*)"\s*,\s*"$d"\s*,.*,.*,.*,.*/ and not /^#/ ) {
+                push(@dtsources, $d);
+                last;
+            }
+            }
+         }
       }
       if ($opt{verbose}) {print "Diag_table source files for $component: '@dtsources'\n";}
 
@@ -761,8 +771,25 @@ my %opt =
          my @dtvall = ();
 
          foreach (@diagtablecontent) {
-            if ( /.*,.*,\s*"(\w*)"\s*,\s*"$srcfile"\s*,.*,.*,.*,.*/ and not /^#/ ) {
-               push @dtvall,$1;
+            if ( /.*,.*,\s*"(\w*)"\s*,\s*"$srcfile"\s*,.*,\s*(\S*)\s*,.*,.*/ and not /^#/ ) {
+                #push @dtvall,$1 unless $2 =~ /none/;
+                my ($v,$av) = ($1,$2);
+                $av =~ s/"//g;
+                if ( $av =~ /min/ ) {
+                    if ( $v =~ /_min$/ ) {
+                        push @dtvall,"$v";
+                    } else {
+                        push @dtvall,"${v}_min";
+                    }
+                } elsif ( $av =~ /max/ ) {
+                    if ( $v =~ /_max$/ ) {
+                        push @dtvall,"$v";
+                    } else {
+                        push @dtvall,"${v}_max";
+                    }
+                } elsif ( $av !~ /none/ ) {
+                    push @dtvall,$v;
+                }
             }
             #omit static/instantaneous variables
             if ( /.*,.*,\s*"(\w*)"\s*,\s*"$srcfile"\s*,.*,\s*\.true\.\s*,.*,.*/ and not /^#/ ) {
@@ -774,8 +801,10 @@ my %opt =
          my $srcfileall = "all_$srcfile";
          if ( "$varstr" ne "" ) {
             $dtvars{$srcfile} = $varstr;
-            $dtvars{$srcfileall} = $varstrall;
             #if ($opt{verbose}) {print "$srcfile vars, static/instant omitted: $dtvars{$srcfile}\n\n";}
+         }
+         if ( "$varstrall" ne "" ) {
+            $dtvars{$srcfileall} = $varstrall;
             if ($opt{verbose}) {print "All $srcfile diag_table variables: $dtvars{$srcfileall}\n\n"};
          }
       }
