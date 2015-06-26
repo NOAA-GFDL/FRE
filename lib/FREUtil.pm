@@ -325,6 +325,53 @@ sub modifydate {
   return $yyyy . $nMDT;
 }
 
+# Determine if a given year is a leap year
+#
+# This routine is to be used within FREUtil.pm.  This is why no checks
+# are done to determine if the year passed in is valid.  The routine
+# calling isaLeapYear should perform the validity check.
+sub isaLeapYear($) {
+  my ($year) = @_;
+
+  my $return = 0; # default: false
+
+  if ($year%4 == 0 and ($year%400 == 0 or $year%100 != 0)) {
+    $return = 1; # true
+  }
+
+  return $return;
+}
+
+# Return number of days in month
+#
+# This routine is only to be used within FREUtil.pm.  This is why no
+# checks are done to determine if the input month number is valid.
+sub daysInMonth($) {
+  my ($month) = @_;
+
+  my @monthDays = qw/31 28 31 30 31 30 31 31 30 31 30 31/;
+
+  return $monthDays[$month-1];
+}
+
+# Return the number of days from Jan 01 of the year given
+#
+# This routine is only to be used within FREUtil.pm, this is why we
+# ignore checks to determine if the passed in date is valid
+sub daysSince01Jan ($$$) {
+  my ($mon, $day, $year) = @_;
+
+  my $days = 0;
+
+  for (my $i = 1; $i < $mon; $i++) {
+    $days += daysInMonth($i);
+    if ($i == 2 and isaLeapYear($year)) {
+      $days += 1;
+    }
+  }
+  $days += $day;
+}
+
 # Wrapper to Date::Manip::Date_DaysSince1BC to deal with possible years beyond 9999
 sub daysSince1BC($$$) {
   my ($mon, $day, $year) = @_;
@@ -339,29 +386,19 @@ sub daysSince1BC($$$) {
     print STDERR "Note: Month must be in the range [1,12]\n";
     return undef;
   }
-  if ($day < 1 || $day > 31) {
-    print STDERR "Note: Day must be in the range [1,31]\n";
+  if ($day < 1 || $day > (daysInMonth($mon)+isaLeapYear($year))) {
+    print STDERR "Note: Day must be in the range [1,",daysInMonth($mon)+isaLeapYear($year),"]\n";
     return undef;
   }
 
-  # To overcome Date::Manip's inability to handle dates beyond 9999, we
-  # force all calculations to be rebased to 2000, then convert back.
-  my $y2k = 2000;
+  # Number of full years
+  my $compYears = $year - 1;
+  # Number of leap years from 1BC to $compYears
+  my $numLeapYears = floor($compYears/4) - floor($compYears/100) + floor($compYears/400);
+  # Number of days in complete years
+  my $numDaysCompYears = 365 * $compYears + $numLeapYears;
 
-  my $y2kMult = floor($year/$y2k);
-  my $y2kMod = $year%$y2k;
-
-  # Number of days from 00010101 - 20001221 (2000 years)
-  my $d2kyears = Date::Manip::Date_DaysSince1BC(12,31,2000);
-
-  # Number of days in from 00010101 - $y2k + $ydkMod
-  my $numDaysTmp = Date::Manip::Date_DaysSince1BC($mon, $day, $y2k + $y2kMod);
-
-  # Because we rebase to 2000, we need to remove the 1st 2000 years off all calculations
-  # (it is already done in the above Date_SaysSince1BC call).  If the original year is
-  # less than 2000, then the $y2kMult - 1 will remove the counting of the first 2000
-  # years.
-  return ($y2kMult - 1) * $d2kyears + $numDaysTmp;
+  return $numDaysCompYears + daysSince01Jan($mon,$day,$year);
 }
 
 # Wrapper for Date::Manip::Date_Cmp.  As Date_Cmp for DM5 "does little
@@ -374,7 +411,7 @@ sub dateCmp ($$) {
   my $return = 0;
 
   my ($yr1, $mo1, $dy1, $hr1, $mn1, $sc1) = $date1 =~ /^(\d{4,})(\d{2})(\d{2})(\d{2}):(\d{2}):(\d{2})$/;
-  my ($yr2, $mo2, $dy2, $hr2, $mn2, $sc2) = $date1 =~ /^(\d{4,})(\d{2})(\d{2})(\d{2}):(\d{2}):(\d{2})$/;
+  my ($yr2, $mo2, $dy2, $hr2, $mn2, $sc2) = $date2 =~ /^(\d{4,})(\d{2})(\d{2})(\d{2}):(\d{2}):(\d{2})$/;
 
   if (int($yr1) == int($yr2)) {
     if (int($mo1) == int($mo2)) {
