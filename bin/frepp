@@ -216,6 +216,9 @@ EOF
    #setting this option inside script for now
    #          -z           = insert timing calls
 
+   # Check of both -D and -r have been given
+   print STDERR "WARNING: Both options -r and -D are given.  The -r option takes precedence.\n" if ( $opt_r and $opt_D );
+
    chomp( my $beginTime = `date +\%s` );
 
    $opt_x = 'rts.xml' unless $opt_x; #set default filename for experiments xml file
@@ -603,17 +606,18 @@ EOF
    $version_info .= "$expt";
    my $this_frepp_cmd = $version_info;
    $this_frepp_cmd =~ s/.*# //smg;
-   my $outscript = "$outscriptdir/$expt"."_$hDate";
-   my $pbs_job_name = "$expt"."_$hDate";
+   my $outscript = "$outscriptdir/$expt";
+   my $pbs_job_name = "$expt";
    if ( $opt_r ) {
-      $outscript = "$outscriptdir/$expt"."_$opt_r"."_$hDate";
+      $outscript .= "_$opt_r";
       $maxruntime = "01:00:00";
-      $pbs_job_name = "$expt"."_$opt_r"."_$hDate";
+      $pbs_job_name .= "_$opt_r";
+   } elsif ( $opt_D ) {
+      $outscript .= "_refineDiag";
+      $pbs_job_name .= "_refineDiag";
    }
-   if ( $opt_D ) {
-      $outscript = "$outscriptdir/$expt"."_refineDiag_$hDate";
-      $pbs_job_name = "$expt"."_refineDiag_$hDate";
-   }
+   $outscript .= "_$hDate";
+   $pbs_job_name .+ "_$hDate";
 
    my $cshscripttmpl = getTemplate($platform);
 
