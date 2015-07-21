@@ -256,6 +256,12 @@ EOF
    #initialize hsmfiles string
    my $hsmfiles="";
 
+   #for grepping and sorting associated files
+   my $grepAssocFiles = <<'EOF';
+grep ':associated_files' | cut -d '"' -f2 | sed "s/\w*://g" | tr ' ' '\n' | sort -u
+EOF
+   chomp $grepAssocFiles;
+
 #begin generating version string
 my $abs_xml_path = File::Spec->rel2abs($opt_x);
 my $createdate = Date::Manip::ParseDate('now');
@@ -2311,7 +2317,7 @@ $checktransfer
          # Get files listed as associated_files
          foreach hsmsrcfile ( $tmphistdir/\$hsmdate/*.\$hsmsrc.* )
             # Get a list of all associated files
-            set assocFiles = `ncdump -h \$hsmsrcfile | grep ':associated_files' | cut -d '"' -f2 | sed "s/\\w*://g"`
+            set assocFiles = `ncdump -h \$hsmsrcfile | $grepAssocFiles`
             foreach assocFile ( \$assocFiles )
                $time_hsmget \$hsmget -a $opt_d -p $ptmpDir/history -w $tmphistdir \$hsmdate/\\*\${assocFile:r}.\\*
  end
@@ -2337,7 +2343,7 @@ $checktransfer
             # Get files listed as associated_files
             foreach hsmsrcfile ( $tmphistdir/\$hsmdate/*.\$hsmsrc.* )
                # Get a list of all associated files
-               set assocFiles = `ncdump -h \$hsmsrcfile | grep ':associated_files' | cut -d '"' -f2 | sed "s/\\w*://g"`
+               set assocFiles = `ncdump -h \$hsmsrcfile | $grepAssocFiles`
                foreach assocFile ( \$assocFiles )
                   $time_hsmget \$hsmget -a $refinedir -p $ptmpDir/history -w $tmphistdir \$hsmdate/\\*\${assocFile:r}.\\*
                end
@@ -5506,7 +5512,7 @@ if ( ! -e $ppRootDir/$component/$component.static.nc ) then
    # Get files listed as associated_files
    foreach file ( $tmphistdir/$hDate.nc/*$diag_source* )
       # Get a list of all associated_files
-      set assocFiles = `ncdump -h \$file | grep ':associated_files' | cut -d '"' -f2 | sed "s/\\w*: //g"`
+      set assocFiles = `ncdump -h \$file | $grepAssocFiles`
       foreach assocFile ( \$assocFiles )
          $time_hsmget \$hsmget -a $opt_d -p $ptmpDir/history -w $tmphistdir $hDate.nc/\\*\${assocFile:r}.\\*
       end
@@ -5521,7 +5527,7 @@ $checktransfer
    # Get files listed as associated_files
    foreach file ( $tmphistdir/$hDate.nc/*$diag_source* )
       # Get a list of all associated_files
-      set assocFiles = `ncdump -h \$file | grep ':associated_files' | cut -d '"' -f2 | sed "s/\\w*: //g"`
+      set assocFiles = `ncdump -h \$file | $grepAssocFiles`
       foreach assocFile ( \$assocFiles )
          $time_hsmget \$hsmget -a $refinedir -p $ptmpDir/history -w $tmphistdir $hDate.nc/\\*\${assocFile:r}.\\*
       end
@@ -5553,7 +5559,7 @@ $checktransfer
    # Get files listed as associated_files
    foreach file ( \\*$diag_source\\* )
       # Get a list of all associated_files
-      set assocFiles = `ncdump -h \$file | grep ':associated_files' | cut -d '"' -f2 | sed "s/\\w*: //g"`
+      set assocFiles = `ncdump -h \$file | $grepAssocFiles`
       foreach assocFile ( \$assocFiles )
          $time_hsmget \$hsmget -a $opt_d -p $ptmpDir/history -w $tmphistdir $hDate.nc/\\*\${assocFile:r}.\\*
       end
@@ -5568,7 +5574,7 @@ $checktransfer
    # Get files listed as associated_files
    foreach file ( \\*$diag_source\\* )
       # Get a list of all associated_files
-      set assocFiles = `ncdump -h \$file | grep ':associated_files' | cut -d '"' -f2 | sed "s/\\w*: //g"`
+      set assocFiles = `ncdump -h \$file | $grepAssocFiles`
       foreach assocFile ( \$assocFiles )
          $time_hsmget \$hsmget -a $refinedir -p $ptmpDir/history -w $tmphistdir $hDate.nc/\\*\${assocFile:r}.\\*
       end
