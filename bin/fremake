@@ -812,6 +812,20 @@ use FREXML();
     $envScript .= "setenv PATH $freCommandsHomeDir/bin:\$PATH\n\n";
     $envScript .= "#FRE scheduler-make-verbose\n";
 
+    # ------- Load NiNaC in environment setting script, if NiNaC module is currently loaded
+
+    if ( exists $ENV{'NiNaC_LVL'} and $ENV{'NiNaC_LVL'} gt 0 )
+    {
+	$envScript .= "# Environment Settings Added by NiNaC Module\n";
+	$envScript .= "# ------------------------------------------------------------------------------\n";
+	$envScript .= "if ( \$?NiNaC_LVL ) then\n";
+	$envScript .= "    if ( \$NiNaC_LVL > 0 ) then\n";
+	$envScript .= "        module use -a \$NiNaC_PATH\n";
+	$envScript .= "        module load NiNaC\n";
+	$envScript .= "    endif\n";
+	$envScript .= "endif\n\n";
+    }
+
     # -------------------------------------------------------------------------- create the compile script
 
     my $cmpScript = '';
