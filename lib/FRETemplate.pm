@@ -116,6 +116,7 @@ use constant PRAGMA_NAMELISTS_UNEXPANDED => 'namelists';
 my %FRETemplatePragmaCsh =
 (
   'platformCsh'			=> 'setup-platform-csh',
+  'NiNaCplatformCsh'		=> 'ninac-platform-csh',
   'expRuntimeCsh'		=> 'experiment-runtime-csh',
   'expInputCshInit'		=> 'experiment-input-csh-init',
   'expInputCshAlwaysOrNotInit'	=> 'experiment-input-csh-always-or-postinit',
