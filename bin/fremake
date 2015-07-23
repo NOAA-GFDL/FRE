@@ -812,18 +812,18 @@ use FREXML();
     $envScript .= "setenv PATH $freCommandsHomeDir/bin:\$PATH\n\n";
     $envScript .= "#FRE scheduler-make-verbose\n";
 
-    # ------- Load NiNaC in environment setting script, if NiNaC module is currently loaded
+    # ------- Load NiNaC in environment setting script, if NiNaC module is loaded
 
     if ( exists $ENV{'NiNaC_LVL'} and $ENV{'NiNaC_LVL'} gt 0 )
     {
-	$envScript .= "# Environment Settings Added by NiNaC Module\n";
-	$envScript .= "# ------------------------------------------------------------------------------\n";
-	$envScript .= "if ( \$?NiNaC_LVL ) then\n";
-	$envScript .= "    if ( \$NiNaC_LVL > 0 ) then\n";
-	$envScript .= "        module use -a \$NiNaC_PATH\n";
-	$envScript .= "        module load NiNaC\n";
-	$envScript .= "    endif\n";
-	$envScript .= "endif\n\n";
+      $envScript .= "# Environment Settings Added by NiNaC Module\n";
+      $envScript .= "# ------------------------------------------------------------------------------\n";
+      $envScript .= "if ( \$?NiNaC_LVL ) then\n";
+      $envScript .= "  if ( \$NiNaC_LVL > 0 ) then\n";
+      $envScript .= "    module use -a \$NiNaC_PATH\n";
+      $envScript .= "    module load NiNaC\n";
+      $envScript .= "  endif\n";
+      $envScript .= "endif\n\n";
     }
 
     # -------------------------------------------------------------------------- create the compile script
@@ -916,8 +916,10 @@ use FREXML();
     $cmpScript .= "# ---------------- call make on the main Makefile\n\n";
     $cmpScript .= "make $makeOverrides fms_$expName.x\n\n";
     $cmpScript .= "if ( \$status == 0 ) then\n";
-    $cmpScript .= "  if ( \$?NiNaC_PATH ) then\n";
-    $cmpScript .= "    \$NiNaC_BldRx \$src_dir \$bld_dir\n";
+    $cmpScript .= "  if ( \$?NiNaC_LVL ) then\n";
+    $cmpScript .= "    if ( \$NiNaC_LVL > 0 ) then\n";
+    $cmpScript .= "      \$NiNaC_BldRx \$src_dir \$bld_dir\n";
+    $cmpScript .= "    endif\n";
     $cmpScript .= "  endif\n";
     $cmpScript .= "  if ( \$echoOn ) unset echo\n";
     $cmpScript .= "  echo \"<NOTE> : make succeeded for $expName.\"\n";
@@ -943,7 +945,9 @@ use FREXML();
     my ($z, $r, %o) = @_;
     my ($fre, $cmpScriptName, $cmpVerifyName) = ($z->fre(), fremake::compileScriptName($z), fremake::compileVerifyName($z));
 
-    if ( exists $ENV{'NiNaC_PATH'} )
+    # ------------ Run NiNaC before executing or submitting the compile if NiNaC module is loaded
+
+    if ( exists $ENV{'NiNaC_LVL'} and $ENV{'NiNaC_LVL'} gt 0 )
     {
       # Get the source dir signature
       system( "$ENV{'NiNaC_SrcRx'}", "${\$z->srcDir()}" );
@@ -961,6 +965,8 @@ use FREXML();
       # Get the xml dir signature
       system( "$ENV{'NiNaC_XmlRx'}", "$xmlfile", "$xmldir" );
     }
+
+    # ----------- Execute or submit
 
     if ($o{execute})
     {
