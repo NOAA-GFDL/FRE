@@ -197,7 +197,7 @@ sub getPlatformSpecificNiNaCLoadCommands()
        . "      # Load NiNaC environment module\n"
        . "      module load NiNaC\n\n"
        . "    endif\n"
-       . "  endif\n";
+       . "  endif";
 }
 
 # //////////////////////////////////////////////////////////////////////////////
