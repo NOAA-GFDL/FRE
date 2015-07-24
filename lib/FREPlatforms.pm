@@ -184,8 +184,8 @@ sub getPlatformSpecificNiNaCLoadCommands()
 # ------ arguments: none
 # ------ return string of csh commands to load NiNaC
 {
-  # Return empty string if the NiNaC module is not loaded
-  return ''
+  # Let the user know NiNaC is not loaded if NiNaC_LVL not found
+  return '  # NiNaC module not loaded'
     if not exists $ENV{'NiNaC_LVL'};
 
   # Otherwise, return the Csh block to load NiNaC
