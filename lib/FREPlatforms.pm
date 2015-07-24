@@ -189,7 +189,7 @@ sub getPlatformSpecificNiNaCLoadCommands()
     if not exists $ENV{'NiNaC_LVL'};
 
   # Otherwise, return the Csh block to load NiNaC
-  return "  # ---------------- Load NiNaC if NiNaC_LVL is set and greater than zero\n\n"
+  return "  # ---- Load NiNaC if NiNaC_LVL is set and greater than zero\n\n"
        . "  if ( \$?NiNaC_LVL ) then\n"
        . "    if ( \$NiNaC_LVL > 0 ) then\n\n"
        . "      # Append directory where NiNaC environment module resides to the module search path\n"
