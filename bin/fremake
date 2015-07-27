@@ -921,7 +921,11 @@ use FREXML();
     $cmpScript .= "if ( \$status == 0 ) then\n";
     $cmpScript .= "  if ( \$?NiNaC_LVL ) then\n";
     $cmpScript .= "    if ( \$NiNaC_LVL > 0 ) then\n";
-    $cmpScript .= "      \$NiNaC_BldRx \$src_dir \$bld_dir\n";
+    $cmpScript .= "      if ( { \$NiNaC_BldRx \$src_dir \$bld_dir } ) then\n";
+    $cmpScript .= "        echo \"<NOTE> : NiNaC BldRx succeeded\"\n";
+    $cmpScript .= "      else\n";
+    $cmpScript .= "        echo \"WARNING: NiNaC BldRx failed\"\n";
+    $cmpScript .= "      endif\n";
     $cmpScript .= "    endif\n";
     $cmpScript .= "  endif\n";
     $cmpScript .= "  if ( \$echoOn ) unset echo\n";
@@ -953,7 +957,14 @@ use FREXML();
     if ( exists $ENV{'NiNaC_LVL'} and $ENV{'NiNaC_LVL'} gt 0 )
     {
       # Get the source dir signature
-      system( "$ENV{'NiNaC_SrcRx'}", "${\$z->srcDir()}" );
+      if (system( "$ENV{'NiNaC_SrcRx'}", "${\$z->srcDir()}" ) == 0)
+      {
+        print "<NOTE> : NiNaC SrcRx succeeded\n";
+      }
+      else
+      {
+        print "WARNING: NiNaC SrcRx failed\n";
+      }
 
       # Find where the xml file lives
       my $xmlfile = File::Basename::basename("$o{'xmlfile'}");
@@ -966,7 +977,14 @@ use FREXML();
       }
 
       # Get the xml dir signature
-      system( "$ENV{'NiNaC_XmlRx'}", "$xmlfile", "$xmldir" );
+      if (system( "$ENV{'NiNaC_XmlRx'}", "$xmlfile", "$xmldir" ) == 0)
+      {
+        print "<NOTE> : NiNaC XmlRx succeeded\n";
+      }
+      else
+      {
+        print "WARNING: NiNaC XmlRx failed\n";
+      }
     }
 
     # ----------- Execute or submit
