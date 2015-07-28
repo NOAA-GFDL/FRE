@@ -921,13 +921,14 @@ use FREXML();
     $cmpScript .= "if ( \$status == 0 ) then\n";
     $cmpScript .= "  if ( \$?NiNaC_LVL ) then\n";
     $cmpScript .= "    if ( \$NiNaC_LVL > 0 ) then\n";
-    $cmpScript .= "      if ( { \$NiNaC_BldRx \$src_dir \$bld_dir } ) then\n";
+    $cmpScript .= "      set status = { \$NiNaC_BldRx \$src_dir \$bld_dir }\n";
+    $cmpScript .= "      if ( \$status == 0 ) then\n";
     $cmpScript .= "        if ( \$echoOn ) unset echo\n";
-    $cmpScript .= "        echo \"<NOTE> : NiNaC BldRx succeeded\"\n";
+    $cmpScript .= "        echo \"NiNaC Note: While NiNaC loaded attempt at NiNaC_BldRx succeeded.\"\n";
     $cmpScript .= "        if ( \$echoOn ) set echo\n";
     $cmpScript .= "      else\n";
     $cmpScript .= "        if ( \$echoOn ) unset echo\n";
-    $cmpScript .= "        echo \"WARNING: NiNaC BldRx failed\"\n";
+    $cmpScript .= "        echo \"NiNaC Note: While NiNaC loaded attempt at NiNaC_BldRx failed with exit status \$status : FRE continuing as normal.\"\n";
     $cmpScript .= "        if ( \$echoOn ) set echo\n";
     $cmpScript .= "      endif\n";
     $cmpScript .= "    endif\n";
@@ -960,15 +961,23 @@ use FREXML();
 
     if ( exists $ENV{'NiNaC_LVL'} and $ENV{'NiNaC_LVL'} gt 0 )
     {
+      my $status = 0;
+      my $message = "";
+
       # Get the source dir signature
-      if (system( "$ENV{'NiNaC_SrcRx'}", "${\$z->srcDir()}" ) == 0)
+      $status = system( "$ENV{'NiNaC_SrcRx'}", "${\$z->srcDir()}" );
+
+      # Alert the user of NiNaC_SrcRx success or failure
+      $message = "NiNaC Note: While NiNaC loaded attempt at NiNaC_SrcRx ";
+      if ( $status == 0 )
       {
-        print "<NOTE> : NiNaC SrcRx succeeded\n";
+        $message .= "succeeded";
       }
       else
       {
-        print "WARNING: NiNaC SrcRx failed\n";
+        $message .= "failed with exit status $status : FRE continuing as normal";
       }
+      print $message . ".\n";
 
       # Find where the xml file lives
       my $xmlfile = File::Basename::basename("$o{'xmlfile'}");
@@ -981,14 +990,19 @@ use FREXML();
       }
 
       # Get the xml dir signature
-      if (system( "$ENV{'NiNaC_XmlRx'}", "$xmlfile", "$xmldir" ) == 0)
+      $status = system( "$ENV{'NiNaC_XmlRx'}", "$xmlfile", "$xmldir" );
+
+      # Alert the user of NiNaC_XmlRx success or failure
+      $message = "NiNaC Note: While NiNaC loaded attempt at NiNaC_XmlRx ";
+      if ( $status == 0 )
       {
-        print "<NOTE> : NiNaC XmlRx succeeded\n";
+        $message .= "succeeded";
       }
       else
       {
-        print "WARNING: NiNaC XmlRx failed\n";
+        $message .= "failed with exit status $status : FRE continuing as normal";
       }
+      print $message . ".\n";
     }
 
     # ----------- Execute or submit
