@@ -90,6 +90,7 @@ use FRE();
 use FREDefaults();
 use FREExperiment();
 use FREMsg();
+use FREPlatforms();
 use FRETargets();
 use FRETemplate();
 use FREUtil();
@@ -814,20 +815,11 @@ use FREXML();
 
     # ------- Load NiNaC in environment setting script, if NiNaC module is loaded
 
-    if ( exists $ENV{'NiNaC_LVL'} and $ENV{'NiNaC_LVL'} gt 0 )
-    {
-      $envScript .= "# Environment Settings Added by NiNaC Module\n";
-      $envScript .= "# ------------------------------------------------------------------------------\n";
-      $envScript .= "if ( ! \$?NiNaC_LVL ) set NiNaC_LVL = 1\n";
-      $envScript .= "if ( \$?NiNaC_LVL ) then\n";
-      $envScript .= "  if ( \$NiNaC_LVL > 0 ) then\n";
-      $envScript .= "    module use -a $ENV{'NiNaC_PATH'}\n";
-      $envScript .= "    module load NiNaC\n";
-      $envScript .= "  endif\n";
-      $envScript .= "endif\n";
-      $envScript .= "# ------------------------------------------------------------------------------\n";
-      $envScript .= "# END: Settings Added by NiNaC\n\n";
-    }
+    $envScript .= "# Environment Settings Added by NiNaC Module\n";
+    $envScript .= "# ------------------------------------------------------------------------------\n";
+    $envScript .= FREPlatforms::getPlatformSpecificNiNaCLoadCommands() . "\n";
+    $envScript .= "# ------------------------------------------------------------------------------\n";
+    $envScript .= "# END: Settings Added by NiNaC\n\n";
 
     # -------------------------------------------------------------------------- create the compile script
 
@@ -919,9 +911,10 @@ use FREXML();
     $cmpScript .= "# ---------------- call make on the main Makefile\n\n";
     $cmpScript .= "make $makeOverrides fms_$expName.x\n\n";
     $cmpScript .= "if ( \$status == 0 ) then\n";
+    $cmpScript .= "  # Run NiNaC\n";
     $cmpScript .= "  if ( \$?NiNaC_LVL ) then\n";
     $cmpScript .= "    if ( \$NiNaC_LVL > 0 ) then\n";
-    $cmpScript .= "      set status = { \$NiNaC_BldRx \$src_dir \$bld_dir }\n";
+    $cmpScript .= "      \$NiNaC_BldRx \$src_dir \$bld_dir\n";
     $cmpScript .= "      if ( \$status == 0 ) then\n";
     $cmpScript .= "        if ( \$echoOn ) unset echo\n";
     $cmpScript .= "        echo \"NiNaC Note: While NiNaC loaded attempt at NiNaC_BldRx succeeded.\"\n";
@@ -932,7 +925,7 @@ use FREXML();
     $cmpScript .= "        if ( \$echoOn ) set echo\n";
     $cmpScript .= "      endif\n";
     $cmpScript .= "    endif\n";
-    $cmpScript .= "  endif\n";
+    $cmpScript .= "  endif\n\n";
     $cmpScript .= "  if ( \$echoOn ) unset echo\n";
     $cmpScript .= "  echo \"<NOTE> : make succeeded for $expName.\"\n";
     $cmpScript .= "  if ( \$echoOn ) set echo\n";

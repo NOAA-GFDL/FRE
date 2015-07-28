@@ -184,26 +184,23 @@ sub getPlatformSpecificNiNaCLoadCommands()
 # ------ arguments: none
 # ------ return string of csh commands to load NiNaC
 {
-  my $ninac_cmds = "  # ---- Load NiNaC if NiNaC_LVL is set and greater than zero\n\n"
-                 . "  if ( \$?NiNaC_LVL ) then\n"
-                 . "    if ( \$NiNaC_LVL > 0 ) then\n\n"
-                 . "      # Append directory where NiNaC environment module resides to the module search path\n"
-                 . "      module use -a $ENV{'NiNaC_PATH'}\n\n"
-                 . "      # Load NiNaC environment module\n"
-                 . "      module load NiNaC\n\n"
-                 . "    endif\n"
-                 . "  endif";
+  # If NiNaC module not loaded, return a comment saying NiNaC wasn't loaded at script creation
+  if ( not exists $ENV{'NiNaC_LVL'} or not $ENV{'NiNaC_LVL'} gt 0 )
+  {
+    return "  # NiNaC not loaded when script created"
+  }
 
-  # Add command to set NiNaC_LVL if NiNaC module is currently loaded
-  if (exists $ENV{'NiNaC_LVL'})
-  {
-    return "  if ( ! \$?NiNaC_LVL ) set NiNaC_LVL = 1\n\n" . $ninac_cmds;
-  }
-  # Otherwise, return a comment saying NiNaC wasn't loaded at script creation
-  else
-  {
-    return "  # NiNaC not loaded when script created\n\n" . $ninac_cmds;
-  }
+  # Otherwise, return the commands to load NiNaC
+  return "  if ( ! \$?NiNaC_LVL ) set NiNaC_LVL = 1\n\n"
+       . "  # ---- Load NiNaC if NiNaC_LVL is set and greater than zero\n\n"
+       . "  if ( \$?NiNaC_LVL ) then\n"
+       . "    if ( \$NiNaC_LVL > 0 ) then\n\n"
+       . "      # Append directory where NiNaC environment module resides to the module search path\n"
+       . "      module use -a $ENV{'NiNaC_PATH'}\n\n"
+       . "      # Load NiNaC environment module\n"
+       . "      module load NiNaC\n\n"
+       . "    endif\n"
+       . "  endif";
 }
 
 # //////////////////////////////////////////////////////////////////////////////
