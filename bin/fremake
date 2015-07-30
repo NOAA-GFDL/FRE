@@ -915,11 +915,7 @@ use FREXML();
     $cmpScript .= "  if ( \$?NiNaC_LVL ) then\n";
     $cmpScript .= "    if ( \$NiNaC_LVL > 0 ) then\n";
     $cmpScript .= "      \$NiNaC_BldRx \$src_dir \$bld_dir\n";
-    $cmpScript .= "      if ( \$status == 0 ) then\n";
-    $cmpScript .= "        if ( \$echoOn ) unset echo\n";
-    $cmpScript .= "        echo \"NiNaC Note: While NiNaC loaded attempt at NiNaC_BldRx succeeded.\"\n";
-    $cmpScript .= "        if ( \$echoOn ) set echo\n";
-    $cmpScript .= "      else\n";
+    $cmpScript .= "      if ( \$status != 0 ) then\n";
     $cmpScript .= "        if ( \$echoOn ) unset echo\n";
     $cmpScript .= "        echo \"NiNaC Note: While NiNaC loaded attempt at NiNaC_BldRx failed with exit status \$status : FRE continuing as normal.\"\n";
     $cmpScript .= "        if ( \$echoOn ) set echo\n";
@@ -960,17 +956,11 @@ use FREXML();
       # Get the source dir signature
       $status = system( "$ENV{'NiNaC_SrcRx'}", "${\$z->srcDir()}" );
 
-      # Alert the user of NiNaC_SrcRx success or failure
-      $message = "NiNaC Note: While NiNaC loaded attempt at NiNaC_SrcRx ";
-      if ( $status == 0 )
+      # Alert the user on NiNaC_SrcRx failure
+      if ( $status != 0 )
       {
-        $message .= "succeeded";
+        print "NiNaC Note: While NiNaC loaded attempt at NiNaC_SrcRx failed with exit status $status : FRE continuing as normal\n";
       }
-      else
-      {
-        $message .= "failed with exit status $status : FRE continuing as normal";
-      }
-      print $message . ".\n";
 
       # Find where the xml file lives
       my $xmlfile = File::Basename::basename("$o{'xmlfile'}");
@@ -985,17 +975,11 @@ use FREXML();
       # Get the xml dir signature
       $status = system( "$ENV{'NiNaC_XmlRx'}", "$xmlfile", "$xmldir" );
 
-      # Alert the user of NiNaC_XmlRx success or failure
-      $message = "NiNaC Note: While NiNaC loaded attempt at NiNaC_XmlRx ";
-      if ( $status == 0 )
+      # Alert the user on NiNaC_XmlRx failure
+      if ( $status != 0 )
       {
-        $message .= "succeeded";
+        print "NiNaC Note: While NiNaC loaded attempt at NiNaC_XmlRx failed with exit status $status : FRE continuing as normal\n";
       }
-      else
-      {
-        $message .= "failed with exit status $status : FRE continuing as normal";
-      }
-      print $message . ".\n";
     }
 
     # ----------- Execute or submit
