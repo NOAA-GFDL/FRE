@@ -85,6 +85,7 @@ use File::Basename();
 use File::Copy();
 use File::Path();
 use Getopt::Long(':config', 'no_ignore_case', 'no_auto_abbrev');
+use POSIX();
 
 use FRE();
 use FREDefaults();
@@ -951,15 +952,35 @@ use FREXML();
     if ( exists $ENV{'NiNaC_LVL'} and $ENV{'NiNaC_LVL'} gt 0 )
     {
       my $status = 0;
-      my $message = "";
 
       # Get the source dir signature
       $status = system( "$ENV{'NiNaC_SrcRx'}", "${\$z->srcDir()}" );
 
       # Alert the user on NiNaC_SrcRx failure
-      if ( $status != 0 )
+      if ( $status == -1 )
       {
-        print "NiNaC Note: While NiNaC loaded attempt at NiNaC_SrcRx failed with exit status $status : FRE continuing as normal\n";
+        print "NiNaC Note: While NiNaC loaded failed to execute NiNaC_SrcRx: $!\n";
+      }
+      elsif ( $status != 0 )
+      {
+        my $message = "NiNaC Note: While NiNaC loaded attempt at NiNaC_SrcRx ";
+        if ( POSIX::WIFEXITED($status) )
+        {
+          $message .= "failed with exit code POSIX::WEXITSTATUS($status)";
+        }
+        elsif ( POSIX::WIFSIGNALED($status) )
+        {
+          $message .= "terminated by signal POSIX::WTERMSIG($status)";
+        }
+        elsif ( POSIX::WIFSTOPPED($status) )
+        {
+          $message .= "stopped by signal POSIX::WSTOPSIG($status)";
+        }
+        else
+        {
+          $message .= "failed with undefined exit status $status";
+        }
+        print $message . " : FRE continuing as normal\n";
       }
 
       # Find where the xml file lives
@@ -976,9 +997,30 @@ use FREXML();
       $status = system( "$ENV{'NiNaC_XmlRx'}", "$xmlfile", "$xmldir" );
 
       # Alert the user on NiNaC_XmlRx failure
-      if ( $status != 0 )
+      if ( $status == -1 )
       {
-        print "NiNaC Note: While NiNaC loaded attempt at NiNaC_XmlRx failed with exit status $status : FRE continuing as normal\n";
+        print "NiNaC Note: While NiNaC loaded failed to execute NiNaC_XmlRx: $!\n";
+      }
+      elsif ( $status != 0 )
+      {
+        my $message = "NiNaC Note: While NiNaC loaded attempt at NiNaC_XmlRx ";
+        if ( POSIX::WIFEXITED($status) )
+        {
+          $message .= "failed with exit code POSIX::WEXITSTATUS($status)";
+        }
+        elsif ( POSIX::WIFSIGNALED($status) )
+        {
+          $message .= "terminated by signal POSIX::WTERMSIG($status)";
+        }
+        elsif ( POSIX::WIFSTOPPED($status) )
+        {
+          $message .= "stopped by signal POSIX::WSTOPSIG($status)";
+        }
+        else
+        {
+          $message .= "failed with undefined exit status $status";
+        }
+        print $message . " : FRE continuing as normal\n";
       }
     }
 

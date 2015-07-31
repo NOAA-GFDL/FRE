@@ -2049,9 +2049,30 @@ use FREUtil();
     my $status = system( "$ENV{'NiNaC_XmlRx'}", "$xmlfile", "$xmldir" );
 
     # Alert the user on NiNaC_XmlRx failure
-    if ( $status != 0 )
+    if ( $status == -1 )
     {
-      print "NiNaC Note: While NiNaC loaded attempt at NiNaC_XmlRx failed with exit status $status : FRE continuing as normal\n";
+      print "NiNaC Note: While NiNaC loaded failed to execute NiNaC_XmlRx: $!\n";
+    }
+    elsif ( $status != 0 )
+    {
+      my $message = "NiNaC Note: While NiNaC loaded attempt at NiNaC_XmlRx ";
+      if ( POSIX::WIFEXITED($status) )
+      {
+        $message .= "failed with exit code POSIX::WEXITSTATUS($status)";
+      }
+      elsif ( POSIX::WIFSIGNALED($status) )
+      {
+        $message .= "terminated by signal POSIX::WTERMSIG($status)";
+      }
+      elsif ( POSIX::WIFSTOPPED($status) )
+      {
+        $message .= "stopped by signal POSIX::WSTOPSIG($status)";
+      }
+      else
+      {
+        $message .= "failed with undefined exit status $status";
+      }
+      print $message . " : FRE continuing as normal\n";
     }
   }
 
