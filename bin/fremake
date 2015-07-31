@@ -957,16 +957,17 @@ use FREXML();
       $status = system( "$ENV{'NiNaC_SrcRx'}", "${\$z->srcDir()}" );
 
       # Alert the user on NiNaC_SrcRx failure
-      if ( $status == -1 )
+      if ( $status != 0 )
       {
-        print "NiNaC Note: While NiNaC loaded failed to execute NiNaC_SrcRx: $!\n";
-      }
-      elsif ( $status != 0 )
-      {
-        my $message = "NiNaC Note: While NiNaC loaded attempt at NiNaC_SrcRx ";
-        if ( POSIX::WIFEXITED($status) )
+        my $message = "NiNaC Note: While NiNaC loaded NiNaC_SrcRx ";
+
+        if ( $status == -1 )
         {
-          $message .= "failed with exit code POSIX::WEXITSTATUS($status)";
+          $message .= "failed to execute: $!"; # hint: $! contains reason for system call failure
+        }
+        elsif ( POSIX::WIFEXITED($status) )
+        {
+          $message .= "failed with exit status POSIX::WEXITSTATUS($status)";
         }
         elsif ( POSIX::WIFSIGNALED($status) )
         {
@@ -980,6 +981,7 @@ use FREXML();
         {
           $message .= "failed with undefined exit status $status";
         }
+
         print $message . " : FRE continuing as normal\n";
       }
 
@@ -997,16 +999,17 @@ use FREXML();
       $status = system( "$ENV{'NiNaC_XmlRx'}", "$xmlfile", "$xmldir" );
 
       # Alert the user on NiNaC_XmlRx failure
-      if ( $status == -1 )
+      if ( $status != 0 )
       {
-        print "NiNaC Note: While NiNaC loaded failed to execute NiNaC_XmlRx: $!\n";
-      }
-      elsif ( $status != 0 )
-      {
-        my $message = "NiNaC Note: While NiNaC loaded attempt at NiNaC_XmlRx ";
-        if ( POSIX::WIFEXITED($status) )
+        my $message = "NiNaC Note: While NiNaC loaded NiNaC_XmlRx ";
+
+        if ( $status == -1 )
         {
-          $message .= "failed with exit code POSIX::WEXITSTATUS($status)";
+          $message .= "failed to execute: $!"; # hint: $! contains reason for system call failure
+        }
+        elsif ( POSIX::WIFEXITED($status) )
+        {
+          $message .= "failed with exit status POSIX::WEXITSTATUS($status)";
         }
         elsif ( POSIX::WIFSIGNALED($status) )
         {
@@ -1020,6 +1023,7 @@ use FREXML();
         {
           $message .= "failed with undefined exit status $status";
         }
+
         print $message . " : FRE continuing as normal\n";
       }
     }
