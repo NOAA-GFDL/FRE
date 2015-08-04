@@ -2146,6 +2146,13 @@ sub hsmget_history_csh {
   #print "histfiles:".join(", ",@histfiles)."\n";
   #print "hsmf $hsmf\n";
 
+  # Retrieve hidden debug mppnccombine flag if available or use default combiner flags
+  my $mppnccombineOptsDefault = "'-64 -h 16384 -m'";
+  my $mppnccombineOptString = $mppnccombineOptsDefault;
+  if ( exists $opt{'mppnccombine-opts'} ) {
+    $mppnccombineOptString = $opt{'mppnccombine-opts'};
+  }
+
   foreach my $h ( @histfiles ) {
     chdir $opt_d;
     my ($year) = $h =~ /(\d{4,})\d{4}\./;
@@ -2227,7 +2234,9 @@ if [ \$MYSTATUS -ne 0 ]; then
 fi
 $time_rm rm $file
 
-setenv mppnccombineOptString '$opt{'mppnccombine-opts'}' && $time_combine $ENV{FRE_COMMANDS_HOME}/site/$ENV{FRE_SYSTEM_SITE}/bin/combinehist
+export mppnccombineOptString '$mppnccombineOptString'
+
+$time_combine $ENV{FRE_COMMANDS_HOME}/site/$ENV{FRE_SYSTEM_SITE}/bin/combinehist
 MYSTATUS=\$?
 if [ \$MYSTATUS -ne 0 ]; then
    echo ERROR: combining history files failed for $file, exiting.
