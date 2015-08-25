@@ -216,6 +216,9 @@ EOF
    #setting this option inside script for now
    #          -z           = insert timing calls
 
+   # Check of both -D and -r have been given
+   print STDERR "WARNING: Both options -r and -D are given.  The -r option takes precedence.\n" if ( $opt_r and $opt_D );
+
    chomp( my $beginTime = `date +\%s` );
 
    $opt_x = 'rts.xml' unless $opt_x; #set default filename for experiments xml file
@@ -255,6 +258,12 @@ EOF
 
    #initialize hsmfiles string
    my $hsmfiles="";
+
+   #for grepping and sorting associated files
+   my $grepAssocFiles = <<'EOF';
+grep ':associated_files' | cut -d '"' -f2 | sed "s/\w*://g" | tr ' ' '\n' | sort -u
+EOF
+   chomp $grepAssocFiles;
 
 #begin generating version string
 my $abs_xml_path = File::Spec->rel2abs($opt_x);
@@ -397,6 +406,7 @@ $version_head .= "-x $abs_xml_path ";
    my $tempCache = (split /\//,$workdir)[0] . "/tempCache";
    my $statedir = $exp->stateDir()."/postProcess";
    my $outscriptdir = "$scriptsdir/postProcess";
+   if ( "$opt_u" -ne '' ) {$outscriptdir .= "/$opt_u";}
    if ( $opt_O ) {$outscriptdir = "$opt_O";}
    unless ( -d "$outscriptdir" or $opt_A ) { system "mkdir -p $outscriptdir"; }
    unless ( -d "$stdoutdir/postProcess" or $opt_A ) { system "mkdir -p $stdoutdir/postProcess"; }
@@ -603,17 +613,24 @@ EOF
    $version_info .= "$expt";
    my $this_frepp_cmd = $version_info;
    $this_frepp_cmd =~ s/.*# //smg;
-   my $outscript = "$outscriptdir/$expt"."_$hDate";
-   my $pbs_job_name = "$expt"."_$hDate";
+
+   my $outscript = "$outscriptdir/$expt";
+   my $pbs_job_name = "$expt";
+
+   if ( "$opt_u" ne '' ) {
+     $pbs_job_name .= "_$opt_u";
+   }
+
    if ( $opt_r ) {
-      $outscript = "$outscriptdir/$expt"."_$opt_r"."_$hDate";
+      $outscript .= "_$opt_r";
       $maxruntime = "01:00:00";
-      $pbs_job_name = "$expt"."_$opt_r"."_$hDate";
+      $pbs_job_name .= "_$opt_r";
+   } elsif ( $opt_D ) {
+      $outscript .= "_refineDiag";
+      $pbs_job_name .= "_refineDiag";
    }
-   if ( $opt_D ) {
-      $outscript = "$outscriptdir/$expt"."_refineDiag_$hDate";
-      $pbs_job_name = "$expt"."_refineDiag_$hDate";
-   }
+   $outscript .= "_$hDate";
+   $pbs_job_name .+ "_$hDate";
 
    my $cshscripttmpl = getTemplate($platform);
 
@@ -1156,7 +1173,11 @@ EOF
          my $origoutscript = $outscript;
          my $orig_pbs_job_name = $pbs_job_name;
          $outscript = "$outscriptdir/$expt"."_$component"."_$hDate";
-         $pbs_job_name = "$expt"."_$component"."_$hDate";
+         $pbs_job_name = "$expt";
+	 if ( "$opt_u" ne '' ) {
+	   $pbs_job_name .= "_$opt_u";
+	 }
+	 $pbs_job_name .= "_$component"."_$hDate";
          $cshscript =~ s/set scriptName = .*/set scriptName = $outscript/;
          $cshscript =~ s/#PBS -N .*/#PBS -N $pbs_job_name/;
          $cshscript =~ s/setenv FRE_STDOUT_PATH.*/setenv FRE_STDOUT_PATH $stdoutdir\/postProcess\/$pbs_job_name.o\$JOB_ID/;
@@ -2311,7 +2332,7 @@ $checktransfer
          # Get files listed as associated_files
          foreach hsmsrcfile ( $tmphistdir/\$hsmdate/*.\$hsmsrc.* )
             # Get a list of all associated files
-            set assocFiles = `ncdump -h \$hsmsrcfile | grep ':associated_files' | cut -d '"' -f2 | sed "s/\\w*://g"`
+            set assocFiles = `ncdump -h \$hsmsrcfile | $grepAssocFiles`
             foreach assocFile ( \$assocFiles )
                $time_hsmget \$hsmget -a $opt_d -p $ptmpDir/history -w $tmphistdir \$hsmdate/\\*\${assocFile:r}.\\*
  end
@@ -2337,9 +2358,9 @@ $checktransfer
             # Get files listed as associated_files
             foreach hsmsrcfile ( $tmphistdir/\$hsmdate/*.\$hsmsrc.* )
                # Get a list of all associated files
-               set assocFiles = `ncdump -h \$hsmsrcfile | grep ':associated_files' | cut -d '"' -f2 | sed "s/\\w*://g"`
+               set assocFiles = `ncdump -h \$hsmsrcfile | $grepAssocFiles`
                foreach assocFile ( \$assocFiles )
-                  $time_hsmget \$hsmget -a $refinedir -p $ptmpDir/history -w $tmphistdir \$hsmdate/\\*\${assocFile:r}.\\*
+                  $time_hsmget \$hsmget -a $refinedir -p $ptmpDir/history_refineDiag -w $tmphistdir \$hsmdate/\\*\${assocFile:r}.\\*
                end
    end
   end
@@ -5506,7 +5527,7 @@ if ( ! -e $ppRootDir/$component/$component.static.nc ) then
    # Get files listed as associated_files
    foreach file ( $tmphistdir/$hDate.nc/*$diag_source* )
       # Get a list of all associated_files
-      set assocFiles = `ncdump -h \$file | grep ':associated_files' | cut -d '"' -f2 | sed "s/\\w*: //g"`
+      set assocFiles = `ncdump -h \$file | $grepAssocFiles`
       foreach assocFile ( \$assocFiles )
          $time_hsmget \$hsmget -a $opt_d -p $ptmpDir/history -w $tmphistdir $hDate.nc/\\*\${assocFile:r}.\\*
       end
@@ -5521,9 +5542,9 @@ $checktransfer
    # Get files listed as associated_files
    foreach file ( $tmphistdir/$hDate.nc/*$diag_source* )
       # Get a list of all associated_files
-      set assocFiles = `ncdump -h \$file | grep ':associated_files' | cut -d '"' -f2 | sed "s/\\w*: //g"`
+      set assocFiles = `ncdump -h \$file | $grepAssocFiles`
       foreach assocFile ( \$assocFiles )
-         $time_hsmget \$hsmget -a $refinedir -p $ptmpDir/history -w $tmphistdir $hDate.nc/\\*\${assocFile:r}.\\*
+         $time_hsmget \$hsmget -a $refinedir -p $ptmpDir/history_refineDiag -w $tmphistdir $hDate.nc/\\*\${assocFile:r}.\\*
       end
    end
 
@@ -5553,7 +5574,7 @@ $checktransfer
    # Get files listed as associated_files
    foreach file ( \\*$diag_source\\* )
       # Get a list of all associated_files
-      set assocFiles = `ncdump -h \$file | grep ':associated_files' | cut -d '"' -f2 | sed "s/\\w*: //g"`
+      set assocFiles = `ncdump -h \$file | $grepAssocFiles`
       foreach assocFile ( \$assocFiles )
          $time_hsmget \$hsmget -a $opt_d -p $ptmpDir/history -w $tmphistdir $hDate.nc/\\*\${assocFile:r}.\\*
       end
@@ -5568,9 +5589,9 @@ $checktransfer
    # Get files listed as associated_files
    foreach file ( \\*$diag_source\\* )
       # Get a list of all associated_files
-      set assocFiles = `ncdump -h \$file | grep ':associated_files' | cut -d '"' -f2 | sed "s/\\w*: //g"`
+      set assocFiles = `ncdump -h \$file | $grepAssocFiles`
       foreach assocFile ( \$assocFiles )
-         $time_hsmget \$hsmget -a $refinedir -p $ptmpDir/history -w $tmphistdir $hDate.nc/\\*\${assocFile:r}.\\*
+         $time_hsmget \$hsmget -a $refinedir -p $ptmpDir/history_refineDiag -w $tmphistdir $hDate.nc/\\*\${assocFile:r}.\\*
       end
    end
 
