@@ -404,7 +404,8 @@ use FREXML();
 	 foreach my $repo_name (@repo_names)
 	 {
 	   my $repo_path = $root . "/" . $repo_name;
-	   $scoScript .= "git clone --recursive -b $version $repo_path\n";
+	   $scoScript .= "echo \"Cloning $repo_path on branch/tag $version\"\n";
+	   $scoScript .= "git clone -q --recursive -b $version $repo_path >& /dev/null\n";
 	 }
 	 $scoScript .= "$csh\n\n";
        }
@@ -437,7 +438,7 @@ use FREXML();
 	print {$scoScriptHandle} $scoScript;
 	close $scoScriptHandle;
 	chmod 0755, $scoScriptName;
-	print qx($scoScriptName);
+	system $scoScriptName;
 	if (!$?)
 	{
 	  FREXML::save(fremake::checkoutVerifyName($z), $r);

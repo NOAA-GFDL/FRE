@@ -1,7 +1,6 @@
-# $Id: gnu.mk,v 1.1.2.2 2012/07/06 19:02:12 Seth.Underwood Exp $
-# template for the Intel fortran compiler
+# template for the GNU fortran compiler on a Cray system
 # typical use with mkmf
-# mkmf -t template.ifc -c"-Duse_libMPI -Duse_netCDF" path_names /usr/local/include
+# mkmf -t gnu.mk -c"-Duse_libMPI -Duse_netCDF" path_names /usr/local/include
 ############
 # commands #
 ############
@@ -18,19 +17,19 @@ OPENMP =
 
 MAKEFLAGS += --jobs=2
 
-FPPFLAGS := 
+FPPFLAGS :=
 
 FFLAGS := -fcray-pointer -fdefault-real-8 -fdefault-double-8 -Waliasing -ffree-line-length-none -fno-range-check
 FFLAGS_OPT = -O2 -fno-expensive-optimizations
-FFLAGS_REPRO = 
-FFLAGS_DEBUG = -O0 -g -W -fbounds-check 
+FFLAGS_REPRO =
+FFLAGS_DEBUG = -O0 -g -W -fbounds-check -ffpe-trap=invalid,zero,overflow
 FFLAGS_OPENMP = -fopenmp
-FFLAGS_VERBOSE = 
+FFLAGS_VERBOSE =
 
-CFLAGS := -D__IFC 
+CFLAGS := -D__IFC
 CFLAGS_OPT = -O2
 CFLAGS_OPENMP = -fopenmp
-CFLAGS_DEBUG = -O0 -g 
+CFLAGS_DEBUG = -O0 -g
 
 # Optional Testing compile flags.  Mutually exclusive from DEBUG, REPRO, and OPT
 # *_TEST will match the production if no new option(s) is(are) to be tested.
@@ -39,7 +38,7 @@ CFLAGS_TEST = -O2
 
 LDFLAGS :=
 LDFLAGS_OPENMP := -fopenmp
-LDFLAGS_VERBOSE := 
+LDFLAGS_VERBOSE :=
 
 ifneq ($(REPRO),)
 CFLAGS += $(CFLAGS_REPRO)
@@ -83,7 +82,7 @@ else
   LIBS += -lnetcdf
 endif
 
-LIBS += 
+LIBS +=
 LDFLAGS += $(LIBS)
 
 #---------------------------------------------------------------------------
