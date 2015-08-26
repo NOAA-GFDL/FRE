@@ -84,6 +84,7 @@ use strict;
 use File::Basename();
 use File::Copy();
 use File::Path();
+use File::Spec();
 use Getopt::Long(':config', 'no_ignore_case', 'no_auto_abbrev');
 use POSIX();
 
@@ -986,15 +987,12 @@ use FREXML();
         print $message . " : FRE continuing as normal.\n";
       }
 
-      # Find where the xml file lives
-      my $xmlfile = File::Basename::basename("$o{'xmlfile'}");
-      my $xmldir = File::Basename::dirname("$o{'xmlfile'}");
+      # Ensure that the xml path is an absolute path
+      my $xmlpath = File::Spec->rel2abs($o{'xmlfile'});
 
-      # If the xml file path is relative, prepend the current working directory
-      if ( substr("$xmlfile", 0, 1) ne '/' )
-      {
-        $xmldir = Cwd::getcwd() . '/' . "$xmldir";
-      }
+      # Find where the xml file lives
+      my $xmlfile = File::Basename::basename($xmlpath);
+      my $xmldir = File::Basename::dirname($xmlpath);
 
       # Get the xml dir signature
       $status = system( "$ENV{'NiNaC_XmlRx'}", "$xmlfile", "$xmldir" );
