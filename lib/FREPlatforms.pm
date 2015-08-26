@@ -185,9 +185,9 @@ sub getPlatformSpecificNiNaCLoadCommands()
 # ------ return string of csh commands to load NiNaC
 {
   # If NiNaC module not loaded, return a comment saying NiNaC wasn't loaded at script creation
-  if ( not exists $ENV{'NiNaC_LVL'} or not $ENV{'NiNaC_LVL'} gt 0 )
+  unless (exists($ENV{'NiNaC_LVL'}) and $ENV{'NiNaC_LVL'} > 0)
   {
-    return "  # NiNaC not loaded when script created"
+    return "  # NiNaC not loaded when script created";
   }
 
   # Otherwise, return the commands to load NiNaC
