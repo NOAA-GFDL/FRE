@@ -2033,38 +2033,38 @@ use FREUtil();
   
   # ------------------------ Call NiNaC on successful runscript creation if NiNaC module is loaded
 
-  if ($status == FREDefaults::STATUS_OK and exists($ENV{'NiNaC_LVL'}) and $ENV{'NiNaC_LVL'} > 0)
+  if ( $status == FREDefaults::STATUS_OK and exists( $ENV{'NiNaC_LVL'} ) and $ENV{'NiNaC_LVL'} > 0 )
   {
     # Ensure that the xml path is an absolute path
-    my $xmlpath = File::Spec->rel2abs($opt{'xmlfile'});
+    my $xmlpath = File::Spec->rel2abs( $opt{'xmlfile'} );
 
     # Split the xml path into file name and directory path
-    my $xmlfile = File::Basename::basename($xmlpath);
-    my $xmldir = File::Basename::dirname($xmlpath);
+    my $xmlfile = File::Basename::basename( $xmlpath );
+    my $xmldir = File::Basename::dirname( $xmlpath );
 
     # Get the xml dir signature
-    my $status = system($ENV{'NiNaC_XmlRx'}, $xmlfile, $xmldir);
+    my $status = system( $ENV{'NiNaC_XmlRx'}, $xmlfile, $xmldir );
 
     # Alert the user on NiNaC_XmlRx failure
-    if ($status != 0)
+    if ( $status != 0 )
     {
       my $message = "NiNaC Note: While NiNaC loaded attempt at NiNaC_XmlRx ";
 
-      if ($status == -1)
+      if ( $status == -1 )
       {
-        $message .= "failed to execute: $!"; # hint: $! contains reason for system call failure
+        $message .= "failed to execute with error $!";
       }
-      elsif (POSIX::WIFEXITED($status))
+      elsif ( POSIX::WIFEXITED( $status ) )
       {
-        $message .= "failed with exit status POSIX::WEXITSTATUS($status)";
+        $message .= "failed with exit status " . POSIX::WEXITSTATUS( $status );
       }
-      elsif (POSIX::WIFSIGNALED($status))
+      elsif ( POSIX::WIFSIGNALED( $status ) )
       {
-        $message .= "terminated by signal POSIX::WTERMSIG($status)";
+        $message .= "terminated by signal " . POSIX::WTERMSIG( $status );
       }
-      elsif (POSIX::WIFSTOPPED($status))
+      elsif ( POSIX::WIFSTOPPED( $status ) )
       {
-        $message .= "stopped by signal POSIX::WSTOPSIG($status)";
+        $message .= "stopped by signal " . POSIX::WSTOPSIG( $status );
       }
       else
       {
