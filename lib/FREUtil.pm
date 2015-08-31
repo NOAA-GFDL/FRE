@@ -856,6 +856,60 @@ sub optionValuesListParse($$@)
   }
 }
 
+sub decodeSystemExitStatus($$)
+# ------ arguments: $childError $osError
+# ------ returns (decodedStatus, errorMessage)
+# ------ Uses knowledge of Unix headers sys/wait.h and bits/waitstatus.h to decode Perl system
+# ------ call exit status. The Perl system call exit status mimics status returned by wait and
+# ------ waitpid. The return value is 16 bits where the exit status is the 8 high order bits,
+# ------ whether or not a core was dumped is the highest of the 8 low order bits and the seven
+# ------ remaining low order bits contain the signal number.
+# ------ See the Perl documentation for system() for more information.
+{
+  my ($childError, $osError) = @_;
+
+  my ($decodedStatus, $errorMessage);
+
+  # Check if Perl system call failed to execute
+  if ($childError == -1)
+  {
+    $decodedStatus = -1;
+
+    $errorMessage = "failed to execute: $osError\n";
+  }
+
+  # Check if system call terminated by signal
+  elsif ($childError & 127)
+  {
+    $errorMessage = "child died ";
+
+    if ($childError & 128)
+    {
+      $errorMessage .= "with";
+    }
+    else
+    {
+      $errorMessage .= "without";
+    }
+
+    # Get the signal from the low order 7 bits
+    $decodedStatus = $childError & 127;
+
+    $errorMessage .= " coredump with signal $decodedStatus\n";
+  }
+
+  # Otherwise, return the system call exit status
+  else
+  {
+    # Get the exit status from the high order 8 bits
+    $decodedStatus = $childError >> 8;
+
+    $errorMessage = "child exited with value $decodedStatus\n";
+  }
+
+  return ($decodedStatus, $errorMessage);
+}
+
 # //////////////////////////////////////////////////////////////////////////////
 # //////////////////////////////////////////////////////////// Initialization //
 # //////////////////////////////////////////////////////////////////////////////
