@@ -858,7 +858,7 @@ sub optionValuesListParse($$@)
 
 sub decodeChildStatus($$)
 # ------ arguments: $? $!
-# ------ returns decoded child process native error status in string form 
+# ------ returns decoded child process native error status as a string
 {
   my ($child_error, $os_error) = @_;
 
