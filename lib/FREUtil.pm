@@ -860,9 +860,9 @@ sub decodeChildStatus($$)
 # ------ arguments: $? $!
 # ------ returns decoded child process native error status as a string
 # ------ The child process native status is a word. The low order byte's
-# ------ lowest 7 bits hold the signal number if the child was terminated 
+# ------ lowest 7 bits hold the signal number if the child was terminated
 # ------ by a signal. The high order byte holds the exit status if the
-# ------ child exited. See ``perldoc -f system'' for more information. 
+# ------ child exited. See ``perldoc -f system'' for more information.
 {
   my ($child_error, $os_error) = @_;
 
