@@ -2043,35 +2043,13 @@ use FREUtil();
     my $xmldir = File::Basename::dirname( $xmlpath );
 
     # Get the xml dir signature
-    my $status = system( $ENV{'NiNaC_XmlRx'}, $xmlfile, $xmldir );
+    system( $ENV{'NiNaC_XmlRx'}, $xmlfile, $xmldir );
 
     # Alert the user on NiNaC_XmlRx failure
-    if ( $status != 0 )
-    {
-      my $message = "NiNaC Note: While NiNaC loaded attempt at NiNaC_XmlRx ";
-
-      if ( $status == -1 )
-      {
-        $message .= "failed to execute with error $!";
-      }
-      elsif ( POSIX::WIFEXITED( $status ) )
-      {
-        $message .= "failed with exit status " . POSIX::WEXITSTATUS( $status );
-      }
-      elsif ( POSIX::WIFSIGNALED( $status ) )
-      {
-        $message .= "terminated by signal " . POSIX::WTERMSIG( $status );
-      }
-      elsif ( POSIX::WIFSTOPPED( $status ) )
-      {
-        $message .= "stopped by signal " . POSIX::WSTOPSIG( $status );
-      }
-      else
-      {
-        $message .= "failed with undefined exit status $status";
-      }
-
-      print $message . " : FRE continuing as normal.\n";
+    if ( $? != 0 ) {
+      print "NiNaC Note: While NiNaC loaded attempt at NiNaC_XmlRx "
+          . FREUtil::decodeChildStatus($?, $!)
+          . " : FRE continuing as normal.\n";
     }
   }
 

@@ -856,10 +856,9 @@ sub optionValuesListParse($$@)
   }
 }
 
-sub decodeErrorStatus($$)
+sub decodeChildStatus($$)
 # ------ arguments: $? $!
 # ------ returns decoded child process native error status in string form 
-# ------ See Perl's documentation for system() for more information.
 {
   my ($child_error, $os_error) = @_;
 
@@ -871,14 +870,14 @@ sub decodeErrorStatus($$)
   }
   elsif ($child_error & 127)
   {
-    $error_string = "child terminated for signal " . ($child_error & 127);
+    $error_string = "terminated for signal " . ($child_error & 127);
   }
   else
   {
-    $error_string = "child exited with status " . ($child_error >> 8);
+    $error_string = "exited with status " . ($child_error >> 8);
   }
 
-  return $error_string . "\n";
+  return $error_string;
 }
 
 # //////////////////////////////////////////////////////////////////////////////
