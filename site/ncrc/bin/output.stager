@@ -256,6 +256,8 @@
 
   set modulesHomeDir = ""
 
+  set mppnccombineOptString = ""
+
 ################################################################################
 #-------------------- argument file checkup and sourcing -----------------------
 ################################################################################
@@ -906,6 +908,19 @@
     if ( $echoOn ) set echo
   endif
 
+  if ( "$mppnccombineOptString" != ""  ) then
+    set -r mppnccombineOptString = "$mppnccombineOptString"
+    if ( $echoOn ) unset echo
+    echo "<NOTE> : mppnccombineOptString = '$mppnccombineOptString'"
+    if ( $echoOn ) set echo
+  else
+    set -r mppnccombineOptsDefault = '-64 -h 16384 -m'
+    if ( $echoOn ) unset echo
+    echo "WARNING: mppnccombineOptString not found, defaulting to '$mppnccombineOptsDefault'"
+    if ( $echoOn ) set echo
+    set -r mppnccombineOptString = "$mppnccombineOptsDefault"
+  endif
+
 ################################################################################
 #-------------- environment modules initialization and loading -----------------
 ################################################################################
@@ -1078,11 +1093,11 @@
     set -r patternGrepFail = '\.'$tagFail'$'
 
     if ( $hostType == 'login' || $hostType == 'ldtn' ) then
-      alias mppnccombine `which mppnccombine` -64 -h 16384 -m
+      alias mppnccombine `which mppnccombine` $mppnccombineOptString
       alias slmnccombine `which combine-ncc`
       alias slmnccompressed `which is-compressed`
     else if ( $hostType == 'c1' || $hostType == 'c2' || $hostType == 't1' || $hostType == 't3' ) then
-      alias mppnccombine aprun -n 1 -N 1 `which mppnccombine` -64 -h 16384 -m
+      alias mppnccombine aprun -n 1 -N 1 `which mppnccombine` $mppnccombineOptString
       alias slmnccombine aprun -n 1 -N 1 `which combine-ncc`
       alias slmnccompressed `which is-compressed`
     else
@@ -1684,7 +1699,7 @@
 	endif
 
 	set ppStarter = $FRE_COMMANDS_HOME/site/gfdl/bin/pp.starter
-	set ppStarterResult = `submit -O "$ppStarterOptions -d $stdoutDirRemotePP -o $stdoutDirRemotePP/" $ppStarter`
+	set ppStarterResult = `submit -O "$ppStarterOptions -v mppnccombineOptString='$mppnccombineOptString' -d $stdoutDirRemotePP -o $stdoutDirRemotePP/" $ppStarter`
 
 	if ( $status == 0 ) then
 	  if ( $echoOn ) unset echo
