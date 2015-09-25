@@ -100,11 +100,23 @@
       exit 1
     endif
 
+    if ( $?freVersion ) then
+      if ( $echoOn ) unset echo
+      echo "<NOTE> : freVersion = '$freVersion'"
+      if ( $echoOn ) set echo
+      set -r freVersion = $freVersion
+    else
+      if ( $echoOn ) unset echo
+      echo "*ERROR*: The argument 'freVersion' is not defined"
+      if ( $echoOn ) set echo
+      exit 1
+    endif
+
   else if ( $# > 0 ) then
 
     alias getopt `which getopt` --shell=tcsh --unquote
 
-    set argv = ( `getopt 'x:P:T:d:t:D:E:' $*` )
+    set argv = ( `getopt 'x:P:T:d:t:D:E:F:' $*` )
     set argvStatus = $status
 
     set expName = ""
@@ -112,6 +124,7 @@
     set platform = ""
     set target = ""
     set firstDate = ""
+    set freVersion = ""
 
     while ( 1 )
       switch ( $argv[1] )
@@ -125,6 +138,8 @@
 	  set target = $argv[2]; shift argv; breaksw;
 	case -t:
 	  set firstDate = $argv[2]; shift argv; breaksw;
+	case -F:
+	  set freVersion = $argv[2]; shift argv; breaksw;
 	default:
 	  if ( $echoOn ) unset echo
 	  echo "*ERROR*: System error"
@@ -145,6 +160,7 @@
       set -r platform = $platform
       set -r target = $target
       set -r firstDate = $firstDate
+      set -r freVersion = $freVersion
     endif
 
     unset argvStatus
@@ -164,7 +180,7 @@
     echo "  -P STRING - platform STRING"
     echo "  -T STRING - target STRING"
     echo "  -t STRING - first date STRING"
-
+    echo "  -F STRING - use freVersion STRING to extract platform csh section"
     if ( $echoOn ) set echo
 
     exit 1
@@ -175,22 +191,13 @@
 #----------------------------- environment setup -------------------------------
 ################################################################################
 
-  # Using xmllint to extract the platform/csh section from the XML
-  # The platform/csh section will be sourced to setup the frepp enviornment
-  ppEnv=`echo "cat //setup/platform[@name='${platform}']/csh/node()" | xmllint --xinclude --nocdata --shell ${xmlFile} | sed sed '/^\/ >/d'`
+  # Use the freVersion to extract the platfrom/csh section.
+  if ( $echoOn ) unset echo
+  csh -c "source ${MODULESHOME}/init/csh; module load fre-commands/${freVersion}; frelist --platform=${platform} --target=${target} --platform-csh --xmlfile=${xmlFile}" | source /dev/stdin
   if ( $status != 0 ) then
-    if ( $echoOn ) unset echo
     echo "*ERROR*: Unable to extract //setup/platform[@name='${platform}'/csh section form xml '${xmlFile}'"
-    if ( $echoOn ) set echo
     exit 1
   endif
-
-  if ( $echoOn ) unset echo
-
-  foreach ppEnvElement ( `echo $ppEnv` )
-    eval $ppEnvElement
-  end
-
   if ( $echoOn ) set echo
 
   # Get the archive directory using frelist, and verify it
@@ -201,7 +208,7 @@
     echo "*ERROR*: Unable to determine the archive directory for experiment '${expName}' in xml '${xmlFile}'"
     if ( $echoOn ) set echo
     exit 1
-  else if ( -d ${dir} ) then
+  else if ( ! -d ${dir} ) then
     if ( $echoOn ) unset echo
     echo "*ERROR*: Archive directory '${dir}' does not exist or isn't a directory"
     if ( $echoOn ) set echo
@@ -220,7 +227,7 @@
 
   if ( ! $echoOn ) set echo
 
-  pp -x $xmlFile -P $platform -T $target -d $dir -t $firstDate -D $expName
+  pp -D -x $xmlFile -P $platform -T $target -d $dir -t $firstDate $expName
 
   if ( $status == 0 ) then
     if ( $echoOn ) unset echo
