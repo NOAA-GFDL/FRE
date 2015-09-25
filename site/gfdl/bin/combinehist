@@ -24,7 +24,14 @@
       exit 1
     endif
 
-    alias mppnccombine `which mppnccombine` -64 -h 16384 -m
+    # Fall back to default combiner string if not found in environment
+    if ( ! $?mppnccombineOptString ) then
+      set -r mppnccombineOptsDefault = '-64 -h 16384 -m'
+      echo "WARNING: Passing mppnccombineOptString from frepp failed, defaulting to '$mppnccombineOptsDefault'"
+      set -r mppnccombineOptString = "$mppnccombineOptsDefault"
+    endif
+
+    alias mppnccombine `which mppnccombine` $mppnccombineOptString
     alias slmnccombine `which combine-ncc`
     alias slmnccompressed `which is-compressed`
 
