@@ -1,6 +1,6 @@
 #!/bin/csh -f
 #FRE scheduler-options
-# 
+#
 # $Id: runscript.template.main,v 1.1.2.25.2.5 2013/12/03 16:17:08 arl Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: Runscript Template - GFDL Workstations Version
@@ -158,6 +158,9 @@
   #FRE run-command-size
   #FRE alias(runCommand)
 
+  #FRE const(mppnccombineOptsRestart)
+  #FRE const(mppnccombineOptsHistory)
+
 ################################################################################
 #------------------------ global constants and aliases -------------------------
 ################################################################################
@@ -199,7 +202,7 @@
 
   set -r hsmDir = $workDir/hsm
 
-  # ---------------- top directory for all the temporary output files 
+  # ---------------- top directory for all the temporary output files
 
   set -r tmpOutputDir = $workDir/output.stager
 
@@ -232,6 +235,7 @@
   # ---------------- FRE runscript site-dependent helper scripts
 
   alias outputStager `which output.stager`
+  @ outputStagerErrors = 0
 
 ################################################################################
 #--------------------------------- environment ---------------------------------
@@ -322,7 +326,7 @@
   limit stacksize unlimited
   limit coredumpsize unlimited
   limit
-      
+
   # ---------------- exit if not running on right machine architecture
 
   set machine = `uname -m`
@@ -386,12 +390,12 @@
 
     if ( -f $reload_file ) then
       if ( -r $reload_file ) then
-	source $reload_file
+        source $reload_file
       else
-	if ( $echoOn ) unset echo
-	echo "*ERROR*: The reload file '$reload_file' is not readable"
+        if ( $echoOn ) unset echo
+        echo "*ERROR*: The reload file '$reload_file' is not readable"
         if ( $echoOn ) set echo
-	exit 1
+        exit 1
       endif
     endif
 
@@ -399,24 +403,24 @@
 
     if ( -f $queue_file ) then
       if ( -r $queue_file ) then
-	source $queue_file
+        source $queue_file
       else
-	if ( $echoOn ) unset echo
-	echo "*ERROR*: The queue file '$queue_file' is not readable"
+        if ( $echoOn ) unset echo
+        echo "*ERROR*: The queue file '$queue_file' is not readable"
         if ( $echoOn ) set echo
-	exit 1
+        exit 1
       endif
     else
       touch $queue_file
       if ( $status == 0 ) then
-	if ( $echoOn ) unset echo
-	echo "<NOTE> : Writing queue information to the queue file '$queue_file' at `date +%s`"
-	if ( $echoOn ) set echo
+        if ( $echoOn ) unset echo
+        echo "<NOTE> : Writing queue information to the queue file '$queue_file' at `date +%s`"
+        if ( $echoOn ) set echo
         echo "set continueFlag = $continueFlag" >> $queue_file
         chmod 644 $queue_file
       else
-	if ( $echoOn ) unset echo
-	echo "*ERROR*: The queue file '$queue_file' can't be saved"
+        if ( $echoOn ) unset echo
+        echo "*ERROR*: The queue file '$queue_file' can't be saved"
         if ( $echoOn ) set echo
         exit 1
       endif
@@ -432,7 +436,7 @@
   endif
 
   if ( $?fyear ) then
-    #remove leading zeros, fyear as integer 
+    #remove leading zeros, fyear as integer
     set fyearint = `echo $fyear | sed 's/^0*//'`
     if ( ${fyearint} > 0 ) then
       @ fyearm1 = ${fyearint} - 1
@@ -455,21 +459,21 @@
   if ( -e $workDir ) then
     if ( -d $workDir ) then
       if ( -r $workDir ) then
-	if ( -w $workDir ) then
+        if ( -w $workDir ) then
           ls -1 --directory --file-type $workDir/* | grep --fixed-strings --invert-match $tmpOutputDir | xargs rm --force --recursive
-          prepareDir $workDir/INPUT 'clean'	|| exit 1
-          prepareDir $workDir/RESTART 'clean'	|| exit 1
-	else
-	  if ( $echoOn ) unset echo
-	  echo "*ERROR*: The directory '$workDir' exists, but is not writable"
-	  if ( $echoOn ) set echo
-	  exit 1
-	endif
+          prepareDir $workDir/INPUT 'clean'     || exit 1
+          prepareDir $workDir/RESTART 'clean'   || exit 1
+        else
+          if ( $echoOn ) unset echo
+          echo "*ERROR*: The directory '$workDir' exists, but is not writable"
+          if ( $echoOn ) set echo
+          exit 1
+        endif
       else
-	if ( $echoOn ) unset echo
-	echo "*ERROR*: The directory '$workDir' exists, but is not readable"
-	if ( $echoOn ) set echo
-	exit 1
+        if ( $echoOn ) unset echo
+        echo "*ERROR*: The directory '$workDir' exists, but is not readable"
+        if ( $echoOn ) set echo
+        exit 1
       endif
     else
       if ( $echoOn ) unset echo
@@ -478,9 +482,9 @@
       exit 1
     endif
   else
-    prepareDir $workDir		|| exit 1
-    prepareDir $workDir/INPUT	|| exit 1
-    prepareDir $workDir/RESTART	|| exit 1
+    prepareDir $workDir         || exit 1
+    prepareDir $workDir/INPUT   || exit 1
+    prepareDir $workDir/RESTART || exit 1
   endif
 
   # ---------------- input data loading
@@ -532,9 +536,9 @@
     exit 1
   endif
 
-  unset gridSpecStatus 
+  unset gridSpecStatus
 
-  @ initCondStatus = 0 
+  @ initCondStatus = 0
 
   if ( ( $initCond:e == 'cpio' || $initCond:e == 'tar' ) && $initCond:r:e == 'nc' ) then
     hsmget $initCond:r:r:s+/++/\* && \
@@ -609,7 +613,7 @@
 
   #FRE namelists
 
-  # ---------------- expand namelists 
+  # ---------------- expand namelists
 
   set months = $monthslist[1]
   set days = $dayslist[1]
@@ -641,7 +645,7 @@
       if ( $echoOn ) set echo
       exit 0
     endif
-  endif 
+  endif
 
 ################################################################################
 #------------------------------- the main loop ---------------------------------
@@ -656,21 +660,21 @@
     if ( $?flagRunTypeProduction ) then
 
       if ( -f $queue_file ) then
-	if ( -r $queue_file ) then
-	  source $queue_file
-	else
-	  if ( $echoOn ) unset echo
-	  echo "*ERROR*: The queue file '$queue_file' is not readable"
+        if ( -r $queue_file ) then
+          source $queue_file
+        else
+          if ( $echoOn ) unset echo
+          echo "*ERROR*: The queue file '$queue_file' is not readable"
           if ( $echoOn ) set echo
-	  exit 1
-	endif
+          exit 1
+        endif
       endif
 
       if ( ! $continueFlag ) then
-	if ( $echoOn ) unset echo
-	echo "<NOTE> : Stopping execution"
-	if ( $echoOn ) set echo
-	exit 0
+        if ( $echoOn ) unset echo
+        echo "<NOTE> : Stopping execution"
+        if ( $echoOn ) set echo
+        exit 0
       endif
 
     endif
@@ -703,9 +707,9 @@
       if ( ! $?OMP_NUM_THREADS ) setenv OMP_NUM_THREADS 1
     else
       unsetenv OMP_NUM_THREADS
-    endif 
+    endif
 
-    echo "Time before runCommand" 
+    echo "Time before runCommand"
     date
 
     runCommand |& tee fms.out
@@ -755,7 +759,7 @@
 
       if ( $#coreFiles > 0 ) then
 
-	if ( ! $?MPI_COREDUMP_DEBUGGER ) setenv MPI_COREDUMP_DEBUGGER 'idb'
+        if ( ! $?MPI_COREDUMP_DEBUGGER ) setenv MPI_COREDUMP_DEBUGGER 'idb'
 
         set coreFileFirst = $coreFiles[1]
         echo "Dump of the core file '$coreFileFirst'" > $coreFileFirst.out
@@ -816,7 +820,7 @@
 
     endif
 
-    echo "Time after runCommand" 
+    echo "Time after runCommand"
     date
 
     # ---------------- generate date for file names
@@ -825,7 +829,7 @@
     if ( $begindate == 'no_time_stamp' ) set begindate = tmp`date '+%j%H%M%S'`
     set enddate = `timeStamp -e`
     if ( $enddate == 'no_time_stamp' ) set enddate = tmp`date '+%j%H%M%S'`
-    set fyear = `echo $enddate | cut -c -4`
+    set fyear = `echo $enddate | timeStamp -y`
 
     # ---------------- commands, copied from XML (experiment/postProcess/csh)
 
@@ -853,39 +857,39 @@
 
         ls -1 | egrep "$patternGrepAscii" | xargs -I'{}' mv --force '{}' $asciiWorkDir/$begindate.'{}'
 
-        set actionSaveOn	= 1
-        set paramArchiveOn	= $?flagOutputArchiveOn
-        @   paramPtmpOn		= ! $?flagOutputArchiveOn
-        set paramCheckSumOn	= $?flagCheckSumOn
-        set paramCompressOn	= $?flagOutputCompressAsciiOn
+        set actionSaveOn        = 1
+        set paramArchiveOn      = $?flagOutputArchiveOn
+        @   paramPtmpOn         = ! $?flagOutputArchiveOn
+        set paramCheckSumOn     = $?flagCheckSumOn
+        set paramCompressOn     = $?flagOutputCompressAsciiOn
 
       else
 
         ls -1 | egrep "$patternGrepAscii" | xargs -I'{}' ln --force '{}' $asciiWorkDir/$begindate.'{}'
 
-        set actionSaveOn	= 1
-        set paramArchiveOn	= 1
-        set paramPtmpOn		= 0
-        set paramCheckSumOn	= 0
-        set paramCompressOn	= 0
+        set actionSaveOn        = 1
+        set paramArchiveOn      = 1
+        set paramPtmpOn         = 0
+        set paramCheckSumOn     = 0
+        set paramCompressOn     = 0
 
       endif
 
       set asciiArgFile = $stateDir/$FRE_JOBID.output.stager.$begindate.A.args
 
-      echo "set expName				=   $name"			 > $asciiArgFile
-      echo "set type				=   ascii"			>> $asciiArgFile
-      echo "set actionCombineOn			=   0"				>> $asciiArgFile
-      echo "set actionCheckOn			=   0"				>> $asciiArgFile
-      echo "set actionSaveOn			=   $actionSaveOn"		>> $asciiArgFile
-      echo "set paramArchiveOn			=   $paramArchiveOn"		>> $asciiArgFile
-      echo "set paramPtmpOn			=   $paramPtmpOn"		>> $asciiArgFile
-      echo "set paramCheckSumOn			=   $paramCheckSumOn"		>> $asciiArgFile
-      echo "set paramCompressOn			=   $paramCompressOn"		>> $asciiArgFile
-      echo "set paramVerbosityOn		=   $?flagVerbosityOn"		>> $asciiArgFile
-      echo "set workDir				=   $tmpOutputDir"		>> $asciiArgFile
-      echo "set ptmpDir				=   $ptmpDir"			>> $asciiArgFile
-      echo "set archDir				=   $asciiArchDir"		>> $asciiArgFile
+      echo "set expName                         =   $name"                       > $asciiArgFile
+      echo "set type                            =   ascii"                      >> $asciiArgFile
+      echo "set actionCombineOn                 =   0"                          >> $asciiArgFile
+      echo "set actionCheckOn                   =   0"                          >> $asciiArgFile
+      echo "set actionSaveOn                    =   $actionSaveOn"              >> $asciiArgFile
+      echo "set paramArchiveOn                  =   $paramArchiveOn"            >> $asciiArgFile
+      echo "set paramPtmpOn                     =   $paramPtmpOn"               >> $asciiArgFile
+      echo "set paramCheckSumOn                 =   $paramCheckSumOn"           >> $asciiArgFile
+      echo "set paramCompressOn                 =   $paramCompressOn"           >> $asciiArgFile
+      echo "set paramVerbosityOn                =   $?flagVerbosityOn"          >> $asciiArgFile
+      echo "set workDir                         =   $tmpOutputDir"              >> $asciiArgFile
+      echo "set ptmpDir                         =   $ptmpDir"                   >> $asciiArgFile
+      echo "set archDir                         =   $asciiArchDir"              >> $asciiArgFile
 
       if ( $?MPICH_RANK_REORDER_METHOD ) then
         set mpiRankReorderMethod = $MPICH_RANK_REORDER_METHOD
@@ -899,10 +903,15 @@
         echo "<NOTE> : The ascii directory '$asciiArchDir' has been processed successfully"
         if ( $echoOn ) set echo
       else
+        @ outputStagerErrors += 1
         if ( $echoOn ) unset echo
-        echo "*ERROR*: Can't process the ascii directory '$asciiArchDir'"
+        set msg = "*WARNING*: Can't submit the output stager job to process the '$asciiArchDir'\n"
+        set msg = "${msg}*WARNING*: ascii files have not been saved, you may need to transfer them manually.\n\n"
+        set msg = "${msg}*WARNING*: The ascii ArgFile has been saved at $asciiArgFile.  You may be able\n"
+        set msg = "${msg}*WARNING*: use the following command:\n\n"
+        set msg = "${msg}*WARNING*: $outputStager $asciiArgFile\n"
+        printf "$msg"
         if ( $echoOn ) set echo
-        exit 1
       endif
 
       if ( $?mpiRankReorderMethod ) then
@@ -942,55 +951,56 @@
 
       ls -1 | egrep "$patternGrepRestart" | xargs ln --force --target-directory=$restartWorkDir
 
-      cp --force --preserve=mode,ownership,timestamps $workDir/input.nml	$restartWorkDir
-      cp --force --preserve=mode,ownership,timestamps $workDir/*_table		$restartWorkDir
-      cp --force --preserve=mode,ownership,timestamps $rtsxml			$restartWorkDir
-      cp --force --preserve=mode,ownership,timestamps $scriptName		$restartWorkDir
+      cp --force --preserve=mode,ownership,timestamps $workDir/input.nml        $restartWorkDir
+      cp --force --preserve=mode,ownership,timestamps $workDir/*_table          $restartWorkDir
+      cp --force --preserve=mode,ownership,timestamps $rtsxml                   $restartWorkDir
+      cp --force --preserve=mode,ownership,timestamps $scriptName               $restartWorkDir
 
       if ( ! $?MPI_FAIL ) then
 
-	if ( $currentSeg < $segmentsPerSimulation && $irun < $segmentsPerJob ) then
+        if ( $currentSeg < $segmentsPerSimulation && $irun < $segmentsPerJob ) then
 
           find $workDir/INPUT   -maxdepth 1 -type f | egrep "$patternGrepRestartNextDrop" | xargs --no-run-if-empty rm --force
           find $workDir/RESTART -maxdepth 1 -type f | egrep "$patternGrepRestartNextMove" | xargs --no-run-if-empty mv --force --target-directory ../INPUT
 
         endif
 
-        set actionCombineOn	= $?flagRunTypeRegression
-        set actionCheckOn	= $?flagOutputCheckOn
-        set actionSaveOn	= 1
-        set paramArchiveOn	= $?flagOutputArchiveOn
-        set paramPtmpOn		= 1
-        set paramCheckSumOn	= $?flagCheckSumOn
-        set paramCompressOn	= $?flagOutputCompressRestartOn
+        set actionCombineOn     = $?flagRunTypeRegression
+        set actionCheckOn       = $?flagOutputCheckOn
+        set actionSaveOn        = 1
+        set paramArchiveOn      = $?flagOutputArchiveOn
+        set paramPtmpOn         = 1
+        set paramCheckSumOn     = $?flagCheckSumOn
+        set paramCompressOn     = $?flagOutputCompressRestartOn
 
       else
 
-        set actionCombineOn	= 0
-        set actionCheckOn	= 0
-        set actionSaveOn	= 1
-        set paramArchiveOn	= 1
-        set paramPtmpOn		= 0
-        set paramCheckSumOn	= 0
-        set paramCompressOn 	= 0
+        set actionCombineOn     = 0
+        set actionCheckOn       = 0
+        set actionSaveOn        = 1
+        set paramArchiveOn      = 1
+        set paramPtmpOn         = 0
+        set paramCheckSumOn     = 0
+        set paramCompressOn     = 0
 
       endif
 
       set restartArgFile = $stateDir/$FRE_JOBID.output.stager.$enddate.R.args
 
-      echo "set expName				=   $name"			 > $restartArgFile 
-      echo "set type				=   restart"			>> $restartArgFile 
-      echo "set actionCombineOn			=   $actionCombineOn"		>> $restartArgFile
-      echo "set actionCheckOn			=   $actionCheckOn"		>> $restartArgFile
-      echo "set actionSaveOn			=   $actionSaveOn"		>> $restartArgFile 
-      echo "set paramArchiveOn			=   $paramArchiveOn"		>> $restartArgFile
-      echo "set paramPtmpOn			=   $paramPtmpOn"		>> $restartArgFile 
-      echo "set paramCheckSumOn			=   $paramCheckSumOn"		>> $restartArgFile
-      echo "set paramCompressOn			=   $paramCompressOn"		>> $restartArgFile
-      echo "set paramVerbosityOn		=   $?flagVerbosityOn"		>> $restartArgFile
-      echo "set workDir				=   $tmpOutputDir"		>> $restartArgFile 
-      echo "set ptmpDir				=   $ptmpDir"			>> $restartArgFile 
-      echo "set archDir				=   $restartArchDir"		>> $restartArgFile 
+      echo "set expName                         =   $name"                       > $restartArgFile
+      echo "set type                            =   restart"                    >> $restartArgFile
+      echo "set actionCombineOn                 =   $actionCombineOn"           >> $restartArgFile
+      echo "set actionCheckOn                   =   $actionCheckOn"             >> $restartArgFile
+      echo "set actionSaveOn                    =   $actionSaveOn"              >> $restartArgFile
+      echo "set paramArchiveOn                  =   $paramArchiveOn"            >> $restartArgFile
+      echo "set paramPtmpOn                     =   $paramPtmpOn"               >> $restartArgFile
+      echo "set paramCheckSumOn                 =   $paramCheckSumOn"           >> $restartArgFile
+      echo "set paramCompressOn                 =   $paramCompressOn"           >> $restartArgFile
+      echo "set paramVerbosityOn                =   $?flagVerbosityOn"          >> $restartArgFile
+      echo "set workDir                         =   $tmpOutputDir"              >> $restartArgFile
+      echo "set ptmpDir                         =   $ptmpDir"                   >> $restartArgFile
+      echo "set archDir                         =   $restartArchDir"            >> $restartArgFile
+      echo "set mppnccombineOptString           =  '$mppnccombineOptsRestart'"  >> $restartArgFile
 
       if ( $?MPICH_RANK_REORDER_METHOD ) then
         set mpiRankReorderMethod = $MPICH_RANK_REORDER_METHOD
@@ -1004,10 +1014,15 @@
         echo "<NOTE> : The restart directory '$restartArchDir' has been processed successfully"
         if ( $echoOn ) set echo
       else
+        @ outputStagerErrors += 1
         if ( $echoOn ) unset echo
-        echo "*ERROR*: Can't save the restart directory '$restartArchDir'"
+        set msg = "*WARNING*: Can't submit the output stager job to process the '$restartArchDir'\n"
+        set msg = "${msg}*WARNING*: restart files have not been saved, you may need to transfer them manually.\n\n"
+        set msg = "${msg}*WARNING*: The restart ArgFile has been saved at $restartArgFile.  You may be able\n"
+        set msg = "${msg}*WARNING*: use the following command:\n\n"
+        set msg = "${msg}*WARNING*: $outputStager $restartArgFile\n"
+        printf "$msg"
         if ( $echoOn ) set echo
-        exit 1
       endif
 
       if ( $?mpiRankReorderMethod ) then
@@ -1039,9 +1054,9 @@
     if ( $#regionHistoryFiles > 0 ) then
 
       if ( ! $?MPI_FAIL ) then
-	foreach file ( $regionHistoryFiles )
+        foreach file ( $regionHistoryFiles )
           mv -f $file `echo $file | sed -r "s/$patternGrepRegion//"`
-	end
+        end
       endif
 
     endif
@@ -1067,45 +1082,46 @@
 
       if ( ! $?MPI_FAIL ) then
 
-	ls -1 | egrep "$patternGrepHistory" | xargs -I'{}' mv --force '{}' $historyWorkDir/$begindate.'{}'
+        ls -1 | egrep "$patternGrepHistory" | xargs -I'{}' mv --force '{}' $historyWorkDir/$begindate.'{}'
 
-        set actionCombineOn	= $?flagOutputCombineHistoryOn
-        set actionCheckOn	= $?flagOutputCheckOn
-        set actionSaveOn	= 1
-        set paramArchiveOn	= $?flagOutputArchiveOn
-        @   paramPtmpOn		= ! $?flagOutputArchiveOn
-        set paramCheckSumOn	= $?flagCheckSumOn
-        set paramCompressOn 	= $?flagOutputCompressHistoryOn
+        set actionCombineOn     = $?flagOutputCombineHistoryOn
+        set actionCheckOn       = $?flagOutputCheckOn
+        set actionSaveOn        = 1
+        set paramArchiveOn      = $?flagOutputArchiveOn
+        @   paramPtmpOn         = ! $?flagOutputArchiveOn
+        set paramCheckSumOn     = $?flagCheckSumOn
+        set paramCompressOn     = $?flagOutputCompressHistoryOn
 
       else
 
-	ls -1 | egrep "$patternGrepHistory" | xargs -I'{}' ln --force '{}' $historyWorkDir/$begindate.'{}'
+        ls -1 | egrep "$patternGrepHistory" | xargs -I'{}' ln --force '{}' $historyWorkDir/$begindate.'{}'
 
-        set actionCombineOn	= 0
-        set actionCheckOn	= 0
-        set actionSaveOn	= 1
-        set paramArchiveOn	= 1
-        set paramPtmpOn		= 0
-        set paramCheckSumOn	= 0
-        set paramCompressOn 	= 0
+        set actionCombineOn     = 0
+        set actionCheckOn       = 0
+        set actionSaveOn        = 1
+        set paramArchiveOn      = 1
+        set paramPtmpOn         = 0
+        set paramCheckSumOn     = 0
+        set paramCompressOn     = 0
 
       endif
 
       set historyArgFile = $stateDir/$FRE_JOBID.output.stager.$begindate.H.args
 
-      echo "set expName				=   $name"			 > $historyArgFile
-      echo "set type				=   history"			>> $historyArgFile
-      echo "set actionCombineOn			=   $actionCombineOn"		>> $historyArgFile
-      echo "set actionCheckOn			=   $actionCheckOn"		>> $historyArgFile
-      echo "set actionSaveOn			=   $actionSaveOn"		>> $historyArgFile
-      echo "set paramArchiveOn			=   $paramArchiveOn"		>> $historyArgFile
-      echo "set paramPtmpOn			=   $paramPtmpOn"		>> $historyArgFile
-      echo "set paramCheckSumOn			=   $paramCheckSumOn"		>> $historyArgFile
-      echo "set paramCompressOn			=   $paramCompressOn"		>> $historyArgFile
-      echo "set paramVerbosityOn		=   $?flagVerbosityOn"		>> $historyArgFile
-      echo "set workDir				=   $tmpOutputDir"		>> $historyArgFile
-      echo "set ptmpDir				=   $ptmpDir"			>> $historyArgFile
-      echo "set archDir				=   $historyArchDir"		>> $historyArgFile
+      echo "set expName                         =   $name"                       > $historyArgFile
+      echo "set type                            =   history"                    >> $historyArgFile
+      echo "set actionCombineOn                 =   $actionCombineOn"           >> $historyArgFile
+      echo "set actionCheckOn                   =   $actionCheckOn"             >> $historyArgFile
+      echo "set actionSaveOn                    =   $actionSaveOn"              >> $historyArgFile
+      echo "set paramArchiveOn                  =   $paramArchiveOn"            >> $historyArgFile
+      echo "set paramPtmpOn                     =   $paramPtmpOn"               >> $historyArgFile
+      echo "set paramCheckSumOn                 =   $paramCheckSumOn"           >> $historyArgFile
+      echo "set paramCompressOn                 =   $paramCompressOn"           >> $historyArgFile
+      echo "set paramVerbosityOn                =   $?flagVerbosityOn"          >> $historyArgFile
+      echo "set workDir                         =   $tmpOutputDir"              >> $historyArgFile
+      echo "set ptmpDir                         =   $ptmpDir"                   >> $historyArgFile
+      echo "set archDir                         =   $historyArchDir"            >> $historyArgFile
+      echo "set mppnccombineOptString           =  '$mppnccombineOptsHistory'"  >> $historyArgFile
 
       if ( $?MPICH_RANK_REORDER_METHOD ) then
         set mpiRankReorderMethod = $MPICH_RANK_REORDER_METHOD
@@ -1119,10 +1135,15 @@
         echo "<NOTE> : The history directory '$historyArchDir' has been processed successfully"
         if ( $echoOn ) set echo
       else
+        @ outputStagerErrors += 1
         if ( $echoOn ) unset echo
-        echo "*ERROR*: Can't process the history directory '$historyArchDir'"
+        set msg = "*WARNING*: Can't submit the output stager job to process the '$historyArchDir'\n"
+        set msg = "${msg}*WARNING*: history files have not been saved, you may need to transfer them manually.\n\n"
+        set msg = "${msg}*WARNING*: The history ArgFile has been saved at $historyArgFile.  You may be able\n"
+        set msg = "${msg}*WARNING*: use the following command:\n\n"
+        set msg = "${msg}*WARNING*: $outputStager $historyArgFile\n"
+        printf "$msg"
         if ( $echoOn ) set echo
-        exit 1
       endif
 
       if ( $?mpiRankReorderMethod ) then
@@ -1179,27 +1200,27 @@
     if ( $?flagRunTypeProduction ) then
 
       if ( $irun < $segmentsPerJob ) then
-	@ irunNext = $irun + 1
+        @ irunNext = $irun + 1
       else
-	@ ireload++
-	@ irunNext = 1
+        @ ireload++
+        @ irunNext = 1
       endif
 
       if ( -f $reload_file ) mv -f $reload_file ${reload_file}_prev
       touch $reload_file
 
       if ( $status == 0 ) then
-	if ( $echoOn ) unset echo
-	echo "<NOTE> : Writing reload information to the reload file '$reload_file' at `date +%s`"
-	if ( $echoOn ) set echo
-	echo "@ ireload       =   $ireload"			>> $reload_file
-	echo "@ irun          =   $irunNext"			>> $reload_file
-	echo "set initCond    =   $restartArchDir.$archExt"	>> $reload_file
-	echo "set fyear       =   $fyear"			>> $reload_file
+        if ( $echoOn ) unset echo
+        echo "<NOTE> : Writing reload information to the reload file '$reload_file' at `date +%s`"
+        if ( $echoOn ) set echo
+        echo "@ ireload       =   $ireload"                     >> $reload_file
+        echo "@ irun          =   $irunNext"                    >> $reload_file
+        echo "set initCond    =   $restartArchDir.$archExt"     >> $reload_file
+        echo "set fyear       =   $fyear"                       >> $reload_file
         chmod 644 $reload_file
       else
-	if ( $echoOn ) unset echo
-	echo "*ERROR*: The reload file '$reload_file' can't be saved"
+        if ( $echoOn ) unset echo
+        echo "*ERROR*: The reload file '$reload_file' can't be saved"
         if ( $echoOn ) set echo
         exit 1
       endif
@@ -1233,28 +1254,28 @@
     if ( $ireload <= $jobsPerSimulation && $currentSeg <= $segmentsPerSimulation ) then
 
       if ( -f $queue_file ) then
-	if ( -r $queue_file ) then
-	  source $queue_file
-	else
-	  if ( $echoOn ) unset echo
-	  echo "*ERROR*: The queue file '$queue_file' is not readable"
+        if ( -r $queue_file ) then
+          source $queue_file
+        else
+          if ( $echoOn ) unset echo
+          echo "*ERROR*: The queue file '$queue_file' is not readable"
           if ( $echoOn ) set echo
-	  exit 1
-	endif
+          exit 1
+        endif
       endif
 
       if ( ! $continueFlag ) then
-	if ( $echoOn ) unset echo
-	echo "<NOTE> : Stopping execution"
-	if ( $echoOn ) set echo
-	exit 0
+        if ( $echoOn ) unset echo
+        echo "<NOTE> : Stopping execution"
+        if ( $echoOn ) set echo
+        exit 0
       endif
 
       if ( -f $scriptName ) then
         batch -f $scriptName
       else
-	if ( $echoOn ) unset echo
-	echo "WARNING: The script '$scriptName' does not exist (run $ireload, loop $irun) - it can't be resubmitted"
+        if ( $echoOn ) unset echo
+        echo "WARNING: The script '$scriptName' does not exist (run $ireload, loop $irun) - it can't be resubmitted"
         if ( $echoOn ) set echo
       endif
 
@@ -1264,7 +1285,7 @@
 
   # ---------------- working directory cleaning
 
-  if ( $?flagWorkDirCleanOn ) then
+  if ( $?flagWorkDirCleanOn && $outputStagerErrors == 0 ) then
 
     workDirCleaner $workDir
 
@@ -1278,9 +1299,15 @@
       if ( $echoOn ) set echo
     endif
 
+  else if ( $?flagWorkDirCleanOn && $outputStagerErrors != 0 ) then
+
+    if ( $echoOn ) unset echo
+    echo "WARNING: Output stager errors ($outputStagerErrors) were encountered.  Unable to clean $workDir."
+    if ( $echoOn ) set echo
+
   endif
 
-  # ---------------- normal end of script 
+  # ---------------- normal end of script
 
   set -r runtimeEnd = `date "+%s"`
   set -r runtime = `echo "$runtimeEnd - $runtimeBeg" | bc -l`

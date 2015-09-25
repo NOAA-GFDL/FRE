@@ -1,77 +1,73 @@
-# template for the GNU compilers
-# typical use with mkmf
-# mkmf -t gnu.mk -c"-Duse_libMPI -Duse_netCDF" path_names /usr/local/include
+# $Id: intel.mk,v 1.1.2.1.2.1.2.1.2.2.6.3 2014/10/15 17:59:28 Seth.Underwood Exp $
+# template for Intel compilers
+# typical use with mkmf:
+# mkmf -t intel.mk -c "-Duse_libMPI -Duse_netCDF" path_names /usr/local/include
+
 ############
 # commands #
 ############
-FC = gfortran
-CC = gcc
-LD = gfortran $(MAIN_PROGRAM)
-#########
-# flags #
-#########
+
+FC = mpiifort
+CC = mpiicc
+CXX = mpiicpc
+LD = mpiifort
+
+############
+#  flags   #
+############
+
 DEBUG =
 REPRO =
 VERBOSE =
 OPENMP =
 
-MAKEFLAGS += --jobs=$(shell grep '^processor' /proc/cpuinfo | wc -l)
+MAKEFLAGS += --jobs=1
 
-FPPFLAGS :=
+FPPFLAGS := -fpp -Wp,-w
 
-FFLAGS := -fcray-pointer -fdefault-real-8 -Waliasing -ffree-line-length-none -fno-range-check
-FFLAGS += $(shell nc-config --fflags)
-#FFLAGS += -I/usr/include/mpich2
-FFLAGS += -I/usr/include/mpich2-x86_64
-FFLAGS_OPT = -O2
-FFLAGS_REPRO =
-FFLAGS_DEBUG = -O0 -g -W -fbounds-check -ffpe-trap=invalid,zero,overflow
-FFLAGS_OPENMP = -fopenmp
-FFLAGS_VERBOSE =
+# NESCC systems set HDF5 as the root directory to the HDF5
+# development libraries.
+INC = -I$(HDF5)/include $(shell nf-config --fflags) 
+FFLAGS := -fno-alias -auto -safe-cray-ptr -ftz -assume byterecl -i4 -r8 -nowarn -sox -traceback $(INC)
+FFLAGS_OPT = -O3 -debug minimal -fp-model source -override-limits
+FFLAGS_DEBUG = -g -O0 -check -check noarg_temp_created -check nopointer -warn -warn noerrors -fpe0 -ftrapuv
+FFLAGS_REPRO = -O2 -debug minimal -fp-model source -override-limits
+FFLAGS_OPENMP = -openmp
+FFLAGS_VERBOSE = -v -V -what
 
-CFLAGS := -D__IFC
-CFLAGS += $(shell nc-config --cflags)
-#CFLAGS += -I/usr/include/mpich2
-CFLAGS += -I/usr/include/mpich2-x86_64
-CFLAGS_OPT = -O2
-CFLAGS_OPENMP = -fopenmp
-CFLAGS_DEBUG = -O0 -g
+CFLAGS := -D__IFC -sox -traceback $(INC)
+CFLAGS_OPT = -O2 -debug minimal
+CFLAGS_OPENMP = -openmp
+CFLAGS_DEBUG = -O0 -g -ftrapuv 
 
-# Optional Testing compile flags.  Mutually exclusive from DEBUG, REPRO, and OPT
-# *_TEST will match the production if no new option(s) is(are) to be tested.
-FFLAGS_TEST = -O2
-CFLAGS_TEST = -O2
+LDFLAGS := -L$(HDF5)/lib $(shell nf-config --flibs)
+LDFLAGS_OPENMP := -openmp
+LDFLAGS_VERBOSE := -Wl,-V,--verbose,-cref,-M
 
-#LDFLAGS := -L/usr/lib/mpich2/lib -lmpich -lmpl -lgomp
-LDFLAGS := -L/usr/lib64/mpich2/lib -lmpich -lgomp
-LDFLAGS_OPENMP := -fopenmp
-LDFLAGS_VERBOSE :=
+# start with blank LIBS
+LIBS :=
 
 ifneq ($(REPRO),)
-CFLAGS += $(CFLAGS_REPRO)
-FFLAGS += $(FFLAGS_REPRO)
-endif
-ifneq ($(DEBUG),)
-CFLAGS += $(CFLAGS_DEBUG)
-FFLAGS += $(FFLAGS_DEBUG)
-else ifneq ($(TEST),)
-CFLAGS += $(CFLAGS_TEST)
-FFLAGS += $(FFLAGS_TEST)
+  CFLAGS += $(CFLAGS_REPRO)
+  FFLAGS += $(FFLAGS_REPRO)
+else ifneq ($(DEBUG),)
+  CFLAGS += $(CFLAGS_DEBUG)
+  FFLAGS += $(FFLAGS_DEBUG)
 else
-CFLAGS += $(CFLAGS_OPT)
-FFLAGS += $(FFLAGS_OPT)
+  CFLAGS += $(CFLAGS_OPT)
+  FFLAGS += $(FFLAGS_OPT)
 endif
 
 ifneq ($(OPENMP),)
-CFLAGS += $(CFLAGS_OPENMP)
-FFLAGS += $(FFLAGS_OPENMP)
-LDFLAGS += $(LDFLAGS_OPENMP)
+  CFLAGS += $(CFLAGS_OPENMP)
+  FFLAGS += $(FFLAGS_OPENMP)
+  LDFLAGS += $(LDFLAGS_OPENMP)
 endif
 
 ifneq ($(VERBOSE),)
-CFLAGS += $(CFLAGS_VERBOSE)
-FFLAGS += $(FFLAGS_VERBOSE)
-LDFLAGS += $(LDFLAGS_VERBOSE)
+  CFLAGS += $(CFLAGS_VERBOSE)
+  FFLAGS += $(FFLAGS_VERBOSE)
+  LDFLAGS += $(LDFLAGS_VERBOSE)
 endif
 
 ifeq ($(NETCDF),3)
@@ -81,7 +77,14 @@ ifeq ($(NETCDF),3)
   endif
 endif
 
-LIBS := $(shell nc-config --flibs) $(shell pkg-config --libs mpich2-f90)
+ifneq ($(findstring netcdf/4,$(LOADEDMODULES)),)
+  LIBS += -lnetcdff -lnetcdf -lhdf5_hl -lhdf5 -lz
+else
+  LIBS += -lnetcdf
+endif
+
+LIBS += 
+LIBS += -lmkl_blas95_lp64 -lmkl_lapack95_lp64 -lmkl_intel_lp64 -lmkl_core -lmkl_sequential 
 LDFLAGS += $(LIBS)
 
 #---------------------------------------------------------------------------

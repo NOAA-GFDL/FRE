@@ -1,7 +1,7 @@
 #!/bin/csh -f
 unalias *
 
-set argv = (`getopt Hbehmsf:t: $*`)
+set argv = (`getopt Hbehmsf:t:y $*`)
 
 #-----------------------------------------------------------------------
 
@@ -14,6 +14,7 @@ set argv = (`getopt Hbehmsf:t: $*`)
  set hours   = 0
  set minutes = 0
  set seconds = 0
+ set years = 0
 
 #-----------------------------------------------------------------------
 
@@ -35,6 +36,8 @@ while ("$argv[1]" != "--")
             set format = $argv[2]; shift argv; breaksw
         case -t:
             set sep = $argv[2]; shift argv; breaksw
+        case -y:
+            set years = 1; breaksw
     endsw
     shift argv
 end
@@ -54,6 +57,7 @@ shift argv
       -s hours,minutes,seconds
       -f format=standard(default),european,digital
       -t separator (default=blank)
+      -y year
 
 END
    exit
@@ -122,6 +126,7 @@ END
         if ( $hours   ) set date_name = $date_name$hsep$hour_num
         if ( $minutes ) set date_name = $date_name$sep$min_num
         if ( $seconds ) set date_name = $date_name$sep$sec_num
+        if ( $years   ) set date_name = $year
 
  else
 #    --- dummy values ---

@@ -5,11 +5,36 @@ our @ISA=qw(Exporter);
 our @EXPORT_OK=qw(analysis);
 
 sub analysis {
-
-   my ($ts_av_Node,$expt,$gridspec,$staticfile,$tsORav,$diagfile,$ppRootDir, 
-       $component,$dtvars_ref,$analysisdir,$aoutscriptdir,$workdir, 
-       $archivedir,$opt_t,$opt_O,$opt_Y,$opt_Z,$opt_v,$opt_u,$sim0,$opt_R,$opt_s,
-       $hist_dir,$nlat,$nlon,$frexml,$stdoutdir,$opt_P,$opt_T) = @_; 
+   my $args = shift;
+   my $ts_av_Node = $args->{node};
+   my $expt = $args->{experiment};
+   my $gridspec = $args->{gridSpec};
+   my $staticfile = $args->{staticFile};
+   my $tsORav = $args->{type};
+   my $diagfile = $args->{diagSrc};
+   my $ppRootDir = $args->{ppRootDir};
+   my $component = $args->{comp};
+   my $dtvars_ref = $args->{dtvarsRef};
+   my $analysisdir = $args->{analysisDir};
+   my $aoutscriptdir = $args->{scriptDir};
+   my $workdir = $args->{workDir};
+   my $archivedir = $args->{archDir};
+   my $opt_t = $args->{opt_t};
+   my $opt_O = $args->{opt_O};
+   my $opt_Y = $args->{opt_Y};
+   my $opt_Z = $args->{opt_Z};
+   my $opt_V = $args->{opt_V};
+   my $opt_u = $args->{opt_u};
+   my $sim0 = $args->{sim0};
+   my $opt_R = $args->{opt_R};
+   my $hist_dir = $args->{histDir};
+   my $nlat = $args->{nLat};
+   my $nlon = $args->{nLon};
+   my $frexml = $args->{absXmlPath};
+   my $stdoutdir = $args->{stdoutDir};
+   my $opt_P = $args->{opt_P};
+   my $opt_T = $args->{stdTarget};
+   my $opt_s = $args->{opt_s};
 
 # exit if no analysis nodes found
    my $anum = &anodenum($ts_av_Node);
@@ -17,7 +42,7 @@ sub analysis {
    #$opt_v=1;
 
 #----list inputs
-   if($opt_v) {
+   if($opt_V) {
                print "node: $tsORav\n";
                print "component: $component\n";
                print "expt: $expt\n";
@@ -34,17 +59,17 @@ sub analysis {
       $freq = $ts_av_Node->findvalue('@freq');
       $cl = $ts_av_Node->findvalue('@chunkLength');
       $asrcdir = "$ppRootDir/$component/ts/$freq/$cl";
-      if($opt_v) {print "freq: $freq\nchunkLength: $cl\n";}
+      if($opt_V) {print "freq: $freq\nchunkLength: $cl\n";}
    }elsif($tsORav eq "timeAverage") {
       $freq = $ts_av_Node->findvalue('@source');
       $cl = $ts_av_Node->findvalue('@interval');
       $asrcdir = "$ppRootDir/$component/av/$freq"."_$cl";
-      if($opt_v) {print "source: $freq\ninterval: $cl\n";}
+      if($opt_V) {print "source: $freq\ninterval: $cl\n";}
    }else{
    print STDERR "ERROR from analysis.PM: timeSeries or timeAverage must be specified. Skip analysis\n";return;
    }
 
-      if($opt_v) {
+      if($opt_V) {
                print "gridspec: $gridspec\n";
                print "staticfile: $staticfile\n";
                print "diagfile: $diagfile\n";
@@ -58,7 +83,7 @@ sub analysis {
                print "\$opt_O: $opt_O\n";
                print "\$opt_Y: $opt_Y\n";
                print "\$opt_Z: $opt_Z\n";
-               print "\$opt_v: $opt_v\n";
+               print "\$opt_V: $opt_V\n";
                print "\$opt_s: $opt_s\n";
                print "sim0: $sim0\n";
                print "hist_dir: $hist_dir\n";
@@ -66,7 +91,7 @@ sub analysis {
                }
 
 
-   if( $opt_v ) {print STDERR "ANALYSIS: Found $anum analysis scripts for $asrcdir\n";}
+   if( $opt_V ) {print STDERR "ANALYSIS: Found $anum analysis scripts for $asrcdir\n";}
 
    my $clnumber = $cl;
    $clnumber =~ s/yr$//;
@@ -79,11 +104,11 @@ sub analysis {
    my  @availablechunkslast = @$last_ref;
 
 # do not do anything if no data available
-   if (@availablechunksfirst < 1 ) { 
+   if (@availablechunksfirst < 1 ) {
       print STDERR "ANALYSIS: No data available for analysis figures in $asrcdir\n\n";
       return;}
 
-   if ($opt_v) {print STDERR "availablechunks start= @availablechunksfirst\n";
+   if ($opt_V) {print STDERR "availablechunks start= @availablechunksfirst\n";
                 print STDERR "availablechunks end  = @availablechunkslast\n";
    }
 
@@ -120,7 +145,7 @@ sub analysis {
      $arrayofExptsH[$iExpt]{dataendyr} = $dataendyr;
 
      # variables for the expt to go into the array of expt hash
-     $arrayofExptsH[$iExpt]{exptname} = $expt; 
+     $arrayofExptsH[$iExpt]{exptname} = $expt;
      $arrayofExptsH[$iExpt]{clnumber} = $clnumber;
      $arrayofExptsH[$iExpt]{archivedir} = cleanpath($archivedir);
      $arrayofExptsH[$iExpt]{asrcdir} = cleanpath($asrcdir);
@@ -145,20 +170,20 @@ sub analysis {
      my $addexptyrstr ;
      foreach my $addexptNode ( $ananode->findnodes('addexpt')) {
        $iExpt++;
-       my @fields = queueAnaAttr($addexptNode); 
+       my @fields = queueAnaAttr($addexptNode);
        push @arrayofExptsH, { @fields };
 
-       # check the addexpt. switch, exptname, xmlfile, script 
+       # check the addexpt. switch, exptname, xmlfile, script
        # must on, or found, or exist. Otherwise exit the analysis node.
        my $switch = $arrayofExptsH[$iExpt]->{'switch'};
        if  ((substr($switch,0,2) eq "of") or (substr($switch,0,2) eq "OF")) { last;}
        if ( ! $arrayofExptsH[$iExpt]->{exptname} ) {
-             print STDERR "ANALYSIS: No experiment name specified for the addexpt. Skipped\n"; 
+             print STDERR "ANALYSIS: No experiment name specified for the addexpt. Skipped\n";
              $myflag = -1;last;}
-       
-       if ( ! $arrayofExptsH[$iExpt]->{xmlfile} ) {print STDERR "ANALYSIS: No xmlfile specified for the addexpt. Skipped\n"; 
+
+       if ( ! $arrayofExptsH[$iExpt]->{xmlfile} ) {print STDERR "ANALYSIS: No xmlfile specified for the addexpt. Skipped\n";
              $myflag = -1;last;}
-       if ( ! -e  $arrayofExptsH[$iExpt]->{xmlfile} ) {print STDERR "ANALYSIS: xmlfile does not exist for the addexpt. Skipped\n"; 
+       if ( ! -e  $arrayofExptsH[$iExpt]->{xmlfile} ) {print STDERR "ANALYSIS: xmlfile does not exist for the addexpt. Skipped\n";
             $myflag = -1;last;}
 
        my $freopts = '';
@@ -186,7 +211,7 @@ sub analysis {
            $asrcdir_addexpt = "$ppRootDir/$component/av/$freq"."_$addexptcl";
        }
 
-       if($opt_v) {
+       if($opt_V) {
        print " addexpt $iExpt xmlfile   = $xmlfile \n";
        print " addexpt $iExpt exptname  = $exptname \n";
        print " addexpt $iExpt ppRootDir = $ppRootDir \n";
@@ -203,23 +228,23 @@ sub analysis {
 
        # exit the analysis node if no data available
        if (@addavailablechunksfirst < 1 ) { print STDERR "ANALYSIS: requested data not found for the addexpt. Skipped\n";
-             $myflag = -1;last;}           
+             $myflag = -1;last;}
 
 
-       #---- start and end date from the <addexpt argument>, if not found, use cntl's 
+       #---- start and end date from the <addexpt argument>, if not found, use cntl's
        my $astart = $arrayofExptsH[$iExpt]->{astartYear} || $arrayofExptsH[0]->{astartYear};
        my $aend = $arrayofExptsH[$iExpt]->{aendYear} || $arrayofExptsH[0]->{aendYear};
 
        #----adjust start and end date
        my ($flag, $astartYear, $aendYear, $databegyr, $dataendyr,@missing) = start_end_date($astart,$aend,$astart, $aend,\@addavailablechunksfirst, \@addavailablechunkslast,$clnumber);
-       if ($flag eq "bad" or ($tsORav eq "timeSeries" and @missing > 0) ) { 
+       if ($flag eq "bad" or ($tsORav eq "timeSeries" and @missing > 0) ) {
            print STDERR "ANALYSIS:   files are not complete for addexpt $iExpt. Skipped. \n";
-           if ($opt_v) {print STDERR "ANALYSIS: Missing chunks: \n @missing \n"};
+           if ($opt_V) {print STDERR "ANALYSIS: Missing chunks: \n @missing \n"};
            $myflag = -1; last; }
 
        if ($astartYear and $aendYear) {$addexptyrstr = $astartYear."-".$aendYear}
 
-       if($opt_v) {print STDERR " addexpt $iExpt astartYear: $astartYear aendYear: $aendYear databegyr: $databegyr dataendyr: $dataendyr\n";
+       if($opt_V) {print STDERR " addexpt $iExpt astartYear: $astartYear aendYear: $aendYear databegyr: $databegyr dataendyr: $dataendyr\n";
                    print STDERR " addexpt $iExpt missing: @missing\n";
                   }
        #
@@ -242,7 +267,7 @@ sub analysis {
        $arrayofExptsH[$iExpt]{nlat} = $nlat;
 
      } ########### foreach my $addexptNode
-    
+
      if ($myflag eq -1)  {
       #print STDERR "addexpts data not complete. process next analysis node\n";
         next;}
@@ -257,7 +282,7 @@ sub analysis {
      $aScript =~ s/"//g;
      $aScript =~ s/\$\(name\)/$expt/g;
      my @afile = split('\/',$aScript);
-     if ( $opt_v ) {
+     if ( $opt_V ) {
         print  STDERR "###analysis script $aScript\n";
         print  STDERR "###analysis### argu," ,@aargu,"\n";
      }
@@ -265,15 +290,15 @@ sub analysis {
      ### find the cksum CRC number of the @aargu
      my @cksumCRC = (-1);
      if (@aargu gt 0) { @cksumCRC = split("\ ",`echo "@aargu" | cksum`)};
-     if ( $opt_v ) { "The cksumCRC of aargu array = $cksumCRC[0] \n   "};
-      
+     if ( $opt_V ) { "The cksumCRC of aargu array = $cksumCRC[0] \n   "};
+
 
      ### define where to put the figures: $figureDir
      my $figureDir = "";
      if ($opt_O) { $figureDir = $opt_O; }#taking command line output dir
      if (! $figureDir) { $figureDir = $ananode->findnodes('outdir'); } # the <outdir> node in <analysis>
      if (! $figureDir) { $figureDir = $arrayofExptsH[0]{figureDir} ;} # the attribute of <analysis>
-     if (! $figureDir) { $figureDir = "$analysisdir" ;} # the node in <setup> 
+     if (! $figureDir) { $figureDir = "$analysisdir" ;} # the node in <setup>
      if (! $figureDir) { $figureDir = "$archivedir" ; }# the default
      $figureDir =~ s/\$user/$user/g;
      $figureDir =~ s/\$USER/$user/g;
@@ -283,10 +308,10 @@ sub analysis {
      $figureDir =~ s/\$addexptName/$arrayofExptsH[1]{exptname}/;
      $figureDir =~ s/"//g;
      $figureDir =~ s/\/$//g;
-     print "ANALYSIS: Figures will be written to $figureDir\n" if $opt_v;
+     print "ANALYSIS: Figures will be written to $figureDir\n" if $opt_V;
      #might be in /net, so can't mkdir directly, analysis scripts must create this.
-     #unless (-d "$figureDir") { 
-     #   print "ANALYSIS: Creating output dir $figureDir\n";# if $opt_v;
+     #unless (-d "$figureDir") {
+     #   print "ANALYSIS: Creating output dir $figureDir\n";# if $opt_V;
      #   if ( substr($figureDir,0,8) eq '/archive' ) {
      #       acarch("mkdir -p $figureDir ");
      #   } else {
@@ -294,7 +319,7 @@ sub analysis {
      #   }
      #}
 
-     ### $aoutscriptdir_final: $aoutscriptdir appended with expts 
+     ### $aoutscriptdir_final: $aoutscriptdir appended with expts
      my $aoutscriptdir_final;
      if ($iExpt == 0) {
          $aoutscriptdir_final = "$aoutscriptdir";
@@ -303,8 +328,8 @@ sub analysis {
          if ($addexptyrstr) {$aoutscriptdir_final = "$aoutscriptdir/${expt}/vs_$arrayofExptsH[$iExpt]{exptname}_$addexptyrstr"};
      }else{
          $aoutscriptdir_final = "$aoutscriptdir/vs_${iExpt}_addexpt";
-     }   
-     
+     }
+
      unless (-d "$aoutscriptdir_final") { system "mkdir -p $aoutscriptdir_final"; }
 
      my $aScriptout; # the script to submit for each analysis
@@ -312,7 +337,7 @@ sub analysis {
      my $unique = '';
      if ( $opt_u ) { $unique = ".$opt_u" };
 
-     #### 
+     ####
      # if specify1year is found
      if ($arrayofExptsH[0]{specify1year}) {
         my $availablechunk = $arrayofExptsH[0]{specify1year};
@@ -323,17 +348,17 @@ sub analysis {
           $aScriptout = "$aoutscriptdir_final/$afile[$#afile].$availablechunk$unique";
         }
         if ( -e $aScriptout and ! $opt_R ) { print STDERR "ANALYSIS: $aScriptout already exists, SKIP\n"; next;}
-        filltemplate(\@arrayofExptsH,cleanpath($figureDir),$aScript,\@aargu,cleanpath($aScriptout),$iExpt,cleanpath($workdir),$mode,cleanpath($asrcfile),$opt_s,$opt_u,$opt_v,cleanpath($frexml),cleanpath($stdoutdir),$opt_P,$opt_T);
+        filltemplate(\@arrayofExptsH,cleanpath($figureDir),$aScript,\@aargu,cleanpath($aScriptout),$iExpt,cleanpath($workdir),$mode,cleanpath($asrcfile),$opt_s,$opt_u,$opt_V,cleanpath($frexml),cleanpath($stdoutdir),$opt_P,$opt_T);
      #
      } else {
-       
-     # 
+
+     #
        my $cumulative;
        if ($tsORav eq "timeSeries") { $cumulative = $arrayofExptsH[0]{cumulative}||"yes";}
        if ($tsORav eq "timeAverage") { $cumulative = $arrayofExptsH[0]{cumulative}||"no";}
 
        if ($cumulative eq "yes" or $cumulative eq "YES") {
-         if ($opt_v) {print "accumulative mode \n";}
+         if ($opt_V) {print "accumulative mode \n";}
          my $availablechunk = "$arrayofExptsH[0]{astartYear}-$arrayofExptsH[0]{aendYear}";
          if ($arrayofExptsH[0]{specify1year}) {$availablechunk = $arrayofExptsH[0]{specify1year};}
          if ($cksumCRC[0] gt 0) {
@@ -354,23 +379,23 @@ sub analysis {
          $tt =~ s/\,\}$/\}/;
          $tt =~ s/\ //g;
          my $asrcfile = "$component.$tt.$ssn.nc";
-         if ($opt_v) {print "asrcfile:: $asrcfile\n"};
-     
+         if ($opt_V) {print "asrcfile:: $asrcfile\n"};
+
 
         #----#---- fill the variables in the template
-        #if ($opt_v) {print STDERR "fill these vars: @arrayofExptsH\n,$figureDir\n,$aScript\n,$aScriptout\n,$iExpt\n,$workdir\n,$mode\n"; }
-         if ($tsORav eq "timeAverage") { 
-           filltemplate(\@arrayofExptsH,cleanpath($figureDir),$aScript,\@aargu,cleanpath($aScriptout),$iExpt,cleanpath($workdir),$mode,cleanpath($asrcfile),$opt_s,$opt_u,$opt_v,cleanpath($frexml),cleanpath($stdoutdir),$opt_P,$opt_T); 
+        #if ($opt_V) {print STDERR "fill these vars: @arrayofExptsH\n,$figureDir\n,$aScript\n,$aScriptout\n,$iExpt\n,$workdir\n,$mode\n"; }
+         if ($tsORav eq "timeAverage") {
+           filltemplate(\@arrayofExptsH,cleanpath($figureDir),$aScript,\@aargu,cleanpath($aScriptout),$iExpt,cleanpath($workdir),$mode,cleanpath($asrcfile),$opt_s,$opt_u,$opt_V,cleanpath($frexml),cleanpath($stdoutdir),$opt_P,$opt_T);
          } else {
-           filltemplate(\@arrayofExptsH,cleanpath($figureDir),$aScript,\@aargu,cleanpath($aScriptout),$iExpt,cleanpath($workdir),$mode,"",$opt_s,$opt_u,$opt_v,cleanpath($frexml),cleanpath($stdoutdir),$opt_P,$opt_T); 
+           filltemplate(\@arrayofExptsH,cleanpath($figureDir),$aScript,\@aargu,cleanpath($aScriptout),$iExpt,cleanpath($workdir),$mode,"",$opt_s,$opt_u,$opt_V,cleanpath($frexml),cleanpath($stdoutdir),$opt_P,$opt_T);
          }
 
-       } else { #if ($cumulative 
+       } else { #if ($cumulative
 
-       if ($opt_v) {print "non-accumulative mode \n"; }
+       if ($opt_V) {print "non-accumulative mode \n"; }
        # loop through each available chunk
        my $afreq = $arrayofExptsH[0]{afreq};
-       for (my $n = 0; $n<@availablechunksfirst;$n=$n+$afreq) {                                   
+       for (my $n = 0; $n<@availablechunksfirst;$n=$n+$afreq) {
          if ($availablechunksfirst[$n] <  $databegyr or $availablechunkslast[$n] > $dataendyr ) {next;}
 
          my $availablechunk = "$availablechunksfirst[$n]-$availablechunkslast[$n]";
@@ -396,11 +421,11 @@ sub analysis {
          }
 
          #----#---- fill the variables in the template
-         #if ($opt_v) {print STDERR "fill these vars: @arrayofExptsH\n,$figureDir\n,$aScript\n,$aScriptout\n,$iExpt\n,$workdir\n,$mode\n";}
-         if ($tsORav eq "timeAverage") { 
-           filltemplate(\@arrayofExptsH,cleanpath($figureDir),$aScript,\@aargu,cleanpath($aScriptout),$iExpt,cleanpath($workdir),$mode,cleanpath($asrcfile),$opt_s,$opt_u,$opt_v,cleanpath($frexml),cleanpath($stdoutdir),$opt_P,$opt_T); 
+         #if ($opt_V) {print STDERR "fill these vars: @arrayofExptsH\n,$figureDir\n,$aScript\n,$aScriptout\n,$iExpt\n,$workdir\n,$mode\n";}
+         if ($tsORav eq "timeAverage") {
+           filltemplate(\@arrayofExptsH,cleanpath($figureDir),$aScript,\@aargu,cleanpath($aScriptout),$iExpt,cleanpath($workdir),$mode,cleanpath($asrcfile),$opt_s,$opt_u,$opt_V,cleanpath($frexml),cleanpath($stdoutdir),$opt_P,$opt_T);
          } else {
-           filltemplate(\@arrayofExptsH,cleanpath($figureDir),$aScript,\@aargu,cleanpath($aScriptout),$iExpt,cleanpath($workdir),$mode,"",$opt_s,$opt_u,$opt_v,cleanpath($frexml),cleanpath($stdoutdir),$opt_P,$opt_T); 
+           filltemplate(\@arrayofExptsH,cleanpath($figureDir),$aScript,\@aargu,cleanpath($aScriptout),$iExpt,cleanpath($workdir),$mode,"",$opt_s,$opt_u,$opt_V,cleanpath($frexml),cleanpath($stdoutdir),$opt_P,$opt_T);
          }
        }  #for (my $n = 0 ...
      } #if ($cumulative ..
@@ -427,7 +452,7 @@ sub graindate {
    } elsif ( "$freq" =~ /season/ ) {
       my $month = substr($date,4,2);
       unless ( $month==12 or $month==3 or $month==6 or $month==9  ) {
-         if ($opt_v) {print STDERR "WARNING: graindate: $month is not the beginning of a known season.\n";}
+         if ($opt_V) {print STDERR "WARNING: graindate: $month is not the beginning of a known season.\n";}
       }
       my $year = substr($date,0,4);
       if ( $month == 12 ) {
@@ -502,7 +527,7 @@ sub writescript {
 }
 
 
-#---- find out all the availablechunks from first file to last file. Missing chunks 
+#---- find out all the availablechunks from first file to last file. Missing chunks
 # in between are not checked, but the chunks with unexpected chunklength are excluded.
 
 sub availablechunks {
@@ -513,7 +538,7 @@ sub availablechunks {
    #my @existingall = <$asrcdir/$component.*.nc>; #unacceptable performance on the pp/an nodes
    opendir(my $dh, "$asrcdir");
    my @existingall = map { $_ =~ s/(.*)/$asrcdir\/$1/ ; $_; } sort( grep { /$component.*.nc$/ } readdir($dh) );
-   closedir($dh); 
+   closedir($dh);
 
    #print "existingall has this many members: $#existingall\n";
    #print "existingall[0] is $existingall[0]\n";
@@ -522,7 +547,7 @@ sub availablechunks {
       #my @cpios = <$asrcdir/$component.*.nc.cpio>;
       opendir(my $dh, "$asrcdir");
       my @cpios = map { $_ =~ s/(.*)/$asrcdir\/$1/ ; $_; } sort( grep { /$component.*.nc.cpio/ } readdir($dh) );
-      closedir($dh); 
+      closedir($dh);
       if (@cpios < 1) {
          print STDERR "ANALYSIS: No .nc or .nc.cpio files found in: $asrcdir\n";
       } else {
@@ -571,7 +596,7 @@ sub availablechunks {
        @availablechunksfirst = (@availablechunksfirst, substr($first,0,6));
        @availablechunkslast = (@availablechunkslast, substr($last,0,6));
      }
-   } 
+   }
 
    return \@availablechunksfirst,\@availablechunkslast;
 }
@@ -588,7 +613,7 @@ sub checkmissingchunks {
 
    for (my $check = $databegyr; $check <= $dataendyr ;$check += $clnumber) {
      #print "CHECKMISSINGCHUNKS: $check"."$month ne ".substr($chunks[$count],0,6)."\n";
-     if ( padzeros($check).$month != substr($chunks[$count],0,6) ) { 
+     if ( padzeros($check).$month != substr($chunks[$count],0,6) ) {
        @themissing = (@themissing,$check);
      }
      if ( "$month" eq '' and $count >= @chunks ) { last; }   #works for models starting in Jan
@@ -601,19 +626,19 @@ sub checkmissingchunks {
 sub filltemplate {
 
 # fill the template with the passing variables
-    my ($arrayofExptsH_ref,$figureDir,$aScript,$aargu,$aScriptout,$iExpt,$workdir,$mode,$asrcfile,$opt_s,$opt_u,$opt_v,$frexml,$stdoutdir,$platform,$target) = @_; 
-    
-    #if ( $opt_v ) {
+    my ($arrayofExptsH_ref,$figureDir,$aScript,$aargu,$aScriptout,$iExpt,$workdir,$mode,$asrcfile,$opt_s,$opt_u,$opt_V,$frexml,$stdoutdir,$platform,$target) = @_;
+
+    #if ( $opt_V ) {
     #   for(my $j=0; $j<2;$j++) {
     #      while(($key,$value) = each %{$arrayofExptsH_ref->[$j]} ) {
     #         print STDERR "$key -- $value\n";
     #      }
     #      print STDERR "\n";
     #   }
-    #   print STDERR "in filltemplate: iExpt=$iExpt\n\n"; 
+    #   print STDERR "in filltemplate: iExpt=$iExpt\n\n";
     #}
 
-#    my ($aScriptout,$aScript, $workdir, $mode, $momGrid,$gridspec,$staticfile,$asrcdir,$asrcfile,$expt,$figureDir,$astartYear,$aendYear,$databegyr,$dataendyr,$clnumber,$specify1year,$archivedir) = @_; 
+#    my ($aScriptout,$aScript, $workdir, $mode, $momGrid,$gridspec,$staticfile,$asrcdir,$asrcfile,$expt,$figureDir,$astartYear,$aendYear,$databegyr,$dataendyr,$clnumber,$specify1year,$archivedir) = @_;
     my $printout = "$aScriptout.printout";  #change this to send the stdout to stdoutdir... but will break analysis scripts. -arl
     chomp( my $scriptexists = `[ -f "$aScript" ] && echo exists`);
     unless ( $scriptexists eq "exists" ) {
@@ -638,7 +663,7 @@ sub filltemplate {
     # a1r edit ln below
     $tmpsch =~ s/out_dir = ""\s*$/out_dir = \"$figureDir\"/m;
     $tmpsch =~ s/set printout\s*$/set printout = $printout/m;
-    # a1r edit ln below 
+    # a1r edit ln below
     $tmpsch =~ s/printout = ""\s*$/printout = \"$printout\"/m;
 
     #----
@@ -654,12 +679,12 @@ sub filltemplate {
     $tmpsch =~ s/argu = ""\s*$/argu = \"(@$aargu)\"/m;
     $tmpsch =~ s/set in_data_dir\s*$/set in_data_dir = $arrayofExptsH_ref->[0]->{asrcdir}/m;
     #a1r edit ln below
-    $tmpsch =~ s/in_data_dir = ""\s*$/in_data_dir = \"$arrayofExptsH_ref->[0]->{asrcdir}\"/m;  
+    $tmpsch =~ s/in_data_dir = ""\s*$/in_data_dir = \"$arrayofExptsH_ref->[0]->{asrcdir}\"/m;
     #$tmpsch =~ s/set in_data_file/set in_data_file = $arrayofExptsH_ref->[0]->{asrcfile}/m;
     $tmpsch =~ s/set in_data_file\s*$/set in_data_file = $asrcfile/m;
     #a1r edit ln below
     $tmpsch =~ s/in_data_file = ""\s*$/in_data_file = \"$asrcfile\"/m;
-  
+
     $tmpsch =~ s/set descriptor\s*$/set descriptor = $arrayofExptsH_ref->[0]->{exptname}/m;
     #a1r edit ln below
     $tmpsch =~ s/descriptor = ""\s*$/descriptor = \"$arrayofExptsH_ref->[0]->{exptname}\"/m;
@@ -671,13 +696,13 @@ sub filltemplate {
     $tmpsch =~ s/yr2 = ""\s*$/yr2 = \"$arrayofExptsH_ref->[0]->{aendYear}\"/m;
     $tmpsch =~ s/set databegyr\s*$/set databegyr = $arrayofExptsH_ref->[0]->{databegyr}/m;
     #a1r edit ln below
-    $tmpsch =~ s/databegyr = ""\s*$/databegyr = \"$arrayofExptsH_ref->[0]->{databegyr}\"/m; 
+    $tmpsch =~ s/databegyr = ""\s*$/databegyr = \"$arrayofExptsH_ref->[0]->{databegyr}\"/m;
     $tmpsch =~ s/set dataendyr\s*$/set dataendyr = $arrayofExptsH_ref->[0]->{dataendyr}/m;
     #a1r edit ln below
-    $tmpsch =~ s/dataendyr = ""\s*$/dataendyr = \"$arrayofExptsH_ref->[0]->{dataendyr}\"/m;  
+    $tmpsch =~ s/dataendyr = ""\s*$/dataendyr = \"$arrayofExptsH_ref->[0]->{dataendyr}\"/m;
     $tmpsch =~ s/set datachunk\s*$/set datachunk = $arrayofExptsH_ref->[0]->{clnumber}/m;
     #a1r edit ln below
-    $tmpsch =~ s/datachunk = ""\s*$/datachunk = \"$arrayofExptsH_ref->[0]->{clnumber}\"/m; 
+    $tmpsch =~ s/datachunk = ""\s*$/datachunk = \"$arrayofExptsH_ref->[0]->{clnumber}\"/m;
     # specify_yr is a particular year, set by user, for daily data
     $tmpsch =~ s/set specify_yr\s*$/set specify_yr = $arrayofExptsH_ref->[0]->{specify1year}/m;
     $tmpsch =~ s/set hist_dir\s*$/set hist_dir = $arrayofExptsH_ref->[0]->{hist_dir}/m;
@@ -724,7 +749,7 @@ sub filltemplate {
     }
 
     writescript($tmpsch,$mode,$aScriptout,$aargu,$opt_s);
-}  
+}
 
 sub adjYearlow {
 # adjust data-beging-year to the beginging/endding of a data chunk
@@ -778,7 +803,7 @@ sub queueAnaAttr {
 
      my $afreq = $anaNode->findvalue('@DeltaInterval');
      if ( ! $afreq) {$afreq = 1};
-     
+
      my $name = $anaNode->findvalue('@name');
      my $xml = $anaNode->findvalue('@xmlfile');
      my $platform = $anaNode->findvalue('@platform');
@@ -792,7 +817,7 @@ sub queueAnaAttr {
 }
 
 sub seasonAV {
-   # season is used for finding chunks 
+   # season is used for finding chunks
    # ssn is for output files
    my $frequency = $_[0];
 
@@ -809,13 +834,13 @@ sub seasonAV {
       $ssn = "{ann}";
    }
    return $season, $ssn;
- 
+
 }
 sub start_end_date {
 # $astartYear (input/output): start date. Always use $opt_Y if exist.
 #                     Set to first available chunk year if not specified by user.
 # $aendYear (input/output): end date
-# $databegyr (output): data start date. Low edge of $astartYear 
+# $databegyr (output): data start date. Low edge of $astartYear
 # $dataendyr (output): data end date. High edge of $aendYear
 
      my ($astartYear,$aendYear,$opt_Y, $opt_Z,$availablechunksfirst_ref, $availablechunkslast_ref,$clnumber)=@_;
@@ -824,9 +849,9 @@ sub start_end_date {
      my @availablechunkslast = @$availablechunkslast_ref;
      my $flag = "good";
 
-     # If user did not specify a start or end year, the start or end year 
+     # If user did not specify a start or end year, the start or end year
      # will be first year of the first available chunk and
-     # the last year of the last available chunk 
+     # the last year of the last available chunk
 
      my $first0 = $availablechunksfirst[0];
      my $last0 = $availablechunkslast[$#availablechunkslast];
@@ -863,10 +888,10 @@ sub start_end_date {
       $astartYear = substr($astartYear,0,4);
       $aendYear = substr($aendYear,0,4);
 
-      if ($opt_v) {print STDERR "ANALYSIS: user specified start and end year: $astartYear - $aendYear\n";}
+      if ($opt_V) {print STDERR "ANALYSIS: user specified start and end year: $astartYear - $aendYear\n";}
 
 
-     # user specified years do not have to be on the begin or end of data chunks       
+     # user specified years do not have to be on the begin or end of data chunks
      #----#---- data period needed for the start year
      my $databegyr = padzeros(adjYearlow($astartYear,@availablechunksfirst));
      if (!$databegyr) {print STDERR "ANALYSIS: No required data available\n";next;}
@@ -906,30 +931,30 @@ sub start_end_date {
      #   print STDERR "Analysis: cannot process timeSeries, missing these chunks: @themissing. \n";
      #}
 
-     if ( $opt_v) {print STDERR "ANALYSIS: data needed for the start year and end year: $databegyr - $dataendyr\n";}
+     if ( $opt_V) {print STDERR "ANALYSIS: data needed for the start year and end year: $databegyr - $dataendyr\n";}
 
      return $flag,$astartYear,$aendYear,$databegyr,$dataendyr,@themissing;
 }
 
-#gets a value from xml, recurse using @inherit and optional second argument $expt  
+#gets a value from xml, recurse using @inherit and optional second argument $expt
 sub getxpathval {
-   my $path = $_[0]; 
+   my $path = $_[0];
    my $e = $expt;
-   if ( $_[1] ) { $e = $_[1]; }  
-   if ( $_[2] ) { $root = $_[2]; }  
+   if ( $_[1] ) { $e = $_[1]; }
+   if ( $_[2] ) { $root = $_[2]; }
    checkExptExists($e);
    my $value = $root->findvalue("experiment[\@label='$e' or \@name='$e']/$path");
    $value =~ s/\$root/$rootdir/g;
    $value =~ s/\$archive/$archivedir/g;
-   $value =~ s/\$name/$e/g;                                                        
-   $value =~ s/\$label/$e/g;                                                       
-   if ("$value" eq "") { 
-      my $mommy = $root->findvalue("experiment[\@label='$e' or \@name='$e']/\@inherit"); 
+   $value =~ s/\$name/$e/g;
+   $value =~ s/\$label/$e/g;
+   if ("$value" eq "") {
+      my $mommy = $root->findvalue("experiment[\@label='$e' or \@name='$e']/\@inherit");
       if( "$mommy" eq "" ) {                                                             return "";
       } else {                                                                           return getxpathval($path,$mommy);                                            }
-   } else { 
-      return $value;                                                               }           
-}           
+   } else {
+      return $value;                                                               }
+}
 
 #make sure experiment exists in xml
 sub checkExptExists {
@@ -956,7 +981,7 @@ sub anodenum {
        if ( (substr($switch,0,2) ne "of") and (substr($switch,0,2) ne "OF")) {$anum++;}
      }
     return $anum;
-}    
+}
 
 #manipulate /archive
 sub acarch {

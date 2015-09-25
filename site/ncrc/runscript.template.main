@@ -1,7 +1,7 @@
 #!/bin/csh -fx
 #FRE scheduler-options
 # 
-# $Id: runscript.template.main,v 1.1.4.115.2.5.2.1.4.3 2014/05/09 18:32:40 sdu Exp $
+# $Id: runscript.template.main,v 1.1.4.115.2.5.2.1.4.3.2.1 2014/12/05 17:00:23 sdu Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: Runscript Template - NCRC Version
 # ------------------------------------------------------------------------------
@@ -324,7 +324,7 @@
   set -r runtimeBeg = `date "+%s"`
 
   if ( $echoOn ) unset echo
-  echo '<NOTE> : ====== FRE RUNSCRIPT $Id: runscript.template.main,v 1.1.4.115.2.5.2.1.4.3 2014/05/09 18:32:40 sdu Exp $ ======'
+  echo '<NOTE> : ====== FRE RUNSCRIPT $Id: runscript.template.main,v 1.1.4.115.2.5.2.1.4.3.2.1 2014/12/05 17:00:23 sdu Exp $ ======'
   echo "<NOTE> : Starting at $HOST on `date`"
   if ( $echoOn ) set echo
 
@@ -459,6 +459,9 @@
   #FRE run-command-size
   #FRE alias(runCommand)
 
+  #FRE const(mppnccombineOptsRestart)
+  #FRE const(mppnccombineOptsHistory)
+
 ################################################################################
 #------------------------ global constants and aliases -------------------------
 ################################################################################
@@ -563,6 +566,7 @@
   alias outputStager `which output.stager`
 
   set -r outputStager = `alias outputStager`
+  @ outputStagerErrors = 0
 
   # ---------------- finding command
 
@@ -1398,7 +1402,7 @@
     if ( $begindate == 'no_time_stamp' ) set begindate = tmp`date '+%j%H%M%S'`
     set enddate = `timeStamp -e`
     if ( $enddate == 'no_time_stamp' ) set enddate = tmp`date '+%j%H%M%S'`
-    set fyear = `echo $enddate | cut -c -4`
+    set fyear = `echo $enddate | timeStamp -y`
 
     # ---------------- commands, copied from XML (experiment/postProcess/csh)
 
@@ -1514,10 +1518,18 @@
           echo "<NOTE> : The ascii directory '$asciiArchDir' has been processed successfully"
           if ( $echoOn ) set echo
         else
+          @ outputStagerErrors += 1
           if ( $echoOn ) unset echo
-          echo "*ERROR*: Can't process the ascii directory '$asciiArchDir'"
+          set msg = "*WARNING*: Can't process the ascii directory '$asciiArchDir'\n"
+          set msg = "${msg}*WARNING*: ascii files have not been saved, you may need to transfer them manually.\n\n"
+          set msg = "${msg}*WARNING*: The ascii ArgFile has been saved at $asciiArgFile.  You may be able\n"
+          set msg = "${msg}*WARNING*: use the following command:\n\n"
+          set msg = "${msg}*WARNING*: $outputStager $asciiArgFile\n"
+          if ( $?batch ) then
+            printf "$msg" | mailx -s "Can't process ascii directory '$asciiArchDir'" $USER@noaa.gov
+          endif
+          printf "$msg"
           if ( $echoOn ) set echo
-          exit 1
 	endif
 
         if ( $?mpiRankReorderMethod ) then
@@ -1538,10 +1550,18 @@
             set saveJobIds = ( $saveJobIds $asciiResult )
             set argFiles = ( $argFiles $asciiArgFile:t )
           else
+            @ outputStagerErrors += 1
             if ( $echoOn ) unset echo
-            echo "*ERROR*: Can't submit the output stager job to process the '$asciiArchDir' (saving)"
+            set msg = "*WARNING*: Can't submit the output stager job to process the '$asciiArchDir' (saving)\n"
+            set msg = "${msg}*WARNING*: ascii files have not been saved, you may need to transfer them manually.\n\n"
+            set msg = "${msg}*WARNING*: The ascii ArgFile has been saved at $asciiArgFile.  You may be able\n"
+            set msg = "${msg}*WARNING*: use the following command:\n\n"
+            set msg = "${msg}*WARNING*: $outputStager $asciiArgFile\n"
+            if ( $?batch ) then
+              printf "$msg" | mailx -s "Can't submit the output stager job to process the '$asciiArchDir' (saving)" $USER@noaa.gov
+            endif
+            printf "$msg"
             if ( $echoOn ) set echo
-            exit 1
 	  endif
 
           unset asciiResult
@@ -1557,10 +1577,18 @@
             echo "<NOTE> : The output stager job '$asciiResult' to process the '$asciiArchDir' (transfer) has been submitted successfully"
             if ( $echoOn ) set echo
           else
+            @ outputStagerErrors += 1
             if ( $echoOn ) unset echo
-            echo "*ERROR*: Can't submit the output stager job to process the '$asciiArchDir' (transfer)"
+            set msg = "*WARNING*: Can't submit the output stager job to process the '$asciiArchDir' (saving)\n"
+            set msg = "${msg}*WARNING*: ascii files have not been saved, you may need to transfer them manually.\n\n"
+            set msg = "${msg}*WARNING*: The ascii ArgFile has been saved at $asciiArgFile.  You may be able\n"
+            set msg = "${msg}*WARNING*: use the following command:\n\n"
+            set msg = "${msg}*WARNING*: $outputStager $asciiArgFile\n"
+            if ( $?batch ) then
+              printf "$msg" | mailx -s "Can't submit the output stager job to process the '$asciiArchDir' (saving)" $USER@noaa.gov
+            endif
+            printf "$msg"
             if ( $echoOn ) set echo
-            exit 1
 	  endif
 
           unset asciiResult
@@ -1580,10 +1608,18 @@
             set saveJobIds = ( $saveJobIds $asciiResult )
             set argFiles = ( $argFiles $asciiArgFile:t )
           else
+            @ outputStagerErrors += 1
             if ( $echoOn ) unset echo
-            echo "*ERROR*: Can't submit the output stager job to process the '$asciiArchDir'"
+            set msg = "*WARNING*: Can't submit the output stager job to process the '$asciiArchDir'\n"
+            set msg = "${msg}*WARNING*: ascii files have not been saved, you may need to transfer them manually.\n\n"
+            set msg = "${msg}*WARNING*: The ascii ArgFile has been saved at $asciiArgFile.  You may be able\n"
+            set msg = "${msg}*WARNING*: use the following command:\n\n"
+            set msg = "${msg}*WARNING*: $outputStager $asciiArgFile\n"
+            if ( $?batch ) then
+              printf "$msg" | mailx -s "Can't submit the output stager job to process the '$asciiArchDir'" $USER@noaa.gov
+            endif
+            printf "$msg"
             if ( $echoOn ) set echo
-            exit 1
 	  endif
 
           unset asciiResult
@@ -1671,9 +1707,16 @@
               if ( $echoOn ) set echo
 	    else
 	      if ( $echoOn ) unset echo
-	      echo "*ERROR*: Can't save the restart directory '$restartArchDir'"
+              set msg = "*ERROR*: Can't save the restart directory '$restartArchDir'\n"
+              set msg = "${msg}*ERROR*: restart files have not been saved.  Files will remain in the work directory\n\n"
+              set msg = "${msg}*ERROR*: $workDir\n\n"
+              set msg = "${msg}*ERROR*: To continue the model, you will need to recover the restart files manually.\n"
+              if ( $?batch ) then
+                printf "$msg" | mailx -s "Can't save the restart directory '$restartArchDir'\n" $USER@noaa.gov
+              endif
+              printf "$msg"
+              set restartSaveFailure = 1
 	      if ( $echoOn ) set echo
-	      exit 1
 	    endif
           endif
 
@@ -1747,6 +1790,7 @@
       echo "set xferToolModuleFilesDir		=   $xferToolModuleFilesDir"	>> $restartArgFile
       echo "set xferToolVersion			=   $xferToolVersion"		>> $restartArgFile
       echo "set modulesHomeDir			=   $modulesHomeDir"		>> $restartArgFile
+      echo "set mppnccombineOptString           =  '$mppnccombineOptsRestart'"  >> $restartArgFile
 
       if ( $?flagOutputStagingTypeOnline ) then
 
@@ -1762,10 +1806,18 @@
           echo "<NOTE> : The restart directory '$restartArchDir' has been processed successfully"
           if ( $echoOn ) set echo
         else
+          @ outputStagerErrors += 1
           if ( $echoOn ) unset echo
-          echo "*ERROR*: Can't save the restart directory '$restartArchDir'"
+          set msg = "*WARNING*: Can't save the restart directory '$restartArchDir'\n"
+          set msg = "${msg}*WARNING*: restart files have not been saved, you may need to transfer them manually.\n\n"
+          set msg = "${msg}*WARNING*: The restart ArgFile has been saved at $restartArgFile.  You may be able\n"
+          set msg = "${msg}*WARNING*: use the following command:\n\n"
+          set msg = "${msg}*WARNING*: $outputStager $restartArgFile\n"
+          if ( $?batch ) then
+            printf "$msg" | mailx -s "Can't save the restart directory '$restartArchDir'\n" $USER@noaa.gov
+          endif
+          printf "$msg"
           if ( $echoOn ) set echo
-          exit 1
 	endif
 
         if ( $?mpiRankReorderMethod ) then
@@ -1786,10 +1838,18 @@
             set saveJobIds = ( $saveJobIds $restartResult )
             set argFiles = ( $argFiles $restartArgFile:t )
           else
+            @ outputStagerErrors += 1
             if ( $echoOn ) unset echo
-            echo "*ERROR*: Can't submit the output stager job to process the '$restartArchDir' (saving)"
+            set msg = "*WARNING*: Can't submit the output stager job to process the '$restartArchDir' (saving)\n"
+            set msg = "${msg}*WARNING*: restart files have not been saved, you may need to transfer them manually.\n\n"
+            set msg = "${msg}*WARNING*: The restart ArgFile has been saved at $restartArgFile.  You may be able\n"
+            set msg = "${msg}*WARNING*: use the following command:\n\n"
+            set msg = "${msg}*WARNING*: $outputStager $restartArgFile\n"
+            if ( $?batch ) then
+              printf "$msg" | mailx -s "Can't submit the output stager job to process the '$restartArchDir' (saving)" $USER@noaa.gov
+            endif
+            printf "$msg"
             if ( $echoOn ) set echo
-            exit 1
 	  endif
 
           unset restartResult
@@ -1805,10 +1865,18 @@
             echo "<NOTE> : The output stager job '$restartResult' to process the '$restartArchDir' (transfer) has been submitted successfully"
             if ( $echoOn ) set echo
           else
+            @ outputStagerErrors += 1
             if ( $echoOn ) unset echo
-            echo "*ERROR*: Can't submit the output stager job to process the '$restartArchDir' (transfer)"
+            set msg = "*WARNING*: Can't submit the output stager job to process the '$restartArchDir' (transfer)\n"
+            set msg = "${msg}*WARNING*: restart files have not been saved, you may need to transfer them manually.\n\n"
+            set msg = "${msg}*WARNING*: The restart ArgFile has been saved at $restartArgFile.  You may be able\n"
+            set msg = "${msg}*WARNING*: use the following command:\n\n"
+            set msg = "${msg}*WARNING*: $outputStager $restartArgFile\n"
+            if ( $?batch ) then
+              printf "$msg" | mailx -s "Can't submit the output stager job to process the '$restartArchDir' (transfer)" $USER@noaa.gov
+            endif
+            printf "$msg"
             if ( $echoOn ) set echo
-            exit 1
 	  endif
 
           unset restartResult
@@ -1828,10 +1896,18 @@
             set saveJobIds = ( $saveJobIds $restartResult )
             set argFiles = ( $argFiles $restartArgFile:t )
           else
+            @ outputStagerErrors += 1
             if ( $echoOn ) unset echo
-            echo "*ERROR*: Can't submit the output stager job to process the '$restartArchDir'"
+            set msg = "*WARNING*: Can't submit the output stager job to process the '$restartArchDir'\n"
+            set msg = "${msg}*WARNING*: restart files have not been saved, you may need to transfer them manually.\n\n"
+            set msg = "${msg}*WARNING*: The restart ArgFile has been saved at $restartArgFile.  You may be able\n"
+            set msg = "${msg}*WARNING*: use the following command:\n\n"
+            set msg = "${msg}*WARNING*: $outputStager $restartArgFile\n"
+            if ( $?batch ) then
+              printf "$msg" | mailx -s "Can't submit the output stager job to process the '$restartArchDir'" $USER@noaa.gov
+            endif
+            printf "$msg"
             if ( $echoOn ) set echo
-            exit 1
 	  endif
 
           unset restartResult
@@ -1898,6 +1974,7 @@
       
       if ( ! $?MPI_FAIL ) then
 
+        ls -1 | egrep "^[0-9][0-9][0-9][0-9][0-9][0-9].+$patternGrepHistory" | xargs -I'{}' mv --force '{}' $historyWorkDir/'{}'
 	ls -1 | egrep "$patternGrepHistory" | xargs -I'{}' mv --force '{}' $historyWorkDir/$begindate.'{}'
 
 	if ( $?flagOutputXferOn ) then
@@ -1920,7 +1997,7 @@
 	if ( $?flagOutputPostProcessOn && $?flagOutputXferOn && $segmentsPerPPCall > 0 && $#combineList == $segmentsPerPPCall && $monthslist[$irun] > 0 ) then
           set actionPPStartOn = 1
 	  if ( $#combineList > 0 ) then
-            set firstDate = `echo $combineList[1] | cut -c -8`
+            set firstDate = `echo $combineList[1] | awk -F . '{print $1}'`
 	  else
             set firstDate = $begindate
 	  endif
@@ -1959,6 +2036,7 @@
 
       else
 
+        ls -1 | egrep "^[0-9][0-9][0-9][0-9][0-9][0-9].+$patternGrepHistory" | xargs -I'{}' mv --force '{}' $historyWorkDir/$begindate.'{}'
 	ls -1 | egrep "$patternGrepHistory" | xargs -I'{}' ln --force '{}' $historyWorkDir/$begindate.'{}'
 
         set historyOutputDirRemote = ""
@@ -2026,6 +2104,7 @@
       echo "set xferToolModuleFilesDir		=   $xferToolModuleFilesDir"	>> $historyArgFile
       echo "set xferToolVersion			=   $xferToolVersion"		>> $historyArgFile
       echo "set modulesHomeDir			=   $modulesHomeDir"		>> $historyArgFile
+      echo "set mppnccombineOptString           =  '$mppnccombineOptsHistory'"  >> $historyArgFile
 
       if ( $?flagOutputStagingTypeOnline ) then
 
@@ -2041,10 +2120,18 @@
           echo "<NOTE> : The history directory '$historyArchDir' has been processed successfully"
           if ( $echoOn ) set echo
         else
+          @ outputStagerErrors += 1
           if ( $echoOn ) unset echo
-          echo "*ERROR*: Can't process the history directory '$historyArchDir'"
+          set msg = "*WARNING*: Can't process the history directory '$historyArchDir'\n"
+          set msg = "${msg}*WARNING*: history files have not been saved, you may need to transfer them manually.\n\n"
+          set msg = "${msg}*WARNING*: The history ArgFile has been saved at $historyArgFile.  You may be able\n"
+          set msg = "${msg}*WARNING*: use the following command:\n\n"
+          set msg = "${msg}*WARNING*: $outputStager $historyArgFile\n"
+          if ( $?batch ) then
+            printf "$msg" | mailx -s "Can't process the history directory '$historyArchDir'" $USER@noaa.gov
+          endif
+          printf "$msg"
           if ( $echoOn ) set echo
-          exit 1
 	endif
 
         if ( $?mpiRankReorderMethod ) then
@@ -2065,10 +2152,18 @@
             set saveJobIds = ( $saveJobIds $historyResult )
             set argFiles = ( $argFiles $historyArgFile:t )
           else
+            @ outputStagerErrors += 1
             if ( $echoOn ) unset echo
-            echo "*ERROR*: Can't submit the output stager job to process the '$historyArchDir' (saving)"
+            set msg = "*WARNING*: Can't submit the output stager job to process the '$historyArchDir' (saving)\n"
+            set msg = "${msg}*WARNING*: history files have not been saved, you may need to transfer them manually.\n\n"
+            set msg = "${msg}*WARNING*: The history ArgFile has been saved at $historyArgFile.  You may be able\n"
+            set msg = "${msg}*WARNING*: use the following command:\n\n"
+            set msg = "${msg}*WARNING*: $outputStager $historyArgFile\n"
+            if ( $?batch ) then
+              printf "$msg" | mailx -s "Can't submit the output stager job to process the '$historyArchDir' (saving)" $USER@noaa.gov
+            endif
+            printf "$msg"
             if ( $echoOn ) set echo
-            exit 1
 	  endif
 
           unset historyResult
@@ -2084,10 +2179,18 @@
             echo "<NOTE> : The output stager job '$historyResult' to process the '$historyArchDir' (transfer) has been submitted successfully"
             if ( $echoOn ) set echo
           else
+            @ outputStagerErrors += 1
             if ( $echoOn ) unset echo
-            echo "*ERROR*: Can't submit the output stager job to process the '$historyArchDir' (transfer)"
+            set msg = "*WARNING*: Can't submit the output stager job to process the '$historyArchDir' (transfer)\n"
+            set msg = "${msg}*WARNING*: history files have not been saved, you may need to transfer them manually.\n\n"
+            set msg = "${msg}*WARNING*: The history ArgFile has been saved at $historyArgFile.  You may be able\n"
+            set msg = "${msg}*WARNING*: use the following command:\n\n"
+            set msg = "${msg}*WARNING*: $outputStager $historyArgFile\n"
+            if ( $?batch ) then
+              printf "$msg" | mailx -s "Can't submit the output stager job to process the '$historyArchDir' (transfer)" $USER@noaa.gov
+            endif
+            printf "$msg"
             if ( $echoOn ) set echo
-            exit 1
 	  endif
 
           unset historyResult
@@ -2107,10 +2210,18 @@
             set saveJobIds = ( $saveJobIds $historyResult )
             set argFiles = ( $argFiles $historyArgFile:t )
           else
+            @ outputStagerErrors += 1
             if ( $echoOn ) unset echo
-            echo "*ERROR*: Can't submit the output stager job to process the '$historyArchDir'"
+            set msg = "*WARNING*: Can't submit the output stager job to process the '$historyArchDir'\n"
+            set msg = "${msg}*WARNING*: history files have not been saved, you may need to transfer them manually.\n\n"
+            set msg = "${msg}*WARNING*: The history ArgFile has been saved at $historyArgFile.  You may be able\n"
+            set msg = "${msg}*WARNING*: use the following command:\n\n"
+            set msg = "${msg}*WARNING*: $outputStager $historyArgFile\n"
+            if ( $?batch ) then
+              printf "$msg" | mailx -s "Can't submit the output stager job to process the '$historyArchDir'" $USER@noaa.gov
+            endif
+            printf "$msg"
             if ( $echoOn ) set echo
-            exit 1
 	  endif
 
           unset historyResult
@@ -2161,10 +2272,10 @@
 
     # ---------------- terminate script if there are no restart files
 
-    if ( $#restartFiles == 0 ) then
+    if ( $#restartFiles == 0 || $?restartSaveFailure ) then
 
       if ( $echoOn ) unset echo
-      echo "*ERROR*: no restart files exist (segment $currentSeg)"
+      echo "*ERROR*: no restart files exist or save failed (segment $currentSeg)"
       if ( $echoOn ) set echo
 
       exit 1
@@ -2311,7 +2422,7 @@
 
   # ---------------- working directory cleaning
 
-  if ( $?flagWorkDirCleanOn ) then
+  if ( $?flagWorkDirCleanOn && $outputStagerErrors == 0 ) then
 
     if ( $?flagOutputStagingTypeOnline ) then
 
@@ -2371,6 +2482,12 @@
       unset inx
 
     endif
+
+  else if ( $?flagWorkDirCleanOn && $outputStagerErrors != 0 ) then
+
+    if ( $echoOn ) unset echo
+    echo "WARNING: Output stager errors ($outputStagerErrors) were encountered.  Unable to clean $workDir."
+    if ( $echoOn ) set echo
 
   endif
 
