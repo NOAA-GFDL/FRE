@@ -61,7 +61,7 @@ use vars qw( $mosaic_type $sourceGrid $xyInterp $xyInterpRegridFile );
       'wait|w=s',
       'plus|p=i',
 
-      'refineDiag|D=s',
+      'refineDiag|D:s',
       'refineDiagOnly|H',
 
       'AnalysisOnly|A',
@@ -384,6 +384,11 @@ $version_head .= "-x $abs_xml_path ";
 
    my $exp = FREExperiment->new($fre, $expt) or exit(1);
    $fre->setCurrentExperimentName($expt);
+   # Get the refineDiag scripts from the XML if -D given
+   # on the command line with no string
+   if (defined($opt{refineDiag}) and not $opt_D) {
+     $opt_D = $exp->extractPPRefineDiagScripts;
+   }
    $rootdir = $exp->rootDir();
    if ( (! -d $rootdir) or (! -w $rootdir) and (! $opt_O) ) {
       system("mkdir -p $rootdir");

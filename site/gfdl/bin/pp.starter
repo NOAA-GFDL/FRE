@@ -1,28 +1,11 @@
 #!/bin/csh -f
-# 
-# $Id: pp.starter,v 1.1.2.10 2011/09/23 21:33:27 afy Exp $
+#
 # ------------------------------------------------------------------------------
-# FMS/FRE Project: Post-Processor Starter - GFDL Version 
+# FMS/FRE Project: Post-Processor Starter - GFDL Version
 # ------------------------------------------------------------------------------
-# afy    Ver   1.00  Initial version                                May 11
-# afy    Ver   2.00  Remove temporary XML file in batch mode        May 11
-# afy    Ver   2.01  Standardize PBS environment determination      May 11
-# afy    Ver   2.02  Add 'getopt'-based calling interface           May 11
-# afy    Ver   2.03  Remove arguments target/project                May 11
-# afy    Ver   2.04  Replace modulePath/modulesToLoad => ppEnv (!)  May 11
-# afy    Ver   3.00  Simplify calling interface                     May 11
-# afy    Ver   4.00  Fix the XML file removal                       May 11
-# afy    Ver   5.00  Remove dummy file instead of the XML file      May 11
-# afy    Ver   6.00  Use eval to expand the XML filepath            May 11
-# afy    Ver   7.00  Don't use eval to expand the XML filepath      May 11
-# afy    Ver   8.00  Add argument 'target'                          May 11
-# afy    Ver   9.00  Modify refineDiagList (translate '&' => ',')   June 11
-# afy    Ver  10.00  Remove dummy files in the script beginning     September 11
-# afy    Ver  10.01  No batch mode with arguments                   September 11
-# afy    Ver  10.02  Modify refineDiagList (translate '+' => ',')   September 11
-# ------------------------------------------------------------------------------
-# Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2000-2011
-# Designed and written by V. Balaji, Amy Langenhorst and Aleksey Yakovlev
+# Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2000-2011, 2015
+# Designed and written by V. Balaji, Amy Langenhorst, Aleksey Yakovlev and
+# Seth Underwood
 #
 
   set -r echoOn = $?echo
@@ -56,7 +39,7 @@
 ################################################################################
 
   if ( $?batch && $# == 0 ) then
-  
+
     if ( $?expName ) then
       if ( $echoOn ) unset echo
       echo "<NOTE> : expName = '$expName'"
@@ -105,18 +88,6 @@
       exit 1
     endif
 
-    if ( $?dir ) then
-      if ( $echoOn ) unset echo
-      echo "<NOTE> : dir = '$dir'"
-      if ( $echoOn ) set echo
-      set -r dir = $dir 
-    else
-      if ( $echoOn ) unset echo
-      echo "*ERROR*: The argument 'dir' is not defined"
-      if ( $echoOn ) set echo
-      exit 1
-    endif
-
     if ( $?firstDate ) then
       if ( $echoOn ) unset echo
       echo "<NOTE> : firstDate = '$firstDate'"
@@ -127,20 +98,6 @@
       echo "*ERROR*: The argument 'firstDate' is not defined"
       if ( $echoOn ) set echo
       exit 1
-    endif
-
-    if ( $?refineDiagList ) then
-      if ( $echoOn ) unset echo
-      echo "<NOTE> : refineDiagList = '$refineDiagList'"
-      if ( $echoOn ) set echo
-      set -r refineDiagList = `echo $refineDiagList | tr '+' ','`
-    endif
-
-    if ( $?ppEnv ) then
-      if ( $echoOn ) unset echo
-      echo "<NOTE> : ppEnv = '$ppEnv'"
-      if ( $echoOn ) set echo
-      set -r ppEnv = $ppEnv
     endif
 
   else if ( $# > 0 ) then
@@ -154,10 +111,7 @@
     set xmlFile = ""
     set platform = ""
     set target = ""
-    set dir = ""
     set firstDate = ""
-    set refineDiagList = ""
-    set ppEnv = ""
 
     while ( 1 )
       switch ( $argv[1] )
@@ -166,22 +120,16 @@
 	case -x:
 	  set xmlFile = $argv[2]; shift argv; breaksw;
 	case -P:
-	  set platform = $argv[2]; shift argv; breaksw; 
+	  set platform = $argv[2]; shift argv; breaksw;
 	case -T:
-	  set target = $argv[2]; shift argv; breaksw; 
-	case -d:
-	  set dir = $argv[2]; shift argv; breaksw;
+	  set target = $argv[2]; shift argv; breaksw;
 	case -t:
 	  set firstDate = $argv[2]; shift argv; breaksw;
-	case -D:
-	  set refineDiagList = $argv[2]; shift argv; breaksw;
-	case -E:
-	  set ppEnv = $argv[2]; shift argv; breaksw;
 	default:
-          if ( $echoOn ) unset echo
+	  if ( $echoOn ) unset echo
 	  echo "*ERROR*: System error"
-          if ( $echoOn ) set echo
-          exit 1
+	  if ( $echoOn ) set echo
+	  exit 1
       endsw
       shift argv
     end
@@ -196,10 +144,7 @@
       set -r xmlFile = $xmlFile
       set -r platform = $platform
       set -r target = $target
-      set -r dir = $dir
       set -r firstDate = $firstDate
-      set -r refineDiagList = $refineDiagList
-      set -r ppEnv = $ppEnv
     endif
 
     unset argvStatus
@@ -216,12 +161,10 @@
     if ( $echoOn ) unset echo
     echo "Usage: $0:t [options] experiment"
     echo "  -x STRING - XML file absolute pathname STRING"
-    echo "  -P STRING - platform STRING" 
-    echo "  -T STRING - target STRING" 
-    echo "  -d STRING - a directory STRING with history files"
+    echo "  -P STRING - platform STRING"
+    echo "  -T STRING - target STRING"
     echo "  -t STRING - first date STRING"
-    echo "  -D STRING - a comma-separated list STRING of refine diagnostics scripts"
-    echo "  -E STRING - a colon-separated list STRING of environment setting commands with spaces, replaced by '+'"
+
     if ( $echoOn ) set echo
 
     exit 1
@@ -232,19 +175,44 @@
 #----------------------------- environment setup -------------------------------
 ################################################################################
 
+  # Using xmllint to extract the platform/csh section from the XML
+  # The platform/csh section will be sourced to setup the frepp enviornment
+  ppEnv=`echo "cat //setup/platform[@name='${platform}']/csh/node()" | xmllint --xinclude --nocdata --shell ${xmlFile} | sed sed '/^\/ >/d'`
+  if ( $status != 0 ) then
+    if ( $echoOn ) unset echo
+    echo "*ERROR*: Unable to extract //setup/platform[@name='${platform}'/csh section form xml '${xmlFile}'"
+    if ( $echoOn ) set echo
+    exit 1
+  endif
+
   if ( $echoOn ) unset echo
 
-  foreach ppEnvElement ( `echo $ppEnv | tr ':' '\n'` )
-    eval `echo $ppEnvElement | tr '+' ' '`
-  end 
+  foreach ppEnvElement ( `echo $ppEnv` )
+    eval $ppEnvElement
+  end
 
   if ( $echoOn ) set echo
+
+  # Get the archive directory using frelist, and verify it
+  # exists and is a directory
+  set -r dir = "`frelist --directory=archive --platform=${platform} --target=${target} --xmlfile=${xmlFile} ${expName}`/history"
+  if ( $status != 0 ) then
+    if ( $echoOn ) unset echo
+    echo "*ERROR*: Unable to determine the archive directory for experiment '${expName}' in xml '${xmlFile}'"
+    if ( $echoOn ) set echo
+    exit 1
+  else if ( -d ${dir} ) then
+    if ( $echoOn ) unset echo
+    echo "*ERROR*: Archive directory '${dir}' does not exist or isn't a directory"
+    if ( $echoOn ) set echo
+    exit 1
+  endif
 
 ################################################################################
 #------------------------ global constants and aliases -------------------------
 ################################################################################
 
-  alias pp `which frepp` -v -c split -s 
+  alias pp `which frepp` -v -c split -s
 
 ################################################################################
 #--------------------------- the post-processor call ---------------------------
@@ -252,7 +220,7 @@
 
   if ( ! $echoOn ) set echo
 
-  pp -x $xmlFile -P $platform -T $target -d $dir -t $firstDate -D "$refineDiagList" $expName
+  pp -x $xmlFile -P $platform -T $target -d $dir -t $firstDate -D $expName
 
   if ( $status == 0 ) then
     if ( $echoOn ) unset echo
