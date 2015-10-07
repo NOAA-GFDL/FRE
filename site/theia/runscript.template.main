@@ -1,9 +1,9 @@
 #!/bin/csh -fx
 #FRE scheduler-options
-# 
+#
 # $Id: runscript.template.main,v 1.1.2.30.2.4.4.4.2.2 2014/05/09 18:32:13 sdu Exp $
 # ------------------------------------------------------------------------------
-# FMS/FRE Project: Runscript Template - NESCC Version
+# FMS/FRE Project: Runscript Template - theia Version
 # ------------------------------------------------------------------------------
 # afy    Ver   1.00  Initial version                                April 12
 # afy    Ver   2.00  Fix memory option for saving jobs              April 12
@@ -113,10 +113,10 @@
   if ( $?PBS_ENVIRONMENT ) then
     if ( $PBS_ENVIRONMENT == 'PBS_BATCH' ) then
       set -r FRE_JOBID = $PBS_JOBNAME:t.o`echo $PBS_JOBID | sed -r 's/^([0-9]+).*$/\1/'`
-      set -r batch 
+      set -r batch
     else
       set -r FRE_JOBID = $0:t.o`date +%s`
-    endif 
+    endif
   else
     set -r FRE_JOBID = $0:t.o`date +%s`
   endif
@@ -217,6 +217,9 @@
   #FRE run-command-size
   #FRE alias(runCommand)
 
+  #FRE const(mppnccombineOptsRestart)
+  #FRE const(mppnccombineOptsHistory)
+
 ################################################################################
 #------------------------ global constants and aliases -------------------------
 ################################################################################
@@ -257,7 +260,7 @@
 
   set -r hsmDir = $workDir/hsm
 
-  # ---------------- top directory for all the temporary output files 
+  # ---------------- top directory for all the temporary output files
 
   set -r tmpOutputDir = $workDir/output.stager
 
@@ -280,10 +283,10 @@
   set -r patternGrepRegion = '^rregion'
 
   # ---------------- search and replacement patterns for sed
-  
+
   set -r patternJobNumber = 's/^([0-9]+).*/\1/'
-  set -r patternSedHome = 's/^\/home\/'$USER'\//\/home\/'$USER'\/nescc\//'
-  set -r patternSedScratch = 's/^\/scratch[0-9]\/.+\/'$USER'\//\/home\/'$USER'\/nescc\//'
+  set -r patternSedHome = 's/^\/home\/'$USER'\//\/home\/'$USER'\/theia\//'
+  set -r patternSedScratch = 's/^\/scratch[0-9]\/.+\/'$USER'\//\/home\/'$USER'\/theia\//'
 
   # ---------------- archive extension
 
@@ -419,7 +422,7 @@
   limit stacksize unlimited
   limit coredumpsize unlimited
   limit
-      
+
   # ---------------- exit if not running on right machine architecture
 
   set machine = `uname -m`
@@ -603,7 +606,7 @@
   endif
 
   # ---------------- backward compatible for segment number
-  
+
   if ( $?ireload ) then
     # Using old way to calculate currentSeg
     # Get best guess --- may not be correct if user changed number of segments
@@ -693,9 +696,9 @@
     exit 1
   endif
 
-  unset gridSpecStatus 
+  unset gridSpecStatus
 
-  @ initCondStatus = 0 
+  @ initCondStatus = 0
 
   if ( ( $initCond:e == 'cpio' || $initCond:e == 'tar' ) && $initCond:r:e == 'nc' ) then
     hsmget $initCond:r:r:s+/++/\* && \
@@ -770,7 +773,7 @@
 
   #FRE namelists
 
-  # ---------------- expand namelists 
+  # ---------------- expand namelists
 
   set months = $monthslist[1]
   set days = $dayslist[1]
@@ -802,7 +805,7 @@
       if ( $echoOn ) set echo
       exit 0
     endif
-  endif 
+  endif
 
   # ---------------- prepare list of refine diagnostics scripts
 
@@ -824,11 +827,11 @@
   endif
 
   # ---------------- remote XML files for post-processing
-    
+
   if ( $?flagOutputXferOn && $?flagOutputPostProcessOn ) then
     set xmlFilesRemote = ( )
     foreach xmlFile ( $xmlFiles )
-      set xmlFileRemote = `echo $xmlFile | sed -r "$patternSedHome;$patternSedScratch"` 
+      set xmlFileRemote = `echo $xmlFile | sed -r "$patternSedHome;$patternSedScratch"`
       if ( $echoOn ) unset echo
       echo "<NOTE> : The file '$xmlFile' will be copied to the file '$xmlFileRemote' @ GFDL to be used in the post-processing..."
       if ( $echoOn ) set echo
@@ -920,9 +923,9 @@
       if ( ! $?OMP_NUM_THREADS ) setenv OMP_NUM_THREADS 1
     else
       unsetenv OMP_NUM_THREADS
-    endif 
+    endif
 
-    echo "Time before runCommand" 
+    echo "Time before runCommand"
     date
 
     runCommand |& tee fms.out
@@ -1037,7 +1040,7 @@
 
     endif
 
-    echo "Time after runCommand" 
+    echo "Time after runCommand"
     date
 
     # ---------------- generate date for file names
@@ -1155,10 +1158,10 @@
       echo "set outputDirRemote			=   $asciiOutputDirRemote"	>> $asciiArgFile
       echo "set saveOptions			= ( $asciiSaveOptions )"	>> $asciiArgFile
       echo "set xferOptions			= ( $asciiXferOptions )"	>> $asciiArgFile
-      echo "set saveRetries			=   $outputStagerSaveRetries"	>> $asciiArgFile 
-      echo "set xferRetries			=   $outputStagerXferRetries"	>> $asciiArgFile 
-      echo "set saveRetry			=   0"				>> $asciiArgFile 
-      echo "set xferRetry			=   0"				>> $asciiArgFile 
+      echo "set saveRetries			=   $outputStagerSaveRetries"	>> $asciiArgFile
+      echo "set xferRetries			=   $outputStagerXferRetries"	>> $asciiArgFile
+      echo "set saveRetry			=   0"				>> $asciiArgFile
+      echo "set xferRetry			=   0"				>> $asciiArgFile
       echo "set freCommandsModuleFilesDir       =   $freCommandsModuleFilesDir"	>> $asciiArgFile
       echo "set freCommandsVersion		=   $freCommandsVersion"	>> $asciiArgFile
       echo "set hsmModuleFilesDir		=   $hsmModuleFilesDir"		>> $asciiArgFile
@@ -1439,29 +1442,29 @@
 	endif
       endif
 
-      echo "set expName				=   $name"			 > $restartArgFile 
-      echo "set type				=   restart"			>> $restartArgFile 
+      echo "set expName				=   $name"			 > $restartArgFile
+      echo "set type				=   restart"			>> $restartArgFile
       echo "set stagingType			=   $outputStagingType"		>> $restartArgFile
       echo "set actionCombineOn			=   $actionCombineOn"		>> $restartArgFile
       echo "set actionCheckOn			=   $actionCheckOn"		>> $restartArgFile
-      echo "set actionSaveOn			=   $actionSaveOn"		>> $restartArgFile 
+      echo "set actionSaveOn			=   $actionSaveOn"		>> $restartArgFile
       echo "set actionXferOn			=   $actionXferOn"		>> $restartArgFile
       echo "set actionPPStartOn			=   0"				>> $restartArgFile
       echo "set paramArchiveOn			=   $paramArchiveOn"		>> $restartArgFile
-      echo "set paramPtmpOn			=   $paramPtmpOn"		>> $restartArgFile 
+      echo "set paramPtmpOn			=   $paramPtmpOn"		>> $restartArgFile
       echo "set paramCheckSumOn			=   $paramCheckSumOn"		>> $restartArgFile
       echo "set paramCompressOn			=   $paramCompressOn"		>> $restartArgFile
       echo "set paramVerbosityOn		=   $?flagVerbosityOn"		>> $restartArgFile
-      echo "set workDir				=   $tmpOutputDir"		>> $restartArgFile 
-      echo "set ptmpDir				=   $ptmpDir"			>> $restartArgFile 
-      echo "set archDir				=   $restartArchDir"		>> $restartArgFile 
+      echo "set workDir				=   $tmpOutputDir"		>> $restartArgFile
+      echo "set ptmpDir				=   $ptmpDir"			>> $restartArgFile
+      echo "set archDir				=   $restartArchDir"		>> $restartArgFile
       echo "set outputDirRemote			=   $restartOutputDirRemote"	>> $restartArgFile
       echo "set saveOptions			= ( $restartSaveOptions )"	>> $restartArgFile
       echo "set xferOptions			= ( $restartXferOptions )"	>> $restartArgFile
-      echo "set saveRetries			=   $outputStagerSaveRetries"	>> $restartArgFile 
-      echo "set xferRetries			=   $outputStagerXferRetries"	>> $restartArgFile 
-      echo "set saveRetry			=   0"				>> $restartArgFile 
-      echo "set xferRetry			=   0"				>> $restartArgFile 
+      echo "set saveRetries			=   $outputStagerSaveRetries"	>> $restartArgFile
+      echo "set xferRetries			=   $outputStagerXferRetries"	>> $restartArgFile
+      echo "set saveRetry			=   0"				>> $restartArgFile
+      echo "set xferRetry			=   0"				>> $restartArgFile
       echo "set freCommandsModuleFilesDir       =   $freCommandsModuleFilesDir"	>> $restartArgFile
       echo "set freCommandsVersion		=   $freCommandsVersion"	>> $restartArgFile
       echo "set freNCToolsModuleFilesDir	=   $freNCToolsModuleFilesDir"	>> $restartArgFile
@@ -1472,6 +1475,7 @@
       echo "set xferToolModuleFilesDir		=   $xferToolModuleFilesDir"	>> $restartArgFile
       echo "set xferToolVersion			=   $xferToolVersion"		>> $restartArgFile
       echo "set modulesHomeDir			=   $modulesHomeDir"		>> $restartArgFile
+      echo "set mppnccombineOptString		=  '$mppnccombineOptsRestart'"	>> $restartArgFile
 
       if ( $?flagOutputStagingTypeOnline ) then
 
@@ -1481,7 +1485,7 @@
         endif
 
         outputStager $restartArgFile
- 
+
 	if ( $status == 0 ) then
           if ( $echoOn ) unset echo
           echo "<NOTE> : The restart directory '$restartArchDir' has been processed successfully"
@@ -1652,7 +1656,7 @@
       set historyWorkDir = $tmpOutputDir$historyArchDir
 
       prepareDir $historyWorkDir 'clean' || exit 1
-      
+
       if ( ! $?MPI_FAIL ) then
 
 	ls -1 | egrep "^[0-9][0-9][0-9][0-9][0-9][0-9].+$patternGrepHistory" | xargs -I'{}' mv --force '{}' $historyWorkDir/'{}'
@@ -1688,18 +1692,18 @@
               set ppStarterOptionsQueueAndRuntime = ( -q $ppStarterCombineOnLargeOnQueue -l walltime=$ppStarterCombineOnLargeOnRuntime )
 	    else
               set ppStarterOptionsQueueAndRuntime = ( -q $ppStarterCombineOnLargeOffQueue -l walltime=$ppStarterCombineOnLargeOffRuntime )
-	    endif	    
+	    endif
 	  else
 	    if ( $historySize / $monthslist[$irun] > $ppStarterHistorySizeThreshold ) then
               set ppStarterOptionsQueueAndRuntime = ( -q $ppStarterCombineOffLargeOnQueue -l walltime=$ppStarterCombineOffLargeOnRuntime )
 	    else
               set ppStarterOptionsQueueAndRuntime = ( -q $ppStarterCombineOffLargeOffQueue -l walltime=$ppStarterCombineOffLargeOffRuntime )
-	    endif	    
+	    endif
 	  endif
           set ppStarterOptions = ( $submitOptionsPPStarter )
           set ppStarterOptions = ( $ppStarterOptions -N $FRE_JOBID.pp.starter.$firstDate )
           set ppStarterOptions = ( $ppStarterOptions $ppStarterOptionsQueueAndRuntime -l $ppStarterCoreSpec )
-          set ppStarterOptions = ( $ppStarterOptions -v expName=$name,xmlFile=$xmlFilesRemote[1],platform=$platformRemote,target=$target,dir=$historyOutputDirRemote:h,firstDate=$firstDate,refineDiagList="'$ppRefineDiagScriptNamesList'",ppEnv="'$envRemote'" )
+          set ppStarterOptions = ( $ppStarterOptions -v expName=$name,xmlFile=$xmlFilesRemote[1],platform=$platformRemote,target=$target,dir=$historyOutputDirRemote:h,firstDate=$firstDate,refineDiagList="'$ppRefineDiagScriptNamesList'",ppEnv="'$envRemote'",mppnccombineOptString="'$mppnccombineOptString'" )
           set combineList = ( )
 	  unset ppStarterOptionsQueueAndRuntime
 	  unset historySize
@@ -1786,10 +1790,10 @@
       echo "set outputDirRemote			=   $historyOutputDirRemote"		>> $historyArgFile
       echo "set saveOptions			= ( $historySaveOptions )"		>> $historyArgFile
       echo "set xferOptions			= ( $historyXferOptions )"		>> $historyArgFile
-      echo "set saveRetries			=   $outputStagerSaveRetries"		>> $historyArgFile 
-      echo "set xferRetries			=   $outputStagerXferRetries"		>> $historyArgFile 
-      echo "set saveRetry			=   0"					>> $historyArgFile 
-      echo "set xferRetry			=   0"					>> $historyArgFile 
+      echo "set saveRetries			=   $outputStagerSaveRetries"		>> $historyArgFile
+      echo "set xferRetries			=   $outputStagerXferRetries"		>> $historyArgFile
+      echo "set saveRetry			=   0"					>> $historyArgFile
+      echo "set xferRetry			=   0"					>> $historyArgFile
       echo "set xmlFiles			= ( $xmlFiles )"			>> $historyArgFile
       echo "set xmlFilesRemote			= ( $xmlFilesRemote )"			>> $historyArgFile
       echo "set ppStarterOptions		= ( $ppStarterOptions )"		>> $historyArgFile
@@ -1806,6 +1810,7 @@
       echo "set xferToolModuleFilesDir		=   $xferToolModuleFilesDir"		>> $historyArgFile
       echo "set xferToolVersion			=   $xferToolVersion"			>> $historyArgFile
       echo "set modulesHomeDir			=   $modulesHomeDir"			>> $historyArgFile
+      echo "set mppnccombineOptString		=  '$mppnccombineOptsHistory'"		>> $historyArgFile
 
       if ( $?flagOutputStagingTypeOnline ) then
 
@@ -2182,7 +2187,7 @@
 
   endif
 
-  # ---------------- normal end of script 
+  # ---------------- normal end of script
 
   set -r runtimeEnd = `date "+%s"`
   set -r runtime = `echo "$runtimeEnd - $runtimeBeg" | bc -l`

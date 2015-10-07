@@ -67,6 +67,8 @@
   set ptmpDir = ""
   set archDir = ""
 
+  set mppnccombineOptString = ""
+
 ################################################################################
 #-------------------- argument file checkup and sourcing -----------------------
 ################################################################################
@@ -294,6 +296,19 @@
     if ( $echoOn ) set echo
   endif
 
+  if ( "$mppnccombineOptString" != ""  ) then
+    set -r mppnccombineOptString = "$mppnccombineOptString"
+    if ( $echoOn ) unset echo
+    echo "<NOTE> : mppnccombineOptString = '$mppnccombineOptString'"
+    if ( $echoOn ) set echo
+  else
+    set -r mppnccombineOptsDefault = '-64 -h 16384 -m'
+    if ( $echoOn ) unset echo
+    echo "WARNING: mppnccombineOptString not found, defaulting to '$mppnccombineOptsDefault'"
+    if ( $echoOn ) set echo
+    set -r mppnccombineOptString = "$mppnccombineOptsDefault"
+  endif
+
 ################################################################################
 #------------------------ global constants and aliases -------------------------
 ################################################################################
@@ -313,7 +328,7 @@
     set -r tagFail = 'fail'
     set -r patternGrepFail = '\.'$tagFail'$'
 
-    alias mppnccombine `which mppnccombine` -64 -h 16384 -m
+    alias mppnccombine `which mppnccombine` $mppnccombineOptString
     alias slmnccombine `which combine-ncc`
     alias slmnccompressed `which is-compressed`
 

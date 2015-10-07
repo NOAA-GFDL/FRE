@@ -1,5 +1,4 @@
-# $Id: gnu.mk,v 1.1.2.1 2014/09/18 15:16:13 sdu Exp $
-# template for the GNU fortran compiler
+# template for the GNU compilers
 # typical use with mkmf
 # mkmf -t gnu.mk -c"-Duse_libMPI -Duse_netCDF" path_names /usr/local/include
 ############
@@ -18,25 +17,25 @@ OPENMP =
 
 MAKEFLAGS += --jobs=$(shell grep '^processor' /proc/cpuinfo | wc -l)
 
-FPPFLAGS := 
+FPPFLAGS :=
 
 FFLAGS := -fcray-pointer -fdefault-real-8 -Waliasing -ffree-line-length-none -fno-range-check
 FFLAGS += $(shell nc-config --fflags)
 #FFLAGS += -I/usr/include/mpich2
 FFLAGS += -I/usr/include/mpich2-x86_64
 FFLAGS_OPT = -O2
-FFLAGS_REPRO = 
-FFLAGS_DEBUG = -O0 -g -W -fbounds-check 
+FFLAGS_REPRO =
+FFLAGS_DEBUG = -O0 -g -W -fbounds-check -ffpe-trap=invalid,zero,overflow
 FFLAGS_OPENMP = -fopenmp
-FFLAGS_VERBOSE = 
+FFLAGS_VERBOSE =
 
-CFLAGS := -D__IFC 
+CFLAGS := -D__IFC
 CFLAGS += $(shell nc-config --cflags)
 #CFLAGS += -I/usr/include/mpich2
 CFLAGS += -I/usr/include/mpich2-x86_64
 CFLAGS_OPT = -O2
 CFLAGS_OPENMP = -fopenmp
-CFLAGS_DEBUG = -O0 -g 
+CFLAGS_DEBUG = -O0 -g
 
 # Optional Testing compile flags.  Mutually exclusive from DEBUG, REPRO, and OPT
 # *_TEST will match the production if no new option(s) is(are) to be tested.
@@ -46,7 +45,7 @@ CFLAGS_TEST = -O2
 #LDFLAGS := -L/usr/lib/mpich2/lib -lmpich -lmpl -lgomp
 LDFLAGS := -L/usr/lib64/mpich2/lib -lmpich -lgomp
 LDFLAGS_OPENMP := -fopenmp
-LDFLAGS_VERBOSE := 
+LDFLAGS_VERBOSE :=
 
 ifneq ($(REPRO),)
 CFLAGS += $(CFLAGS_REPRO)
