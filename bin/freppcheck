@@ -579,7 +579,20 @@ sub check_ppnodes {
            }
            if( @checkvars <= 0 and $e->{dtvars}->{$srcfile} ) { @checkvars = split(/,/, $e->{dtvars}->{$srcfile} ); }
            
-           if( @checkvars <= 0 and $e->{dtvars}->{"all_$srcfile"} ) { @checkvars = split(/,/, $e->{dtvars}->{"all_$srcfile"} ); }
+           if( @checkvars <= 0 and $e->{dtvars}->{"all_$srcfile"} ) {
+               print "Removing static vars from time-series checking\n" if $e->{verbose};
+               # first set checkvars to all vars
+               @checkvars = split(/,/, $e->{dtvars}->{"all_$srcfile"} );
+               print "Before removal: @checkvars\n" if $e->{verbose};
+               # make a hash of static vars
+               my @static_vars = split ',', $e->{dtvars}->{"static_$srcfile"};
+               my %static_vars;
+               @static_vars{ @static_vars } = ();
+               # eliminate the static vars from checkvars
+               @checkvars = grep { ! exists $static_vars{$_} } @checkvars;
+               print "After removal: @checkvars\n" if $e->{verbose};
+           }
+
            #print "$srcfile============$e->{dtvars}->{$srcfile}\n" if $e->{verbose};
            if (@checkvars <= 0) {
               print "WARNING: Cannot find a variable to check for $c data, not checking\n";
@@ -769,6 +782,7 @@ my %opt =
       foreach my $srcfile (@dtsources) {
          my @dtv = ();
          my @dtvall = ();
+         my @dtv_static;
 
          foreach (@diagtablecontent) {
             if ( /.*,.*,\s*"(\w*)"\s*,\s*"$srcfile"\s*,.*,\s*(\S*)\s*,.*,.*/ and not /^#/ ) {
@@ -795,6 +809,10 @@ my %opt =
             if ( /.*,.*,\s*"(\w*)"\s*,\s*"$srcfile"\s*,.*,\s*\.true\.\s*,.*,.*/ and not /^#/ ) {
                push @dtv,$1;
             }
+            # static variables have time_avg set to false
+            if ( /.*,.*,\s*"(\w*)"\s*,\s*"$srcfile"\s*,.*,\s*\.false\.\s*,.*,.*/ and not /^#/ ) {
+               push @dtv_static, $1;
+            }
          }
          my $varstr = join(',',@dtv);
          my $varstrall = join(',',@dtvall);
@@ -806,6 +824,11 @@ my %opt =
          if ( "$varstrall" ne "" ) {
             $dtvars{$srcfileall} = $varstrall;
             if ($opt{verbose}) {print "All $srcfile diag_table variables: $dtvars{$srcfileall}\n\n"};
+         }
+         # keep track of static vars along with the all and time vars
+         if (@dtv_static) {
+             $dtvars{"static_$srcfile"} = join ',', @dtv_static;
+             print qq(Static $srcfile vars: $dtvars{"static_$srcfile"}\n);
          }
       }
    }
