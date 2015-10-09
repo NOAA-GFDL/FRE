@@ -49,8 +49,12 @@ sub list_all_files {
                $thechunk = "$chunkbeg-$chunkend";
             }
          foreach my $ssn (@$seasons) {
-            my $thisfile = "$component.$thechunk.$ssn.nc";
-            @files = ($thisfile, @files);
+            # if component is tiled, loop for tiles 1 thru 6 instead
+            my @list = $self->{is_tiled} ? (qw( .tile1 .tile2 .tile3 .tile4 .tile5 .tile6 )) : ();
+            for my $x (@list) {
+                my $thisfile = "$component.$thechunk.$ssn$x.nc";
+                @files = ($thisfile, @files);
+            }
         }
         $chunkend = FREUtil::padzeros($chunkend + $self->{interval} );
    }
@@ -102,7 +106,7 @@ sub lookup_ssn {
 package TSnodes;
 sub new {
     my $class = shift;
-    my ($freq, $interval,$firstyr,$lastyr,$asrcdir,$c,$source,$optM,$variables) = @_;
+    my ($freq, $interval,$firstyr,$lastyr,$asrcdir,$c,$source,$optM,$variables,$is_tiled) = @_;
     my $ref = { freq => $freq,
                 interval => $interval,
                 firstyr => $firstyr,
@@ -112,6 +116,7 @@ sub new {
                 source => $source,
                 checkcpio => $optM,
                 variables => $variables,
+                is_tiled => $is_tiled,
     };
     return bless ($ref, $class);
 }
@@ -151,10 +156,13 @@ sub list_all_files {
       } else {
          my ($size, $status);
          foreach my $thecheckvar (@$checkvars) {
+            # if component is tiled, loop for tiles 1 thru 6 instead
+            my @list = $self->{is_tiled} ? (qw( .tile1 .tile2 .tile3 .tile4 .tile5 .tile6 )) : ();
+            for my $x (@list) {
             if ($self->{freq} ne "seasonal") {
                $size = " ";
                $status = " ";
-               my $thisfile = "$component.$thechunk.$thecheckvar.nc";
+               my $thisfile = "$component.$thechunk.$thecheckvar$x.nc";
                if ( -f "$path/$thisfile") {
                  $size = (stat("$path/$thisfile"))[7];
                  $status = "exist";
@@ -177,6 +185,7 @@ sub list_all_files {
                   $files{$thisfile}{size} = $size ;
               }
            }
+            }
         }
      }
 
@@ -580,17 +589,17 @@ sub check_ppnodes {
            if( @checkvars <= 0 and $e->{dtvars}->{$srcfile} ) { @checkvars = split(/,/, $e->{dtvars}->{$srcfile} ); }
            
            if( @checkvars <= 0 and $e->{dtvars}->{"all_$srcfile"} ) {
-               print "Removing static vars from time-series checking\n" if $e->{verbose};
+               print "NOTE: Removing static vars from time-series checking\n" if $e->{verbose};
                # first set checkvars to all vars
                @checkvars = split(/,/, $e->{dtvars}->{"all_$srcfile"} );
-               print "Before removal: @checkvars\n" if $e->{verbose};
+               print "NOTE: Before removal: @checkvars\n" if $e->{verbose};
                # make a hash of static vars
                my @static_vars = split ',', $e->{dtvars}->{"static_$srcfile"};
                my %static_vars;
                @static_vars{ @static_vars } = ();
                # eliminate the static vars from checkvars
                @checkvars = grep { ! exists $static_vars{$_} } @checkvars;
-               print "After removal: @checkvars\n" if $e->{verbose};
+               print "NOTE: After removal: @checkvars\n" if $e->{verbose};
            }
 
            #print "$srcfile============$e->{dtvars}->{$srcfile}\n" if $e->{verbose};
@@ -606,7 +615,7 @@ sub check_ppnodes {
            if( $opt->{All} ) { $checkcpio = "reqBoth"; }
 
            print "\nChecking variable(s): @checkvars\n" if $e->{verbose};
-           my $tsnoderef = TSnodes->new($freq,$interval,$firstyr,$lastyr,$asrcdir,$c,$srcfile,$checkcpio,\@checkvars);
+           my $tsnoderef = TSnodes->new($freq,$interval,$firstyr,$lastyr,$asrcdir,$c,$srcfile,$checkcpio,\@checkvars, $p->{$c}->{is_tiled});
            $tsnoderef->update_checkvars;
 
            my $allfiles = $tsnoderef->list_all_files;
@@ -855,6 +864,14 @@ my %opt =
       $rec->{source} = $ppcNode->findvalue('@source');
       $rec->{tsnodes} = [ freppcheck::parse_ts_nodes($ppcNode) ];
       $rec->{avnodes} = [ freppcheck::parse_av_nodes($ppcNode) ];
+
+      # in the XML, if the PP component has property sourceGrid it matches /cubedsphere/ and doesn't have
+      # the xyInterp property, assume it's in the 6-tile format
+      my $is_cubedsphere = $ppcNode->hasAttribute('sourceGrid') && $ppcNode->findvalue('@sourceGrid') =~ /cubedsphere/ ? 1 : 0;
+      my $is_tiled = $is_cubedsphere && ! $ppcNode->hasAttribute('xyInterp') ? 1 : 0;
+      print "NOTE: assuming component $type is in 6-tile format\n" if $is_tiled and $opt{verbose};
+      $rec->{is_tiled} = $is_tiled;
+
       $comps_rec{ ($type) } =  $rec;
     }
     my $pp_ref = \%comps_rec;
