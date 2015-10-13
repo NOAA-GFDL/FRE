@@ -238,13 +238,25 @@
 
   alias pp `which frepp` -v -c split -s --mppnccombine-opts=\'$mppnccombineOptString\'
 
+  # Check if using an older fre-commands/bronx version that does not 
+  # have mppnccombine-opts in frepp.
+  set fre_version = ( ${FRE_COMMANDS_VERSION:as/-/ /} )
+  if ( $#fre_version > 1 ) then
+    if ( $fre_version[1] =~ "bronx" && $fre_version[2] < 11 ) then
+      # mppnccombine-opts is not available in this version of FRE
+      alias pp `which frepp` -v -c split -s
+    endif
+  endif
+  unset fre_version
+
 ################################################################################
 #--------------------------- the post-processor call ---------------------------
 ################################################################################
 
   if ( ! $echoOn ) set echo
 
-  pp -D -x $xmlFile -P $platform -T $target -d $dir -t $firstDate $expName
+  # The -D '' is required for compatability with older fre-commands/bronx versions
+  pp -D '' -x $xmlFile -P $platform -T $target -d $dir -t $firstDate $expName
 
   if ( $status == 0 ) then
     if ( $echoOn ) unset echo
