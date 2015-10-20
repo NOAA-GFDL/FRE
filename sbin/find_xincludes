@@ -72,38 +72,48 @@ use XML::LibXML();
         );
     }
 
-    sub Process($$$$$)
+    sub Process($$$$)
 
-        # ------ arguments: ref to parser, ref to filenames array, dirname, basename, verbose flag
+        # ------ arguments: ref to parser, ref to filenames array, absolute filename, verbose flag
     {
-        my ( $p, $r, $d, $b, $v ) = @_;
-        my $filename = File::Spec->rel2abs( $b, $d );
-        print STDERR "Processing the file '$filename'...\n" if $v;
+        my ( $p, $r, $filename, $v ) = @_;
         if ( -f $filename and -r $filename ) {
             if ( scalar( grep( $_ eq $filename, @{$r} ) ) == 0 ) {
+                print STDERR "Processing the file '$filename'...\n" if $v;
                 push @{$r}, $filename;
                 my $document = $p->parse_file($filename);
                 my $root     = $document->documentElement();
-                my $prefix   = $root->lookupNamespacePrefix('http://www.w3.org/2001/XInclude');
-                if ($prefix) {
-                    my $ok = 1;
-                    foreach my $xincludeNode ( $root->getElementsByTagName("$prefix:include") ) {
-                        my $href = $xincludeNode->getAttribute('href');
-                        my $pos = index( $href, '#' );
-                        $href = substr( $href, 0, $pos ) if $pos >= 0;
-                        if ($href) {
-                            my $xincludeFilename = File::Spec->rel2abs( $href, $d );
-                            $ok &&= Process( $p, $r, $d,
-                                File::Basename::basename($xincludeFilename), $v );
+                my $ok = 1;
+                foreach my $xincludeNode ( $root->getElementsByLocalName('include') ) {
+                    my $href = $xincludeNode->getAttribute('href');
+                    next unless $href;
+                    my $xincludeFilename = do {
+                        if (File::Spec->file_name_is_absolute($href)) {
+                            print STDERR "$href is absolute\n" if $v;
+                            $href;
                         }
-                    }
-                    return $ok;
+                        elsif (my $f = File::Spec->rel2abs($href, File::Basename::dirname($filename))) {
+                            print STDERR "$href is relative from xml dir\n" if $v;
+                            $f;
+                        }
+                        elsif (my $f = File::Spec->rel2abs($href, $find_xincludes::xml_dir)) {
+                            # only for testing/development: should never get here,
+                            # because xincluded files should be absolute or relative from its parent
+                            # not related to our original "base" XMl dir
+                            print STDERR "$href is relative from base xml dir (SUSPICIOUS)\n";
+                            $f;
+                        }
+                        else {
+                            print STDERR "$href doesn't exist\n";
+                            undef;
+                        }
+                    };
+                    $ok &&= Process( $p, $r, $xincludeFilename, $v );
                 }
-                else {
-                    return 1;
-                }
+                return $ok;
             } ## end if ( scalar( grep( $_ ...)))
             else {
+                print STDERR "Skipping the file '$filename', already processed...\n" if $v;
                 return 1;
             }
         } ## end if ( -f $filename and ...)
@@ -132,10 +142,13 @@ use XML::LibXML();
         my @list     = ();
         my $parser   = XML::LibXML->new();
         my $filename = File::Spec->rel2abs( $ARGV[0] );
+        # base XML dir isn't needed, used for development
+        # possibly useful for solving this issue so leaving for now
+        $main::xml_dir = File::Basename::dirname($filename);
+        print STDERR "XML dir is $main::xml_dir\n" if $opt{verbose};
         if (find_xincludes::Process(
                 $parser, \@list,
-                File::Basename::dirname($filename),
-                File::Basename::basename($filename),
+                $filename,
                 $opt{verbose}
             )
             ) {
