@@ -106,7 +106,7 @@ sub lookup_ssn {
 package TSnodes;
 sub new {
     my $class = shift;
-    my ($freq, $interval,$firstyr,$lastyr,$asrcdir,$c,$source,$optM,$variables,$is_tiled) = @_;
+    my ($freq, $interval,$firstyr,$lastyr,$asrcdir,$c,$source,$optM,$variables,$is_tiled,$pp_root_dir) = @_;
     my $ref = { freq => $freq,
                 interval => $interval,
                 firstyr => $firstyr,
@@ -117,6 +117,7 @@ sub new {
                 checkcpio => $optM,
                 variables => $variables,
                 is_tiled => $is_tiled,
+                static_file => File::Spec->catfile($pp_root_dir, $c, "$c.static.nc"),
     };
     return bless ($ref, $class);
 }
@@ -602,7 +603,7 @@ sub check_ppnodes {
            if( $opt->{All} ) { $checkcpio = "reqBoth"; }
 
            print "\nChecking variable(s): @checkvars\n" if $e->{verbose};
-           my $tsnoderef = TSnodes->new($freq,$interval,$firstyr,$lastyr,$asrcdir,$c,$srcfile,$checkcpio,\@checkvars, $p->{$c}->{is_tiled});
+           my $tsnoderef = TSnodes->new($freq,$interval,$firstyr,$lastyr,$asrcdir,$c,$srcfile,$checkcpio,\@checkvars, $p->{$c}->{is_tiled}, $e->{ppRootDir});
            $tsnoderef->update_checkvars;
 
            my $allfiles = $tsnoderef->list_all_files;
