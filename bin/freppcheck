@@ -107,6 +107,20 @@ package TSnodes;
 sub new {
     my $class = shift;
     my ($freq, $interval,$firstyr,$lastyr,$asrcdir,$c,$source,$optM,$variables,$is_tiled,$pp_root_dir) = @_;
+
+    my @static_files
+        = map
+            { File::Spec->catfile($pp_root_dir, $c, "$c.static$_.nc") }
+            $is_tiled ? (qw( .tile1 .tile2 .tile3 .tile4 .tile5 .tile6 )) : ('');
+
+    my $static_files_exist = do {
+        my $ok = 1;
+        for (@static_files) {
+            $ok = 0 unless -f;
+        }
+        $ok;
+    };
+
     my $ref = { freq => $freq,
                 interval => $interval,
                 firstyr => $firstyr,
@@ -117,7 +131,8 @@ sub new {
                 checkcpio => $optM,
                 variables => $variables,
                 is_tiled => $is_tiled,
-                static_file => File::Spec->catfile($pp_root_dir, $c, "$c.static.nc"),
+                static_files => \@static_files,
+                static_files_exist => $static_files_exist,
     };
     return bless ($ref, $class);
 }
@@ -248,7 +263,7 @@ sub reporting {
    my @missingfiles = ();
    for my $f ( sort keys %infiles) {
      if ($infiles{$f}{status} ne "exist" ) {
-        push (@missingfiles, $f ) ;
+        push (@missingfiles, $f ) unless $self->{static_files_exist};
      }
    }
 
