@@ -390,6 +390,7 @@ sub new($$%)
 		  # ---------------------------------------------------------------------------- calculate and save misc values in the object 
 		  $fre->{project} = $projectGet->($fre, $o{project});
 		  $fre->{baseCsh} = $fre->platformValue('csh');
+          $fre->{xmlDir}  = File::Basename::dirname($xmlfileAbsPath);
 		  # -------------------------------------------------------------------------------------------------- derive the mkmf template
 		  my $mkmfTemplate = $mkmfTemplateGet->($fre, $caller, $platformNode, $o{verbose});
 		  if ($mkmfTemplate)
