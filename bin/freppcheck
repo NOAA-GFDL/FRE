@@ -10,6 +10,8 @@ use Cwd;
 use Getopt::Long(':config', 'no_ignore_case');
 use XML::LibXML;
 use File::Path;
+use File::Spec;
+use Try::Tiny;
 
 use FREUtil qw(padzeros cleanstr);
 use FRE();
@@ -108,6 +110,15 @@ sub new {
     my $class = shift;
     my ($freq, $interval,$firstyr,$lastyr,$asrcdir,$c,$source,$optM,$variables,$is_tiled,$pp_root_dir) = @_;
 
+    # static file checking
+    # TSnodes object now contains hashref %existing_static_vars, whose keys
+    # are variables known to exist in the static file for the given component $c
+    # If the static file is missing or one more more of the static tiles are missing,
+    # %existing_static_vars will be empty
+    # Otherwise we use dmget and list_ncvars to get the variables from the
+    # static file or the variables from the first static tile
+    # If there are any errors in either program, a warning will be printed
+    # and the hash will be empty.
     my @static_files
         = map
             { File::Spec->catfile($pp_root_dir, $c, "$c.static$_.nc") }
@@ -121,6 +132,28 @@ sub new {
         $ok;
     };
 
+    my %existing_static_vars;
+    if ($static_files_exist) {
+        Try::Tiny::try {
+            my $command = "dmget $static_files[0]";
+            system $command;
+            my $exit_code = $? >> 8;
+            die "$command returned exit code $exit_code" if $exit_code;
+
+            $command = "list_ncvars.csh -st01234 $static_files[0]";
+            my $output = `$command`;
+            $exit_code = $? >> 8;
+            die "$command returned exit code $exit_code" if $exit_code;
+            die "$command returning in error: $output" if $output =~ /ERROR/;
+
+            my @vars = split ' ', $output;
+            @existing_static_vars{ @vars } = ();
+        }
+        Try::Tiny::catch {
+            print "WARNING: failure in retrieving static vars: $_";
+        };
+    }
+
     my $ref = { freq => $freq,
                 interval => $interval,
                 firstyr => $firstyr,
@@ -132,7 +165,7 @@ sub new {
                 variables => $variables,
                 is_tiled => $is_tiled,
                 static_files => \@static_files,
-                static_files_exist => $static_files_exist,
+                existing_static_vars => \%existing_static_vars,
     };
     return bless ($ref, $class);
 }
@@ -262,14 +295,18 @@ sub reporting {
    #check for missing files
    my @missingfiles = ();
    for my $f ( sort keys %infiles) {
-     if ($infiles{$f}{status} ne "exist" ) {
-        push (@missingfiles, $f ) unless $self->{static_files_exist};
-     }
+       if ($infiles{$f}{status} ne "exist" ) {
+           my $var = third_field($f);
+           push (@missingfiles, $f ) unless exists $self->{existing_static_vars}->{$var};
+       }
    }
 
    if (@missingfiles > 0) {
        print  "\n # OOPS ### missing files in $self->{asrcdir}\ \n";
-       foreach my $m ( @missingfiles) { print  "   ### missing: $m or $self->{static_files}->[0]\n"; }
+       foreach my $m ( @missingfiles) {
+           my $var = third_field($m);
+           print  "   ### missing: $m or $var in $self->{static_files}->[0]\n";
+        }
    } else {
        print  "\n # No files missing in $self->{asrcdir}\n";
    }
