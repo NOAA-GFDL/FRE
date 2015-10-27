@@ -10,6 +10,8 @@ use Cwd;
 use Getopt::Long(':config', 'no_ignore_case');
 use XML::LibXML;
 use File::Path;
+use File::Spec;
+use Try::Tiny;
 
 use FREUtil qw(padzeros cleanstr);
 use FRE();
@@ -106,7 +108,52 @@ sub lookup_ssn {
 package TSnodes;
 sub new {
     my $class = shift;
-    my ($freq, $interval,$firstyr,$lastyr,$asrcdir,$c,$source,$optM,$variables,$is_tiled) = @_;
+    my ($freq, $interval,$firstyr,$lastyr,$asrcdir,$c,$source,$optM,$variables,$is_tiled,$pp_root_dir) = @_;
+
+    # static file checking
+    # TSnodes object now contains hashref %existing_static_vars, whose keys
+    # are variables known to exist in the static file for the given component $c
+    # If the static file is missing or one more more of the static tiles are missing,
+    # %existing_static_vars will be empty
+    # Otherwise we use dmget and list_ncvars to get the variables from the
+    # static file or the variables from the first static tile
+    # If there are any errors in either program, a warning will be printed
+    # and the hash will be empty.
+    my @static_files
+        = map
+            { File::Spec->catfile($pp_root_dir, $c, "$c.static$_.nc") }
+            $is_tiled ? (qw( .tile1 .tile2 .tile3 .tile4 .tile5 .tile6 )) : ('');
+
+    my $static_files_exist = do {
+        my $ok = 1;
+        for (@static_files) {
+            $ok = 0 unless -f;
+        }
+        $ok;
+    };
+
+    my %existing_static_vars;
+    if ($static_files_exist) {
+        Try::Tiny::try {
+            my $command = "dmget $static_files[0]";
+            system $command;
+            my $exit_code = $? >> 8;
+            die "$command returned exit code $exit_code" if $exit_code;
+
+            $command = "list_ncvars.csh -st01234 $static_files[0]";
+            my $output = `$command`;
+            $exit_code = $? >> 8;
+            die "$command returned exit code $exit_code" if $exit_code;
+            die "$command returning in error: $output" if $output =~ /ERROR/;
+
+            my @vars = split ' ', $output;
+            @existing_static_vars{ @vars } = ();
+        }
+        Try::Tiny::catch {
+            print "WARNING: failure in retrieving static vars: $_";
+        };
+    }
+
     my $ref = { freq => $freq,
                 interval => $interval,
                 firstyr => $firstyr,
@@ -117,6 +164,8 @@ sub new {
                 checkcpio => $optM,
                 variables => $variables,
                 is_tiled => $is_tiled,
+                static_files => \@static_files,
+                existing_static_vars => \%existing_static_vars,
     };
     return bless ($ref, $class);
 }
@@ -246,14 +295,18 @@ sub reporting {
    #check for missing files
    my @missingfiles = ();
    for my $f ( sort keys %infiles) {
-     if ($infiles{$f}{status} ne "exist" ) {
-        push (@missingfiles, $f ) ;
-     }
+       if ($infiles{$f}{status} ne "exist" ) {
+           my $var = third_field($f);
+           push (@missingfiles, $f ) unless exists $self->{existing_static_vars}->{$var};
+       }
    }
 
    if (@missingfiles > 0) {
        print  "\n # OOPS ### missing files in $self->{asrcdir}\ \n";
-       foreach my $m ( @missingfiles) { print  "   ### missing: $m\n"; }
+       foreach my $m ( @missingfiles) {
+           my $var = third_field($m);
+           print  "   ### missing: $m or $var in $self->{static_files}->[0]\n";
+        }
    } else {
        print  "\n # No files missing in $self->{asrcdir}\n";
    }
@@ -602,7 +655,7 @@ sub check_ppnodes {
            if( $opt->{All} ) { $checkcpio = "reqBoth"; }
 
            print "\nChecking variable(s): @checkvars\n" if $e->{verbose};
-           my $tsnoderef = TSnodes->new($freq,$interval,$firstyr,$lastyr,$asrcdir,$c,$srcfile,$checkcpio,\@checkvars, $p->{$c}->{is_tiled});
+           my $tsnoderef = TSnodes->new($freq,$interval,$firstyr,$lastyr,$asrcdir,$c,$srcfile,$checkcpio,\@checkvars, $p->{$c}->{is_tiled}, $e->{ppRootDir});
            $tsnoderef->update_checkvars;
 
            my $allfiles = $tsnoderef->list_all_files;
@@ -846,6 +899,9 @@ my %opt =
       # the xyInterp property, assume it's in the 6-tile format
       my $is_cubedsphere = $ppcNode->hasAttribute('sourceGrid') && $ppcNode->findvalue('@sourceGrid') =~ /cubedsphere/ ? 1 : 0;
       my $is_tiled = $is_cubedsphere && ! $ppcNode->hasAttribute('xyInterp') ? 1 : 0;
+      # check for backwards combatility
+      my $is_tiled_legacy = $ppcNode->hasAttribute('cubicToLatLon') and $ppcNode->findvalue('@cubicToLatLon') =~ /none/;
+      $is_tiled ||= $is_tiled_legacy;
       print "NOTE: assuming component $type is in 6-tile format\n" if $is_tiled and $opt{verbose};
       $rec->{is_tiled} = $is_tiled;
 
