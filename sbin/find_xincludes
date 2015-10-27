@@ -87,27 +87,7 @@ use XML::LibXML();
                 foreach my $xincludeNode ( $root->getElementsByLocalName('include') ) {
                     my $href = $xincludeNode->getAttribute('href');
                     next unless $href;
-                    my $xincludeFilename = do {
-                        if (File::Spec->file_name_is_absolute($href)) {
-                            print STDERR "$href is absolute\n" if $v;
-                            $href;
-                        }
-                        elsif (my $f = File::Spec->rel2abs($href, File::Basename::dirname($filename))) {
-                            print STDERR "$href is relative from xml dir\n" if $v;
-                            $f;
-                        }
-                        elsif (my $f = File::Spec->rel2abs($href, $find_xincludes::xml_dir)) {
-                            # only for testing/development: should never get here,
-                            # because xincluded files should be absolute or relative from its parent
-                            # not related to our original "base" XMl dir
-                            print STDERR "$href is relative from base xml dir (SUSPICIOUS)\n";
-                            $f;
-                        }
-                        else {
-                            print STDERR "$href doesn't exist\n";
-                            undef;
-                        }
-                    };
+                    my $xincludeFilename = File::Spec->rel2abs($href, File::Basename::dirname($filename));
                     $ok &&= Process( $p, $r, $xincludeFilename, $v );
                 }
                 return $ok;
@@ -142,10 +122,6 @@ use XML::LibXML();
         my @list     = ();
         my $parser   = XML::LibXML->new();
         my $filename = File::Spec->rel2abs( $ARGV[0] );
-        # base XML dir isn't needed, used for development
-        # possibly useful for solving this issue so leaving for now
-        $main::xml_dir = File::Basename::dirname($filename);
-        print STDERR "XML dir is $main::xml_dir\n" if $opt{verbose};
         if (find_xincludes::Process(
                 $parser, \@list,
                 $filename,
