@@ -379,6 +379,20 @@ sub new($$%)
                             if ($properties) {
                                 $properties->propertiesList( $o{verbose} );
 
+                                # check for FRE version mismatch between XML and current shell
+                                my @loaded_fre_modules = grep s#fre/##, split ':', $ENV{LOADEDMODULES};
+                                # verify only one fre module is loaded
+                                if ((my $n = scalar @loaded_fre_modules) != 1) {
+                                    FREMsg::out( $o{verbose}, FREMsg::FATAL,
+                                        "$n FRE modules appear to be loaded; should be 1" );
+                                    return '';
+                                }
+                                if ((my $shell = $loaded_fre_modules[0]) ne (my $xml = $properties->{FRE_VERSION})) {
+                                    FREMsg::out( $o{verbose}, FREMsg::FATAL,
+                                        "FRE version mismatch between shell ($shell) and XML ($xml)" );
+                                    return '';
+                                }
+
 # ----------------------------------------------- locate the platform node (no backward compatibility anymore)
                                 my $platformNode = $platformNodeGet->($rootNode);
                                 if ($platformNode) {
