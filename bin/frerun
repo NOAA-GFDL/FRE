@@ -563,15 +563,21 @@ use FREUtil();
         my $cmd = "frelist --xmlfile=$xmlfile --platform=$p --target=$target --fre-version";
         my $version = qx($cmd);
         if ( $? != 0 ) {
-            $fre->out( FREMsg::WARNING, "Can't load remote platform FRE version as frelist exited poorly" );
+            $fre->out( FREMsg::FATAL, "Can't load remote platform FRE version as frelist exited poorly" );
+            exit FREDefaults::STATUS_FRE_GENERIC_PROBLEM;
         }
-        $version =~ s/\s+//;
-        $version = $fre->{freVersion} unless $version;
+        $version =~ s/\s+//g;
+        unless ($version) {
+            $fre->out( FREMsg::FATAL, "Remote platform FRE version must be specified" );
+            exit FREDefaults::STATUS_FRE_GENERIC_PROBLEM;
+        }
 
         # read site file
         my @lines;
-        open my $fh, $env_defaults_file
-            or $fre->out(FREMsg::WARNING, "Can't open remote platform environment defaults file $env_defaults_file");
+        open my $fh, $env_defaults_file or do {
+            $fre->out(FREMsg::FATAL, "Can't open remote platform environment defaults file $env_defaults_file");
+            exit FREDefaults::STATUS_FRE_GENERIC_PROBLEM;
+        };
         @lines = <$fh>;
         close $fh;
 
@@ -585,7 +591,8 @@ use FREUtil();
         my $cmd = "frelist --xmlfile=$xmlfile --platform=$p --target=$target --platform-csh";
         $res .= qx($cmd);
         if ( $? != 0 ) {
-            $fre->out( FREMsg::WARNING, "Can't load remote platform csh as frelist exited poorly" );
+            $fre->out( FREMsg::FATAL, "Can't load remote platform csh as frelist exited poorly" );
+            exit FREDefaults::STATUS_FRE_GENERIC_PROBLEM;
         }
 
         $res =~ s/^\s*//mg;
