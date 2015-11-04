@@ -550,24 +550,54 @@ use FREUtil();
         # ------ arguments: $exp $platform
     {
         my ( $z, $p ) = @_;
-        my $fre = $z->fre();
+        my $fre = $z->{fre};
         my ( $target, $xmlfile ) = ( $fre->target(), $fre->configFileAbsPathName() );
+
+        # get remote platform environment site file
+        my @dirs = File::Spec->splitdir($fre->siteDir);
+        pop @dirs;
+        my ($remote_site) = $p =~ /^(.*)\./;
+        my $env_defaults_file = File::Spec->catfile( @dirs, $remote_site, "env.defaults");
+
+        # get remote FRE version
+        my $cmd = "frelist --xmlfile=$xmlfile --platform=$p --target=$target --fre-version";
+        my $version = qx($cmd);
+        if ( $? != 0 ) {
+            $fre->out( FREMsg::WARNING, "Can't load remote platform FRE version as frelist exited poorly" );
+        }
+        $version =~ s/\s+//;
+        $version = $fre->{freVersion} unless $version;
+
+        # read site file
+        my @lines;
+        open my $fh, $env_defaults_file
+            or $fre->out(FREMsg::WARNING, "Can't open remote platform environment defaults file $env_defaults_file");
+        @lines = <$fh>;
+        close $fh;
+
+        # replace remote FRE version into site lines
+        s/\$\(FRE_VERSION\)/$version/ for @lines;
+
+        # prepend the file output to the overrides in the csh section
+        my $res = "@lines";
+
+        # get the remote platform csh
         my $cmd = "frelist --xmlfile=$xmlfile --platform=$p --target=$target --platform-csh";
-        my $res = qx($cmd);
-        if ( $? == 0 ) {
-            $res =~ s/^\s*//mg;
-            $res =~ s/ +/ /mg;
-            $res =~ s/\$/\\\$/mg;
-            $res =~ s/\t+/\t/mg;
-            $res =~ s/\n+/\n/sg;
-            $res =~ s/(?: |\t)/+/sg;
-            $res =~ s/\n/:/sg;
-            $res = $z->placeholdersExpand($res);
-            return $res;
+        $res .= qx($cmd);
+        if ( $? != 0 ) {
+            $fre->out( FREMsg::WARNING, "Can't load remote platform csh as frelist exited poorly" );
         }
-        else {
-            return '';
-        }
+
+        $res =~ s/^\s*//mg;
+        $res =~ s/ +/ /mg;
+        $res =~ s/\$/\\\$/mg;
+        $res =~ s/\t+/\t/mg;
+        $res =~ s/\n+/\n/sg;
+        $res =~ s/(?: |\t)/+/sg;
+        $res =~ s/\n/:/sg;
+        $res = $z->placeholdersExpand($res);
+
+        return $res;
     } ## end sub getRemotePlatformCsh($$)
 
     sub init($%)
