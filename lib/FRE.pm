@@ -912,6 +912,39 @@ sub out($$@)
     FREMsg::out( $fre->{verbose}, shift, @_ );
 }
 
+# Reads the site and ompiler-specific default environment file,
+# replaces compiler version and fre version
+sub default_platform_csh {
+    my $self = shift;
+
+    # get compiler type and version
+    my ($compiler_node) = $self->{platformNode}->getChildrenByTagName('compiler');
+    my %compiler = (
+        type => $compiler_node->getAttribute('type'),
+        version => $compiler_node->getAttribute('version'),
+    );
+    unless ($compiler{type} and $compiler{version}) {
+        $self->out(FREMsg::FATAL, "Compiler type and version must be specified in XML");
+        exit FREDefaults::STATUS_FRE_GENERIC_PROBLEM;
+    }
+
+    # read platform environment site file
+    my $env_defaults_file = File::Spec->catfile( $self->siteDir, "env.defaults.$compiler{type}");
+    my @env_default_lines;
+    open my $fh, $env_defaults_file or do {
+        $self->out(FREMsg::FATAL, "Can't open platform environment defaults file $env_defaults_file");
+        exit FREDefaults::STATUS_FRE_GENERIC_PROBLEM;
+    };
+    @env_default_lines = <$fh>;
+    close $fh;
+
+    # replace FRE version and compiler version into site lines
+    s/\$\(FRE_VERSION\)/$self->{freVersion}/g for @env_default_lines;
+    s/\$\(COMPILER_VERSION\)/$compiler{version}/g for @env_default_lines;
+
+    return "@env_default_lines";
+}
+
 # //////////////////////////////////////////////////////////////////////////////
 # //////////////////////////////////////////////////////////// Initialization //
 # //////////////////////////////////////////////////////////////////////////////

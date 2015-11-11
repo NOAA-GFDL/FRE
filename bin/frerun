@@ -1064,33 +1064,10 @@ use FREUtil();
             postInit => [ 'if ( $currentSeg != 1 ) then' . "\n", "\n" . 'endif' . "\n" ]
         );
 
-        # get compiler type and version
-        my ($compiler_node) = $fre->{platformNode}->getChildrenByTagName('compiler');
-        my %compiler = (
-            type => $compiler_node->getAttribute('type'),
-            version => $compiler_node->getAttribute('version'),
-        );
-        unless ($compiler{type} and $compiler{version}) {
-            $fre->out(FREMsg::FATAL, "Compiler type and version must be specified in XML");
-            exit FREDefaults::STATUS_FRE_GENERIC_PROBLEM;
-        }
-
-        # read platform environment site file
-        my $env_defaults_file = File::Spec->catfile( $fre->siteDir, "env.defaults.$compiler{type}");
-        my @env_default_lines;
-        open my $fh, $env_defaults_file or do {
-            $fre->out(FREMsg::FATAL, "Can't open platform environment defaults file $env_defaults_file");
-            exit FREDefaults::STATUS_FRE_GENERIC_PROBLEM;
-        };
-        @env_default_lines = <$fh>;
-        close $fh;
-
-        # replace FRE version and compiler version into site lines
-        s/\$\(FRE_VERSION\)/$fre->{freVersion}/g for @env_default_lines;
-        s/\$\(COMPILER_VERSION\)/$compiler{version}/g for @env_default_lines;
+        my $env_default = $fre->default_platform_csh;
 
         FRETemplate::setShellCommands( $fre, $r, 'platformCsh',
-                                       "@env_default_lines" . $fre->platformValue('csh') );
+                                       $env_default . $fre->platformValue('csh') );
         FRETemplate::setShellCommands( $fre, $r, 'expRuntimeCsh',
             $z->extractShellCommands('runtime/csh') );
         FRETemplate::setShellCommands(
