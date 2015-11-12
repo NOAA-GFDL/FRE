@@ -389,8 +389,8 @@ sub new($$%)
 		  $fre->{platformNode} = $platformNode;
 		  # ---------------------------------------------------------------------------- calculate and save misc values in the object 
 		  $fre->{project} = $projectGet->($fre, $o{project});
-          $fre->{freVersion} = $fre->platformValue('freVersion');
-          $fre->{baseCsh} = $fre->default_platform_csh . $fre->platformValue('csh');
+              $fre->{freVersion} = $fre->platformValue('freVersion');
+              $fre->{baseCsh} = $fre->default_platform_csh . $fre->platformValue('csh');
 		  # -------------------------------------------------------------------------------------------------- derive the mkmf template
 		  my $mkmfTemplate = $mkmfTemplateGet->($fre, $caller, $platformNode, $o{verbose});
 		  if ($mkmfTemplate)
@@ -423,7 +423,7 @@ sub new($$%)
 			  "target         = $fre->{target}",
 			  "project        = $fre->{project}", 
 			  "mkmfTemplate   = $fre->{mkmfTemplate}"
-              "freVersion     = $fre->{freVersion}"
+                    "freVersion     = $fre->{freVersion}"
 			);
 			# ------------------------------------------------- normal return
 			return $fre;
@@ -488,7 +488,6 @@ sub new($$%)
     {
       FREMsg::out($o{verbose}, FREMsg::FATAL, "The XML file '$xmlfileAbsPath' can't be parsed");
       return '';
->>>>>>> parent of 72921f4... perltidy only on FRE.pm
     }
   }
   else
@@ -857,7 +856,7 @@ sub out($$@)
   FREMsg::out($fre->{verbose}, shift, @_);
 }
 
-# Reads the site and ompiler-specific default environment file,
+# Reads the site and compiler-specific default environment file,
 # replaces compiler version and fre version
 # Returns string containing default platform environment c-shell
 sub default_platform_csh {
