@@ -389,8 +389,8 @@ sub new($$%)
 		  $fre->{platformNode} = $platformNode;
 		  # ---------------------------------------------------------------------------- calculate and save misc values in the object 
 		  $fre->{project} = $projectGet->($fre, $o{project});
-              $fre->{freVersion} = $fre->platformValue('freVersion');
-              $fre->{baseCsh} = $fre->default_platform_csh . $fre->platformValue('csh');
+		  $fre->{freVersion} = $fre->platformValue('freVersion');
+		  $fre->{baseCsh} = $fre->default_platform_csh . $fre->platformValue('csh');
 		  # -------------------------------------------------------------------------------------------------- derive the mkmf template
 		  my $mkmfTemplate = $mkmfTemplateGet->($fre, $caller, $platformNode, $o{verbose});
 		  if ($mkmfTemplate)
@@ -423,7 +423,7 @@ sub new($$%)
 			  "target         = $fre->{target}",
 			  "project        = $fre->{project}", 
 			  "mkmfTemplate   = $fre->{mkmfTemplate}"
-                    "freVersion     = $fre->{freVersion}"
+			  "freVersion     = $fre->{freVersion}"
 			);
 			# ------------------------------------------------- normal return
 			return $fre;
