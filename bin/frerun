@@ -553,43 +553,9 @@ use FREUtil();
         my $fre = $z->{fre};
         my ( $target, $xmlfile ) = ( $fre->target(), $fre->configFileAbsPathName() );
 
-        # get remote platform environment site file
-        my @dirs = File::Spec->splitdir($fre->siteDir);
-        pop @dirs;
-        my ($remote_site) = $p =~ /^(.*)\./;
-        my $env_defaults_file = File::Spec->catfile( @dirs, $remote_site, "env.defaults");
-
-        # get remote FRE version
-        my $cmd = "frelist --xmlfile=$xmlfile --platform=$p --target=$target --fre-version";
-        my $version = qx($cmd);
-        if ( $? != 0 ) {
-            $fre->out( FREMsg::FATAL, "Can't load remote platform FRE version as frelist exited poorly" );
-            exit FREDefaults::STATUS_FRE_GENERIC_PROBLEM;
-        }
-        $version =~ s/\s+//g;
-        unless ($version) {
-            $fre->out( FREMsg::FATAL, "Remote platform FRE version must be specified" );
-            exit FREDefaults::STATUS_FRE_GENERIC_PROBLEM;
-        }
-
-        # read site file
-        my @lines;
-        open my $fh, $env_defaults_file or do {
-            $fre->out(FREMsg::FATAL, "Can't open remote platform environment defaults file $env_defaults_file");
-            exit FREDefaults::STATUS_FRE_GENERIC_PROBLEM;
-        };
-        @lines = <$fh>;
-        close $fh;
-
-        # replace remote FRE version into site lines
-        s/\$\(FRE_VERSION\)/$version/g for @lines;
-
-        # prepend the file output to the overrides in the csh section
-        my $res = "@lines";
-
         # get the remote platform csh
         my $cmd = "frelist --xmlfile=$xmlfile --platform=$p --target=$target --platform-csh";
-        $res .= qx($cmd);
+        my $res = qx($cmd);
         if ( $? != 0 ) {
             $fre->out( FREMsg::FATAL, "Can't load remote platform csh as frelist exited poorly" );
             exit FREDefaults::STATUS_FRE_GENERIC_PROBLEM;
@@ -604,6 +570,7 @@ use FREUtil();
         $res =~ s/\n/:/sg;
         $res = $z->placeholdersExpand($res);
 
+        print "test $res\n";
         return $res;
     } ## end sub getRemotePlatformCsh($$)
 
@@ -1951,17 +1918,7 @@ use FREUtil();
     my $fre = FRE->new( 'frerun', %opt ) or exit FREDefaults::STATUS_FRE_GENERIC_PROBLEM;
 
     # check for FRE version mismatch between XML and current shell
-    my @loaded_fre_modules = grep s#fre/##, split ':', $ENV{LOADEDMODULES};
-    if ((my $n = scalar @loaded_fre_modules) != 1) {
-        FREMsg::out( $opt{verbose}, FREMsg::FATAL,
-            "$n FRE modules appear to be loaded; should be 1" );
-        exit FREDefaults::STATUS_FRE_GENERIC_PROBLEM;
-    }
-    if ($loaded_fre_modules[0] ne $fre->{freVersion}) {
-        FREMsg::out( $opt{verbose}, FREMsg::FATAL,
-            "FRE version mismatch between shell ($loaded_fre_modules[0]) and XML ($fre->{freVersion})" );
-        exit FREDefaults::STATUS_FRE_GENERIC_PROBLEM;
-    }
+    $fre->check_for_fre_version_mismatch;
 
     unless ( $fre->property('FRE.tool.frerun.enabled') ) {
         my $platformSite = $fre->platformSite();

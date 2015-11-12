@@ -404,8 +404,8 @@ sub new($$%)
 
 # ---------------------------------------------------------------------------- calculate and save misc values in the object
                                     $fre->{project} = $projectGet->( $fre, $o{project} );
-                                    $fre->{baseCsh} = $fre->platformValue('csh');
                                     $fre->{freVersion} = $fre->platformValue('freVersion');
+                                    $fre->{baseCsh} = $fre->default_platform_csh . $fre->platformValue('csh');
 
 # -------------------------------------------------------------------------------------------------- derive the mkmf template
                                     my $mkmfTemplate = $mkmfTemplateGet->(
@@ -914,6 +914,7 @@ sub out($$@)
 
 # Reads the site and ompiler-specific default environment file,
 # replaces compiler version and fre version
+# Returns string containing default platform environment c-shell
 sub default_platform_csh {
     my $self = shift;
 
@@ -935,20 +936,48 @@ sub default_platform_csh {
     };
 
     # read platform environment site file
-    my $env_defaults_file = File::Spec->catfile( $self->siteDir, "env.defaults" . ($self->platformSite eq 'gfdl' ? '' : ".$compiler{type}"));
-    my @env_default_lines;
+    my $env_defaults_file
+        = File::Spec->catfile(
+            $self->siteDir, "env.defaults" . ($self->platformSite eq 'gfdl' ? '' : ".$compiler{type}")
+        );
     open my $fh, $env_defaults_file or do {
         $self->out(FREMsg::FATAL, "Can't open platform environment defaults file $env_defaults_file");
         exit FREDefaults::STATUS_FRE_GENERIC_PROBLEM;
     };
-    @env_default_lines = <$fh>;
+    my @env_default_lines = <$fh>;
     close $fh;
 
     # replace FRE version and compiler version into site lines
-    s/\$\(FRE_VERSION\)/$self->{freVersion}/g for @env_default_lines;
-    s/\$\(COMPILER_VERSION\)/$compiler{version}/g for @env_default_lines;
+    for (@env_default_lines) {
+        s/\$\(FRE_VERSION\)/$self->{freVersion}/g;
+        s/\$\(COMPILER_VERSION\)/$compiler{version}/g;
+    }
 
-    return "@env_default_lines";
+    # comments
+    unshift @env_default_lines, "\n# Platform environment defaults from $env_defaults_file\n";
+    push @env_default_lines, "\n# Platform environment overrides from XML\n";
+
+    return join "", @env_default_lines;
+}
+
+# Checks for consistency between the fre version in the platform xml section and the
+# current shell environment
+# Exits with error if different, returns nothing
+sub check_for_fre_version_mismatch {
+    my $self = shift;
+
+    my @loaded_fre_modules = grep s#fre/##, split ':', $ENV{LOADEDMODULES};
+    if ((my $n = scalar @loaded_fre_modules) != 1) {
+        FREMsg::out(1, FREMsg::FATAL,
+            "$n FRE modules appear to be loaded; should be 1" );
+        exit FREDefaults::STATUS_FRE_GENERIC_PROBLEM;
+    }
+
+    if ($loaded_fre_modules[0] ne $self->{freVersion}) {
+        FREMsg::out(1, FREMsg::FATAL,
+            "FRE version mismatch between shell ($loaded_fre_modules[0]) and XML ($self->{freVersion})" );
+        exit FREDefaults::STATUS_FRE_GENERIC_PROBLEM;
+    }
 }
 
 # //////////////////////////////////////////////////////////////////////////////
