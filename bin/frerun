@@ -569,53 +569,39 @@ use FREUtil();
   {
     my ($z, $p) = @_;
     my $fre = $z->fre();
-    my ($target, $xmlfile) = ($fre->target(), $fre->configFileAbsPathName());
+    my ( $target, $xmlfile ) = ( $fre->target(), $fre->configFileAbsPathName() );
+
+    # get the remote platform csh
     my $cmd = "frelist --xmlfile=$xmlfile --platform=$p --target=$target --platform-csh";
     my $res = qx($cmd);
-    if ($? == 0)
-    {
-      $res =~ s/^\s*//mg;
-      $res =~ s/ +/ /mg;
-      $res =~ s/\$/\\\$/mg;
-      $res =~ s/\t+/\t/mg;
-      $res =~ s/\n+/\n/sg;
-      $res =~ s/(?: |\t)/+/sg;
-      $res =~ s/\n/:/sg;
-      $res = $z->placeholdersExpand($res);
-      return $res;
+    if ( $? != 0 ) {
+        $fre->out( FREMsg::FATAL, "Can't load remote platform csh as frelist exited poorly" );
+        exit FREDefaults::STATUS_FRE_GENERIC_PROBLEM;
     }
-    else
-    {
-        my ( $z, $p ) = @_;
-        my $fre = $z->{fre};
-        my ( $target, $xmlfile ) = ( $fre->target(), $fre->configFileAbsPathName() );
 
-        # get the remote platform csh
-        my $cmd = "frelist --xmlfile=$xmlfile --platform=$p --target=$target --platform-csh";
-        my $res = qx($cmd);
-        if ( $? != 0 ) {
-            $fre->out( FREMsg::FATAL, "Can't load remote platform csh as frelist exited poorly" );
-            exit FREDefaults::STATUS_FRE_GENERIC_PROBLEM;
-        }
+    $res =~ s/^\s*//mg;
+    $res =~ s/ +/ /mg;
+    $res =~ s/\$/\\\$/mg;
+    $res =~ s/\t+/\t/mg;
+    $res =~ s/\n+/\n/sg;
+    $res =~ s/(?: |\t)/+/sg;
+    $res =~ s/\n/:/sg;
+    $res = $z->placeholdersExpand($res);
 
-        $res =~ s/^\s*//mg;
-        $res =~ s/ +/ /mg;
-        $res =~ s/\$/\\\$/mg;
-        $res =~ s/\t+/\t/mg;
-        $res =~ s/\n+/\n/sg;
-        $res =~ s/(?: |\t)/+/sg;
-        $res =~ s/\n/:/sg;
-        $res = $z->placeholdersExpand($res);
+    return $res;
+  }
 
-        print "test $res\n";
-        return $res;
-    } ## end sub getRemotePlatformCsh($$)
+  sub init($%)
 
-    sub init($%)
+      # ------ arguments: $exp %options
+      # ------ return ($sript, $status)
+  {
 
-        # ------ arguments: $exp %options
-        # ------ return ($sript, $status)
-    {
+    my ($z, %o) = @_;
+    my $fre = $z->fre();
+
+    my ( $s, $status ) = frerun::getTemplate( $fre, frerun::RUNSCRIPT_TEMPLATE_MAIN );
+    if ($s) {
 
       # ------------------------------------- executable
 
@@ -1011,7 +997,6 @@ use FREUtil();
     # -------------------------------------------------------------- diagTable
     
     if (defined(my $diagTable = $z->extractTable('diagTable')))
->>>>>>> parent of 90a7527... perltidy on frerun
     {
       my $baseDate = frerun::baseDate($h);
       FRETemplate::setVariable($fre, $r, 'baseDate', "'$baseDate'");
