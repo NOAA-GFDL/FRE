@@ -918,18 +918,24 @@ sub default_platform_csh {
     my $self = shift;
 
     # get compiler type and version
-    my ($compiler_node) = $self->{platformNode}->getChildrenByTagName('compiler');
-    my %compiler = (
-        type => $compiler_node->getAttribute('type'),
-        version => $compiler_node->getAttribute('version'),
-    );
-    unless ($compiler{type} and $compiler{version}) {
-        $self->out(FREMsg::FATAL, "Compiler type and version must be specified in XML");
-        exit FREDefaults::STATUS_FRE_GENERIC_PROBLEM;
-    }
+    my %compiler = do {
+        if ($self->platformSite eq 'gfdl') {
+            ();
+        }
+        else {
+            my ($compiler_node) = $self->{platformNode}->getChildrenByTagName('compiler');
+            my $type = $compiler_node->getAttribute('type');
+            my $version = $compiler_node->getAttribute('version');
+            unless ($type and $version) {
+                $self->out(FREMsg::FATAL, "Compiler type and version must be specified in XML");
+                exit FREDefaults::STATUS_FRE_GENERIC_PROBLEM;
+            }
+            ( type => $type, version => $version);
+        }
+    };
 
     # read platform environment site file
-    my $env_defaults_file = File::Spec->catfile( $self->siteDir, "env.defaults.$compiler{type}");
+    my $env_defaults_file = File::Spec->catfile( $self->siteDir, "env.defaults" . ($self->platformSite eq 'gfdl' ? '' : ".$compiler{type}"));
     my @env_default_lines;
     open my $fh, $env_defaults_file or do {
         $self->out(FREMsg::FATAL, "Can't open platform environment defaults file $env_defaults_file");
