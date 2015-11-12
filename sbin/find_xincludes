@@ -18,7 +18,7 @@ use strict;
 use Cwd();
 use File::Basename();
 use File::Spec();
-use Getopt::Long(':config', 'no_ignore_case', 'no_auto_abbrev');
+use Getopt::Long( ':config', 'no_ignore_case', 'no_auto_abbrev' );
 use XML::LibXML();
 
 # //////////////////////////////////////////////////////////////////////////////
@@ -27,16 +27,11 @@ use XML::LibXML();
 
 {
 
-  package find_xincludes;
+    package find_xincludes;
 
-  use constant VERSION => '$Id: find_xincludes,v 1.1.2.3 2011/10/19 18:55:35 afy Exp $';
+    use constant VERSION => '$Id: find_xincludes,v 1.1.2.3 2011/10/19 18:55:35 afy Exp $';
 
-  use constant OPTLIST =>
-  (
-    'help|h',
-    'version|V',
-    'verbose|v+'
-  );
+    use constant OPTLIST => ( 'help|h', 'version|V', 'verbose|v+' );
 
 }
 
@@ -46,84 +41,68 @@ use XML::LibXML();
 
 {
 
-  package find_xincludes;
-  
-  my $self = File::Basename::basename($0);
+    package find_xincludes;
 
-  sub Usage()
-  # ------ arguments: none
-  {
-    return
-    (
-      "\n",
-      "  Usage: $self [options] filename\n\n",
-      "  Options:\n\n",
-      "   -h, --help     print help message and exit\n",
-      "   -v, --verbose  get verbose messages (repeat to get more messages)\n", 
-      "   -V, --version  print the tool version and exit\n\n"
-    );
-  }
-  
-  sub Help()
-  # ------ arguments: none
-  {
-    my @usage = Usage();
-    return
-    (
-      "\n",
-      "   Synopsis: $self outputs a list of filenames, which are supposed to be XInclude'd into the argument (including the argument itself)\n",
-      "@usage",
-      "   All the files must exist and be readable\n"
-    );
-  }
-  
-  sub Process($$$$$)
-  # ------ arguments: ref to parser, ref to filenames array, dirname, basename, verbose flag
-  {
-    my ($p, $r, $d, $b, $v) = @_;
-    my $filename = File::Spec->rel2abs($b, $d);
-    print STDERR "Processing the file '$filename'...\n" if $v;
-    if (-f $filename and -r $filename)
+    my $self = File::Basename::basename($0);
+
+    sub Usage()
+
+        # ------ arguments: none
     {
-      if (scalar(grep($_ eq $filename, @{$r})) == 0)
-      {
-        push @{$r}, $filename;
-	my $document = $p->parse_file($filename);
-	my $root = $document->documentElement();
-	my $prefix = $root->lookupNamespacePrefix('http://www.w3.org/2001/XInclude');
-	if ($prefix)
-	{
-          my $ok = 1;
-	  foreach my $xincludeNode ($root->getElementsByTagName("$prefix:include"))
-	  {
-	    my $href = $xincludeNode->getAttribute('href');
-	    my $pos = index($href, '#');
-	    $href = substr($href, 0, $pos) if $pos >= 0;
-	    if ($href)
-	    {
-	      my $xincludeFilename = File::Spec->rel2abs($href, $d);
-	      $ok &&= Process($p, $r, $d, File::Basename::basename($xincludeFilename), $v);
-	    }
-	  }
-          return $ok;
-	}
-	else
-	{
-          return 1;
-	}
-      }
-      else
-      {
-        return 1;
-      }
+        return (
+            "\n",
+            "  Usage: $self [options] filename\n\n",
+            "  Options:\n\n",
+            "   -h, --help     print help message and exit\n",
+            "   -v, --verbose  get verbose messages (repeat to get more messages)\n",
+            "   -V, --version  print the tool version and exit\n\n"
+        );
     }
-    else
+
+    sub Help()
+
+        # ------ arguments: none
     {
-      print STDERR "The file '$filename' isn't found or not readable\n";
-      return 0;
+        my @usage = Usage();
+        return (
+            "\n",
+            "   Synopsis: $self outputs a list of filenames, which are supposed to be XInclude'd into the argument (including the argument itself)\n",
+            "@usage",
+            "   All the files must exist and be readable\n"
+        );
     }
-  }
-  
+
+    sub Process($$$$)
+
+        # ------ arguments: ref to parser, ref to filenames array, absolute filename, verbose flag
+    {
+        my ( $p, $r, $filename, $v ) = @_;
+        if ( -f $filename and -r $filename ) {
+            if ( scalar( grep( $_ eq $filename, @{$r} ) ) == 0 ) {
+                print STDERR "Processing the file '$filename'...\n" if $v;
+                push @{$r}, $filename;
+                my $document = $p->parse_file($filename);
+                my $root     = $document->documentElement();
+                my $ok = 1;
+                foreach my $xincludeNode ( $root->getElementsByLocalName('include') ) {
+                    my $href = $xincludeNode->getAttribute('href');
+                    next unless $href;
+                    my $xincludeFilename = File::Spec->rel2abs($href, File::Basename::dirname($filename));
+                    $ok &&= Process( $p, $r, $xincludeFilename, $v );
+                }
+                return $ok;
+            } ## end if ( scalar( grep( $_ ...)))
+            else {
+                print STDERR "Skipping the file '$filename', already processed...\n" if $v;
+                return 1;
+            }
+        } ## end if ( -f $filename and ...)
+        else {
+            print STDERR "The file '$filename' isn't found or not readable\n" if $v;
+            return 1;
+        }
+    } ## end sub Process($$$$$)
+
 }
 
 # //////////////////////////////////////////////////////////////////////////////
@@ -132,32 +111,34 @@ use XML::LibXML();
 
 {
 
-  my %opt = ();
+    my %opt = ();
 
-  Getopt::Long::GetOptions(\%opt, find_xincludes::OPTLIST) or (print STDERR find_xincludes::Usage() and exit 1);
-  if ($opt{version}) {print STDERR find_xincludes::VERSION,"\n" and exit 0;}
-  if ($opt{help}) {print STDERR find_xincludes::Help() and exit 0;}
+    Getopt::Long::GetOptions( \%opt, find_xincludes::OPTLIST )
+        or ( print STDERR find_xincludes::Usage() and exit 1 );
+    if ( $opt{version} ) { print STDERR find_xincludes::VERSION, "\n" and exit 0; }
+    if ( $opt{help} ) { print STDERR find_xincludes::Help() and exit 0; }
 
-  if (scalar(@ARGV) == 1)
-  {
-    my @list = ();
-    my $parser = XML::LibXML->new();
-    my $filename = File::Spec->rel2abs($ARGV[0]);
-    if (find_xincludes::Process($parser, \@list, File::Basename::dirname($filename), File::Basename::basename($filename), $opt{verbose}))
-    {
-      my $list = join("\n", @list);
-      print $list, "\n";
-      exit 0; 
+    if ( scalar(@ARGV) == 1 ) {
+        my @list     = ();
+        my $parser   = XML::LibXML->new();
+        my $filename = File::Spec->rel2abs( $ARGV[0] );
+        if (find_xincludes::Process(
+                $parser, \@list,
+                $filename,
+                $opt{verbose}
+            )
+            ) {
+            my $list = join( "\n", @list );
+            print $list, "\n";
+            exit 0;
+        }
+        else {
+            exit 1;
+        }
     }
-    else
-    {
-      exit 1;
+    else {
+        print STDERR "A filename argument is absent or not a single one\n";
+        exit 1;
     }
-  }
-  else
-  {
-    print STDERR "A filename argument is absent or not a single one\n";
-    exit 1;
-  }
 
 }

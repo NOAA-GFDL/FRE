@@ -1,28 +1,11 @@
 #!/bin/csh -f
-# 
-# $Id: pp.starter,v 1.1.2.10 2011/09/23 21:33:27 afy Exp $
+#
 # ------------------------------------------------------------------------------
-# FMS/FRE Project: Post-Processor Starter - GFDL Version 
+# FMS/FRE Project: Post-Processor Starter - GFDL Version
 # ------------------------------------------------------------------------------
-# afy    Ver   1.00  Initial version                                May 11
-# afy    Ver   2.00  Remove temporary XML file in batch mode        May 11
-# afy    Ver   2.01  Standardize PBS environment determination      May 11
-# afy    Ver   2.02  Add 'getopt'-based calling interface           May 11
-# afy    Ver   2.03  Remove arguments target/project                May 11
-# afy    Ver   2.04  Replace modulePath/modulesToLoad => ppEnv (!)  May 11
-# afy    Ver   3.00  Simplify calling interface                     May 11
-# afy    Ver   4.00  Fix the XML file removal                       May 11
-# afy    Ver   5.00  Remove dummy file instead of the XML file      May 11
-# afy    Ver   6.00  Use eval to expand the XML filepath            May 11
-# afy    Ver   7.00  Don't use eval to expand the XML filepath      May 11
-# afy    Ver   8.00  Add argument 'target'                          May 11
-# afy    Ver   9.00  Modify refineDiagList (translate '&' => ',')   June 11
-# afy    Ver  10.00  Remove dummy files in the script beginning     September 11
-# afy    Ver  10.01  No batch mode with arguments                   September 11
-# afy    Ver  10.02  Modify refineDiagList (translate '+' => ',')   September 11
-# ------------------------------------------------------------------------------
-# Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2000-2011
-# Designed and written by V. Balaji, Amy Langenhorst and Aleksey Yakovlev
+# Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2000-2011, 2015
+# Designed and written by V. Balaji, Amy Langenhorst, Aleksey Yakovlev and
+# Seth Underwood
 #
 
   set -r echoOn = $?echo
@@ -56,7 +39,7 @@
 ################################################################################
 
   if ( $?batch && $# == 0 ) then
-  
+
     if ( $?expName ) then
       if ( $echoOn ) unset echo
       echo "<NOTE> : expName = '$expName'"
@@ -105,18 +88,6 @@
       exit 1
     endif
 
-    if ( $?dir ) then
-      if ( $echoOn ) unset echo
-      echo "<NOTE> : dir = '$dir'"
-      if ( $echoOn ) set echo
-      set -r dir = $dir 
-    else
-      if ( $echoOn ) unset echo
-      echo "*ERROR*: The argument 'dir' is not defined"
-      if ( $echoOn ) set echo
-      exit 1
-    endif
-
     if ( $?firstDate ) then
       if ( $echoOn ) unset echo
       echo "<NOTE> : firstDate = '$firstDate'"
@@ -129,18 +100,16 @@
       exit 1
     endif
 
-    if ( $?refineDiagList ) then
+    if ( $?freVersion ) then
       if ( $echoOn ) unset echo
-      echo "<NOTE> : refineDiagList = '$refineDiagList'"
+      echo "<NOTE> : freVersion = '$freVersion'"
       if ( $echoOn ) set echo
-      set -r refineDiagList = `echo $refineDiagList | tr '+' ','`
-    endif
-
-    if ( $?ppEnv ) then
+      set -r freVersion = $freVersion
+    else
       if ( $echoOn ) unset echo
-      echo "<NOTE> : ppEnv = '$ppEnv'"
+      echo "*ERROR*: The argument 'freVersion' is not defined"
       if ( $echoOn ) set echo
-      set -r ppEnv = $ppEnv
+      exit 1
     endif
 
     if ( $?mppnccombineOptString ) then
@@ -160,17 +129,16 @@
 
     alias getopt `which getopt` --shell=tcsh --unquote
 
-    set argv = ( `getopt 'x:P:T:d:t:D:E:' $*` )
+    set argv = ( `getopt 'x:P:T:d:t:D:E:F:C:' $*` )
     set argvStatus = $status
 
     set expName = ""
     set xmlFile = ""
     set platform = ""
     set target = ""
-    set dir = ""
     set firstDate = ""
-    set refineDiagList = ""
-    set ppEnv = ""
+    set freVersion = ""
+    set mppnccombineOptString = '-64 -h 16384 -m'
 
     while ( 1 )
       switch ( $argv[1] )
@@ -179,22 +147,20 @@
 	case -x:
 	  set xmlFile = $argv[2]; shift argv; breaksw;
 	case -P:
-	  set platform = $argv[2]; shift argv; breaksw; 
+	  set platform = $argv[2]; shift argv; breaksw;
 	case -T:
-	  set target = $argv[2]; shift argv; breaksw; 
-	case -d:
-	  set dir = $argv[2]; shift argv; breaksw;
+	  set target = $argv[2]; shift argv; breaksw;
 	case -t:
 	  set firstDate = $argv[2]; shift argv; breaksw;
-	case -D:
-	  set refineDiagList = $argv[2]; shift argv; breaksw;
-	case -E:
-	  set ppEnv = $argv[2]; shift argv; breaksw;
+	case -F:
+	  set freVersion = $argv[2]; shift argv; breaksw;
+        case -C:
+          set mppnccombineOptString = "$argv[2]"; shift argv; breaksw;
 	default:
-          if ( $echoOn ) unset echo
+	  if ( $echoOn ) unset echo
 	  echo "*ERROR*: System error"
-          if ( $echoOn ) set echo
-          exit 1
+	  if ( $echoOn ) set echo
+	  exit 1
       endsw
       shift argv
     end
@@ -209,10 +175,9 @@
       set -r xmlFile = $xmlFile
       set -r platform = $platform
       set -r target = $target
-      set -r dir = $dir
       set -r firstDate = $firstDate
-      set -r refineDiagList = $refineDiagList
-      set -r ppEnv = $ppEnv
+      set -r freVersion = $freVersion
+      set -r mppnccombineOptString = "$mppnccombineOptString"
     endif
 
     unset argvStatus
@@ -229,12 +194,10 @@
     if ( $echoOn ) unset echo
     echo "Usage: $0:t [options] experiment"
     echo "  -x STRING - XML file absolute pathname STRING"
-    echo "  -P STRING - platform STRING" 
-    echo "  -T STRING - target STRING" 
-    echo "  -d STRING - a directory STRING with history files"
+    echo "  -P STRING - platform STRING"
+    echo "  -T STRING - target STRING"
     echo "  -t STRING - first date STRING"
-    echo "  -D STRING - a comma-separated list STRING of refine diagnostics scripts"
-    echo "  -E STRING - a colon-separated list STRING of environment setting commands with spaces, replaced by '+'"
+    echo "  -F STRING - use freVersion STRING to extract platform csh section"
     if ( $echoOn ) set echo
 
     exit 1
@@ -245,13 +208,29 @@
 #----------------------------- environment setup -------------------------------
 ################################################################################
 
+  # Use the freVersion to extract and load the platform/csh section.
   if ( $echoOn ) unset echo
-
-  foreach ppEnvElement ( `echo $ppEnv | tr ':' '\n'` )
-    eval `echo $ppEnvElement | tr '+' ' '`
-  end 
-
+  csh -c "source ${MODULESHOME}/init/csh; module load fre-commands/${freVersion}; frelist --platform=${platform} --target=${target} --platform-csh --xmlfile=${xmlFile}" | source /dev/stdin
+  if ( $status != 0 ) then
+    echo "*ERROR*: Unable to extract //setup/platform[@name='${platform}'/csh section from xml '${xmlFile}'"
+    exit 1
+  endif
   if ( $echoOn ) set echo
+
+  # Get the archive directory using frelist, and verify it
+  # exists and is a directory
+  set -r dir = "`frelist --directory=archive --platform=${platform} --target=${target} --xmlfile=${xmlFile} ${expName}`/history"
+  if ( $status != 0 ) then
+    if ( $echoOn ) unset echo
+    echo "*ERROR*: Unable to determine the archive directory for experiment '${expName}' in xml '${xmlFile}'"
+    if ( $echoOn ) set echo
+    exit 1
+  else if ( ! -d ${dir} ) then
+    if ( $echoOn ) unset echo
+    echo "*ERROR*: Archive directory '${dir}' does not exist or isn't a directory"
+    if ( $echoOn ) set echo
+    exit 1
+  endif
 
 ################################################################################
 #------------------------ global constants and aliases -------------------------
@@ -259,13 +238,25 @@
 
   alias pp `which frepp` -v -c split -s --mppnccombine-opts=\'$mppnccombineOptString\'
 
+  # Check if using an older fre-commands/bronx version that does not 
+  # have mppnccombine-opts in frepp.
+  set fre_version = ( ${FRE_COMMANDS_VERSION:as/-/ /} )
+  if ( $#fre_version > 1 ) then
+    if ( $fre_version[1] =~ "bronx" && $fre_version[2] < 11 ) then
+      # mppnccombine-opts is not available in this version of FRE
+      alias pp `which frepp` -v -c split -s
+    endif
+  endif
+  unset fre_version
+
 ################################################################################
 #--------------------------- the post-processor call ---------------------------
 ################################################################################
 
   if ( ! $echoOn ) set echo
 
-  pp -x $xmlFile -P $platform -T $target -d $dir -t $firstDate -D "$refineDiagList" $expName
+  # The -D '' is required for compatability with older fre-commands/bronx versions
+  pp -D '' -x $xmlFile -P $platform -T $target -d $dir -t $firstDate $expName
 
   if ( $status == 0 ) then
     if ( $echoOn ) unset echo

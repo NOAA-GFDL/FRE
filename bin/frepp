@@ -61,7 +61,7 @@ use vars qw( $mosaic_type $sourceGrid $xyInterp $xyInterpRegridFile );
       'wait|w=s',
       'plus|p=i',
 
-      'refineDiag|D=s',
+      'refineDiag|D:s',
       'refineDiagOnly|H',
 
       'AnalysisOnly|A',
@@ -106,7 +106,7 @@ use vars qw( $mosaic_type $sourceGrid $xyInterp $xyInterpRegridFile );
    Getopt::Long::GetOptions(\%opt, frepp::OPTLIST) or (print 'bad opts' and die "\n");
    if ($opt{Version}) {print frepp::VERSION,"\n" and exit(0);}
    use vars qw( $opt_d $opt_D $opt_f $opt_l $opt_p $opt_M $opt_m $opt_q $opt_Q $opt_t $opt_r $opt_x $opt_s $opt_v $opt_V  $opt_A $opt_B $opt_C $opt_O $opt_R $opt_S $opt_Y $opt_Z $opt_c $opt_H $opt_h $opt_o $opt_u $opt_z $opt_w $opt_P $opt_T );
-   $opt_d=$opt{dir};
+   $opt_d=($opt{dir} =~ s|\/$||g);
    $opt_f=$opt{forceCombine};
    $opt_l=$opt{limitstatic};
    $opt_o=$opt{override};
@@ -388,6 +388,11 @@ $version_head .= "-x $abs_xml_path ";
 
    my $exp = FREExperiment->new($fre, $expt) or exit(1);
    $fre->setCurrentExperimentName($expt);
+   # Get the refineDiag scripts from the XML if -D given
+   # on the command line with no string
+   if (defined($opt{refineDiag}) and not $opt_D) {
+     $opt_D = join ',', $exp->extractPPRefineDiagScripts;
+   }
    $rootdir = $exp->rootDir();
    if ( (! -d $rootdir) or (! -w $rootdir) and (! $opt_O) ) {
       system("mkdir -p $rootdir");

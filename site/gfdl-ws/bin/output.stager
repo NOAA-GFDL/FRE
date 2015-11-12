@@ -1,40 +1,18 @@
 #!/bin/csh -fx
-# 
-# $Id: output.stager,v 1.1.2.12 2013/04/01 18:47:43 afy Exp $
+#
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: Output Stager - GFDL Workstations Version
 # ------------------------------------------------------------------------------
-# afy    Ver   1.00  Initial version                                June 12
-# afy    Ver   2.00  Unload modulefiles before their loading        July 12
-# afy    Ver   3.00  Add 'freNCToolsModuleName' argument            July 12
-# afy    Ver   4.00  Modify 'patternSedRegression'                  July 12
-# afy    Ver   5.00  Modify saving (hsmput with split makefile)     September 12
-# afy    Ver   6.00  Add 'paramOverrideOn' argument                 November 12
-# afy    Ver   6.01  Add 'hsmModuleFilesDir/hsmVersion' arguments   November 12
-# afy    Ver   6.02  Conditionally load 'hsm' module                November 12
-# afy    Ver   6.03  Add 'paramVerbosityOn' argument                November 12
-# afy    Ver   6.04  Remove all modules loading                     November 12
-# afy    Ver   7.00  Add 'exitStatus' variable                      December 12
-# afy    Ver   7.01  Don't exit in the middle of the script         December 12
-# afy    Ver   8.00  Modify checking patterns (uncombined history)  January 13
-# afy    Ver   9.00  Combine files with 4+ digits extension         February 13
-# afy    Ver  10.00  Combine compressed history files               February 13
-# afy    Ver  11.00  Remove argument 'combineMemory'                March 13
-# afy    Ver  11.01  Dynamically estimate memory to combine         March 13
-# afy    Ver  11.02  Call 'mppnccombine' without options -n/-e      March 13
-# afy    Ver  11.03  Remove 'paramOverrideOn' argument              March 13
-# afy    Ver  11.04  Call 'mppnccombine' with option -m             March 13
-# afy    Ver  12.00  Modify 'combineMemory' estimation              April 13
-# ------------------------------------------------------------------------------
-# Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2000-2013
-# Designed and written by V. Balaji, Amy Langenhorst and Aleksey Yakovlev
+# Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2000-2013, 2015
+# Designed and written by V. Balaji, Amy Langenhorst, Aleksey Yakovlev
+# Carlo Rosati and Seth Underwood
 #
 
   set -r echoOn = $?echo
   set -r runtimeBeg = `date "+%s"`
 
   if ( $echoOn ) unset echo
-  echo '<NOTE> : ====== FRE OUTPUT STAGER $Id: output.stager,v 1.1.2.12 2013/04/01 18:47:43 afy Exp $ ======'
+  echo '<NOTE> : ====== FRE OUTPUT STAGER $Id:$ ======'
   echo "<NOTE> : Starting at $HOST on `date`"
   if ( $echoOn ) set echo
 
@@ -48,7 +26,7 @@
 
   set expName = ""
   set type = ""
-    
+
   set actionCombineOn = 0
   set actionCheckOn = 0
   set actionSaveOn = 0
@@ -96,15 +74,15 @@
   if ( -e "$argFile" ) then
     if ( -f "$argFile" ) then
       if ( -r "$argFile" && -w "$argFile" ) then
-	if ( $echoOn ) unset echo
-	echo "<NOTE> : Using the argFile '$argFile'..."
-	if ( $echoOn ) set echo
-	source $argFile
+        if ( $echoOn ) unset echo
+        echo "<NOTE> : Using the argFile '$argFile'..."
+        if ( $echoOn ) set echo
+        source $argFile
       else
-	if ( $echoOn ) unset echo
-	echo "*ERROR*: The argFile '$argFile' must be readable and writable"
-	if ( $echoOn ) set echo
-	exit 1
+        if ( $echoOn ) unset echo
+        echo "*ERROR*: The argFile '$argFile' must be readable and writable"
+        if ( $echoOn ) set echo
+        exit 1
       endif
     else
       if ( $echoOn ) unset echo
@@ -255,9 +233,9 @@
 #------------------------------- derived flags ---------------------------------
 ################################################################################
 
-  @ actionCombineToDo	= ( $actionCombineOn * ! $actionCombineOk )
-  @ actionCheckToDo	= ( $actionCheckOn * ! $actionCheckOk )
-  @ actionSaveToDo	= ( $actionSaveOn * ( $paramArchiveOn || $paramPtmpOn ) * ! $actionSaveOk )
+  @ actionCombineToDo   = ( $actionCombineOn * ! $actionCombineOk )
+  @ actionCheckToDo     = ( $actionCheckOn * ! $actionCheckOk )
+  @ actionSaveToDo      = ( $actionSaveOn * ( $paramArchiveOn || $paramPtmpOn ) * ! $actionSaveOk )
 
 ################################################################################
 #---------------------- arguments checkup (second part) ------------------------
@@ -331,6 +309,7 @@
     alias mppnccombine `which mppnccombine` $mppnccombineOptString
     alias slmnccombine `which combine-ncc`
     alias slmnccompressed `which is-compressed`
+    alias iceberg_comb `which iceberg_comb.sh`
 
     set -r memoryDownscalingFactor = '0.75'
     set -r memorySpec = ( `free -om | grep Mem` )
@@ -355,36 +334,38 @@
       pushd $srcDir
 
       if ( $type == 'history' ) then
-	set filesToCombine = ( `ls -1 | egrep "($patternGrepHistory).*$patternGrepTail" | sed -r "s/$patternGrepTail//g" | sort -u` )
+        set filesToCombine = ( `ls -1 | egrep "($patternGrepHistory).*$patternGrepTail" | sed -r "s/$patternGrepTail//g" | sort -u` )
       else if ( $type == 'restart' ) then
-	set filesToCombine = ( `ls -1 | egrep "($patternGrepRestart).*$patternGrepTail" | sed -r "s/$patternGrepTail//g" | sort -u` )
+        set filesToCombine = ( `ls -1 | egrep "($patternGrepRestart).*$patternGrepTail" | sed -r "s/$patternGrepTail//g" | sort -u` )
       else
-	set filesToCombine = ( )
+        set filesToCombine = ( )
       endif
 
       if ( $#filesToCombine > 0 ) then
         @ counter = 1
         set -r combineTimeBeg = `date "+%s"`
-	foreach file ( $filesToCombine )
+        foreach file ( $filesToCombine )
           set inputFiles = ( `ls -1 | egrep "^$file$patternGrepTail"` )
           if ( $#inputFiles > 1 ) then
             rm --force $file
-	    slmnccompressed $inputFiles[1]
-	    if ( $status == 0 ) then
+            slmnccompressed $inputFiles[1]
+            if ( $status == 0 ) then
               ( slmnccombine $inputFiles $file && ( echo $inputFiles | xargs rm --force ) || touch $file.$tagFail ) &
+            else if ( ($type == 'restart' && $file == 'icebergs.res.nc') || ($type == 'history' && $file =~ '*iceberg_trajectories.nc') ) then
+              ( iceberg_comb $inputFiles $file && ( echo $inputFiles | xargs rm --force ) || touch $file.$tagFail ) &
             else
               if ( $?mppnccombineWithBuffering ) then
                 @ memoryPerOneBuffer = `mppnccombine -x $file $inputFiles`
                 if ( $status == 0 ) then
                   @ buffersNmb = ( $combineMemory / ( $combinesPerJob * $memoryPerOneBuffer ) ) + 1
-                  if ( $buffersNmb > $buffersNmbMax ) @ buffersNmb = $buffersNmbMax 
+                  if ( $buffersNmb > $buffersNmbMax ) @ buffersNmb = $buffersNmbMax
                   ( mppnccombine -k $buffersNmb $file $inputFiles && ( echo $inputFiles | xargs rm --force ) || touch $file.$tagFail ) &
                   unset buffersNmb
                 else
                   ( mppnccombine $file $inputFiles && ( echo $inputFiles | xargs rm --force ) || touch $file.$tagFail ) &
-		  if ( $echoOn ) unset echo
-		  echo "WARNING: Unable to determine a mppnccombine buffer memory"
-		  if ( $echoOn ) set echo
+                  if ( $echoOn ) unset echo
+                  echo "WARNING: Unable to determine a mppnccombine buffer memory"
+                  if ( $echoOn ) set echo
                 endif
                 unset memoryPerOneBuffer
               else
@@ -401,41 +382,41 @@
             mv --force $inputFiles[1] $file
           endif
           unset inputFiles
-	end
+        end
         wait
         unset counter
       endif
 
-      unset filesToCombine 
+      unset filesToCombine
 
       set filesNotOK = ( `ls -1 | egrep "$patternGrepFail"` )
 
       if ( $#filesNotOK > 0 ) then
-	foreach file ( $filesNotOK )
-	  if ( $echoOn ) unset echo
-	  echo "*ERROR*: A problem during combining the $type file '$file:r'"
-	  if ( $echoOn ) set echo
+        foreach file ( $filesNotOK )
+          if ( $echoOn ) unset echo
+          echo "*ERROR*: A problem during combining the $type file '$file:r'"
+          if ( $echoOn ) set echo
           rm -f $file
-	end
-	if ( $echoOn ) unset echo
-	echo "-ERROR-: Failed to combine $type files"
-	if ( $echoOn ) set echo
-	set exitStatus = 3
-	goto END
+        end
+        if ( $echoOn ) unset echo
+        echo "-ERROR-: Failed to combine $type files"
+        if ( $echoOn ) set echo
+        set exitStatus = 3
+        goto END
       else if ( $?combineTimeBeg ) then
-	set -r combineTimeEnd = `date "+%s"`
-	set -r combineTime = `echo "$combineTimeEnd - $combineTimeBeg" | bc -l`
-	if ( $echoOn ) unset echo
-	echo "<NOTE> : All the $type files have been combined successfully"
-	echo "<NOTE> : Time to combine = '$combineTime' (seconds)"
-	if ( $echoOn ) set echo
+        set -r combineTimeEnd = `date "+%s"`
+        set -r combineTime = `echo "$combineTimeEnd - $combineTimeBeg" | bc -l`
+        if ( $echoOn ) unset echo
+        echo "<NOTE> : All the $type files have been combined successfully"
+        echo "<NOTE> : Time to combine = '$combineTime' (seconds)"
+        if ( $echoOn ) set echo
       else
-	if ( $echoOn ) unset echo
-	echo "<NOTE> : No uncombined $type files have been found"
-	if ( $echoOn ) set echo
+        if ( $echoOn ) unset echo
+        echo "<NOTE> : No uncombined $type files have been found"
+        if ( $echoOn ) set echo
       endif
 
-      unset filesNotOK 
+      unset filesNotOK
 
       popd
 
@@ -480,21 +461,21 @@
 
       if ( $archDirMainProduction != $archDir || $archDirMainRegression != $archDir ) then
 
-	if ( $archDirMainProduction != $archDir ) then
-	  set archDirMain = $archDirMainProduction
-	else if ( $archDirMainRegression != $archDir ) then
-	  set archDirMain = $archDirMainRegression
-	endif
+        if ( $archDirMainProduction != $archDir ) then
+          set archDirMain = $archDirMainProduction
+        else if ( $archDirMainRegression != $archDir ) then
+          set archDirMain = $archDirMainRegression
+        endif
 
         @ retry = 0
 
-	while ( 1 )
+        while ( 1 )
 
-	  if ( -d "$ptmpDir$archDirMain" ) then
+          if ( -d "$ptmpDir$archDirMain" ) then
             if ( -r "$ptmpDir$archDirMain" ) then
               set filesToCompare = `ls "$ptmpDir$archDirMain"`
               if ( $#filesToCompare > 0 ) then
-                set filesToCompareAreReadable = 1 
+                set filesToCompareAreReadable = 1
                 foreach fileToCompare ( $filesToCompare )
                   if ( ! -r "$ptmpDir$archDirMain/$fileToCompare" ) then
                     set filesToCompareAreReadable = 0
@@ -504,144 +485,144 @@
                 if ( $filesToCompareAreReadable ) then
                   set dstDirOrArchive = $ptmpDir$archDirMain
                 else
-		  if ( $echoOn ) unset echo
-		  echo "WARNING: The $type directory '$ptmpDir$archDirMain' contains unreadable files - skipping the dual checking"
-		  if ( $echoOn ) set echo
-        	  break
+                  if ( $echoOn ) unset echo
+                  echo "WARNING: The $type directory '$ptmpDir$archDirMain' contains unreadable files - skipping the dual checking"
+                  if ( $echoOn ) set echo
+                  break
                 endif
-                unset filesToCompareAreReadable 
+                unset filesToCompareAreReadable
               endif
               unset filesToCompare
             else
-	      if ( $echoOn ) unset echo
-	      echo "WARNING: The $type directory '$ptmpDir$archDirMain' exists, but is not readable - skipping the dual checking"
-	      if ( $echoOn ) set echo
+              if ( $echoOn ) unset echo
+              echo "WARNING: The $type directory '$ptmpDir$archDirMain' exists, but is not readable - skipping the dual checking"
+              if ( $echoOn ) set echo
               break
             endif
           endif
 
           if ( ! $?dstDirOrArchive ) then
-	    if ( -f $archDirMain.$archExt ) then
+            if ( -f $archDirMain.$archExt ) then
               if ( -r $archDirMain.$archExt ) then
-		set dstDirOrArchive = $archDirMain.$archExt
+                set dstDirOrArchive = $archDirMain.$archExt
               else
-		if ( $echoOn ) unset echo
-		echo "WARNING: The $type archive '$archDirMain.$archExt' exists, but is not readable - skipping the dual checking"
-		if ( $echoOn ) set echo
-		break
+                if ( $echoOn ) unset echo
+                echo "WARNING: The $type archive '$archDirMain.$archExt' exists, but is not readable - skipping the dual checking"
+                if ( $echoOn ) set echo
+                break
               endif
-	    endif
+            endif
           endif
 
-	  if ( $?dstDirOrArchive ) then
-	    set diffCommand = ( ls -1d $dstDirOrArchive $srcDir | `alias ardiff` )
-	    if ( -f $dstDirOrArchive.ok ) then
+          if ( $?dstDirOrArchive ) then
+            set diffCommand = ( ls -1d $dstDirOrArchive $srcDir | `alias ardiff` )
+            if ( -f $dstDirOrArchive.ok ) then
               eval $diffCommand
-	      if ( $status == 0 ) then
-        	if ( $echoOn ) unset echo
-		echo "<NOTE> : Archives/directories '$dstDirOrArchive' and '$srcDir' match..."
-        	if ( $echoOn ) set echo
-	      else if ( $?batch ) then
-        	if ( $echoOn ) unset echo
-		set msg =       "WARNING: Automatic message from the job '$jobName'\n"
-		set msg = "${msg}WARNING: -----------------------------------------------------------------------\n"
-		set msg = "${msg}WARNING: These two $type archives/directories don't match:\n"
-		set msg = "${msg}WARNING: \n"
-		set msg = "${msg}WARNING: \t$dstDirOrArchive\n"
-		set msg = "${msg}WARNING: \t$srcDir\n"
-		set msg = "${msg}WARNING: \n"
-		set msg = "${msg}WARNING: The job stdout:\n"
-		set msg = "${msg}WARNING: \n"
+              if ( $status == 0 ) then
+                if ( $echoOn ) unset echo
+                echo "<NOTE> : Archives/directories '$dstDirOrArchive' and '$srcDir' match..."
+                if ( $echoOn ) set echo
+              else if ( $?batch ) then
+                if ( $echoOn ) unset echo
+                set msg =       "WARNING: Automatic message from the job '$jobName'\n"
+                set msg = "${msg}WARNING: -----------------------------------------------------------------------\n"
+                set msg = "${msg}WARNING: These two $type archives/directories don't match:\n"
+                set msg = "${msg}WARNING: \n"
+                set msg = "${msg}WARNING: \t$dstDirOrArchive\n"
+                set msg = "${msg}WARNING: \t$srcDir\n"
+                set msg = "${msg}WARNING: \n"
+                set msg = "${msg}WARNING: The job stdout:\n"
+                set msg = "${msg}WARNING: \n"
                 set msg = "${msg}WARNING: \t$stdoutDir/$jobName\n"
-		set msg = "${msg}WARNING: \n"
-		set msg = "${msg}WARNING: The command which was used:\n"
-		set msg = "${msg}WARNING: \n"
-		set msg = "${msg}WARNING: \t$diffCommand\n"
-		set msg = "${msg}WARNING: \n"
-		set msg = "${msg}WARNING: -----------------------------------------------------------------------\n"
-		set msg = "${msg}WARNING: This message has been generated by FRE\n"
-		set msg = "${msg}WARNING: `date`"
-		printf "$msg" | mailx -s "Archives/directories don't match!" $USER@noaa.gov
-		printf "$msg" | mailx -s "Archives/directories don't match!" GFDL.operations@noaa.gov
-        	printf "$msg"
-		unset msg
-        	if ( $echoOn ) set echo
+                set msg = "${msg}WARNING: \n"
+                set msg = "${msg}WARNING: The command which was used:\n"
+                set msg = "${msg}WARNING: \n"
+                set msg = "${msg}WARNING: \t$diffCommand\n"
+                set msg = "${msg}WARNING: \n"
+                set msg = "${msg}WARNING: -----------------------------------------------------------------------\n"
+                set msg = "${msg}WARNING: This message has been generated by FRE\n"
+                set msg = "${msg}WARNING: `date`"
+                printf "$msg" | mailx -s "Archives/directories don't match!" $USER@noaa.gov
+                printf "$msg" | mailx -s "Archives/directories don't match!" GFDL.operations@noaa.gov
+                printf "$msg"
+                unset msg
+                if ( $echoOn ) set echo
               else
-        	if ( $echoOn ) unset echo
-		echo "WARNING: These two $type archives/directories don't match:"
-		echo "WARNING: $dstDirOrArchive"
-		echo "WARNING: $srcDir"
-        	if ( $echoOn ) set echo
-	      endif
-	      break
-	    else if ( $retry < $checkRetriesNmb ) then
-	      sleep $checkRetryDelay
-	      @ retry++
-            else if ( $?batch ) then
-	      if ( $echoOn ) unset echo
-	      set msg =       "WARNING: Automatic message from the job '$jobName'\n"
-	      set msg = "${msg}WARNING: -----------------------------------------------------------------------\n"
-	      set msg = "${msg}WARNING: FRE was unable to compare these two $type archives/directories:\n"
-	      set msg = "${msg}WARNING: \n"
-	      set msg = "${msg}WARNING: \t$dstDirOrArchive\n"
-	      set msg = "${msg}WARNING: \t$srcDir\n"
-	      set msg = "${msg}WARNING: \n"
-	      set msg = "${msg}WARNING: The main run data saving was not completed in time.\n"
-	      set msg = "${msg}WARNING: \n"
-	      set msg = "${msg}WARNING: The job stdout:\n"
-	      set msg = "${msg}WARNING: \n"
-              set msg = "${msg}WARNING: \t$stdoutDir/$jobName\n"
-	      set msg = "${msg}WARNING: \n"
-	      set msg = "${msg}WARNING: Please use this command to check that your run has reproduced the main run:\n"
-	      set msg = "${msg}WARNING: \n"
-	      set msg = "${msg}WARNING: \t$diffCommand\n"
-	      set msg = "${msg}WARNING: \n"
-	      set msg = "${msg}WARNING: -----------------------------------------------------------------------\n"
-	      set msg = "${msg}WARNING: This message has been generated by FRE\n"
-	      set msg = "${msg}WARNING: `date`"
-	      printf "$msg" | mailx -s "FRE was unable to compare $type archives/directories!" $USER@noaa.gov
-              printf "$msg"
-	      unset msg
-	      if ( $echoOn ) set echo
+                if ( $echoOn ) unset echo
+                echo "WARNING: These two $type archives/directories don't match:"
+                echo "WARNING: $dstDirOrArchive"
+                echo "WARNING: $srcDir"
+                if ( $echoOn ) set echo
+              endif
               break
-	    else
+            else if ( $retry < $checkRetriesNmb ) then
+              sleep $checkRetryDelay
+              @ retry++
+            else if ( $?batch ) then
               if ( $echoOn ) unset echo
-	      echo "WARNING: FRE was unable to compare these two $type archives/directories:"
-	      echo "WARNING: $dstDirOrArchive"
-	      echo "WARNING: $srcDir"
+              set msg =       "WARNING: Automatic message from the job '$jobName'\n"
+              set msg = "${msg}WARNING: -----------------------------------------------------------------------\n"
+              set msg = "${msg}WARNING: FRE was unable to compare these two $type archives/directories:\n"
+              set msg = "${msg}WARNING: \n"
+              set msg = "${msg}WARNING: \t$dstDirOrArchive\n"
+              set msg = "${msg}WARNING: \t$srcDir\n"
+              set msg = "${msg}WARNING: \n"
+              set msg = "${msg}WARNING: The main run data saving was not completed in time.\n"
+              set msg = "${msg}WARNING: \n"
+              set msg = "${msg}WARNING: The job stdout:\n"
+              set msg = "${msg}WARNING: \n"
+              set msg = "${msg}WARNING: \t$stdoutDir/$jobName\n"
+              set msg = "${msg}WARNING: \n"
+              set msg = "${msg}WARNING: Please use this command to check that your run has reproduced the main run:\n"
+              set msg = "${msg}WARNING: \n"
+              set msg = "${msg}WARNING: \t$diffCommand\n"
+              set msg = "${msg}WARNING: \n"
+              set msg = "${msg}WARNING: -----------------------------------------------------------------------\n"
+              set msg = "${msg}WARNING: This message has been generated by FRE\n"
+              set msg = "${msg}WARNING: `date`"
+              printf "$msg" | mailx -s "FRE was unable to compare $type archives/directories!" $USER@noaa.gov
+              printf "$msg"
+              unset msg
               if ( $echoOn ) set echo
-	      break
-	    endif
+              break
+            else
+              if ( $echoOn ) unset echo
+              echo "WARNING: FRE was unable to compare these two $type archives/directories:"
+              echo "WARNING: $dstDirOrArchive"
+              echo "WARNING: $srcDir"
+              if ( $echoOn ) set echo
+              break
+            endif
             unset diffCommand
           else if ( $retry < $checkRetriesNmb ) then
-	    sleep $checkRetryDelay
-	    @ retry++
+            sleep $checkRetryDelay
+            @ retry++
           else if ( $?batch ) then
-	    if ( $echoOn ) unset echo
-	    set msg =       "WARNING: Automatic message from the job '$jobName'\n"
-	    set msg = "${msg}WARNING: -----------------------------------------------------------------------\n"
-	    set msg = "${msg}WARNING: FRE was unable to check this $type directory:\n"
-	    set msg = "${msg}WARNING: \n"
-	    set msg = "${msg}WARNING: \t$srcDir\n"
-	    set msg = "${msg}WARNING: \n"
-	    set msg = "${msg}WARNING: The main run data was not found.\n"
-	    set msg = "${msg}WARNING: \n"
-	    set msg = "${msg}WARNING: The job stdout:\n"
-	    set msg = "${msg}WARNING: \n"
+            if ( $echoOn ) unset echo
+            set msg =       "WARNING: Automatic message from the job '$jobName'\n"
+            set msg = "${msg}WARNING: -----------------------------------------------------------------------\n"
+            set msg = "${msg}WARNING: FRE was unable to check this $type directory:\n"
+            set msg = "${msg}WARNING: \n"
+            set msg = "${msg}WARNING: \t$srcDir\n"
+            set msg = "${msg}WARNING: \n"
+            set msg = "${msg}WARNING: The main run data was not found.\n"
+            set msg = "${msg}WARNING: \n"
+            set msg = "${msg}WARNING: The job stdout:\n"
+            set msg = "${msg}WARNING: \n"
             set msg = "${msg}WARNING: \t$stdoutDir/$jobName\n"
-	    set msg = "${msg}WARNING: \n"
-	    set msg = "${msg}WARNING: -----------------------------------------------------------------------\n"
-	    set msg = "${msg}WARNING: This message has been generated by FRE\n"
-	    set msg = "${msg}WARNING: `date`"
-	    printf "$msg" | mailx -s "FRE was unable to check the $type directory!" $USER@noaa.gov
+            set msg = "${msg}WARNING: \n"
+            set msg = "${msg}WARNING: -----------------------------------------------------------------------\n"
+            set msg = "${msg}WARNING: This message has been generated by FRE\n"
+            set msg = "${msg}WARNING: `date`"
+            printf "$msg" | mailx -s "FRE was unable to check the $type directory!" $USER@noaa.gov
             printf "$msg"
             unset msg
-	    if ( $echoOn ) set echo
+            if ( $echoOn ) set echo
             break
           else
             if ( $echoOn ) unset echo
-	    echo "WARNING: FRE was unable to check this $type directory:"
-	    echo "WARNING: $srcDir"
+            echo "WARNING: FRE was unable to check this $type directory:"
+            echo "WARNING: $srcDir"
             if ( $echoOn ) set echo
             break
           endif
@@ -650,16 +631,16 @@
 
         end
 
-	unset retry
-	unset archDirMain
+        unset retry
+        unset archDirMain
 
       else
 
-	if ( $echoOn ) unset echo
-	echo "*ERROR*: The string '$archDir' doesn't conform to the unique $type directory pattern"
-	if ( $echoOn ) set echo
-	set exitStatus = 2
-	goto END
+        if ( $echoOn ) unset echo
+        echo "*ERROR*: The string '$archDir' doesn't conform to the unique $type directory pattern"
+        if ( $echoOn ) set echo
+        set exitStatus = 2
+        goto END
 
       endif
 
@@ -691,7 +672,7 @@
   if ( $actionSaveToDo ) then
 
     alias hsmput `which hsmput` --time --workroot=$workDir --archroot=//
-    
+
     if ( $paramCheckSumOn ) alias hsmput `alias hsmput` --checksum
     if ( $paramCompressOn ) alias hsmput `alias hsmput` --zip
 
@@ -713,7 +694,7 @@
 
     if ( $status == 0 ) then
       if ( $paramArchiveOn ) then
-	if ( -f $archDir.$archExt && -f $archDir.$archExt.ok ) then
+        if ( -f $archDir.$archExt && -f $archDir.$archExt.ok ) then
           if ( $echoOn ) unset echo
           echo "<NOTE> : The $type archive '$archDir.$archExt' has been saved successfully"
           if ( $echoOn ) set echo
@@ -721,22 +702,22 @@
           if ( $echoOn ) unset echo
           echo "*ERROR*: System error during saving $type archive '$archDir.$archExt'"
           if ( $echoOn ) set echo
-	  set exitStatus = 2
-	  goto END
+          set exitStatus = 2
+          goto END
         endif
       endif
       if ( $paramPtmpOn ) then
-	if ( -d "$ptmpDir$archDir" && -f $ptmpDir$archDir.ok ) then
+        if ( -d "$ptmpDir$archDir" && -f $ptmpDir$archDir.ok ) then
           if ( $echoOn ) unset echo
           echo "<NOTE> : The $type directory '$ptmpDir$archDir' has been saved successfully"
           if ( $echoOn ) set echo
-	else
+        else
           if ( $echoOn ) unset echo
           echo "*ERROR*: System error during saving $type directory '$ptmpDir$archDir'"
           if ( $echoOn ) set echo
-	  set exitStatus = 2
-	  goto END
-	endif
+          set exitStatus = 2
+          goto END
+        endif
       endif
     else
       if ( $echoOn ) unset echo
