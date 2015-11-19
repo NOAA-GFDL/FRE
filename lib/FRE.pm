@@ -422,7 +422,7 @@ sub new($$%)
 			  "platform       = $fre->{platform}",
 			  "target         = $fre->{target}",
 			  "project        = $fre->{project}", 
-			  "mkmfTemplate   = $fre->{mkmfTemplate}"
+			  "mkmfTemplate   = $fre->{mkmfTemplate}",
 			  "freVersion     = $fre->{freVersion}"
 			);
 			# ------------------------------------------------- normal return
@@ -869,10 +869,14 @@ sub default_platform_csh {
         }
         else {
             my ($compiler_node) = $self->{platformNode}->getChildrenByTagName('compiler');
-            my $type = $compiler_node->getAttribute('type');
+            unless ($compiler_node) {
+                $self->out(FREMsg::FATAL, "Compiler type and version must be specified in XML platform <compiler> tag");
+                exit FREDefaults::STATUS_FRE_GENERIC_PROBLEM;
+            }
+            my $type    = $compiler_node->getAttribute('type');
             my $version = $compiler_node->getAttribute('version');
             unless ($type and $version) {
-                $self->out(FREMsg::FATAL, "Compiler type and version must be specified in XML");
+                $self->out(FREMsg::FATAL, "Compiler type and version must be specified in XML platform <compiler> tag");
                 exit FREDefaults::STATUS_FRE_GENERIC_PROBLEM;
             }
             ( type => $type, version => $version);
