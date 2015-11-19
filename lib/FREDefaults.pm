@@ -111,7 +111,7 @@ use constant SITE_CURRENT	=> $ENV{FRE_SYSTEM_SITE};
 use constant SITES_ALL		=> split(/:/, $ENV{FRE_SYSTEM_SITES});
 
 use constant XMLFILE_DEFAULT	=> 'rts.xml';
-use constant PLATFORM_DEFAULT	=> 'default';
+#use constant PLATFORM_DEFAULT	=> 'default';
 use constant TARGET_DEFAULT 	=> 'prod';
 
 use constant GLOBAL_NAMES	=> 'site,siteDir,suite,platform,target,name,root,stem';
@@ -140,11 +140,11 @@ sub XMLFile()
   return FREDefaults::XMLFILE_DEFAULT;
 }
 
-sub Platform()
+#sub Platform()
 # ------ arguments: none
-{
-  return FREDefaults::SITE_CURRENT . '.' . FREDefaults::PLATFORM_DEFAULT;
-}
+#{
+#  return FREDefaults::SITE_CURRENT . '.' . FREDefaults::PLATFORM_DEFAULT;
+#}
 
 sub Target()
 # ------ arguments: none
