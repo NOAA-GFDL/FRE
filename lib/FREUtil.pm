@@ -856,6 +856,21 @@ sub optionValuesListParse($$@)
   }
 }
 
+our $defaultPlatformErrorMsg = <<EOF;
+Default platform no longer supported.
+Define platforms in experiment XML and use with -p site.compiler (e.g. -p ncrc2.intel).
+See documentation at http://wiki.gfdl.noaa.gov/index.php/FRE_User_Documentation#Platforms_and_Sites".
+EOF
+
+sub checkPlatform {
+    my $platform = shift;
+    if (! $platform or $platform =~ /default/) {
+        FREMsg::out(FREMsg::FATAL, 0, $defaultPlatformErrorMsg);
+        exit FREDefaults::STATUS_COMMAND_PLATFORM_PROBLEM;
+    }
+    return $platform;
+}
+
 # //////////////////////////////////////////////////////////////////////////////
 # //////////////////////////////////////////////////////////// Initialization //
 # //////////////////////////////////////////////////////////////////////////////

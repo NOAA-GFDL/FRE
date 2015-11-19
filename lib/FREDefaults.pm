@@ -77,6 +77,7 @@ use constant STATUS_XML_NOT_VALID			=>  1;
 
 use constant STATUS_COMMAND_GENERIC_PROBLEM		=> 10;
 use constant STATUS_COMMAND_NO_EXPERIMENTS		=> 11;
+use constant STATUS_COMMAND_PLATFORM_PROBLEM    => 12;
 
 use constant STATUS_FS_GENERIC_PROBLEM			=> 20;
 use constant STATUS_FS_PERMISSION_PROBLEM		=> 21;
@@ -137,13 +138,6 @@ sub XMLFile()
 # ------ arguments: none
 {
   return FREDefaults::XMLFILE_DEFAULT;
-}
-
-sub Platform()
-# ------ arguments: none
-{
-  FREMsg::out(FREMsg::FATAL, 0, "Default platform no longer supported.\nDefine platforms in experiment XML and use with -p site.compiler (e.g. -p ncrc2.intel).\nSee documentation at http://wiki.gfdl.noaa.gov/index.php/FRE_User_Documentation#Platforms_and_Sites");
-  exit STATUS_FRE_GENERIC_PROBLEM;
 }
 
 sub Target()
