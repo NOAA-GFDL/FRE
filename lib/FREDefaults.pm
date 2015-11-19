@@ -111,7 +111,6 @@ use constant SITE_CURRENT	=> $ENV{FRE_SYSTEM_SITE};
 use constant SITES_ALL		=> split(/:/, $ENV{FRE_SYSTEM_SITES});
 
 use constant XMLFILE_DEFAULT	=> 'rts.xml';
-#use constant PLATFORM_DEFAULT	=> 'default';
 use constant TARGET_DEFAULT 	=> 'prod';
 
 use constant GLOBAL_NAMES	=> 'site,siteDir,suite,platform,target,name,root,stem';
@@ -140,11 +139,12 @@ sub XMLFile()
   return FREDefaults::XMLFILE_DEFAULT;
 }
 
-#sub Platform()
+sub Platform()
 # ------ arguments: none
-#{
-#  return FREDefaults::SITE_CURRENT . '.' . FREDefaults::PLATFORM_DEFAULT;
-#}
+{
+  FREMsg::out(FREMsg::FATAL, 0, "Default platform no longer supported.\nDefine platforms in experiment XML and use with -p site.compiler (e.g. -p ncrc2.intel).\nSee documentation at http://wiki.gfdl.noaa.gov/index.php/FRE_User_Documentation#Platforms_and_Sites");
+  exit STATUS_FRE_GENERIC_PROBLEM;
+}
 
 sub Target()
 # ------ arguments: none
