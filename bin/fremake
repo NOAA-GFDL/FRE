@@ -147,14 +147,13 @@ use FREXML();
   {
     my $cwd = Cwd::getcwd();
     my $xml = FREDefaults::XMLFile();
-    my $pfm = FREDefaults::Platform();
     my $tgt = FREDefaults::Target();
     my $ncs = fremake::NCORES_DEFAULT;
     my $wtm = fremake::WALLTIME_DEFAULT;
     return
     (
       "\n",
-      "  Usage: $self [option|experiment] ...\n\n",
+      "  Usage: $self -p|--platform platform [options] experiment [experiment2 ...]\n\n",
       "  Options:\n\n",
       "   -f,        --force-checkout            force checkout in case the source directory exists\n",
       "   -F,        --force-compile             force compile in case the executable directory exists\n",
@@ -164,7 +163,7 @@ use FREXML();
       "   -E,        --execute                   execute all the created scripts in the current session\n",
       "   -h,        --help                      print help message and exit\n",
       "   -n NUM,    --ncores=NUM                number NUM of processor cores to use (default is $ncs)\n",
-      "   -p STRING, --platform=STRING           hardware and software patform STRING (default is '$pfm')\n",
+      "   -p STRING, --platform=STRING           hardware and software platform STRING (required)\n",
       "   -s,        --submit                    submit all the created scripts as batch jobs\n",
       "   -t STRING, --target=STRING             use compilation directives, targeted by STRING (default is '$tgt')\n",
       "   -V,        --version                   print the tool version and exit\n",
@@ -172,7 +171,7 @@ use FREXML();
       "   -w NUM,    --walltime=NUM              maximum wall time NUM (in minutes) to use (default is $wtm)\n",
       "   -x FILE,   --xmlfile=FILE              experiment suite XML configuration FILE (default is '$cwd/$xml')\n\n",
       "  All the option names may be abbreviated, a single leading dash is also acceptable.\n",
-      "  At least one experiment from the FILE must be listed as an argument.\n\n"
+      "  The platform and at least one experiment from the FILE must be listed as arguments.\n\n"
     );
   }
 
@@ -1121,7 +1120,6 @@ use FREXML();
     'link'      => 1,
     'ncores'    => fremake::NCORES_DEFAULT,
     'walltime'  => fremake::WALLTIME_DEFAULT,
-    'platform'  => FREDefaults::Platform(),
     'target'    => FREDefaults::Target(),
     'xmlfile'   => FREDefaults::XMLFile()
   );
@@ -1155,7 +1153,7 @@ use FREXML();
     }
   }
 
-  if (exists($opt{platform}))
+  if ($opt{platform})
   {
     unless ($opt{platform} && substr($opt{platform}, 0, 1) ne '-')
     {
