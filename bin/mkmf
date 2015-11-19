@@ -1,4 +1,5 @@
 #!/usr/bin/perl
+#
 #-----------------------------------------------------------------------
 #              mkmf: Perl script for makefile construction
 #
@@ -29,7 +30,7 @@ use strict;
 use File::Basename;
 use Getopt::Long qw(:config posix_default bundling no_ignore_case);
 use Config;			# use to put in platform-specific stuff
-use vars qw( $opt_a $opt_b $opt_c $opt_d $opt_f $opt_I $opt_l $opt_m $opt_o $opt_p $opt_t $opt_v $opt_x ); # declare these global to be shared with Getopt:Std
+use vars qw( $opt_a $opt_b $opt_c $opt_d $opt_f $opt_g $opt_I $opt_l $opt_m $opt_o $opt_p $opt_t $opt_v $opt_x ); # declare these global to be shared with Getopt:Std
 
 #subroutines
 sub ensureTrailingSlash {
@@ -37,14 +38,15 @@ sub ensureTrailingSlash {
    local $/ = '/'; chomp @_[0]; @_[0] .= '/';
 }
 
-my $version = '$Id: mkmf,v 18.0.18.4.2.1.2.3 2013/08/21 15:04:06 Seth.Underwood Exp $ ';
+my $version = '__FRE_VERSION__';
 
 # initialize variables: use getopts for these
 GetOptions("abspath|a=s" => \$opt_a,
-           "blddir|b=s" => \$opt_b,
+	   "blddir|b=s" => \$opt_b,
 	   "cppdefs|c=s" => \$opt_c,
 	   "debug|d" => \$opt_d,
 	   "f" => \$opt_f,
+	   "git|g" => \$opt_g,
 	   "includes|I=s@" => \$opt_I,
 	   "makefile|m=s" => \$opt_m,
 	   "otherflags|o=s" => \$opt_o,
@@ -52,7 +54,7 @@ GetOptions("abspath|a=s" => \$opt_a,
 	   "template|t=s" => \$opt_t,
 	   "verbose|v=s" => \$opt_v,
 	   "execute|x" => \$opt_x,
-	  ) or die "\aSyntax: $0 [-a abspath] [-c cppdefs] [-d] [-f] [-I includes] [-m makefile] [-o otherflags] ][-p program] [-t template] [-v] [-x] [targets]\n";
+	  ) or die "\aSyntax: $0 [-a abspath] [-c cppdefs] [-d] [-f] [-g] [-I includes] [-m makefile] [-o otherflags] ][-p program] [-t template] [-v] [-x] [targets]\n";
 $opt_v = 1 if $opt_d;	# debug flag turns on verbose flag also
 print "$0 $version\n" if $opt_v;
 
@@ -130,12 +132,18 @@ if ( $opt_c ) {
       $compile_cmd{'.F'}   = q/$(FC) $(CPPDEFS_XLF) $(FFLAGS) -c/;
       $compile_cmd{'.F90'} = q/$(FC) $(CPPDEFS_XLF) $(FFLAGS) -c/;
    }
-   &print_formatted_list("CPPDEFS = $opt_c") if $opt_c;
 }
+
+if ( $opt_g ) {
+  $opt_c .= ' -D_FILE_VERSION="`git-version-string $<`"';
+}
+
+&print_formatted_list("CPPDEFS = $opt_c") if $opt_c;
+
 if ( $opt_o ) {
   $opt_o =~ s/$opt_a/\$\(SRCROOT\)/g if ( $opt_a );
   $opt_o =~ s/$opt_b/\$\(BUILDROOT\)/g if ( $opt_b );
-  print MAKEFILE "\nOTHERFLAGS = $opt_o\n" if $opt_o;
+  print MAKEFILE "\nOTHERFLAGS = $opt_o\n";
 }
 
 #vb 2009-12-17, include now comes after vardefs, so that it can modify make variables
@@ -220,22 +228,22 @@ foreach $target ( @targets ) {
       foreach ( @files ) {
 	 # These next two lines appear to not be important
 	 # This is due to "@includepaths=''" line below.
-         # Leaving them here for now until further testing can be done.
+	 # Leaving them here for now until further testing can be done.
 	 ( $name, $path, $suffix ) = fileparse( "$target$_", @inc_suffixes );
-         push @includepaths, $target if $suffix; # is this line doing anything? looks like includepaths='' later...
+	 push @includepaths, $target if $suffix; # is this line doing anything? looks like includepaths='' later...
 
 	 ( $name, $path, $suffix ) = fileparse( "$target$_", @src_suffixes );
 	 $object = "$name.o";
 	 if( $suffix && !$actual_source_of{$object} ) {
 	    if ( $opt_a and substr($path,0,1) ne '/' ) { # if an abs_path exists, attach it to all relative paths
 	       ensureTrailingSlash($path);
-               $path = '' if $path eq './';
-               $source_of{$object} = '$(SRCROOT)' . "$path$name$suffix";
+	       $path = '' if $path eq './';
+	       $source_of{$object} = '$(SRCROOT)' . "$path$name$suffix";
 	       $path = $opt_a . $path;
 	    }
-            $actual_source_of{$object} = "$path$name$suffix";
-            $source_of{$object} = $actual_source_of{$object} unless $source_of{$object};
-         }
+	    $actual_source_of{$object} = "$path$name$suffix";
+	    $source_of{$object} = $actual_source_of{$object} unless $source_of{$object};
+	 }
       }
       closedir DIR;
       $scanned{$target} = $scanOrder++;
@@ -248,60 +256,60 @@ foreach $target ( @targets ) {
 	    $path = '' if $path eq './';
 	    if ( $opt_a and substr($path,0,1) ne '/' ) { # if an abs_path exists, attach it to all relative paths
 	       ensureTrailingSlash($path);
-               $source_of{$object} = '$(SRCROOT)' . "$path$name$suffix";
+	       $source_of{$object} = '$(SRCROOT)' . "$path$name$suffix";
 	       $path = $opt_a . $path;
 	    }
 	    $actual_source_of{$object} = "$path$name$suffix";
-            $source_of{$object} = $actual_source_of{$object} unless $source_of{$object};
+	    $source_of{$object} = $actual_source_of{$object} unless $source_of{$object};
 	 } else {
-            ( $name, $path, $suffix ) = fileparse( $target, @inc_suffixes );
-            if ( ! $suffix ) {
+	    ( $name, $path, $suffix ) = fileparse( $target, @inc_suffixes );
+	    if ( ! $suffix ) {
 #not a sourcefile: assume it contains list of sourcefiles
 #specify files requiring special commands (e.g special compiler flags) thus:
 #   f90 -Oaggress a.f90
 #if last word on line is not a valid sourcefile, line is ignored
-               open CMDFILE, $target;
-               print "Reading commands from $target...\n" if $opt_v;
-               while ( <CMDFILE> ) {
-                  next if ( $_ eq "\n");
-                  $line = $_;
-                  my @wordlist = split;
-                  $file = @wordlist[$#wordlist]; # last word on line
-                  ( $name, $path, $suffix ) = fileparse( $file, @src_suffixes );
-                  print "file=$file suffix=$suffix in $target\n" if $opt_d;
-                  $object = "$name.o";
-                  if ( $suffix && !$actual_source_of{$object} ) {
-                     $path = '' if $path eq './';
-                     if ( $opt_a and ( substr($path,0,1) ne '/' ) ) { # if an abs_path exists, attach it to all relative paths
-                        ensureTrailingSlash($path);
-                        $source_of{$object} = '$(SRCROOT)' . "$path$name$suffix";
-                        $path = $opt_a . $path;
-                     }
-                     $actual_source_of{$object} = "$path$name$suffix";
-                     $source_of{$object} = $actual_source_of{$object} unless $source_of{$object};
-                     $scanned{$path} = $scanOrder++ unless $scanned{$path};
+	       open CMDFILE, $target;
+	       print "Reading commands from $target...\n" if $opt_v;
+	       while ( <CMDFILE> ) {
+		  next if ( $_ eq "\n");
+		  $line = $_;
+		  my @wordlist = split;
+		  $file = @wordlist[$#wordlist]; # last word on line
+		  ( $name, $path, $suffix ) = fileparse( $file, @src_suffixes );
+		  print "file=$file suffix=$suffix in $target\n" if $opt_d;
+		  $object = "$name.o";
+		  if ( $suffix && !$actual_source_of{$object} ) {
+		     $path = '' if $path eq './';
+		     if ( $opt_a and ( substr($path,0,1) ne '/' ) ) { # if an abs_path exists, attach it to all relative paths
+			ensureTrailingSlash($path);
+			$source_of{$object} = '$(SRCROOT)' . "$path$name$suffix";
+			$path = $opt_a . $path;
+		     }
+		     $actual_source_of{$object} = "$path$name$suffix";
+		     $source_of{$object} = $actual_source_of{$object} unless $source_of{$object};
+		     $scanned{$path} = $scanOrder++ unless $scanned{$path};
 #command for this file is all of line except the filename
-                     $line =~ /\s+$file/; $line=$`;
-                     if ( $line ) {
-                        $compile_cmd{"$name$suffix"} = $line;
-                        print "Special command for file $name$suffix: ($line)\n" if $opt_v;
-                     }
-                  }
-                  if ( ! $suffix ) { # look for include files
-                     ( $name, $path, $suffix ) = fileparse( $file, @inc_suffixes );
-                     if ( $opt_a and ( substr($path,0,1) ne '/' ) ) { # if an abs_path exists, attach it to all relative paths
-                        ensureTrailingSlash($path);
-                        $path = $opt_a . $path;
-                     }
-                     print "file=$file path=$path suffix=$suffix order=$scanOrder in $target\n" if $opt_d;
+		     $line =~ /\s+$file/; $line=$`;
+		     if ( $line ) {
+			$compile_cmd{"$name$suffix"} = $line;
+			print "Special command for file $name$suffix: ($line)\n" if $opt_v;
+		     }
+		  }
+		  if ( ! $suffix ) { # look for include files
+		     ( $name, $path, $suffix ) = fileparse( $file, @inc_suffixes );
+		     if ( $opt_a and ( substr($path,0,1) ne '/' ) ) { # if an abs_path exists, attach it to all relative paths
+			ensureTrailingSlash($path);
+			$path = $opt_a . $path;
+		     }
+		     print "file=$file path=$path suffix=$suffix order=$scanOrder in $target\n" if $opt_d;
 # anything that's found here is an includefile but not a sourcefile...
 # just include directory in scan
-                     $scanned{$path} = $scanOrder++
-                       if ( $suffix && !$scanned{$path} );
-                  }
-               }
-               close CMDFILE;
-            }
+		     $scanned{$path} = $scanOrder++
+		       if ( $suffix && !$scanned{$path} );
+		  }
+	       }
+	       close CMDFILE;
+	    }
 	 }
       }
    }
