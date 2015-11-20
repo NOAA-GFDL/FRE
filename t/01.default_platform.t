@@ -28,6 +28,7 @@ my $good_platform = $ENV{HSM_SITE} eq 'gfdl' ? 'ncrc2-intel' : 'intel';
 ok(-f $xml);
 
 for my $tool (keys %tools) {
+    next if $tool =~ /frepp / and $ENV{HSM_SITE} ne 'gfdl';
     my $command = "$tool -x $xml --platform default $exp";
     print "$command\n";
     my $exit_code = run($command);
@@ -36,6 +37,7 @@ for my $tool (keys %tools) {
 }
 
 for my $tool (keys %tools) {
+    next if $tool =~ /frepp / and $ENV{HSM_SITE} ne 'gfdl';
     my $command = "$tool -x $xml --platform bad $exp";
     print "$command\n";
     my $exit_code = run($command);
@@ -43,6 +45,7 @@ for my $tool (keys %tools) {
 }
 
 for my $tool (keys %tools) {
+    next if $tool =~ /frepp / and $ENV{HSM_SITE} ne 'gfdl';
     my $command = "$tool -x $xml $exp";
     print "$command\n";
     my $exit_code = run($command);
@@ -50,6 +53,7 @@ for my $tool (keys %tools) {
 }
 
 while (my ($tool, $expected_exit_code) =  each %tools) {
+    next if $tool =~ /frepp / and $ENV{HSM_SITE} ne 'gfdl';
     if (ref $expected_exit_code eq 'ARRAY') {
         $expected_exit_code
             = $ENV{HSM_SITE} eq 'gfdl' ? $expected_exit_code->[1]
