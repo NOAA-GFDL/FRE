@@ -530,6 +530,60 @@ sub currentExperimentName($)
   return $fre->{name};
 }
 
+sub setCurrentExperID($$)
+# ----- arguments: $fre $experID
+# ----- called as object method
+{
+  my ($fre, $experID) = @_;
+  $fre->{experID} = $experID;
+}
+
+sub unsetCurrentExperId($)
+# ----- arguments: $fre
+# ----- called as object method
+{
+  my $fre = shift;
+  my $experID = $fre->{experID};
+  delete($fre->{experID});
+  return $experID;
+}
+
+sub setCurrentRealizID($$)
+# ----- arguments: $fre $realizID
+# ----- called as object method
+{
+  my ($fre, $realizID) = @_;
+  $fre->{realizID} = $realizID;
+}
+
+sub unsetCurrentRealizID($)
+# ----- arguments: $fre
+# ----- called as object method
+{
+  my $fre = shift;
+  my $realizID = $fre->{realizID};
+  delete($fre->{realizID});
+  return $realizID;
+}
+
+sub setCurrentRunID($$)
+# ----- arguments: $fre $runID
+# ----- called as object method
+{
+  my ($fre, $runID) = @_;
+  $fre->{runID} = $runID;
+}
+
+sub unsetCurrentRunID($)
+# ----- arguments: $fre
+# ----- called as object method
+{
+  my $fre = shift;
+  my $runID = $fre->{runID};
+  delete($fre->{runID});
+  return $runID;
+}
+
 sub xmlAsString($)
 # ------ arguments: $fre
 # ------ called as object method
