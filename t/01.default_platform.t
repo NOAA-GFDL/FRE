@@ -29,7 +29,7 @@ ok(-f $xml);
 
 for my $tool (keys %tools) {
     next if $tool =~ /frepp / and $ENV{HSM_SITE} ne 'gfdl';
-    my $command = "$tool -x $xml --platform default $exp";
+    my $command = "$tool -x $xml -p default $exp";
     print "$command\n";
     my $exit_code = run($command);
     is($exit_code, 12,
