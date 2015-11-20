@@ -9,50 +9,59 @@ my %tools = (
     frecheck        => 20,
     freinfo         => 20,
     frelist         => 0,
-    fremake         => 0,
-    frepriority     => 10,
+    fremake         => [0, 30],
+    frepriority     => [10, 30],
     frerts_check    => 0,
-    frerun          => 60,
+    frerun          => [60, 30],
     frescrub        => 0,
     frestatus       => 0,
     fretransform    => 0,
+    'frepp -t 1982' => 0,
+    'freppcheck -b 1980 -e 1981' => 0,
 );
 
 my $xml = 't/xml/CM2.1U.xml';
 my $exp = 'CM2.1U_Control-1990_E1.M_3A';
 
+my $good_platform = $ENV{HSM_SITE} eq 'gfdl' ? 'ncrc2-intel' : 'intel';
+
 ok(-f $xml);
 
-while (my ($tool, $expected_exit_code) =  each %tools) {
-    my $command = "$tool -x $xml -p default $exp";
+for my $tool (keys %tools) {
+    my $command = "$tool -x $xml --platform default $exp";
     print "$command\n";
     my $exit_code = run($command);
     is($exit_code, 12,
-        "$tool should exit with platform default problem; was $exit_code instead");
+        "$tool should exit with platform default problem");
 }
 
-while (my ($tool, $expected_exit_code) =  each %tools) {
-    my $command = "$tool -x $xml -p bad $exp";
+for my $tool (keys %tools) {
+    my $command = "$tool -x $xml --platform bad $exp";
     print "$command\n";
     my $exit_code = run($command);
-    isnt($exit_code, 12);
+    isnt($exit_code, 12, "$tool shouldn't exit with default platform problem");
 }
 
 for my $tool (keys %tools) {
     my $command = "$tool -x $xml $exp";
     print "$command\n";
     my $exit_code = run($command);
-    is($exit_code, 12,
-        "$tool should exit with platform default problem; was $exit_code instead");
+    is($exit_code, 12, "$tool should exit with platform default problem");
 }
 
 while (my ($tool, $expected_exit_code) =  each %tools) {
-    my $command = "$tool -x $xml -p intel $exp";
+    if (ref $expected_exit_code eq 'ARRAY') {
+        $expected_exit_code
+            = $ENV{HSM_SITE} eq 'gfdl' ? $expected_exit_code->[1]
+            : $expected_exit_code->[0];
+    }
+    my $command = "$tool -x $xml --platform $good_platform $exp";
     print "$command\n";
     my $exit_code = run($command);
-    is($exit_code, $expected_exit_code,
-        "$tool should get expected exit code $expected_exit_code; was $exit_code instead");
+    is($exit_code, $expected_exit_code, "$tool should get expected exit code");
 }
+
+done_testing;
 
 sub run {
     my $command = shift;
