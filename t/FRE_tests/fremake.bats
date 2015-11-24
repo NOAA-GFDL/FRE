@@ -54,7 +54,7 @@ setup() {
             skip "Don't test fremake on Analysis"
             ;;
         * )
-            output_good="*FATAL*: The XML file '`pwd`/rts.xml' doesn't exist or isn't readable"
+            output_good="*FATAL*: The XML file '`pwd -P`/rts.xml' doesn't exist or isn't readable"
             ;;
     esac
 
@@ -110,7 +110,7 @@ setup() {
             ;;
         * )
             # NOTE: I am using the pwd command here so we don't have to glob and escape the * in *FATAL*
-            output_good="*FATAL*: The XML file '`pwd`/nonexistent_file.xml' doesn't exist or isn't readable"
+            output_good="*FATAL*: The XML file '`pwd -P`/nonexistent_file.xml' doesn't exist or isn't readable"
             ;;
     esac
 
@@ -174,7 +174,7 @@ setup() {
     esac
 
     output_good="*FATAL*: XML file line 42: the platform '${platform}.nonexistent_platform' is missed
-*FATAL*: A problem with the XML file '`pwd`/CM2.1U.xml'"
+*FATAL*: A problem with the XML file '`pwd -P`/CM2.1U.xml'"
 
     run fremake -x CM2.1U.xml -p nonexistent_platform CM2.1U_Control-1990_E1.M_3A
     echo "Expected: \"$output_good\""
