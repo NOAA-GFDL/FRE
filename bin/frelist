@@ -490,11 +490,6 @@ use FREUtil();
 
   my $fre = FRE->new('frelist', %opt) or exit FREDefaults::STATUS_FRE_GENERIC_PROBLEM;
 
-  if ($opt{'platform-csh'})
-  {
-    print ($fre->baseCsh(), "\n") and exit FREDefaults::STATUS_OK;
-  }
-
   if ($opt{Xml})
   {
     print ($fre->xmlAsString(), "\n") and exit FREDefaults::STATUS_OK;
@@ -502,6 +497,13 @@ use FREUtil();
 
   my @expNamesRequested = FREUtil::listUnique(@ARGV);
   my @expNames = (scalar(@expNamesRequested) > 0) ? @expNamesRequested : $fre->experimentNames();
+
+  # for --platform-csh option, substitute $(name) with the first experiment name if one is given
+  if ($opt{'platform-csh'}) {
+    my $csh = $fre->baseCsh;
+    $csh =~ s/\$\(name\)/$expNames[0]/g if scalar @expNamesRequested > 0;
+    print "$csh\n" and exit FREDefaults::STATUS_OK;
+  }
 
   my @exps = ();
   foreach my $expName (@expNames)
