@@ -1,0 +1,102 @@
+#%Module1.0
+#
+# ------------------------------------------------------------------------------
+# FMS/FRE Project: Module To Set Up 'fre-commands'
+# ------------------------------------------------------------------------------
+# Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2010-2012, 2015
+# Designed and written by V. Balaji, Amy Langenhorst, Seth Underwood
+# and Aleksey Yakovlev
+#
+
+# Read in the FRE module configuration
+set modDir [file dirname [file dirname ${ModulesCurrentModulefile}]]
+source ${modDir}/fre/.frerc
+
+proc ModulesHelp {} {
+  puts stderr "Sets up the shell environment for FRE commands"
+}
+
+set pkgName fre-commands
+set pkgVersion jenkins
+
+conflict ${pkgName}
+
+
+switch ${domain} {
+
+  "gfdl.noaa.gov" {
+    module load lxml/2.2.4_bronx-9
+    module load nccmp/1.1.1_bronx-9
+    module load gcp
+  }
+
+  "princeton.rdhpcs.noaa.gov" {
+    module load lxml/2.2.4_bronx-9
+    module load nccmp/1.1.1_bronx-9
+    module load gcp
+    setenv DATE_MANIP DM5
+  }
+
+  "ncrc.gov" {
+    setenv CVS_RSH gsissh
+    setenv CVSROOT :ext:cvs.princeton.rdhpcs.noaa.gov:/home/fms/cvs
+    setenv FRE_SYSTEM_TMP /lustre/f1/${env(USER)}/tmp
+    set-alias msub_chain "msub -N \$1:t_chain -j oe -l size=1,walltime=01:00:00,partition=es -q eslogin -v FRE_STAGE=CHAIN \$1"
+    set-alias msub_stage "msub -N \$1:t_stage -j oe -l size=1,walltime=01:00:00,partition=es -q eslogin -v FRE_STAGE=INPUT \$1 | xargs -I_X_ msub -l depend=afterok:_X_ \$1"
+    module load nccmp/1.1.0_bronx-9
+    module load gcp
+  }
+  
+  "zeus.fairmont.rdhpcs.noaa.gov" {
+    setenv CVS_RSH gsissh
+    setenv CVSROOT :ext:cvs.princeton.rdhpcs.noaa.gov:/home/fms/cvs
+    module load nccmp/1.1.0_bronx-9
+    if {[module-info mode load]} {
+      module use --append /contrib/gfdl/modulefiles
+      module load gcp
+    } elseif {[module-info mode remove]} {
+      module unload gcp
+      module unuse /contrib/gfdl/modulefiles
+    }
+  }
+
+  "theia.fairmont.rdhpcs.noaa.gov" {
+    setenv CVS_RSH gsissh
+    setenv CVSROOT :ext:cvs.princeton.rdhpcs.noaa.gov:/home/fms/cvs
+    module load nccmp/1.1.0_bronx-9
+    if {[module-info mode load]} {
+      module use --append /contrib/gfdl/modulefiles
+      module load gcp
+    } elseif {[module-info mode remove]} {
+      module unload gcp
+      module unuse /contrib/gfdl/modulefiles
+    }
+  }
+
+  default {
+    module load nccmp/1.1.0_bronx-9
+  }
+
+}
+
+module load File-NFSLock/1.21_bronx-9
+module load XML-LibXML/1.70_bronx-9
+module load XML-Dumper/0.81_bronx-9
+
+set pkgHome ${sysDir}/${pkgName}
+set siteDir [string trimright ${site} 0123456789]
+
+prepend-path PATH ${pkgHome}/bin:${pkgHome}/sbin:${pkgHome}/site/${siteDir}/bin
+prepend-path PERL5LIB ${pkgHome}/lib
+prepend-path MANPATH ${pkgHome}/man
+
+setenv FRE_SYSTEM_MODULEFILES_DIR ${moduleFilesDir}
+setenv FRE_SYSTEM_SITE ${site}
+setenv FRE_SYSTEM_SITES gfdl-ws:gfdl:ncrc1:ncrc2:ncrc:nescc:theia:alcf:olcf
+setenv FRE_SYSTEM_TMP ${tmpDir}
+
+setenv FRE_COMMANDS_HOME ${pkgHome}
+setenv FRE_COMMANDS_VERSION ${pkgVersion}
+
+module load hsm/1.0.1_bronx-9
+

@@ -1,0 +1,1604 @@
+<?xml version="1.0"?>
+<!-- FRE Usage documentation: http://www.gfdl.noaa.gov/fms/fre -->
+<!-- $Id$ -->
+
+<!-- To run PostProcessing at GFDL, comment the DOCTYPE below and uncomment this one:
+<!DOCTYPE experimentSuite [
+<!ENTITY % script_abbrevs SYSTEM "/home/atw/fms/diags/xml_entities/analysis/script_abbrevs.dtd"> %script_abbrevs;
+<!ENTITY analysis_am_atmos_av_annual_20yr   SYSTEM "/home/atw/fms/diags/xml_entities/analysis/am/atmos/av/annual/20yr.xml">
+<!ENTITY analysis_cm_atmos_ts_monthly_20yr  SYSTEM "/home/atw/fms/diags/xml_entities/analysis/cm/atmos/ts/monthly/20yr.xml">
+<!ENTITY analysis_cm_atmos_ts_monthly_100yr SYSTEM "/home/atw/fms/diags/xml_entities/analysis/cm/atmos/ts/monthly/100yr.xml">
+<!ENTITY analysis_cm_atmos_av_monthly_20yr  SYSTEM "/home/atw/fms/diags/xml_entities/analysis/cm/atmos/av/monthly/20yr.xml">
+<!ENTITY analysis_cm_atmos_av_monthly_100yr SYSTEM "/home/atw/fms/diags/xml_entities/analysis/cm/atmos/av/monthly/100yr.xml">
+<!ENTITY analysis_cm_atmos_av_annual_20yr   SYSTEM "/home/atw/fms/diags/xml_entities/analysis/cm/atmos/av/annual/20yr.xml">
+<!ENTITY analysis_cm_atmos_av_annual_100yr  SYSTEM "/home/atw/fms/diags/xml_entities/analysis/cm/atmos/av/annual/100yr.xml">
+<!ENTITY analysis_cm_ocean_ts_annual_20yr   SYSTEM "/home/atw/fms/diags/xml_entities/analysis/cm/ocean/ts/annual/20yr.xml">
+<!ENTITY analysis_cm_ocean_ts_annual_100yr  SYSTEM "/home/atw/fms/diags/xml_entities/analysis/cm/ocean/ts/annual/100yr.xml">
+<!ENTITY analysis_cm_ocean_av_annual_20yr   SYSTEM "/home/atw/fms/diags/xml_entities/analysis/cm/ocean/av/annual/20yr.xml">
+<!ENTITY analysis_cm_ocean_av_annual_100yr  SYSTEM "/home/atw/fms/diags/xml_entities/analysis/cm/ocean/av/annual/100yr.xml">
+]>
+-->
+
+<!DOCTYPE experimentSuite [
+<!ENTITY analysis_am_atmos_av_annual_20yr   "">
+<!ENTITY analysis_cm_atmos_ts_monthly_20yr  "">
+<!ENTITY analysis_cm_atmos_ts_monthly_100yr "">
+<!ENTITY analysis_cm_atmos_av_monthly_20yr  "">
+<!ENTITY analysis_cm_atmos_av_monthly_100yr "">
+<!ENTITY analysis_cm_atmos_av_annual_20yr   "">
+<!ENTITY analysis_cm_atmos_av_annual_100yr  "">
+<!ENTITY analysis_cm_ocean_ts_annual_20yr   "">
+<!ENTITY analysis_cm_ocean_ts_annual_100yr  "">
+<!ENTITY analysis_cm_ocean_av_annual_20yr   "">
+<!ENTITY analysis_cm_ocean_av_annual_100yr  "">
+]>
+
+<experimentSuite rtsVersion="4" xmlns:xi="http://www.w3.org/2001/XInclude">
+  <property name="RELEASE" value="ulm_201505" />
+  <property name="FRE_STEM" value="$(RELEASE)" />
+  <property name="REFERENCE_VERSION" value="ulm" />
+  <property name="FRE_VERSION" value="bronx-10" />
+
+  <setup>
+    <!-- Default Platforms -->
+    <platform name="nescc.default">
+      <xi:include xpointer="xpointer(//setup/platform[@name='nescc.intel']/node())" />
+    </platform>
+
+    <platform name="theia.default">
+      <xi:include xpointer="xpointer(//setup/platform[@name='theia.intel']/node())" />
+    </platform>
+
+    <platform name="ncrc2.default">
+      <xi:include xpointer="xpointer(//setup/platform[@name='ncrc2.intel']/node())" />
+    </platform>
+
+    <platform name="gfdl.default">
+      <xi:include xpointer="xpointer(//setup/platform[@name='gfdl.intel']/node())" />
+    </platform>
+
+    <platform name="gfdl.ncrc2-default">
+      <xi:include xpointer="xpointer(//setup/platform[@name='gfdl.intel']/node())" />
+    </platform>
+
+    <!-- GFDL Analysis/PP Platforms -->
+    <platform name="gfdl.intel">
+      <property name="INTERNAL_NML_FLAG" value="" />
+      <property name="FMS_ARCHIVE_ROOT" value="/archive/fms" />
+
+      <directory stem="$(FRE_STEM)" />
+      <csh><![CDATA[
+        source $MODULESHOME/init/csh
+        module purge
+        module load fre/$(FRE_VERSION)
+        ]]>
+      </csh>
+    </platform>
+
+    <platform name="gfdl.ncrc2-intel">
+      <xi:include xpointer="xpointer(//setup/platform[@name='gfdl.intel']/node())" />
+    </platform>
+
+    <platform name="gfdl.ncrc2-pgi">
+      <xi:include xpointer="xpointer(//setup/platform[@name='gfdl.intel']/node())" />
+    </platform>
+
+    <platform name="gfdl.nescc-intel">
+      <xi:include xpointer="xpointer(//setup/platform[@name='gfdl.intel']/node())" />
+    </platform>
+
+    <platform name="gfdl.theia-intel">
+      <xi:include xpointer="xpointer(//setup/platform[@name='gfdl.intel']/node())" />
+    </platform>
+
+    <!-- NCRC Platforms -->
+    <platform name="ncrc2.intel">
+      <property name="INTERNAL_NML_FLAG" value="-DINTERNAL_FILE_NML" />
+      <property name="FMS_ARCHIVE_ROOT" value="${CDATA}/fms" />
+
+      <directory stem="$(FRE_STEM)" />
+      <project>gfdl_YOURGROUPLETTER</project>
+      <csh><![CDATA[
+        source $MODULESHOME/init/csh
+        module use -a /ncrc/home2/fms/local/modulefiles
+        module unload PrgEnv-pgi PrgEnv-pathscale PrgEnv-intel PrgEnv-gnu PrgEnv-cray
+        module unload netcdf fre
+        module load PrgEnv-intel/4.0.46
+        module swap intel intel/12.1.3.293
+        module load fre/$(FRE_VERSION)
+
+        setenv KMP_STACKSIZE 512m
+        setenv NC_BLKSZ 1M
+        setenv F_UFMTENDIAN big
+        ]]>
+      </csh>
+    </platform>
+
+    <platform name="ncrc2.pgi">
+      <property name="INTERNAL_NML_FLAG" value="-DINTERNAL_FILE_NML" />
+      <property name="FMS_ARCHIVE_ROOT" value="${CDATA}/fms" />
+
+      <directory stem="$(FRE_STEM)" />
+      <project>gfdl_YOURGROUPLETTER</project>
+      <csh><![CDATA[
+        source $MODULESHOME/init/csh
+        module use -a /ncrc/home2/fms/local/modulefiles
+        module unload PrgEnv-pgi PrgEnv-pathscale PrgEnv-intel PrgEnv-gnu PrgEnv-cray
+        module unload netcdf fre
+        module load PrgEnv-pgi/4.0.46
+        module swap pgi pgi/12.5.0
+        module load fre/$(FRE_VERSION)
+
+        setenv NC_BLKSZ 1M
+        ]]>
+      </csh>
+    </platform>
+
+    <!-- NESCC Platforms -->
+    <platform name="nescc.intel">
+      <property name="INTERNAL_NML_FLAG" value="-DINTERNAL_FILE_NML" />
+      <property name="FMS_ARCHIVE_ROOT" value="/scratch2/portfolios/GFDL/gfdlscr/fms" />
+
+      <directory stem="$(FRE_STEM)">
+        <root>/scratch2/portfolios/GFDL/gfdlscr/${USER}/$(stem)</root>
+      </directory>
+      <project>gfdlport</project>
+      <csh><![CDATA[
+        module use -a /home/fms/local/modulefiles
+        module load intel/13.0.079
+        module load mpt
+        module load netcdf/4.1.1-intel-12
+        module load fre/$(FRE_VERSION)
+        module load fre-nctools/$(FRE_VERSION)
+
+        setenv KMP_STACKSIZE 512m
+        setenv NC_BLKSZ 1M
+        setenv F_UFMTENDIAN big
+        ]]>
+      </csh>
+    </platform>
+
+    <platform name="theia.intel">
+      <property name="INTERNAL_NML_FLAG" value="-DINTERNAL_FILE_NML" />
+      <property name="FMS_ARCHIVE_ROOT" value="/scratch4/GFDL/gfdlscr/fms" />
+
+      <directory stem="$(FRE_STEM)" />
+      <project>gfdlport</project>
+      <csh><![CDATA[
+        module use -a /home/fms/local/modulefiles
+        module load intel/15.1.133
+        module load netcdf/4.3.0
+        module load hdf5/1.8.14
+        module load impi/5.0.1.035
+        module load fre-commands/bronx-10
+        module load fre-nctools/bronx-10
+
+        setenv KMP_STACKSIZE 512m
+        setenv NC_BLKSZ 1M
+        setenv F_UFMTENDIAN big
+        ]]>
+      </csh>
+    </platform>
+  </setup>
+
+  <experiment name="CM2.1U_Control-1990_E1.M_3A">
+    <description>
+      This experiment is same as the latest CM2.1U_Control-1860_D1 specified in
+      /home/ccsp/fjz/ipcc_ar4_preK/CM2.1U_Control-1860_D1.xml, except for:
+      1. running with year 1990 radiative forcing and 1990 land cover
+      2. the executable is built with Khartoum code on sep 01, 2004 by this xml file:
+         /home/fjz/cm2.1_K_20040901/CM2.1U_Control-1860_D1.xml
+      3. the initCond is based on /archive/fjz/IC/CM3_ic_00010101.cpio but
+         reformed to one time level by Matt.
+      4. the diagTable has some addtions for energy balance terms suggested by Tony R.
+      5. run 30 atmos and 20 ocean PEs
+    </description>
+    <!-- fms_cm2_fv_mom4 -->
+    <component name="fms" paths="shared" includeDir="$(srcDir)/shared/include">
+      <source versionControl="git" root="http://gitlab.gfdl.noaa.gov/fms">
+        <codeBase version="$(RELEASE)"> shared.git </codeBase>
+        <!-- This csh section is needed for systems that use an older git version that doesn't
+             support cloning a specific tag directly. -->
+        <csh><![CDATA[
+          ( cd shared && git checkout $(RELEASE) )
+          ]]>
+        </csh>
+      </source>
+      <compile>
+        <cppDefs>
+          -Duse_netCDF -Duse_libMPI $(INTERNAL_NML_FLAG)
+        </cppDefs>
+      </compile>
+    </component>
+    <component name="ocean" paths="mom4" requires="fms">
+      <source versionControl="cvs">
+        <codeBase version="$(RELEASE)">
+          mom4/doc
+          mom4/ocean_core
+          mom4/ocean_diag
+          mom4/ocean_tracers
+          mom4/ocean_param/sources
+          mom4/ocean_param/mixing/sigma
+          mom4/ocean_param/mixing/neutral mom4/ocean_param/mixing/convect
+          mom4/ocean_param/mixing/horz/tracer/lap
+          mom4/ocean_param/mixing/horz/velocity/lap/general
+          mom4/ocean_param/mixing/horz/velocity/bih/const
+          mom4/ocean_param/mixing/vert/kpp
+          mom4/ocean_param/mixing/vert/ocean_vert_mix.F90
+          mom4/ocean_param/mixing/vert/ocean_vert_mix.html
+          mom4/ocean_param/mixing/polarfilter
+        </codeBase>
+      </source>
+      <compile>
+        <cppDefs>
+          $(INTERNAL_NML_FLAG)
+        </cppDefs>
+      </compile>
+    </component>
+    <component name="atmos_phys" paths="atmos_param atmos_shared" requires="fms">
+      <source versionControl="git" root="http://gitlab.gfdl.noaa.gov/fms">
+        <codeBase version="$(RELEASE)">atmos_param.git atmos_shared.git</codeBase>
+        <!-- This csh section is needed for systems that use an older git version that doesn't
+             support cloning a specific tag directly. -->
+        <csh><![CDATA[
+          ( cd atmos_shared && git checkout $(RELEASE) )
+          ( cd atmos_param && git checkout $(RELEASE) )
+          ]]>
+        </csh>
+      </source>
+      <compile>
+        <cppDefs>
+          $(INTERNAL_NML_FLAG) -DGFDL_COMPATIBLE_MICROP
+        </cppDefs>
+      </compile>
+    </component>
+    <component name="atmos_dyn" paths="atmos_drivers/coupled
+                                       atmos_fv_dynamics/driver/coupled
+                                       atmos_fv_dynamics/model
+                                       atmos_fv_dynamics/tools" requires="fms atmos_phys">
+      <source versionControl="git" root="http://gitlab.gfdl.noaa.gov/fms">
+        <codeBase version="$(RELEASE)"> atmos_drivers.git atmos_fv_dynamics.git </codeBase>
+        <!-- This csh section is needed for systems that use an older git version that doesn't
+             support cloning a specific tag directly. -->
+        <csh><![CDATA[
+          ( cd atmos_drivers && git checkout $(RELEASE) )
+          ( cd atmos_fv_dynamics && git checkout $(RELEASE) )
+          ]]>
+        </csh>
+      </source>
+      <compile>
+        <cppDefs>
+          -DSPMD -Duse_shared_pointers $(INTERNAL_NML_FLAG)
+        </cppDefs>
+      </compile>
+    </component>
+    <component name="ice" paths="ice_param ice_sis" requires="fms">
+      <source versionControl="git" root="http://gitlab.gfdl.noaa.gov/fms">
+        <codeBase version="$(RELEASE)">ice_param.git ice_sis.git</codeBase>
+        <!-- This csh section is needed for systems that use an older git version that doesn't
+             support cloning a specific tag directly. -->
+        <csh><![CDATA[
+          ( cd ice_param && git checkout $(RELEASE) )
+          ( cd ice_sis && git checkout $(RELEASE) )
+          ]]>
+        </csh>
+      </source>
+      <compile>
+        <cppDefs>
+          $(INTERNAL_NML_FLAG)
+        </cppDefs>
+      </compile>
+    </component>
+    <component name="land" paths="land_lad land_param" requires="fms">
+      <source versionControl="cvs">
+        <codeBase version="$(RELEASE)">land_lad land_param</codeBase>
+      </source>
+      <compile>
+        <cppDefs>
+          -DLAND_BND_TRACERS $(INTERNAL_NML_FLAG)
+        </cppDefs>
+      </compile>
+    </component>
+    <component name="coupler" paths="coupler" requires="fms ocean atmos_dyn atmos_phys land ice">
+      <source versionControl="git" root="http://gitlab.gfdl.noaa.gov/fms">
+        <codeBase version="$(RELEASE)"> coupler.git </codeBase>
+        <!-- This csh section is needed for systems that use an older git version that doesn't
+             support cloning a specific tag directly. -->
+        <csh><![CDATA[
+          ( cd coupler && git checkout $(RELEASE) )
+          ]]>
+        </csh>
+      </source>
+      <compile>
+        <cppDefs>
+          $(INTERNAL_NML_FLAG) -DGFDL_COMPATIBLE_MICROP
+        </cppDefs>
+      </compile>
+    </component>
+    <input>
+      <dataFile label="gridSpec" target="INPUT/."
+                chksum="213bdfd06700b51e9525eaa260d3894f" size="5108" timestamp="">
+         <dataSource site="$(site)">
+           $(FMS_ARCHIVE_ROOT)/module_data/omsk/expt/CM2.1U/mosaic.nc
+         </dataSource>
+      </dataFile>
+      <dataFile label="dataTable" target="INPUT/."
+                chksum="e321fd761fe74d256897b1fe5403e370" size="186" timestamp="">
+        <dataSource site="$(site)">
+          $(FMS_ARCHIVE_ROOT)/module_data/omsk/expt/CM2.1U/CM2.data_table
+        </dataSource>
+      </dataFile>
+      <dataFile label="diagTable" target="INPUT/."
+                chksum="b59cc3042fdb09d64c204ddb51ebdc8b" size="42409" timestamp="">
+        <dataSource site="$(site)">
+          $(FMS_ARCHIVE_ROOT)/module_data/ulm/expt/CM2.1U/CM2.1.cpld_diag_table_ipcc_aer_v3a
+        </dataSource>
+      </dataFile>
+      <dataFile label="initCond" target="INPUT/"
+                chksum="da479fc89c07aff0df23c1965dc7cddf" size="480772096" timestamp="">
+        <dataSource site="$(site)">
+          $(FMS_ARCHIVE_ROOT)/module_data/omsk/expt/CM2.1U/CM2.1U_Control-1990_E1_01010101.cpio
+        </dataSource>
+      </dataFile>
+      <dataFile label="fieldTable" target="INPUT/."
+                chksum="88c79a5b414735d91ec5395a482712a7" size="4515" timestamp="">
+        <dataSource site="$(site)">
+          $(FMS_ARCHIVE_ROOT)/module_data/omsk/expt/CM2.1U/om3p4_field_table_mh2_v1
+        </dataSource>
+      </dataFile>
+      <fieldTable>
+# specific humidity for moist runs
+
+ "TRACER", "atmos_mod", "sphum"
+           "longname",     "specific humidity"
+           "units",        "kg/kg"
+           "profile_type", "fixed", "surface_value=3.e-6" /
+
+# required by ESM
+
+  "TRACER", "land_mod", "sphum"
+           "longname",     "specific humidity"
+            "units",        "kg/kg" /
+
+# prognotic cloud scheme tracers
+
+  "TRACER", "atmos_mod", "liq_wat"
+            "longname",     "cloud liquid specific humidity"
+            "units",        "kg/kg" /
+  "TRACER", "atmos_mod", "ice_wat"
+            "longname",     "cloud ice water specific humidity"
+            "units",        "kg/kg" /
+  "TRACER", "atmos_mod", "cld_amt"
+            "longname",     "cloud fraction"
+            "units",        "none" /
+
+# test tracer for radon
+
+# "TRACER", "atmos_mod", "radon"
+#           "longname",     "radon test tracer"
+#           "units",        "kg/kg" /
+
+      </fieldTable>
+      <dataFile label="input" target="INPUT/"
+                chksum="c9e1b890b0d614ed6b6a67b657c3c9e4" size="52428800" timestamp="">
+        <dataSource site="$(site)">
+          $(FMS_ARCHIVE_ROOT)/module_data/memphis/sst_data.cpio
+        </dataSource>
+      </dataFile>
+      <dataFile label="input" target="INPUT/"
+                chksum="c95021130b922e8ef921624fe58a0000" size="4453099520" timestamp="">
+        <dataSource site="$(site)">
+          <!-- This is where the file will live long term -->
+          <!-- Remove these comments once it is put in the correct location -->
+          <!-- $(FMS_ARCHIVE_ROOT)/module_data/ulm_201505/sea_esf.tar -->
+          /lustre/f1/unswept/Seth.Underwood/archive/module_data/ulm_201505/sea_esf.tar
+        </dataSource>
+      </dataFile>
+      <dataFile label="input" target="INPUT/."
+                chksum="889adc53f89f17aa0f0a4f742510fbb2" size="324288" timestamp="">
+        <dataSource site="$(site)">
+          $(FMS_ARCHIVE_ROOT)/module_data/memphis/albedo.data.nc
+        </dataSource>
+      </dataFile>
+      <dataFile label="input" target="INPUT/"
+                chksum="6748e1e9ae5e403864165de5cfae6835" size="115736576" timestamp="">
+        <dataSource site="$(site)">
+          $(FMS_ARCHIVE_ROOT)/module_data/memphis/lad_data.cpio
+        </dataSource>
+      </dataFile>
+      <dataFile label="input" target="INPUT/."
+                chksum="e166a597b6a3bdea476cfeb41870be4b" size="9344452" timestamp="">
+        <dataSource site="$(site)">
+          $(FMS_ARCHIVE_ROOT)/module_data/memphis/navy_topography.data.nc
+        </dataSource>
+      </dataFile>
+      <dataFile label="input" target="INPUT/."
+                chksum="eea35547f8b836c678f75f75f8445a09" size="7015236" timestamp="">
+        <dataSource site="$(site)">
+          $(FMS_ARCHIVE_ROOT)/module_data/memphis/sst_ice_clim.nc
+        </dataSource>
+      </dataFile>
+      <dataFile label="input" target="INPUT/"
+                chksum="90e5fe75d027a2527f9539ab5eb28544" size="5767168" timestamp="">
+        <dataSource site="$(site)">
+          $(FMS_ARCHIVE_ROOT)/module_data/memphis/mom4.cpio
+        </dataSource>
+      </dataFile>
+      <dataFile label="input" target="INPUT/cover_type_field"
+                chksum="0416dc40dacea1441155e30527fec15a" size="131321" timestamp="">
+        <dataSource site="$(site)">
+          $(FMS_ARCHIVE_ROOT)/module_data/omsk/expt/CM2.1U/cover_type_1990_v3_g
+        </dataSource>
+      </dataFile>
+      <dataFile label="input" target="INPUT/river_destination_field"
+                chksum="2c0db42a645a5db542bdadf0210ffd7d" size="62268" timestamp="">
+        <dataSource site="$(site)">
+          $(FMS_ARCHIVE_ROOT)/module_data/omsk/expt/CM2.1U/river_routes.no_caspian.move_yangtze.new_antarc.casp_to_indus.amur_to_soj.shifted_wb
+        </dataSource>
+      </dataFile>
+      <dataFile label="input" target="INPUT/"
+                chksum="426d3885c260b44214b2984c2314eef9" size="29687808" timestamp="">
+        <dataSource site="$(site)">
+          $(FMS_ARCHIVE_ROOT)/module_data/omsk/expt/CM2.1U/grid.cpio
+        </dataSource>
+      </dataFile>
+      <namelist name="time_interp_nml">
+        perthlike_behavior = .TRUE.
+      </namelist>
+      <namelist name="aerosol_nml">
+        use_aerosol_timeseries = .false.
+        aerosol_dataset_entry =  1990, 1, 1, 0, 0, 0,
+                                 1990, 1, 1, 0, 0, 0,
+                                 1990, 1, 1, 0, 0, 0,
+                                 1990, 1, 1, 0, 0, 0,
+                                 1990, 1, 1, 0, 0, 0,
+                                 1990, 1, 1, 0, 0, 0,
+                                 1990, 1, 1, 0, 0, 0,
+                                 1990, 1, 1, 0, 0, 0,
+                                 1990, 1, 1, 0, 0, 0,
+                                 1990, 1, 1, 0, 0, 0,
+                                 1990, 1, 1, 0, 0, 0,
+                                 1990, 1, 1, 0, 0, 0,
+                                 1990, 1, 1, 0, 0, 0,
+                                 1990, 1, 1, 0, 0, 0,
+                                 1990, 1, 1, 0, 0, 0,
+                                 1990, 1, 1, 0, 0, 0,
+                                 1990, 1, 1, 0, 0, 0,
+                                 1990, 1, 1, 0, 0, 0,
+                                 1990, 1, 1, 0, 0, 0,
+                                 1990, 1, 1, 0, 0, 0,
+                                 1990, 1, 1, 0, 0, 0,
+        family_names = "small_dust", "large_dust", "sulfate", "aerosol"
+        in_family1 = F,F,F,F,F,T,T,T,T,T,F,F,F,T,T,T,T,T,F,F,F,
+        in_family2 = F,F,F,F,F,F,F,F,F,F,T,T,T,F,F,F,F,F,T,T,T,
+        in_family3 = T,T,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,
+        in_family4 = T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,
+        data_names = "so4_anthro", "so4_natural", "organic_carbon", "black_carbon", "sea_salt",
+                     "anthro_dust_0.1", "anthro_dust_0.2", "anthro_dust_0.4", "anthro_dust_0.8",
+                     "anthro_dust_1.0", "anthro_dust_2.0", "anthro_dust_4.0", "anthro_dust_8.0",
+                     "natural_dust_0.1", "natural_dust_0.2", "natural_dust_0.4", "natural_dust_0.8",
+                     "natural_dust_1.0", "natural_dust_2.0", "natural_dust_4.0", "natural_dust_8.0",
+        filename = "aerosol.climatology.nc"
+      </namelist>
+      <namelist name="aerosolrad_package_nml">
+        volcanic_dataset_entry = 1, 1, 1, 0, 0, 0,
+        using_volcanic_lw_files = .false.,
+        lw_ext_filename = "             "
+        lw_ext_root = "     "
+        lw_asy_filename = "             "
+        lw_asy_root = "     "
+        lw_ssa_filename = "             "
+        lw_ssa_root = "     "
+        using_volcanic_sw_files = .false.,
+        sw_ext_filename = "             "
+        sw_ext_root = "     "
+        sw_ssa_filename = "             "
+        sw_ssa_root = "     "
+        sw_asy_filename = "             "
+        sw_asy_root = "     "
+        do_lwaerosol = .true.,
+        do_swaerosol = .true.,
+        aerosol_data_set = 'shettle_fenn',
+        optical_filename = "aerosol.optical.dat",
+        aerosol_optical_names = "sulfate_30%", "sulfate_35%", "sulfate_40%", "sulfate_45%",
+                                "sulfate_50%", "sulfate_55%", "sulfate_60%", "sulfate_65%",
+                                "sulfate_70%", "sulfate_75%", "sulfate_80%", "sulfate_82%",
+                                "sulfate_84%", "sulfate_86%", "sulfate_88%", "sulfate_90%",
+                                "sulfate_91%", "sulfate_92%", "sulfate_93%", "sulfate_94%",
+                                "sulfate_95%", "sulfate_96%", "sulfate_97%", "sulfate_98%",
+                                "sulfate_99%", "sulfate_100%","organic_carbon","soot",
+                                "sea_salt",    "dust_0.1",    "dust_0.2",    "dust_0.4",
+                                "dust_0.8",    "dust_1.0",    "dust_2.0",    "dust_4.0",
+                                "dust_8.0"
+      </namelist>
+      <namelist name="amip_interp_nml">
+        data_set = 'reynolds_oi',
+        date_out_of_range = 'fail'
+      </namelist>
+      <namelist name="cg_drag_nml">
+        cg_drag_freq = 1800,
+        cg_drag_offset = 0,
+        debug = .false.,
+        calculate_ked = .false.,
+        itest = 12,
+        jtest = 42,
+        ktest = 9,
+        Bt_0 = 0.0015,
+        lat_limit = 25.0
+      </namelist>
+      <namelist name="cloud_rad_nml">
+        overlap = 2,
+        do_brenguier = .false.
+      </namelist>
+      <namelist name="cloud_spec_nml">
+        cloud_type_form = 'strat'
+      </namelist>
+      <namelist name="cloudrad_package_nml">
+        microphys_form = 'predicted'
+      </namelist>
+      <namelist name="clouds_nml">
+        do_zonal_clouds = .false.,
+        do_obs_clouds  = .false.
+      </namelist>
+      <namelist name="coupler_nml">
+        months = $months,
+        days   = $days,
+        current_date = 101,1,1,0,0,0,
+        calendar = 'NOLEAP',
+        dt_cpld = 7200,
+        dt_atmos = 1800,
+        atmos_npes = 30,
+        atmos_nthreads = 1
+        do_concurrent_radiation=.false.
+        radiation_nthreads = 1
+        ocean_npes = 120,
+        concurrent = .true.
+        use_lag_fluxes=.true.
+      </namelist>
+      <namelist name="cu_mo_trans_nml">
+        diff_norm = 2.0
+      </namelist>
+      <namelist name="damping_driver_nml">
+        trayfric = -40.,
+        nlev_rayfric = 1,
+        do_mg_drag = .true.,
+        do_cg_drag = .false.,
+        do_topo_drag = .false.,
+        do_conserve_energy = .true.
+      </namelist>
+      <namelist name="diag_cloud_nml">
+        linvers = .false., lcnvcld = .false.,
+        l_theqv = .true., lomega = .true.,
+        low_lev_cloud_index = 16, nofog = .false.
+      </namelist>
+      <namelist name="diag_cloud_rad_nml">
+        l_har_anvil   = .true.,
+        l_har_coldcld = .true.,
+        l_anom_abs_v  = .true.
+      </namelist>
+      <namelist name="diag_integral_nml">
+        file_name  = 'diag_integral.out',
+        time_units = 'days',
+        output_interval = 1.0
+      </namelist>
+      <namelist name="diag_manager_nml">
+        max_input_fields = 400
+        max_output_fields = 500
+        mix_snapshot_average_fields=.false.
+      </namelist>
+      <namelist name="donner_deep_clouds_W_nml">
+        using_dge_sw = .true.,
+        using_dge_lw = .true.
+      </namelist>
+      <namelist name="donner_deep_nml">
+        donner_deep_offset = 0
+        donner_deep_freq = 1800
+        save_donner_deep_diagnostics=.true.
+        cell_liquid_size_type = 'bower'
+        cell_ice_size_type = 'default'
+        debug = .false.
+        kttest=5
+        itest=53
+        jtest=32
+        ktest_model=17
+      </namelist>
+      <namelist name="edt_nml">
+        n_print_levels = 14,
+        use_qcmin = .true.,
+        num_pts_ij = 0,
+        min_adj_time = 1.0,
+        do_gaussian_cloud = .false.,
+        use_extrapolated_ql = .false.
+      </namelist>
+      <namelist name="entrain_nml">
+        convect_shutoff = .true.,
+        apply_entrain = .true.,
+        parcel_buoy   = 0.25,
+        parcel_option = 2,
+        beta_rad      = 0.5,
+        Ashear        = 25.0,
+        radperturb    = 0.10,
+        critjump      = 0.10,
+        num_pts_ij    = 0,
+        i_entprt_gl   = 112, 96, 89,105, 81, 97,
+        j_entprt_gl   =  71, 61, 56, 64, 53, 46
+      </namelist>
+      <namelist name="esfsw_parameters_nml">
+        sw_resolution = 'low',
+        sw_diff_streams = 1
+      </namelist>
+      <namelist name="flux_exchange_nml">
+        sw1way_bug = .FALSE. ! post lima BUG
+        ex_u_star_smooth_bug = .FALSE.
+      </namelist>
+      <namelist name="fms_io_nml">
+        threading_read='multi'
+      </namelist>
+      <namelist name="fms_nml">
+        clock_grain='COMPONENT'
+        clock_flags='SYNC'
+        domains_stack_size = 130296
+        stack_size =0
+      </namelist>
+      <namelist name="fv_core_nml">
+        layout = 1,30
+        nlon =144
+        mlat=90
+        nlev = 24
+        ncnst = 4
+        pnats = 0
+        n_split = 5
+        change_time = .true.
+        consv_te = 0.7
+      </namelist>
+      <namelist name="atmos_model_nml">
+        nxblocks = 2
+        nyblocks = 2
+      </namelist>
+      <namelist name="gas_tf_nml">
+        interp_form = 'log' ,
+        do_calcstdco2tfs = .true.,
+        do_writestdco2tfs= .false.,
+        do_readstdco2tfs = .false.,
+        do_calcstdch4tfs = .true.,
+        do_writestdch4tfs= .false.,
+        do_readstdch4tfs = .false.,
+        do_calcstdn2otfs = .true.,
+        do_writestdn2otfs= .false.,
+        do_readstdn2otfs = .false.
+      </namelist>
+      <namelist name="ice_albedo_nml">
+         t_range = 10.
+      </namelist>
+      <namelist name="ice_model_nml">
+        cm2_bugs = .FALSE. ! post lima BUG fix
+        nsteps_dyn=72
+        nsteps_adv=1
+        num_part = 6
+        wd_turn = 0.0
+        spec_ice=.false.
+        ice_bulk_salin = 0.005
+        alb_sno = 0.80
+        t_range_melt = 10.0
+      </namelist>
+      <namelist name="land_properties_nml">
+        use_topo_rough    = .true.,
+        max_topo_rough    = 100.0,
+        topo_rough_factor = 0.01,
+        crit_snowmass_vec = 60.,   10., 25.,  40.,   40.,  5.,  5.,     5.,  5.,  5.,   5.,  100., 5.,  5.,
+        veg_rs_min_vec    = 43.6, 131., 87.1, 69.7, 218., 56.6, 0.01, 170., 56.6, 0.01, 0.01, 67., 0.,  0.,
+        min_nosnow_alb_vec= 0.149, 0.130, 0.132, 0.126, 0.143, 0.182, 0.333, 0.139, 0.160, 0.65, 0.06, 0.12, 999., 0.55,
+        max_nosnow_alb_vec= 0.149, 0.130, 0.132, 0.126, 0.143, 0.182, 0.333, 0.139, 0.160, 0.80, 0.06, 0.12, 999., 0.65,
+        factor_stomata = 0.2,
+        num_sfc_layers = 6,
+        sfc_heat_factor = 0.25,
+        use_desert_albedo_map = .true.
+        cover_dataset_entry = 1990, 1, 1, 0, 0, 0,
+        dynamic_cover_type = .false.
+        read_old_ascii_cover = .true.
+        cover_dataset_init_year = 1860
+      </namelist>
+      <namelist name="lscale_cond_nml">
+        do_evap = .true.
+      </namelist>
+      <namelist name="lw_gases_stdtf_nml">
+        NSTDCO2LVLS=496
+      </namelist>
+      <namelist name="mg_drag_nml">
+        gmax  = 1.,
+        acoef = 1.,
+        do_conserve_energy = .true.,
+        source_of_sgsmtn = 'computed'
+      </namelist>
+      <namelist name="microphys_rad_nml">
+        lwem_form = 'fuliou'
+      </namelist>
+      <namelist name="moist_conv_nml">
+        beta = 0.0
+      </namelist>
+      <namelist name="moist_processes_nml">
+        do_lsc=.false., do_strat=.true., do_mca=.false., do_ras=.true.,
+        do_donner_deep = .false.,
+        do_diag_clouds = .false., do_cmt=.true.,
+        do_rh_clouds = .false.,
+        do_gust_cv = .false.
+      </namelist>
+      <namelist name="monin_obukhov_nml">
+        stable_option =  2,
+        rich_crit = 10.0,
+        zeta_trans =  0.5
+      </namelist>
+      <namelist name="my25_turb_nml">
+        do_thv_stab = .true.,
+        TKEmin = 1.e-8,
+        AKmin_land = 5.,
+        AKmin_sea  = 0.
+      </namelist>
+      <namelist name="ocean_adv_vel_diag_nml">
+        diag_freq=180
+      </namelist>
+      <namelist name="ocean_advection_velocity_nml">
+        max_advection_velocity = 0.5
+      </namelist>
+      <namelist name="ocean_age_tracer_nml">
+        name='global'
+        nlat(1) = 90.0
+        slat(1) = -90.0
+      </namelist>
+      <namelist name="ocean_albedo_nml">
+        ocean_albedo_option = 3
+      </namelist>
+      <namelist name="ocean_bbc_nml">
+        u2tides = 2.5e-3
+        cdbot = 1.e-3
+      </namelist>
+      <namelist name="ocean_bih_friction_const_nml">
+        bih_friction_on=.false.
+      </namelist>
+      <namelist name="ocean_bih_friction_general_nml"/>
+      <namelist name="ocean_convect_nml">
+        convect_ncon=.false.
+      </namelist>
+      <namelist name="ocean_density_nml">
+        linear_eos=.false.
+      </namelist>
+      <namelist name="ocean_domains_nml"/>
+      <namelist name="ocean_freesurf_nml">
+        barotropic_pred_corr=.true.
+        barotropic_leap_frog=.false.
+        pred_corr_gamma=0.20
+        smooth_eta_t_fs_laplacian=.false.
+        smooth_eta_t_fs_biharmonic=.false.
+        smooth_eta_t_laplacian=.false.
+        smooth_eta_t_biharmonic=.true.
+        vel_micom_bih=0.01
+        vel_micom_lap=0.05
+        truncate_eta=.false.
+        eta_max=8.0
+        verbose_truncate=.true.
+        frac_crit_cell_height=0.20
+        zero_tendency=.false.
+        debug_fs=.false.
+        diag_freq=180
+      </namelist>
+      <namelist name="ocean_grids_nml">
+        debug_this_module = .true.
+      </namelist>
+      <namelist name="ocean_horz_diffuse_bih_nml">
+        horz_diffuse_on=.false.
+      </namelist>
+      <namelist name="ocean_horz_diffuse_lap_nml">
+        horz_diffuse_on=.false.
+      </namelist>
+      <namelist name="ocean_lap_friction_general_nml">
+        lap_friction_on=.true.
+        k_smag_iso=2.0
+        k_smag_aniso=0.0
+        bottom_5point=.true.
+        vel_micom_iso=0.10
+        eq_vel_micom_iso=0.0
+        eq_lat_micom=0.0
+        equatorial_zonal=.true.
+        equatorial_zonal_lat=20.0
+        equatorial_no_smag=.true.
+        viscosity_ncar=.true.
+        ncar_only_equatorial=.true.
+        vconst_1=8.0e6
+        vconst_2=0.0
+        vconst_3=0.80
+        vconst_4=0.5e-8
+        vconst_5=3
+        vconst_6=3e8
+        vconst_7=100.0
+        restrict_polar_visc=.true.
+        restrict_polar_visc_lat=60.0
+        restrict_polar_visc_ratio=0.35
+      </namelist>
+      <namelist name="ocean_model_nml">
+        dt_ocean = 7200,
+        time_tendency='twolevel'
+        baroclinic_split = 1
+        surface_height_split = 1
+        barotropic_split = 80
+        acor=0.50
+        robert=0.05
+        aidif=1.0
+        energy_diag_freq=180
+        debug=.false.
+        layout=12,10
+        velocity_change_check=.false.
+        velocity_change_max=20.0
+        velocity_change_max_num=100
+        velocity_change_diag_freq=180
+      </namelist>
+      <namelist name="ocean_neutral_physics_nml">
+        neutral_physics_on=.true.
+        neutral_physics_limit=.true.
+        neutral_physics_debug=.false.
+        aredi=600.0
+        agm=100.0
+        smax=0.002
+        swidth=0.002
+        tracer_mix_micom=.false.
+        vel_micom = 0.0
+        gm_velocity_save=.false.
+        agm_closure=.true.
+        agm_closure_scaling=0.07
+        agm_closure_min=100.
+        agm_closure_max=600.
+        agm_closure_length_fixed=.false.
+        agm_closure_length_rossby=.false.
+        agm_closure_length_bczone=.false.
+        agm_closure_baroclinic=.true.
+        agm_closure_length=50.e3
+        agm_closure_buoy_freq=.004
+        agm_closure_upper_depth=100.0
+        agm_closure_lower_depth=2000.0
+        neutral_physics_simple=.false.
+        neutral_linear_gm_taper=.true.
+        neutral_sine_taper=.true.
+        tmask_neutral_on=.true.
+      </namelist>
+      <namelist name="ocean_obc_nml"/>
+      <namelist name="ocean_overflow_nml">
+        use_overflow=.false.
+      </namelist>
+      <namelist name="ocean_polar_filter_nml">
+        polar_filter_on=.false.
+      </namelist>
+      <namelist name="ocean_pressure_nml"/>
+      <namelist name="ocean_rivermix_nml">
+        river_insertion_thickness=40.
+        river_diffusivity=0.0
+        debug_river=.false.
+        river_diffuse_salt=.false.
+        river_diffuse_temp=.false.
+      </namelist>
+      <namelist name="ocean_riverspread_nml"/>
+      <namelist name="ocean_rough_nml">
+        rough_scheme = 'beljaars'
+      </namelist>
+      <namelist name="ocean_sbc_nml">
+        temp_restore_tscale = -10.
+        salt_restore_tscale = -10.
+        salt_restore_under_ice = .true.
+        max_ice_thickness = 4.0
+        use_waterflux=.true.
+        waterflux_tavg=.true.
+      </namelist>
+      <namelist name="ocean_shortwave_nml">
+        reproduce_lima = .false. ! set to FALSE for faster algorithm
+        shortwave_pen_on=.true.
+        read_chl=.true.
+        zmax_pen=100.0
+      </namelist>
+      <namelist name="ocean_sigma_diffuse_nml">
+        sigma_diffuse_on=.true.
+        tmask_sigma_on=.false.
+        sigma_diffusivity = 1.e3
+        sigma_diffusivity_ratio=1.e-6
+        sigma_thickness_max=100.0
+        tracer_mix_micom=.true.
+        vel_micom=0.50
+      </namelist>
+      <namelist name="ocean_thickness_nml"/>
+      <namelist name="ocean_topog_nml"/>
+      <namelist name="ocean_tracer_advect_nml">
+        limit_with_upwind=.true.
+      </namelist>
+      <namelist name="ocean_tracer_diag_nml">
+        tracer_conserve_days=10.0
+        diag_freq=180
+      </namelist>
+      <namelist name="ocean_tracer_nml">
+        convective_adjust_on=.true.
+        t_min=-5.0
+        t_max = 55.0
+        s_min = -1.0
+        s_max = 55.0
+        t_min_limit =-2.0
+        t_max_limit =32.0
+        s_min_limit =0.0
+        s_max_limit =42.0
+        use_frazil=.true.
+        zero_tendency=.false.
+        debug_tracer=.false.
+      </namelist>
+      <namelist name="ocean_velocity_advect_nml"/>
+      <namelist name="ocean_velocity_diag_nml">
+        diag_freq=180
+      </namelist>
+      <namelist name="ocean_velocity_nml">
+        vel_max=2.0
+      </namelist>
+      <namelist name="ocean_vert_mix_coeff_kpp_nml">
+        diffusion_kpp_on=.true.
+        diff_cbt_iw = 1.34e-7
+        visc_cbu_iw = 1.0e-4
+        double_diffusion=.true.
+        Ricr=0.3
+        smooth_blmc=.true.
+        sigma_tide=3.0
+        p_tide=-0.25
+        tidal_mix=.true.
+      </namelist>
+      <namelist name="ocean_vert_mix_nml">
+        bryan_lewis_diffusivity=.true.
+        use_diff_cbt_table=.false.
+        linear_taper_diff_cbt_table=.true.
+        bryan_lewis_lat_depend=.true.
+        bryan_lewis_lat_transition=35.0
+        afkph_90=0.75
+        dfkph_90=0.95
+        sfkph_90=4.5e-5
+        zfkph_90=2500.0e2
+        afkph_00=0.65
+        dfkph_00=1.15
+        sfkph_00=4.5e-5
+        zfkph_00=2500.0e2
+      </namelist>
+      <namelist name="ocean_xlandinsert_nml">
+        verbose_init=.true.
+        use_xlandinsert=.true.
+        debug_xlandinsert=.false.
+      </namelist>
+      <namelist name="ocean_xlandmix_nml">
+        verbose_init=.true.
+        use_xlandmix=.true.
+      </namelist>
+      <namelist name="ozone_nml">
+        basic_ozone_type = 'fixed_year' ,
+        ozone_dataset_entry = 1990, 1, 1, 0, 0, 0,
+        data_name = "ozone",
+        filename = "o3.climatology.nc"
+      </namelist>
+      <namelist name="rad_output_file_nml">
+        write_data_file=.true.
+      </namelist>
+      <!--
+      <namelist name="rad_utilities_nml">
+        application_type='gcm'
+      </namelist>
+      -->
+      <namelist name="radiation_diag_nml">
+        iradprt_gl = 20, 6,
+        jradprt_gl = 12, 20,
+        num_pts_ij = 0
+      </namelist>
+      <namelist name="physics_driver_nml">
+        do_modis_yim = .FALSE.
+      </namelist>
+      <namelist name="sat_vapor_pres_nml">
+        construct_table_wrt_liq = .true.
+        construct_table_wrt_liq_and_ice = .true.
+      </namelist>
+      <namelist name="radiation_driver_nml">
+        using_restart_file = .FALSE.
+        rad_time_step= 10800,
+        rad_package = 'sea_esf',
+        do_clear_sky_pass=.true.,
+        renormalize_sw_fluxes=.true.,
+        zenith_spec = 'diurnally_varying'
+      </namelist>
+      <namelist name="radiation_driver_diag_nml">
+        all_step_diagnostics = .true.
+      </namelist>
+      <namelist name="radiative_gases_nml">
+        verbose = 3
+        gas_printout_freq = 240
+
+        time_varying_co2 = .false.,
+        co2_variation_type = 'linear',
+        co2_dataset_entry = 1990,1,1,0,0,0,
+        co2_specification_type = 'time_series',
+        co2_floor = 100.0E-06,
+        co2_ceiling = 1600.0E-06,
+        co2_data_source = 'input'
+        calc_co2_tfs_on_first_step = .true.,
+        calc_co2_tfs_monthly = .false.,
+        co2_tf_time_displacement = 0.0,
+
+        time_varying_ch4 = .false.,
+        ch4_variation_type = 'linear'
+        ch4_dataset_entry = 1990, 1, 1, 0, 0, 0,
+        ch4_specification_type = 'time_series'
+        ch4_data_source = 'input'
+        calc_ch4_tfs_on_first_step = .true.,
+        calc_ch4_tfs_monthly = .false.,
+        ch4_tf_time_displacement = 0.0,
+
+        time_varying_n2o = .false.,
+        n2o_variation_type = 'linear'
+        n2o_dataset_entry = 1990, 1, 1, 0, 0, 0,
+        n2o_specification_type = 'time_series'
+        n2o_data_source = 'input'
+        calc_n2o_tfs_on_first_step = .true.,
+        calc_n2o_tfs_monthly = .false.,
+        n2o_tf_time_displacement = 0.0,
+
+        time_varying_f11 = .false.,
+        f11_variation_type = 'linear'
+        f11_dataset_entry = 1990, 1, 1, 0, 0, 0,
+        f11_specification_type = 'time_series'
+        f11_data_source = 'input'
+
+        time_varying_f12 = .false.,
+        f12_variation_type = 'linear'
+        f12_dataset_entry = 1990, 1, 1, 0, 0, 0,
+        f12_specification_type = 'time_series'
+        f12_data_source = 'input'
+
+        time_varying_f113 = .false.,
+        f113_variation_type = 'linear'
+        f113_dataset_entry = 1990, 1, 1, 0, 0, 0,
+        f113_specification_type = 'time_series'
+        f113_data_source = 'input'
+
+        time_varying_f22 = .false.,
+        f22_variation_type = 'linear'
+        f22_dataset_entry = 1990, 1, 1, 0, 0, 0,
+        f22_specification_type = 'time_series'
+        f22_data_source = 'input'
+      </namelist>
+      <namelist name="ras_nml">
+        aratio = 1.0,
+        modify_pbl=.true.
+        rn_frac_bot = 0.5,
+        rn_pbot = 800.0e2,
+        puplim =  20.0e02,
+        rn_ptop = 500.0e2,
+        rn_frac_top = 0.975,
+        Tokioka_on = .true.,
+        Tokioka_con = 0.025,
+        Tokioka_plim = 500.0e2,
+        a = 1.6851, 1.1686, 0.7663, 0.5255, 0.4100, 0.3677,
+            0.3151, 0.2216, 0.1521, 0.0750, 0.0000, 0.0000,
+            0.0000, 0.0000, 0.0000
+      </namelist>
+      <namelist name="rh_based_clouds_nml">
+        cirrus_cld_prop_form = 'part',
+        cldht_type_form = '93'
+      </namelist>
+      <namelist name="rivers_nml">
+        min_land_frac  = 0.699,
+        min_water_frac = 0.3
+      </namelist>
+      <namelist name="sealw99_nml">
+        do_thick = .false.,
+        do_nlte = .false.,
+        do_lwcldemiss = .true.,
+        continuum_form = 'ckd2.1',
+        linecatalog_form = 'hitran_2000',
+        verbose = 5
+      </namelist>
+      <namelist name="shortwave_driver_nml">
+        time_varying_solar_constant = .false.,
+        solar_dataset_entry = 1990,1,1,0,0,0,
+        do_cmip_diagnostics = .true.,
+        swform = 'esfsw99'
+      </namelist>
+      <namelist name="soil_nml">
+        conserve_glacier_mass = .true.,
+        n_levels = 18,
+        dz              = 0.02, 0.04, 0.04, 0.05, 0.05, 0.1, 0.1, 0.2, 0.2, 0.2, 0.4, 0.4, 0.4, 0.4, 0.4, 1.,  1.,  1.,
+        freezable_water = 0,    300,  300,  300,  300,  300, 300, 300, 300, 300, 300, 300, 300, 300, 300, 300, 300, 300
+      </namelist>
+      <namelist name="stable_bl_turb_nml">
+        alsm = 500.0,
+        alsh = 500.0
+      </namelist>
+      <namelist name="strat_cloud_nml">
+        U00 = 0.800,
+        U00_profile = .true.,
+        rthresh =  8.0,
+        Dmin = 1.0e-07,
+        n_land = 300.e6,
+        diff_thresh = 0.1,
+        mc_thresh = 0.001,
+        eros_scale = 1.e-6,
+        eros_choice = .true.,
+        eros_scale_c = 8.e-6,
+        eros_scale_t = 5.e-5,
+        super_choice = .true.,
+        tracer_advec = .true.
+        do_old_snowmelt = .true.
+      </namelist>
+      <namelist name="surface_flux_nml">
+        old_dtaudv = .FALSE.
+      </namelist>
+      <namelist name="time_manager_nml"/>
+      <namelist name="topography_nml">
+        topog_file = 'INPUT/navy_topography.data.nc'
+      </namelist>
+      <namelist name="vegetation_nml">
+        klev = 7
+      </namelist>
+      <namelist name="vert_diff_driver_nml">
+        do_conserve_energy = .true.
+      </namelist>
+      <namelist name="vert_turb_driver_nml">
+        use_tau          = .false.,
+        gust_scheme      = 'beljaars',
+        do_mellor_yamada = .false.,
+        do_entrain       = .true.,
+        do_edt           = .false.,
+        do_diffusivity   = .false.,
+        do_stable_bl     = .true.,
+        do_shallow_conv  = .false.
+      </namelist>
+      <namelist name="xgrid_nml">
+        make_exchange_reproduce = .true.
+        interp_method = 'second_order'
+      </namelist>
+    </input>
+    <runtime>
+      <regression label="basic">
+        <run days="8" months="0"
+             overrideParams="coupler_nml:atmos_npes=30;
+                             coupler_nml:ocean_npes=20;
+                             fv_core_nml:layout=1,30;
+                             ocean_model_nml:layout=4,5;"
+             npes="50" runTimePerJob="00:30:00"/>
+      </regression>
+      <regression label="restarts">
+        <run days="4 4" months="0"
+             overrideParams="coupler_nml:atmos_npes=30;
+                             coupler_nml:ocean_npes=20;
+                             fv_core_nml:layout=1,30;
+                             ocean_model_nml:layout=4,5;"
+             npes="50" runTimePerJob="00:30:00"/>
+      </regression>
+      <regression label="scaling">
+        <run days="8" months="0"
+             overrideParams="coupler_nml:atmos_npes=30;
+                             coupler_nml:ocean_npes=12;
+                             fv_core_nml:layout=1,30;
+                             ocean_model_nml:layout=3,4;"
+             npes="42" runTimePerJob="00:30:00"/>
+        <run days="8" months="0"
+             overrideParams="coupler_nml:atmos_npes=30;
+                             coupler_nml:ocean_npes=30;
+                             fv_core_nml:layout=1,30;
+                             ocean_model_nml:layout=5,6;"
+             npes="60" runTimePerJob="00:30:00"/>
+        <run days="8" months="0"
+             overrideParams="coupler_nml:atmos_npes=30;
+                             coupler_nml:ocean_npes=42;
+                             fv_core_nml:layout=1,30;
+                             ocean_model_nml:layout=6,7;"
+             npes="72" runTimePerJob="00:30:00"/>
+        <run days="8" months="0"
+             overrideParams="coupler_nml:atmos_npes=30;
+                             coupler_nml:ocean_npes=120;
+                             coupler_nml:atmos_nthreads=2;
+                             fv_core_nml:layout=1,30;
+                             ocean_model_nml:layout=12,10;"
+             npes="150" runTimePerJob="00:30:00"/>
+      </regression>
+      <regression label="debug">
+        <run days="1" months="0"
+             overrideParams="coupler_nml:atmos_npes=30;
+                             coupler_nml:ocean_npes=20;
+                             fv_core_nml:layout=1,30;
+                             ocean_model_nml:layout=4,5;"
+             npes="50" runTimePerJob="02:00:00"/>
+      </regression>
+      <dataFile label="reference">
+        <dataSource site="gfdl">
+          /archive/sdu/FMS/$(REFERENCE_VERSION)/$(suite)/$(name)/$(platform)-$(target)/1x0m8d_30x1a_20x1o/restart/01010109.tar
+        </dataSource>
+        <dataSource site="ncrc">
+          ${CPERM}/Seth.Underwood/FMS/$(REFERENCE_VERSION)/$(suite)/$(name)/$(platform)-$(target)/1x0m8d_30x1a_20x1o/restart/01010109.tar
+        </dataSource>
+        <dataSource site="nescc">
+          /scratch2/portfolios/GFDL/gfdlscr/Seth.Underwood/FMS/$(REFERENCE_VERSION)/$(suite)/$(name)/$(platform)-$(target)/1x0m8d_30x1a_20x1o/restart/01010109.tar
+        </dataSource>
+      </dataFile>
+    </runtime>
+
+    <postProcess/>
+  </experiment>
+
+  <experiment name="CM2.1U_Control-1990_E1.M_3B_snowmelt" inherit="CM2.1U_Control-1990_E1.M_3A">
+    <description/>
+    <input>
+      <namelist name="coupler_nml">
+        months = $months,
+        days   = $days,
+        current_date = 101,1,1,0,0,0,
+        calendar = 'NOLEAP',
+        dt_cpld = 7200,
+        dt_atmos = 1800,
+        atmos_npes = 30,
+        atmos_nthreads = 3,
+        do_concurrent_radiation=.false.
+        radiation_nthreads = 3
+        ocean_npes = 120,
+        concurrent = .true.
+        use_lag_fluxes=.true.
+      </namelist>
+      <namelist name="atmos_model_nml">
+        nxblocks = 2
+        nyblocks = 2
+      </namelist>
+      <namelist name="xgrid_nml">
+        make_exchange_reproduce = .true.
+        interp_method = 'second_order'
+      </namelist>
+      <namelist name="strat_cloud_nml">
+        U00 = 0.800,
+        U00_profile = .true.,
+        rthresh =  8.0,
+        Dmin = 1.0e-07,
+        n_land = 300.e6,
+        diff_thresh = 0.1,
+        mc_thresh = 0.001,
+        eros_scale = 1.e-6,
+        eros_choice = .true.,
+        eros_scale_c = 8.e-6,
+        eros_scale_t = 5.e-5,
+        super_choice = .true.,
+        tracer_advec = .true.
+        do_old_snowmelt = .false.
+      </namelist>
+    </input>
+    <runtime>
+      <!-- Production Runs -->
+      <production simTime="20" units="years" npes="150">
+        <segment simTime="12" units="months" runTime="03:35:00"/>
+      </production>
+      <!-- Regression Runs -->
+      <regression label="basic">
+        <run days="8" months="0"
+             overrideParams="coupler_nml:atmos_npes=30;
+                             coupler_nml:atmos_nthreads=1;
+                             coupler_nml:ocean_npes=20;
+                             fv_core_nml:layout=1,30;
+                             ocean_model_nml:layout=4,5;"
+             npes="50" runTimePerJob="00:30:00"/>
+      </regression>
+      <regression label="restarts">
+        <run days="4 4" months="0"
+             overrideParams="coupler_nml:atmos_npes=30;
+                             coupler_nml:atmos_nthreads=1;
+                             coupler_nml:ocean_npes=20;
+                             fv_core_nml:layout=1,30;
+                             ocean_model_nml:layout=4,5;"
+             npes="50" runTimePerJob="00:30:00"/>
+      </regression>
+      <regression label="scaling">
+        <run days="8" months="0"
+             overrideParams="coupler_nml:atmos_npes=30;
+                             coupler_nml:atmos_nthreads=1;
+                             coupler_nml:ocean_npes=12;
+                             fv_core_nml:layout=1,30;
+                             ocean_model_nml:layout=3,4;"
+             npes="42" runTimePerJob="00:30:00"/>
+        <run days="8" months="0"
+             overrideParams="coupler_nml:atmos_npes=30;
+                             coupler_nml:atmos_nthreads=1;
+                             coupler_nml:ocean_npes=30;
+                             fv_core_nml:layout=1,30;
+                             ocean_model_nml:layout=5,6;"
+             npes="60" runTimePerJob="00:30:00"/>
+        <run days="8" months="0"
+             overrideParams="coupler_nml:atmos_npes=30;
+                             coupler_nml:atmos_nthreads=1;
+                             coupler_nml:ocean_npes=42;
+                             fv_core_nml:layout=1,30;
+                             ocean_model_nml:layout=6,7;"
+             npes="72" runTimePerJob="00:30:00"/>
+        <run days="8" months="0"
+             overrideParams="coupler_nml:atmos_npes=30;
+                             coupler_nml:ocean_npes=120;
+                             coupler_nml:atmos_nthreads=2;
+                             fv_core_nml:layout=1,30;
+                             ocean_model_nml:layout=12,10;"
+             npes="150" runTimePerJob="00:30:00"/>
+      </regression>
+      <regression label="trapnanIC">
+        <run days="1" months="0"
+             overrideParams="coupler_nml:atmos_npes=30;
+                             coupler_nml:ocean_npes=20;
+                             fv_core_nml:layout=1,30;
+                             ocean_model_nml:layout=4,5;"
+             npes="72" runTimePerJob="02:00:00"/>
+      </regression>
+      <regression label="debug">
+        <run days="1" months="0"
+             overrideParams="coupler_nml:atmos_npes=30;
+                             coupler_nml:atmos_nthreads=1;
+                             coupler_nml:ocean_npes=20;
+                             fv_core_nml:layout=1,30;
+                             ocean_model_nml:layout=4,5;"
+             npes="50" runTimePerJob="02:00:00"/>
+      </regression>
+      <dataFile label="reference">
+        <dataSource site="gfdl">
+          /archive/sdu/FMS/$(REFERENCE_VERSION)/$(suite)/$(name)/$(platform)-$(target)/1x0m8d_30x1a_20x1o/restart/01010109.tar
+        </dataSource>
+        <dataSource site="ncrc">
+          ${CPERM}/Seth.Underwood/FMS/$(REFERENCE_VERSION)/$(suite)/$(name)/$(platform)-$(target)/1x0m8d_30x1a_20x1o/restart/01010109.tar
+        </dataSource>
+        <dataSource site="nescc">
+         /scratch2/portfolios/GFDL/gfdlscr/Seth.Underwood/FMS/$(REFERENCE_VERSION)/$(suite)/$(name)/$(platform)-$(target)/1x0m8d_30x1a_20x1o/restart/01010109.tar
+        </dataSource>
+
+      </dataFile>
+    </runtime>
+
+    <postProcess>
+      <component type="atmos" zInterp="ncep" source="atmos_month" sourceGrid="atmos-latlon">
+        <timeSeries freq="monthly" chunkLength="5yr"/>
+        <timeSeries freq="monthly" chunkLength="100yr">&analysis_cm_atmos_ts_monthly_100yr;</timeSeries>
+        <timeSeries freq="monthly" chunkLength="200yr"/>
+        <timeSeries freq="annual" chunkLength="5yr"/>
+        <timeSeries freq="annual" chunkLength="100yr"/>
+        <timeSeries freq="annual" chunkLength="200yr"/>
+        <timeAverage source="monthly" interval="5yr"/>
+        <timeAverage source="monthly" interval="100yr">&analysis_cm_atmos_av_monthly_100yr;</timeAverage>
+        <timeAverage source="annual" interval="5yr"/>
+        <timeAverage source="annual" interval="100yr">&analysis_cm_atmos_av_annual_100yr;</timeAverage>
+      </component>
+      <component type="ocean" source="ocean_month" sourceGrid="ocean-tripolar">
+        <timeSeries freq="monthly" chunkLength="5yr"/>
+        <timeSeries freq="monthly" chunkLength="100yr"/>
+        <timeSeries freq="monthly" chunkLength="200yr"/>
+        <timeSeries freq="annual" chunkLength="5yr"/>
+        <timeSeries freq="annual" chunkLength="100yr">&analysis_cm_ocean_ts_annual_100yr;</timeSeries>
+        <timeSeries freq="annual" chunkLength="200yr"/>
+        <timeAverage source="monthly" interval="5yr"/>
+        <timeAverage source="monthly" interval="100yr"/>
+        <timeAverage source="annual" interval="5yr"/>
+        <timeAverage source="annual" interval="100yr">&analysis_cm_ocean_av_annual_100yr;</timeAverage>
+      </component>
+      <component type="land" source="land_month" sourceGrid="land-latlon">
+        <timeSeries freq="monthly" chunkLength="5yr"/>
+        <timeSeries freq="monthly" chunkLength="100yr"/>
+        <timeSeries freq="monthly" chunkLength="200yr"/>
+        <timeSeries freq="annual" chunkLength="5yr"/>
+        <timeSeries freq="annual" chunkLength="100yr"/>
+        <timeSeries freq="annual" chunkLength="200yr"/>
+        <timeAverage source="monthly" interval="5yr"/>
+        <timeAverage source="monthly" interval="100yr"/>
+        <timeAverage source="annual" interval="5yr"/>
+        <timeAverage source="annual" interval="100yr"/>
+      </component>
+      <component type="ice" source="ice_month" sourceGrid="ocean-tripolar">
+        <timeSeries freq="monthly" chunkLength="5yr"/>
+        <timeSeries freq="monthly" chunkLength="100yr"/>
+        <timeSeries freq="monthly" chunkLength="200yr"/>
+        <timeSeries freq="annual" chunkLength="5yr"/>
+        <timeSeries freq="annual" chunkLength="100yr"/>
+        <timeSeries freq="annual" chunkLength="200yr"/>
+        <timeAverage source="monthly" interval="5yr"/>
+        <timeAverage source="monthly" interval="100yr"/>
+        <timeAverage source="annual" interval="5yr"/>
+        <timeAverage source="annual" interval="100yr"/>
+      </component>
+    </postProcess>
+  </experiment>
+
+  <experiment name="CM2.1U_Control-1990_E1.M_3B_snowmelt_static_ocn6x5" inherit="CM2.1U_Control-1990_E1.M_3B_snowmelt">
+    <description/>
+    <component name="fms" paths="shared" includeDir="$(srcDir)/shared/include">
+      <source versionControl="git" root="http://gitlab.gfdl.noaa.gov/fms">
+        <codeBase version="$(RELEASE)"> shared.git </codeBase>
+        <!-- This csh section is needed for systems that use an older git version that doesn't
+             support cloning a specific tag directly. -->
+        <csh><![CDATA[
+          ( cd shared && git checkout $(RELEASE) )
+          ]]>
+        </csh>
+      </source>
+      <compile>
+        <cppDefs>
+          -Duse_netCDF -Duse_libMPI $(INTERNAL_NML_FLAG)
+        </cppDefs>
+      </compile>
+    </component>
+    <component name="ocean" paths="mom4" requires="fms">
+      <source versionControl="cvs">
+        <codeBase version="$(RELEASE)">
+          mom4/doc
+          mom4/ocean_core
+          mom4/ocean_diag
+          mom4/ocean_tracers
+          mom4/ocean_param/sources
+          mom4/ocean_param/mixing/sigma
+          mom4/ocean_param/mixing/neutral mom4/ocean_param/mixing/convect
+          mom4/ocean_param/mixing/horz/tracer/lap
+          mom4/ocean_param/mixing/horz/velocity/lap/general
+          mom4/ocean_param/mixing/horz/velocity/bih/const
+          mom4/ocean_param/mixing/vert/kpp
+          mom4/ocean_param/mixing/vert/ocean_vert_mix.F90
+          mom4/ocean_param/mixing/vert/ocean_vert_mix.html
+          mom4/ocean_param/mixing/polarfilter
+        </codeBase>
+      </source>
+      <compile>
+        <cppDefs>
+          -DSTATIC_MEMORY -DNI_=360 -DNJ_=200 -DNK_=50 -DNI_LOCAL_=60 -DNJ_LOCAL_=40 $(INTERNAL_NML_FLAG)
+        </cppDefs>
+      </compile>
+    </component>
+    <component name="atmos_phys" paths="atmos_param atmos_shared" requires="fms">
+      <source versionControl="git" root="http://gitlab.gfdl.noaa.gov/fms">
+        <codeBase version="$(RELEASE)">atmos_param.git atmos_shared.git</codeBase>
+        <!-- This csh section is needed for systems that use an older git version that doesn't
+             support cloning a specific tag directly. -->
+        <csh><![CDATA[
+          ( cd atmos_shared && git checkout $(RELEASE) )
+          ( cd atmos_param && git checkout $(RELEASE) )
+          ]]>
+        </csh>
+      </source>
+      <compile>
+        <cppDefs>
+          $(INTERNAL_NML_FLAG) -DGFDL_COMPATIBLE_MICROP
+        </cppDefs>
+      </compile>
+    </component>
+    <component name="atmos_dyn" paths="atmos_drivers/coupled
+                                       atmos_fv_dynamics/driver/coupled
+                                       atmos_fv_dynamics/model
+                                       atmos_fv_dynamics/tools" requires="fms atmos_phys">
+      <source versionControl="git" root="http://gitlab.gfdl.noaa.gov/fms">
+        <codeBase version="$(RELEASE)"> atmos_drivers.git atmos_fv_dynamics.git </codeBase>
+        <!-- This csh section is needed for systems that use an older git version that doesn't
+             support cloning a specific tag directly. -->
+        <csh><![CDATA[
+          ( cd atmos_drivers && git checkout $(RELEASE) )
+          ( cd atmos_fv_dynamics && git checkout $(RELEASE) )
+          ]]>
+        </csh>
+      </source>
+      <compile>
+        <cppDefs>
+          -DSPMD -Duse_shared_pointers $(INTERNAL_NML_FLAG)
+        </cppDefs>
+      </compile>
+    </component>
+    <component name="ice" paths="ice_param ice_sis" requires="fms">
+      <source versionControl="git" root="http://gitlab.gfdl.noaa.gov/fms">
+        <codeBase version="$(RELEASE)">ice_sis.git ice_param.git</codeBase>
+        <!-- This csh section is needed for systems that use an older git version that doesn't
+             support cloning a specific tag directly. -->
+        <csh><![CDATA[
+          ( cd ice_param && git checkout $(RELEASE) )
+          ( cd ice_sis && git checkout $(RELEASE) )
+          ]]>
+        </csh>
+      </source>
+      <compile>
+        <cppDefs>
+          $(INTERNAL_NML_FLAG)
+        </cppDefs>
+      </compile>
+    </component>
+    <component name="land" paths="land_lad land_param" requires="fms">
+      <source versionControl="cvs">
+        <codeBase version="$(RELEASE)">land_lad land_param</codeBase>
+      </source>
+      <compile>
+        <cppDefs>
+          -DLAND_BND_TRACERS $(INTERNAL_NML_FLAG)
+        </cppDefs>
+      </compile>
+    </component>
+    <component name="coupler" paths="coupler" requires="fms ocean atmos_dyn atmos_phys land ice">
+      <source versionControl="git" root="http://gitlab.gfdl.noaa.gov/fms">
+        <codeBase version="$(RELEASE)"> coupler.git </codeBase>
+        <csh><![CDATA[
+          ( cd coupler && git checkout $(RELEASE) )
+          ]]>
+        </csh>
+      </source>
+      <compile>
+        <cppDefs>
+          $(INTERNAL_NML_FLAG)
+        </cppDefs>
+      </compile>
+    </component>
+    <input>
+      <namelist name="coupler_nml">
+        months = $months,
+        days   = $days,
+        current_date = 101,1,1,0,0,0,
+        calendar = 'NOLEAP',
+        dt_cpld = 7200,
+        dt_atmos = 1800,
+        atmos_npes = 30,
+        atmos_nthreads = 1
+        do_concurrent_radiation = .false.
+        radiation_nthreads = 1
+        ocean_npes = 30,
+        concurrent = .true.
+        use_lag_fluxes=.true.
+      </namelist>
+    </input>
+    <runtime>
+      <regression label="basic">
+        <run days="8" months="0"
+             overrideParams="coupler_nml:atmos_npes=30;
+                             coupler_nml:ocean_npes=30;
+                             fv_core_nml:layout=1,30;
+                             ocean_model_nml:layout=6,5;"
+             npes="60" runTimePerJob="00:30:00"/>
+      </regression>
+      <regression label="restarts">
+        <run days="4 4" months="0"
+             overrideParams="coupler_nml:atmos_npes=30;
+                             coupler_nml:ocean_npes=30;
+                             fv_core_nml:layout=1,30;
+                             ocean_model_nml:layout=6,5;"
+             npes="60" runTimePerJob="00:30:00"/>
+      </regression>
+      <regression label="scaling">
+        <run days="8" months="0"
+             overrideParams="coupler_nml:atmos_npes=15;
+                             coupler_nml:ocean_npes=30;
+                             fv_core_nml:layout=1,15;
+                             ocean_model_nml:layout=6,5;"
+             npes="45" runTimePerJob="00:30:00"/>
+        <run days="8" months="0"
+             overrideParams="coupler_nml:atmos_npes=30;
+                             coupler_nml:ocean_npes=30;
+                             coupler_nml:atmos_nthreads=2;
+                             fv_core_nml:layout=1,30;
+                             ocean_model_nml:layout=6,5;"
+             npes="60" runTimePerJob="00:30:00"/>
+      </regression>
+      <regression label="trapnanIC">
+        <run days="1" months="0"
+             overrideParams="coupler_nml:atmos_npes=30;
+                             coupler_nml:ocean_npes=30;
+                             fv_core_nml:layout=1,30;
+                             ocean_model_nml:layout=6,5;"
+             npes="60" runTimePerJob="02:00:00"/>
+      </regression>
+      <regression label="debug">
+        <run days="8" months="0"
+             overrideParams="coupler_nml:atmos_npes=30;
+                             coupler_nml:ocean_npes=30;
+                             fv_core_nml:layout=1,30;
+                             ocean_model_nml:layout=6,5;"
+             npes="60" runTimePerJob="02:00:00"/>
+      </regression>
+      <dataFile label="reference">
+        <dataSource site="gfdl">
+          /archive/sdu/FMS/$(REFERENCE_VERSION)/$(suite)/$(name)/$(platform)-$(target)/1x0m8d_30x1a_30x1o/restart/01010109.tar
+        </dataSource>
+        <dataSource site="ncrc">
+          ${CPERM}/Seth.Underwood/FMS/$(REFERENCE_VERSION)/$(suite)/$(name)/$(platform)-$(target)/1x0m8d_30x1a_30x1o/restart/01010109.tar
+        </dataSource>
+        <dataSource site="nescc">
+          /scratch2/portfolios/GFDL/gfdlscr/Seth.Underwood/FMS/$(REFERENCE_VERSION)/$(suite)/$(name)/$(platform)-$(target)/1x0m8d_30x1a_30x1o/restart/01010109.tar
+        </dataSource>
+
+      </dataFile>
+    </runtime>
+
+    <postProcess/>
+  </experiment>
+</experimentSuite>
