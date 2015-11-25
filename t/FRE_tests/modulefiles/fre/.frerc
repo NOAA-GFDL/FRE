@@ -1,0 +1,90 @@
+#%Module1.0
+#
+# ------------------------------------------------------------------------------
+# Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2000-2013
+# Designed and written by V. Balaji, Amy Langenhorst and Aleksey Yakovlev
+#
+
+set domain [exec perl -T -e "use Net::Domain(hostdomain); print hostdomain"]
+
+set last [string length ${domain}]
+
+if { [string index ${domain} [expr { ${last} - 1 }]] == "." } {
+   set domain [string range ${domain} 0 end-1]
+}
+
+switch -glob ${domain} {
+
+  "gfdl.noaa.gov" {
+    set site gfdl-ws
+    set hostType ${site}
+    set tmpDir /net2/${env(USER)}/tmp
+  }
+
+  "princeton.rdhpcs.noaa.gov" {
+    set site gfdl
+    set hostType ${site}
+    set tmpDir /vftmp/${env(USER)}/tmp
+  }
+  
+  "ncrc.gov" {
+    set site ncrc2
+    set hostType [switch -glob ${env(HOST)} {"*batch*" {expr {"batch"}} "*ldtn*" {expr {"ldtn"}} "*rdtn*" {expr {"rdtn"}} default {expr {"login"}}}]
+    set tmpDir /lustre/f1/${env(USER)}/tmp
+  }
+  
+  "zeus.fairmont.rdhpcs.noaa.gov" {
+    if {[info exists env(PROJECT_DIR)]} {
+      set site nescc
+      set hostType ${site}
+      set tmpDir ${env(PROJECT_DIR)}/${env(USER)}/tmp
+    } else {
+      puts stderr "Your environment must contain the 'PROJECT_DIR' variable, pointing to your project directory."
+      puts stderr "Please call the 'account_params' program to find out this directory..."
+      exit 1
+    }
+  }
+  
+  "theia.fairmont.rdhpcs.noaa.gov" {
+    if {[info exists env(PROJECT_DIR)]} {
+      set site theia
+      set hostType ${site}
+      set tmpDir ${env(PROJECT_DIR)}/${env(USER)}/tmp
+    } else {
+      puts stderr "Your environment must contain the 'PROJECT_DIR' variable, pointing to your project directory"
+      exit 1
+    }
+  }
+
+  "*.alcf.anl.gov" {
+    if {[info exists env(PROJECT_DIR)]} {
+      set site alcf
+      set hostType ${site}
+      set tmpDir ${env(PROJECT_DIR)}/${env(USER)}/tmp
+    } else {
+      puts stderr "Your environment must contain the 'PROJECT_DIR' variable, pointing to your project directory"
+      exit 1
+    }
+  }
+  
+  "ccs.ornl.gov" {
+    set site olcf
+    set hostType ${site}
+    set zipDir /home/afyak/soft
+    set tmpDir /tmp/work/${env(USER)}/tmp
+  }
+
+  default {
+    puts stderr "Unsupported domain '${domain}'..."
+    exit 1
+  }
+  
+}
+
+# Settings for all domains
+set sysDir [file dirname [file dirname [file dirname [file dirname ${ModulesCurrentModulefile}]]]]
+set moduleFilesDir [file dirname [file dirname ${ModulesCurrentModulefile}]] 
+set perlArchName [regsub {^archname='([a-z0-9_-]+)';$} [exec perl -V:archname] {\1}]
+set perlVersion [exec perl -e "use English; printf \"%vd\", \$PERL_VERSION"]
+set pythonInfix [regsub {^Python ([0-9]\.[0-9]).*$} [exec python -V |& cat] {python\1}]
+

@@ -1,0 +1,47 @@
+#%Module1.0
+#
+# ------------------------------------------------------------------------------
+# FMS/FRE Project: Module to set up fre
+# ------------------------------------------------------------------------------
+# Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2010, 2015
+# Designed and written by V. Balaji, Amy Langenhorst, Seth Underwood
+# and Aleksey Yakovlev
+#
+
+# Read in the FRE module configuration
+set modDir [file dirname ${ModulesCurrentModulefile}]
+source ${modDir}/.frerc
+
+proc ModulesHelp {} {puts stderr "Sets up the shell environment for FRE"}
+
+set nctoolsVersion "bronx-10"
+set commandsVersion "jenkins"
+set curatorVersion "master"
+
+conflict fre
+
+# selective conflicts
+if { ![is-loaded fre-commands/${commandsVersion}] } {
+    conflict fre-commands
+}
+if { ![is-loaded fre-nctools/${nctoolsVersion}] } {
+    conflict fre-nctools
+}
+if { ![is-loaded fre-curator/${curatorVersion}] } {
+    conflict fre-curator
+}
+
+module load fre-commands/${commandsVersion}
+module load fre-nctools/${nctoolsVersion}
+
+# Domain specific modules/settings
+switch ${domain} {
+
+  "princeton.rdhpcs.noaa.gov" {
+    module load moab
+    module load globus
+    module load fre-curator/${curatorVersion}
+  }
+
+}
+
