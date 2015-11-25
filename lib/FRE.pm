@@ -393,7 +393,8 @@ sub new($$%)
 		  $fre->{platformNode} = $platformNode;
 		  # ---------------------------------------------------------------------------- calculate and save misc values in the object 
 		  $fre->{project} = $projectGet->($fre, $o{project});
-		  $fre->{baseCsh} = $fre->platformValue('csh');
+		  $fre->{freVersion} = $fre->platformValue('freVersion');
+		  $fre->{baseCsh} = $fre->default_platform_csh . $fre->platformValue('csh');
 		  # -------------------------------------------------------------------------------------------------- derive the mkmf template
 		  my $mkmfTemplate = $mkmfTemplateGet->($fre, $caller, $platformNode, $o{verbose});
 		  if ($mkmfTemplate)
@@ -425,7 +426,8 @@ sub new($$%)
 			  "platform       = $fre->{platform}",
 			  "target         = $fre->{target}",
 			  "project        = $fre->{project}", 
-			  "mkmfTemplate   = $fre->{mkmfTemplate}"
+			  "mkmfTemplate   = $fre->{mkmfTemplate}",
+			  "freVersion     = $fre->{freVersion}"
 			);
 			# ------------------------------------------------- normal return
 			return $fre;
@@ -910,6 +912,78 @@ sub out($$@)
 {
   my $fre = shift;
   FREMsg::out($fre->{verbose}, shift, @_);
+}
+
+# Reads the site and compiler-specific default environment file,
+# replaces compiler version and fre version
+# Returns string containing default platform environment c-shell
+sub default_platform_csh {
+    my $self = shift;
+
+    # get compiler type and version
+    my %compiler = do {
+        if ($self->platformSite eq 'gfdl') {
+            ();
+        }
+        else {
+            my ($compiler_node) = $self->{platformNode}->getChildrenByTagName('compiler');
+            unless ($compiler_node) {
+                $self->out(FREMsg::FATAL, "Compiler type and version must be specified in XML platform <compiler> tag");
+                exit FREDefaults::STATUS_FRE_GENERIC_PROBLEM;
+            }
+            my $type    = $compiler_node->getAttribute('type');
+            my $version = $compiler_node->getAttribute('version');
+            unless ($type and $version) {
+                $self->out(FREMsg::FATAL, "Compiler type and version must be specified in XML platform <compiler> tag");
+                exit FREDefaults::STATUS_FRE_GENERIC_PROBLEM;
+            }
+            ( type => $type, version => $version);
+        }
+    };
+
+    # read platform environment site file
+    my $env_defaults_file
+        = File::Spec->catfile(
+            $self->siteDir, "env.defaults" . ($self->platformSite eq 'gfdl' ? '' : ".$compiler{type}")
+        );
+    open my $fh, $env_defaults_file or do {
+        $self->out(FREMsg::FATAL, "Can't open platform environment defaults file $env_defaults_file");
+        exit FREDefaults::STATUS_FRE_GENERIC_PROBLEM;
+    };
+    my @env_default_lines = <$fh>;
+    close $fh;
+
+    # replace FRE version and compiler version into site lines
+    for (@env_default_lines) {
+        s/\$\(FRE_VERSION\)/$self->{freVersion}/g;
+        s/\$\(COMPILER_VERSION\)/$compiler{version}/g;
+    }
+
+    # comments
+    unshift @env_default_lines, "\n# Platform environment defaults from $env_defaults_file\n";
+    push @env_default_lines, "\n# Platform environment overrides from XML\n";
+
+    return join "", @env_default_lines;
+}
+
+# Checks for consistency between the fre version in the platform xml section and the
+# current shell environment
+# Exits with error if different, returns nothing
+sub check_for_fre_version_mismatch {
+    my $self = shift;
+
+    my @loaded_fre_modules = grep s#fre/##, split ':', $ENV{LOADEDMODULES};
+    if ((my $n = scalar @loaded_fre_modules) != 1) {
+        FREMsg::out(1, FREMsg::FATAL,
+            "$n FRE modules appear to be loaded; should be 1" );
+        exit FREDefaults::STATUS_FRE_GENERIC_PROBLEM;
+    }
+
+    if ($loaded_fre_modules[0] ne $self->{freVersion}) {
+        FREMsg::out(1, FREMsg::FATAL,
+            "FRE version mismatch between shell ($loaded_fre_modules[0]) and XML ($self->{freVersion})" );
+        exit FREDefaults::STATUS_FRE_GENERIC_PROBLEM;
+    }
 }
 
 # //////////////////////////////////////////////////////////////////////////////

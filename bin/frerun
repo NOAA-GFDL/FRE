@@ -945,8 +945,9 @@ use FREUtil();
       init	=> ['if ( $currentSeg == 1 ) then'."\n", "\n".'endif'."\n"],
       postInit	=> ['if ( $currentSeg != 1 ) then'."\n", "\n".'endif'."\n"]
     );
-    
-    FRETemplate::setShellCommands($fre, $r, 'platformCsh', $fre->platformValue('csh'));
+
+    FRETemplate::setShellCommands($fre, $r, 'platformCsh',
+                                  $fre->default_platform_csh . $fre->platformValue('csh'));
     FRETemplate::setShellCommands($fre, $r, 'expRuntimeCsh', $z->extractShellCommands('runtime/csh'));
     FRETemplate::setShellCommands($fre, $r, 'expInputCshInit', $z->extractShellCommands('input/csh[not(@type="always") and not(@type="postInit")]', %adjustment));
     FRETemplate::setShellCommands($fre, $r, 'expInputCshAlwaysOrNotInit', $z->extractShellCommands('input/csh[@type="always" or @type="postInit"]', %adjustment));
@@ -1776,6 +1777,9 @@ use FREUtil();
   }
   
   my $fre = FRE->new('frerun', %opt) or exit FREDefaults::STATUS_FRE_GENERIC_PROBLEM;
+
+  # check for FRE version mismatch between XML and current shell
+  $fre->check_for_fre_version_mismatch;
   
   unless ($fre->property('FRE.tool.frerun.enabled'))
   {
