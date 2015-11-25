@@ -69,9 +69,28 @@ use constant SITE_LETTER => qr/[a-z]/o;
 use constant PLATFORM_TAIL_LETTER => qr/\w/o;
 use constant SITE_TAIL_SEPARATOR => '-';
 
+use constant DEFAULT_PLATFORM_ERROR_MSG => <<EOF;
+Default platforms are no longer supported.
+Define platforms in experiment XML and use with -p|--platform site.name (e.g. -p ncrc2.intel)
+or -p|--platform name (current site will be used), e.g. -p intel.
+At GFDL, use -p gfdl.<remote_site>-<compiler> (e.g. gfdl.ncrc2-intel)
+or -p <remote_site>-<compiler> (e.g. ncrc2-intel)
+See documentation at http://wiki.gfdl.noaa.gov/index.php/FRE_User_Documentation#Platforms_and_Sites.
+EOF
+
 # //////////////////////////////////////////////////////////////////////////////
 # ///////////////////////////////////////////////////////////////// Utilities //
 # //////////////////////////////////////////////////////////////////////////////
+
+# Verifies a given platform is acceptable, i.e. not null and not containing "default"
+# Exits with a descriptive error message and a unique error code if not ok, does nothing if ok
+sub checkPlatform {
+    my $platform = shift;
+    if (! $platform or $platform =~ /default/) {
+        FREMsg::out(FREMsg::FATAL, 0, FREPlatforms::DEFAULT_PLATFORM_ERROR_MSG);
+        exit FREDefaults::STATUS_COMMAND_PLATFORM_PROBLEM;
+    }
+}
 
 my $sitePattern = sub()
 # ------ arguments: none
@@ -90,7 +109,7 @@ my $siteParse = sub($)
 my $platformParse = sub($)
 # ------ arguments: $platform
 {
-  my ($p, $t, $z) = (shift || FREDefaults::Platform(), $sitePattern->(), FREPlatforms::PLATFORM_TAIL_LETTER); 
+  my ($p, $t, $z) = (shift, $sitePattern->(), FREPlatforms::PLATFORM_TAIL_LETTER); 
   $p = FREDefaults::Site() . '.' . $p if index($p, '.') < 0;
   return ($p =~ m/^($t)\.($z(?:$z|-)*)$/o) ? ($1, $2, $3, $4) : ();
 };

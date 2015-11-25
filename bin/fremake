@@ -1,82 +1,12 @@
 #!/usr/bin/perl
 # -*- cperl -*-
 #
-# $Id: fremake,v 18.0.2.27.2.13.2.2 2014/02/21 18:43:11 fms Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: Program to Create a Script to Compile a Model
 # ------------------------------------------------------------------------------
-# arl    Ver  18.00  Merged revision 17.0.4.12 onto trunk           March 10
-# afy -------------- Branch 18.0.2 -------------------------------- March 10
-# afy    Ver   1.00  Modify Help subroutine (list targets)          April 10
-# afy    Ver   1.01  Modify Usage subroutine (reorder, attributes)  April 10
-# afy    Ver   1.02  Add single-letter option names                 April 10
-# afy    Ver   1.03  Add option --validate                          April 10
-# afy    Ver   1.04  Check for experiment names separately          April 10
-# afy    Ver   2.00  Improve building in the current session        April 10
-# afy    Ver   2.01  Use new FREUtil.pm module (jobID)              April 10
-# afy    Ver   3.00  Add (modified) processCheckoutScriptCreate     May 10
-# afy    Ver   3.01  Modify processCheckoutExistingCleanDir         May 10
-# afy    Ver   3.02  Add (modified) processCompileScriptCreate      May 10
-# afy    Ver   3.03  Modify processCompileExistingCleanDir          May 10
-# afy    Ver   4.00  Use/Set FRE_COMMANDS_HOME directory            May 10
-# afy    Ver   5.00  Fix processCheckoutScriptCreate (vcRoot)       May 10
-# afy    Ver   6.00  Modify processCompileScriptCreate (new FRE.pm) May 10
-# afy    Ver   7.00  Use new FREDefaults.pm to return status        June 10
-# afy    Ver   7.01  Use new FREXML.pm (based on the XML::Dumper)   June 10
-# afy    Ver   7.02  Add check for the executable existence/perms   June 10
-# afy    Ver   8.00  Reconfigure Getopt::Long (no 'auto_abbrev')    September 10
-# afy    Ver   8.01  Add single-letter aliases to all the options   September 10
-# afy    Ver   8.02  Modify option --validate (no aliases)          September 10
-# afy    Ver   8.03  Modify option --version (low case)             September 10
-# afy    Ver   8.04  Use new module FRETemplate                     September 10
-# afy    Ver   8.05  Modify processCompileExecuteOrSubmit ($submit) September 10
-# afy    Ver   9.00  Use new module FRETemplate (setScheduler*)     September 10
-# afy    Ver  10.00  Rename option --npes => --ncores               September 10
-# afy    Ver  10.01  Modify processCompileScriptCreate (ncores)     September 10
-# afy    Ver  10.02  Modify processCompileScriptCreate (tabs!)      September 10
-# afy    Ver  10.03  Modify processCompileScriptCreate (cosmetics)  September 10
-# afy    Ver  10.04  Modify Usage subroutine (corrections)          September 10
-# afy    Ver  11.00  Add option --partition                         September 10
-# afy    Ver  12.00  Modify processCompileScriptCreate (modules)    December 10
-# afy    Ver  13.00  Modify processCompileScriptCreate (fix)        December 10
-# afy    Ver  14.00  Use new module FREMsg (symbolic levels)        January 11
-# afy    Ver  14.01  Modify processCheckoutScriptCreate (hashes)    January 11
-# afy    Ver  14.02  Modify processCompileScriptCreate (hashes)     January 11
-# afy    Ver  14.03  Modify processCompileScriptCreate (overrides)  January 11
-# afy    Ver  14.04  Modify processCompileScriptCreate (libList)    January 11
-# afy    Ver  15.00  Modify processCompileExecuteOrSubmit (checks)  January 11
-# afy    Ver  16.00  Use new FRETemplate module (*Resources)        February 11
-# afy    Ver  16.01  Remove option --partition                      February 11
-# afy    Ver  17.00  Remove option --validate                       November 11
-# afy    Ver  17.01  Revive option --partition                      November 11
-# afy    Ver  17.02  Add option --queue                             November 11
-# afy    Ver  17.03  Add all the option values checkup              November 11
-# afy    Ver  17.04  Check 'FRE.tool.fremake.enabled' value         November 11
-# afy    Ver  17.05  Use 'FREUtil::listUnique' to remove dupes      November 11
-# afy    Ver  18.00  Add option --keep-compiled                     November 11
-# afy    Ver  18.01  Elaborate compiled files removal               November 11
-# afy    Ver  18.02  Build component libraries in subdirectories    November 11
-# afy    Ver  18.03  Replace 'moduleInitDir' => 'modulesHomeDir'    November 11
-# afy    Ver  18.04  Add option --make-jobs                         November 11
-# afy    Ver  18.05  Fix jobs setting in the MAKEFLAGS              November 11
-# afy    Ver  19.00  Use new module FREExperiment (executable)      November 11
-# afy    Ver  20.00  Remove option --partition                      December 11
-# afy    Ver  20.01  Remove option --queue                          December 11
-# afy    Ver  21.00  Add option --link (for Niki testing script)    December 11
-# afy    Ver  22.00  Modify process*CleanDir (new FRETemplate)      January 12
-# afy    Ver  23.00  Modify Usage (remove ASCII escapes)            March 12
-# afy    Ver  23.01  Modify processCheckoutClean (no tmpDir)        March 12
-# afy    Ver  23.02  Modify processCompileClean (no tmpDir)         March 12
-# afy    Ver  24.00  Cosmetics in messages                          April 12
-# afy    Ver  25.00  Use new module FRETemplate ('fre' argument)    July 12
-# afy    Ver  26.00  Modify processCheckout (sources w/o checkout)  July 12
-# afy    Ver  26.01  Modify processCompileExecuteOrSubmit (msg)     July 12
-# afy    Ver  27.00  Modify processCompileCleanExecDir (no tcsh)    August 12
-# afy    Ver  28.00  Copied from 18.0.2.27.2.1                      December 12
-# afy    Ver  29.00  Use new module FRETemplate (account, dualFlag) December 12
-# ------------------------------------------------------------------------------
-# Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2000-2012
-# Designed and written by V. Balaji, Amy Langenhorst and Aleksey Yakovlev
+# Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2000-2012, 2015
+# Designed and written by V. Balaji, Amy Langenhorst, Aleksey Yakovlev and
+# Seth Underwood
 #
 
 use strict;
@@ -147,14 +77,13 @@ use FREXML();
   {
     my $cwd = Cwd::getcwd();
     my $xml = FREDefaults::XMLFile();
-    my $pfm = FREDefaults::Platform();
     my $tgt = FREDefaults::Target();
     my $ncs = fremake::NCORES_DEFAULT;
     my $wtm = fremake::WALLTIME_DEFAULT;
     return
     (
       "\n",
-      "  Usage: $self [option|experiment] ...\n\n",
+      "  Usage: $self -p|--platform platform [options] experiment [experiment2 ...]\n\n",
       "  Options:\n\n",
       "   -f,        --force-checkout            force checkout in case the source directory exists\n",
       "   -F,        --force-compile             force compile in case the executable directory exists\n",
@@ -164,7 +93,7 @@ use FREXML();
       "   -E,        --execute                   execute all the created scripts in the current session\n",
       "   -h,        --help                      print help message and exit\n",
       "   -n NUM,    --ncores=NUM                number NUM of processor cores to use (default is $ncs)\n",
-      "   -p STRING, --platform=STRING           hardware and software patform STRING (default is '$pfm')\n",
+      "   -p STRING, --platform=STRING           hardware and software platform STRING (required)\n",
       "   -s,        --submit                    submit all the created scripts as batch jobs\n",
       "   -t STRING, --target=STRING             use compilation directives, targeted by STRING (default is '$tgt')\n",
       "   -V,        --version                   print the tool version and exit\n",
@@ -172,7 +101,7 @@ use FREXML();
       "   -w NUM,    --walltime=NUM              maximum wall time NUM (in minutes) to use (default is $wtm)\n",
       "   -x FILE,   --xmlfile=FILE              experiment suite XML configuration FILE (default is '$cwd/$xml')\n\n",
       "  All the option names may be abbreviated, a single leading dash is also acceptable.\n",
-      "  At least one experiment from the FILE must be listed as an argument.\n\n"
+      "  The platform and at least one experiment from the FILE must be listed as arguments.\n\n"
     );
   }
 
@@ -654,7 +583,7 @@ use FREXML();
 
     my ($z, $r, %o) = @_;
     my ($expName, $srcDir, $execDir, $ptmpDir, $fre) = ($z->name(), $z->srcDir(), $z->execDir(), $z->ptmpDir(), $z->fre());
-
+    my $checkoutInfo = $z->extractCheckoutInfo();
     my $baseCsh = $fre->baseCsh();
     my $mkmfTemplate = $fre->mkmfTemplate();
 
@@ -891,6 +820,7 @@ use FREXML();
 	$cmpScript .= "cd \$bld_dir\n";
 	$cmpScript .= "pushd $name\n";
 	$cmpScript .= "mkmf -m Makefile -a \$src_dir -b \$bld_dir -p lib$name.a -t \$mkmf_template";
+        $cmpScript .= " -g" if ($checkoutInfo->{$name}->{vcBrand} eq 'git'); # Add the git-version hash if using git
 	$cmpScript .= " -c \"$ref->{cppDefs}\"" if $ref->{cppDefs};
 	$cmpScript .= " -o \"$otherFlags\"" if $otherFlags;
 	$cmpScript .= " $includeDirsList" if $includeDirsList;
@@ -1121,7 +1051,6 @@ use FREXML();
     'link'      => 1,
     'ncores'    => fremake::NCORES_DEFAULT,
     'walltime'  => fremake::WALLTIME_DEFAULT,
-    'platform'  => FREDefaults::Platform(),
     'target'    => FREDefaults::Target(),
     'xmlfile'   => FREDefaults::XMLFile()
   );
@@ -1155,7 +1084,7 @@ use FREXML();
     }
   }
 
-  if (exists($opt{platform}))
+  if ($opt{platform})
   {
     unless ($opt{platform} && substr($opt{platform}, 0, 1) ne '-')
     {

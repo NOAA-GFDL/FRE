@@ -336,6 +336,10 @@ sub new($$%)
 # ------ read a FRE XML tree from a file, check for basic errors, return the FRE object 
 {
   my ($class, $caller, %o) = @_;
+
+  # if platform isn't specified or contains default, print a descriptive message and exit
+  FREPlatforms::checkPlatform($o{platform});
+
   my $xmlfileAbsPath = File::Spec->rel2abs($o{xmlfile});
   if (-f $xmlfileAbsPath and -r $xmlfileAbsPath)
   {
@@ -530,6 +534,60 @@ sub currentExperimentName($)
 {
   my $fre = shift;
   return $fre->{name};
+}
+
+sub setCurrentExperID($$)
+# ----- arguments: $fre $experID
+# ----- called as object method
+{
+  my ($fre, $experID) = @_;
+  $fre->{experID} = $experID;
+}
+
+sub unsetCurrentExperId($)
+# ----- arguments: $fre
+# ----- called as object method
+{
+  my $fre = shift;
+  my $experID = $fre->{experID};
+  delete($fre->{experID});
+  return $experID;
+}
+
+sub setCurrentRealizID($$)
+# ----- arguments: $fre $realizID
+# ----- called as object method
+{
+  my ($fre, $realizID) = @_;
+  $fre->{realizID} = $realizID;
+}
+
+sub unsetCurrentRealizID($)
+# ----- arguments: $fre
+# ----- called as object method
+{
+  my $fre = shift;
+  my $realizID = $fre->{realizID};
+  delete($fre->{realizID});
+  return $realizID;
+}
+
+sub setCurrentRunID($$)
+# ----- arguments: $fre $runID
+# ----- called as object method
+{
+  my ($fre, $runID) = @_;
+  $fre->{runID} = $runID;
+}
+
+sub unsetCurrentRunID($)
+# ----- arguments: $fre
+# ----- called as object method
+{
+  my $fre = shift;
+  my $runID = $fre->{runID};
+  delete($fre->{runID});
+  return $runID;
 }
 
 sub xmlAsString($)

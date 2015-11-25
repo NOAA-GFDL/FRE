@@ -119,7 +119,6 @@ use FREUtil();
   {
     my $cwd = Cwd::getcwd();
     my $xml = FREDefaults::XMLFile();
-    my $pfm = FREDefaults::Platform();
     my $tgt = FREDefaults::Target();
     return
     (
@@ -140,7 +139,7 @@ use FREUtil();
       "   -c,        --curator                   check that mandatory curator tags are included in the experiment\n",
       "   -X,        --Xml                       print the experiment suite XML configuration FILE with all expansions and exit\n\n",
       "   -h,        --help                      print help message and exit\n",
-      "   -p STRING, --platform=STRING           hardware and software platform STRING (default is '$pfm')\n",
+      "   -p STRING, --platform=STRING           hardware and software platform STRING (required)\n",
       "   -t STRING, --target=STRING             use compilation directives, targeted by STRING (default is '$tgt')\n",
       "   -v,        --verbose                   get verbose messages (repeat the option to increase verbosity level)\n",
       "   -V,        --version                   print the tool version and exit\n",
@@ -342,7 +341,6 @@ use FREUtil();
   my %opt =
   (
     'inherit'		=> frelist::INHERIT_DEFAULT,
-    'platform'		=> FREDefaults::Platform(),
     'target'		=> FREDefaults::Target(),
     'xmlfile'		=> FREDefaults::XMLFile()
   );
@@ -490,11 +488,6 @@ use FREUtil();
 
   my $fre = FRE->new('frelist', %opt) or exit FREDefaults::STATUS_FRE_GENERIC_PROBLEM;
 
-  if ($opt{'platform-csh'})
-  {
-    print ($fre->baseCsh(), "\n") and exit FREDefaults::STATUS_OK;
-  }
-
   if ($opt{Xml})
   {
     print ($fre->xmlAsString(), "\n") and exit FREDefaults::STATUS_OK;
@@ -502,6 +495,13 @@ use FREUtil();
 
   my @expNamesRequested = FREUtil::listUnique(@ARGV);
   my @expNames = (scalar(@expNamesRequested) > 0) ? @expNamesRequested : $fre->experimentNames();
+
+  # for --platform-csh option, substitute $(name) with the first experiment name if one is given
+  if ($opt{'platform-csh'}) {
+    my $csh = $fre->baseCsh;
+    $csh =~ s/\$\(name\)/$expNames[0]/g if scalar @expNamesRequested > 0;
+    print "$csh\n" and exit FREDefaults::STATUS_OK;
+  }
 
   my @exps = ();
   foreach my $expName (@expNames)
