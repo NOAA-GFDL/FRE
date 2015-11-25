@@ -336,6 +336,10 @@ sub new($$%)
 # ------ read a FRE XML tree from a file, check for basic errors, return the FRE object 
 {
   my ($class, $caller, %o) = @_;
+
+  # if platform isn't specified or contains default, print a descriptive message and exit
+  FREPlatforms::checkPlatform($o{platform});
+
   my $xmlfileAbsPath = File::Spec->rel2abs($o{xmlfile});
   if (-f $xmlfileAbsPath and -r $xmlfileAbsPath)
   {

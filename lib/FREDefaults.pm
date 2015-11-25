@@ -77,6 +77,7 @@ use constant STATUS_XML_NOT_VALID			=>  1;
 
 use constant STATUS_COMMAND_GENERIC_PROBLEM		=> 10;
 use constant STATUS_COMMAND_NO_EXPERIMENTS		=> 11;
+use constant STATUS_COMMAND_PLATFORM_PROBLEM    => 12;
 
 use constant STATUS_FS_GENERIC_PROBLEM			=> 20;
 use constant STATUS_FS_PERMISSION_PROBLEM		=> 21;
@@ -111,7 +112,6 @@ use constant SITE_CURRENT	=> $ENV{FRE_SYSTEM_SITE};
 use constant SITES_ALL		=> split(/:/, $ENV{FRE_SYSTEM_SITES});
 
 use constant XMLFILE_DEFAULT	=> 'rts.xml';
-use constant PLATFORM_DEFAULT	=> 'default';
 use constant TARGET_DEFAULT 	=> 'prod';
 
 use constant GLOBAL_NAMES	=> 'site,siteDir,suite,platform,target,name,root,stem';
@@ -138,12 +138,6 @@ sub XMLFile()
 # ------ arguments: none
 {
   return FREDefaults::XMLFILE_DEFAULT;
-}
-
-sub Platform()
-# ------ arguments: none
-{
-  return FREDefaults::SITE_CURRENT . '.' . FREDefaults::PLATFORM_DEFAULT;
 }
 
 sub Target()
