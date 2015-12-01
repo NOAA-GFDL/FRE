@@ -129,6 +129,25 @@ my $versionGet = sub($$)
   return $version;
 };
 
+my $getMDBIswitch = sub($)
+# ------ arguments: $rootNode
+# ------ return the MDBI switch
+# ------ default: false
+{
+  my $r = shift;
+  my @properties = $r->findnodes('property');
+  for my $prop ( @properties ){
+    if ( $prop->getAttribute('name') =~ /^MDBIswitch$/ ){
+      if ( $prop->getAttribute('value') eq 'on' ){
+	return 1;
+      } else {
+	return 0;
+      }
+    }
+  }
+  return 0;
+};
+
 my $platformNodeGet = sub($)
 # ------ arguments: $rootNode
 # ------ return the platform node
@@ -350,6 +369,7 @@ sub new($$%)
     {
       my $rootNode = $document->documentElement();
       my $version = $versionGet->($rootNode, $o{verbose});
+      my $MDBIswitch = $getMDBIswitch->($rootNode);
       # ------------------------------------ standardize the platform string and verify its correctness
       my ($platformSite, $platformTail) = FREPlatforms::parse($o{platform});
       if ($platformSite)
@@ -390,6 +410,7 @@ sub new($$%)
 		  $fre->{version} = $version;
 		  $fre->{siteDir} = $siteDir;
 		  $fre->{properties} = $properties;
+		  $fre->{MDBIswitch} = $MDBIswitch;
 		  $fre->{platformNode} = $platformNode;
 		  # ---------------------------------------------------------------------------- calculate and save misc values in the object 
 		  $fre->{project} = $projectGet->($fre, $o{project});
