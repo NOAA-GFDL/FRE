@@ -142,20 +142,6 @@ CM2.1U_Control-1990_E1.M_3B_snowmelt_static_ocn6x5"
     [[ "$output_good" =~ "$output" ]]
 }
 
-@test "Get root directory for --platform=nescc.intel" {
-    # TODO: Need a way to get the STEM from the XML.
-    # For now, hard coding the STEM
-    # Setting the part of the path that gets ${USER} to be a * glob
-    output_good="/scratch2/portfolios/GFDL/gfdlscr/.*/ulm_201505"
-
-    run frelist -p nescc.intel -d root -x CM2.1U.xml CM2.1U_Control-1990_E1.M_3A
-    echo "Expected: \"$output_good\""
-    echo "Got:      \"$output\""
-    echo "Exit status: $status"
-    [ "$status" -eq 0 ]
-    [ $( expr "$output" : "$output_good" ) -gt 0 ]
-}
-
 @test "Get stdout directory for --platform=ncrc2.intel" {
     output_good="/lustre/f1/.*/ulm_201505/CM2.1U_Control-1990_E1.M_3A/ncrc2.intel-prod/stdout"
 
@@ -179,10 +165,10 @@ analysis: /archive/.*/ulm_201505/CM2.1U_Control-1990_E1.M_3A/gfdl.ncrc2-intel-pr
     [ $( expr "$output" : "$output_good" ) -gt 0 ]
 }
 
-@test "List all directories for all experiments in XML" {
+@test "List all directories for ncrc2-intel" {
     # Assume all directories are correct, if the ones above are
     # This is to only check that this specific command runs
-    run frelist -d all -x CM2.1U.xml
+    run frelist -d all -x CM2.1U.xml -p ncrc2-intel
     echo "Got: \"$output\""
     echo "Exit status: $status"
     [ "$status" -eq 0 ]
@@ -252,31 +238,31 @@ CM2.1U_Control-1990_E1.M_3B_snowmelt_static_ocn6x5 /lustre/f1/unswept/$USER/ulm_
     [ "$status" -eq 0 ]
 }
 
-@test "Extract platform csh section --platform=gfdl.intel" {
-    output_good="
-        source \$MODULESHOME/init/csh
-        module purge
-        module load fre/bronx-10
-        
-      "
+#@test "Extract platform csh section --platform=gfdl.intel" {
+#    output_good="
+#        source \$MODULESHOME/init/csh
+#        module purge
+#        module load fre/bronx-10
+#        
+#      "
 
-    run frelist -p gfdl.intel -S -x CM2.1U.xml
-    echo "Expected: \"$output_good\""
-    echo "Got:      \"$output\""
-    echo "Exit status: $status"
-    [ "$status" -eq 0 ]
-    [[ "$output_good" =~ "$output" ]]
-}
+#    run frelist -p gfdl.intel -S -x CM2.1U.xml
+#    echo "Expected: \"$output_good\""
+#    echo "Got:      \"$output\""
+#    echo "Exit status: $status"
+#    [ "$status" -eq 0 ]
+#    [[ "$output_good" =~ "$output" ]]
+#}
 
 @test "Accept regression option" {
-    run frelist -r foo -x CM2.1U.xml
+    run frelist -r foo -x CM2.1U.xml -p ncrc2-intel
     echo "Got: \"$output\""
     echo "Exit status: $status"
     [ "$status" -eq 0 ]
 }
 
 @test "Print namelist for regression basic, inherited experiment" {
-    run frelist -r basic -N -x CM2.1U.xml CM2.1U_Control-1990_E1.M_3B_snowmelt
+    run frelist -r basic -N -x CM2.1U.xml CM2.1U_Control-1990_E1.M_3B_snowmelt -p ncrc2-intel
     echo "Got: \"$output\""
     echo "Exit status: $status"
     [ "$status" -eq 0 ]
@@ -348,33 +334,33 @@ scaling       3        1x0m8d_30x1_120x1
 }
 
 @test "Test -Xml option" {
-    run frelist -X -x CM2.1U.xml CM2.1U_Control-1990_E1.M_3B_snowmelt_static_ocn6x5
+    run frelist -X -x CM2.1U.xml -p ncrc2-intel CM2.1U_Control-1990_E1.M_3B_snowmelt_static_ocn6x5
     echo "Got: \"$output\""
     echo "Exit status: $status"
     [ "$status" -eq 0 ]
 }
 
-@test "Test inherit of external XML file" {
-    output_good="
-           source \$MODULESHOME/init/csh
-           module purge
-           module load fre/bronx-10
+#@test "Test inherit of external XML file" {
+#    output_good="
+#           source \$MODULESHOME/init/csh
+#           module purge
+#           module load fre/bronx-10
 
-           module use -a /home/John.Krasting/local/modulefiles
-           module load jpk-analysis/0.0.4
+#           module use -a /home/John.Krasting/local/modulefiles
+#           module load jpk-analysis/0.0.4
            #Some tricks to use the refineDiag and analysis scripts from a checkout of MOM6 at gfdl 
-           setenv FREVERSION fre/bronx-10           
-           setenv NBROOT /nbhome/${USER}/ulm_201505_mom6_2014.12.24/\$(name)/gfdl.ncrc2-intel-prod
-           mkdir -p \$NBROOT
-           cd \$NBROOT
-           git clone /home/fms/git/ocean/mom6
+#           setenv FREVERSION fre/bronx-10           
+#           setenv NBROOT /nbhome/${USER}/ulm_201505_mom6_2014.12.24/\$(name)/gfdl.ncrc2-intel-prod
+#           mkdir -p \$NBROOT
+#           cd \$NBROOT
+#           git clone /home/fms/git/ocean/mom6
+#
+#         "
 
-         "
-
-    run frelist -R ${USER} -p gfdl.ncrc2-intel -S -x MOM6_solo.xml
-    echo "Expected: \"$output_good\""
-    echo "Got:      \"$output\""
-    echo "Exit status: $status"
-    [ "$status" -eq 0 ]
-    [[ "$output_good" =~ "$output" ]]
-}
+#    run frelist -R ${USER} -p gfdl.ncrc2-intel -S -x MOM6_solo.xml
+#    echo "Expected: \"$output_good\""
+#    echo "Got:      \"$output\""
+#    echo "Exit status: $status"
+#    [ "$status" -eq 0 ]
+#    [[ "$output_good" =~ "$output" ]]
+#}
