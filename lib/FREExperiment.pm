@@ -1171,6 +1171,26 @@ sub extractCompileValue($$$)
   return $value;
 }
 
+sub extractDoF90Cpp($$)
+# ------ arguments: $object $xPath $componentName
+# ------ called as object method
+# ------ return a value corresponding to the $xPath under the <component/compile> node, following inherits
+{
+  my ($r, $c) = @_;
+  my ($exp, $value) = ($r, '');
+  my $compileNode = $exp->node()->findnodes('component[@name="' . $c . '"]/compile')->get_node(1);
+  while ($exp and !$value)
+  {
+    $value = $exp->nodeValue($compileNode, '@doF90Cpp');
+    $exp = $exp->parent();
+  }
+  if ($value!~/(?i:yes|on|true)/)
+  {
+    $value = '';
+  }
+  return $value;
+}
+
 sub extractExecutable($)
 # ------ arguments: $object
 # ------ called as object method
@@ -1742,6 +1762,7 @@ sub extractCompileInfo($)
 	    $component{makeOverrides} = $strMergeWS->($r->extractCompileValue('makeOverrides', $name));
 	    $component{compileCsh} = $r->extractCompileValue('csh', $name);
 	    $component{mkmfTemplate} = $strRemoveWS->($r->extractMkmfTemplate($name)) || $fre->mkmfTemplate();
+	    $component{doF90Cpp} = $r->extractDoF90Cpp($name);
             $component{lineNumber} = $componentNode->line_number();
 	    $component{rank} = undef;
 	    # ------------------------------------------------------------------------------------------- print what we got
