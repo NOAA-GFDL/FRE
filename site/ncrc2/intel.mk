@@ -33,15 +33,19 @@ INCLUDE = -I$(NETCDF_ROOT)/include
 
 FPPFLAGS := -fpp -Wp,-w $(INCLUDE)
 
-FFLAGS := -fno-alias -auto -safe-cray-ptr -ftz -assume byterecl -i4 -r8 -nowarn -sox -traceback $(INCLUDE)
+# -msse2 is added as a workaround for reproducibility on the c3 system.  We in the
+# modeling systems group are looking for why this is needed to allow run-to-run 
+# reproducibility on the c3 system.
+FFLAGS := -msse2 -fno-alias -auto -safe-cray-ptr -ftz -assume byterecl -i4 -r8 -nowarn -sox -traceback $(INCLUDE)
 FFLAGS_OPT = -O3 -debug minimal -fp-model source -override-limits
 FFLAGS_DEBUG = -g -O0 -check -check noarg_temp_created -check nopointer -warn -warn noerrors -fpe0 -ftrapuv
 FFLAGS_REPRO = -O2 -debug minimal -fp-model source -override-limits
 FFLAGS_OPENMP = -openmp
 FFLAGS_VERBOSE = -v -V -what
 
-CFLAGS := -D__IFC -sox -traceback
+CFLAGS := -D__IFC -msse2 -sox -traceback
 CFLAGS_OPT = -O2 -debug minimal
+CFLAGS_REPRO = -O2 -debug minimal
 CFLAGS_OPENMP = -openmp
 CFLAGS_DEBUG = -O0 -g -ftrapuv 
 
