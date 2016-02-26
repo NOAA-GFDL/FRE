@@ -3,6 +3,7 @@
 # The output_good strings are configured with the exact number of spaces needed
 # for the tests to pass.  DO NOT adjust unless needed, this includes removing
 # whitespace.
+good_platform="ncrc2.intel"
 
 setup() {
     unique_string="date$(date +%s)pid$$"
@@ -59,7 +60,7 @@ setup() {
     esac
 
     rm -f rts.xml
-    run frerun CM2.1U_Control-1990_E1.M_3A
+    run frerun -p $good_platform CM2.1U_Control-1990_E1.M_3A
     echo "Expected: \"$output_good\""
     echo "Got:      \"$output\""
     echo "Exit status: $status"
@@ -84,10 +85,10 @@ setup() {
             ;;
     esac
 
-    last_line_good="TO SUBMIT => ${submit_cmd} ${root_stem}/${USER}/FRE_tests-${unique_string}-temp/ulm_201505/CM2.1U_Control-1990_E1.M_3B_snowmelt/${platform}.default-prod/scripts/run/CM2.1U_Control-1990_E1.M_3B_snowmelt"
+    last_line_good="TO SUBMIT => ${submit_cmd} ${root_stem}/${USER}/FRE_tests-${unique_string}-temp/ulm_201505/CM2.1U_Control-1990_E1.M_3B_snowmelt/${platform}.intel-prod/scripts/run/CM2.1U_Control-1990_E1.M_3B_snowmelt"
 
     sed "s/SED_UNIQUE_STRING_HERE/${unique_string}/" <sedMe.xml >rts.xml
-    run frerun CM2.1U_Control-1990_E1.M_3B_snowmelt
+    run frerun -p $good_platform CM2.1U_Control-1990_E1.M_3B_snowmelt
 
     # Get the last line from the output
     num_lines=${#lines[@]}
@@ -115,7 +116,7 @@ setup() {
     esac
 
     [ ! -f nonexistent_file.xml ] # Assert file doesn't exist
-    run frerun -x nonexistent_file.xml CM2.1U_Control-1990_E1.M_3A
+    run frerun -x nonexistent_file.xml -p $good_platform CM2.1U_Control-1990_E1.M_3A
     echo "Expected: \"$output_good\""
     echo "Got:      \"$output\""
     echo "Exit status: $status"
@@ -140,10 +141,10 @@ setup() {
             ;;
     esac
 
-    last_line_good="TO SUBMIT => ${submit_cmd} ${root_stem}/${USER}/FRE_tests-${unique_string}-temp/ulm_201505/CM2.1U_Control-1990_E1.M_3B_snowmelt/${platform}.default-prod/scripts/run/CM2.1U_Control-1990_E1.M_3B_snowmelt"
+    last_line_good="TO SUBMIT => ${submit_cmd} ${root_stem}/${USER}/FRE_tests-${unique_string}-temp/ulm_201505/CM2.1U_Control-1990_E1.M_3B_snowmelt/${platform}.intel-prod/scripts/run/CM2.1U_Control-1990_E1.M_3B_snowmelt"
 
     sed "s/SED_UNIQUE_STRING_HERE/${unique_string}/" <sedMe.xml >"${unique_string}-temp.xml"
-    run frerun -x "${unique_string}-temp.xml" CM2.1U_Control-1990_E1.M_3B_snowmelt
+    run frerun -x "${unique_string}-temp.xml" -p $good_platform CM2.1U_Control-1990_E1.M_3B_snowmelt
 
     # Get the last line from the output
     num_lines=${#lines[@]}

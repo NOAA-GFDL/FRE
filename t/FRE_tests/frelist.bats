@@ -27,6 +27,9 @@
 
 @test "No XML listed on frelist command line and no rts.xml file" {
     output_good="*FATAL*: The xmlfile 'rts.xml' doesn't exist or isn't readable"
+    if [ -f rts.xml ]; then
+        rm rts.xml
+    fi
 
     run frelist
     echo "Expected: \"$output_good\""
