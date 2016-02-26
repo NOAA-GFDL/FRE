@@ -338,7 +338,22 @@ sub new($$%)
   my ($class, $caller, %o) = @_;
 
   # if platform isn't specified or contains default, print a descriptive message and exit
-  FREPlatforms::checkPlatform($o{platform});
+  # let frelist go ahead if no options are specified so it can print experiments
+  # and if -d is used so it can list experiment descriptions
+  if ($caller eq 'frelist') {
+      if (keys %o <= 3) {
+          $o{platform} = 'default';
+      }
+      elsif (keys %o == 4 and exists $o{description}) {
+          $o{platform} = 'default';
+      }
+      else {
+          FREPlatforms::checkPlatform($o{platform});
+      }
+  }
+  else {
+      FREPlatforms::checkPlatform($o{platform});
+  }
 
   my $xmlfileAbsPath = File::Spec->rel2abs($o{xmlfile});
   if (-f $xmlfileAbsPath and -r $xmlfileAbsPath)
