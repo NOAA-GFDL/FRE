@@ -409,7 +409,8 @@ sub new($$%)
 		  # ---------------------------------------------------------------------------- calculate and save misc values in the object 
 		  $fre->{project} = $projectGet->($fre, $o{project});
 		  $fre->{freVersion} = $fre->platformValue('freVersion');
-		  $fre->{baseCsh} = $fre->default_platform_csh . $fre->platformValue('csh');
+		  $fre->{baseCsh} = $fre->default_platform_csh . $fre->platformValue('csh')
+              unless $caller eq 'frelist';  # will bomb on lack of compiler tag otherwise
 		  # -------------------------------------------------------------------------------------------------- derive the mkmf template
 		  my $mkmfTemplate = $mkmfTemplateGet->($fre, $caller, $platformNode, $o{verbose});
 		  if ($mkmfTemplate)
@@ -995,9 +996,16 @@ sub check_for_fre_version_mismatch {
     }
 
     if ($loaded_fre_modules[0] ne $self->{freVersion}) {
-        FREMsg::out(1, FREMsg::FATAL,
-            "FRE version mismatch between shell ($loaded_fre_modules[0]) and XML ($self->{freVersion})" );
-        exit FREDefaults::STATUS_FRE_GENERIC_PROBLEM;
+        if ($self->{freVersion}) {
+            FREMsg::out(1, FREMsg::FATAL,
+                "FRE version mismatch between shell ($loaded_fre_modules[0]) and XML ($self->{freVersion})" );
+            exit FREDefaults::STATUS_FRE_GENERIC_PROBLEM;
+        }
+        else {
+            FREMsg::out(1, FREMsg::FATAL,
+                "FRE version must be specified within <platform> in <freVersion> tag. See documentation at http://wiki.gfdl.noaa.gov/index.php/FRE_User_Documentation");
+            exit FREDefaults::STATUS_FRE_GENERIC_PROBLEM;
+        }
     }
 }
 
