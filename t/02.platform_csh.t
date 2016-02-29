@@ -4,7 +4,7 @@ use warnings FATAL => 'all';
 use Test::Most;
 use File::Basename;
 use File::Spec::Functions;
-bail_on_fail;
+#bail_on_fail;
 
 if ($ENV{HSM_SITE} eq 'gfdl') {
     done_testing;
