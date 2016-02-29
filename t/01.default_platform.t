@@ -12,7 +12,7 @@ my %tools = (
     fremake         => [0, 30],
     frepriority     => [10, 30],
     frerts_check    => 0,
-    frerun          => [60, 30],
+    frerun          => [20, 30],
     frescrub        => 0,
     frestatus       => 0,
     fretransform    => 0,
@@ -22,12 +22,12 @@ my %tools = (
 
 my $xml = 't/xml/CM2.1U.xml';
 my $exp = 'CM2.1U_Control-1990_E1.M_3A';
-
 my $good_platform = $ENV{HSM_SITE} eq 'gfdl' ? 'ncrc2-intel' : 'intel';
 
 ok(-f $xml);
 
 for my $tool (keys %tools) {
+    next if $tool eq 'frelist';
     next if $tool =~ /frepp / and $ENV{HSM_SITE} ne 'gfdl';
     my $command = "$tool -x $xml -p default $exp";
     print "$command\n";
@@ -45,6 +45,7 @@ for my $tool (keys %tools) {
 }
 
 for my $tool (keys %tools) {
+    next if $tool eq 'frelist';
     next if $tool =~ /frepp / and $ENV{HSM_SITE} ne 'gfdl';
     my $command = "$tool -x $xml $exp";
     print "$command\n";

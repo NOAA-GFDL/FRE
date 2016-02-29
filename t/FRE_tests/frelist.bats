@@ -27,6 +27,9 @@
 
 @test "No XML listed on frelist command line and no rts.xml file" {
     output_good="*FATAL*: The xmlfile 'rts.xml' doesn't exist or isn't readable"
+    if [ -f rts.xml ]; then
+        rm rts.xml
+    fi
 
     run frelist
     echo "Expected: \"$output_good\""
@@ -165,10 +168,10 @@ analysis: /archive/.*/ulm_201505/CM2.1U_Control-1990_E1.M_3A/gfdl.ncrc2-intel-pr
     [ $( expr "$output" : "$output_good" ) -gt 0 ]
 }
 
-@test "List all directories for ncrc2-intel" {
+@test "List all directories for ncrc2.intel" {
     # Assume all directories are correct, if the ones above are
     # This is to only check that this specific command runs
-    run frelist -d all -x CM2.1U.xml -p ncrc2-intel
+    run frelist -d all -x CM2.1U.xml -p ncrc2.intel
     echo "Got: \"$output\""
     echo "Exit status: $status"
     [ "$status" -eq 0 ]
@@ -255,14 +258,14 @@ CM2.1U_Control-1990_E1.M_3B_snowmelt_static_ocn6x5 /lustre/f1/unswept/$USER/ulm_
 #}
 
 @test "Accept regression option" {
-    run frelist -r foo -x CM2.1U.xml -p ncrc2-intel
+    run frelist -r foo -x CM2.1U.xml -p ncrc2.intel
     echo "Got: \"$output\""
     echo "Exit status: $status"
     [ "$status" -eq 0 ]
 }
 
 @test "Print namelist for regression basic, inherited experiment" {
-    run frelist -r basic -N -x CM2.1U.xml CM2.1U_Control-1990_E1.M_3B_snowmelt -p ncrc2-intel
+    run frelist -r basic -N -x CM2.1U.xml CM2.1U_Control-1990_E1.M_3B_snowmelt -p ncrc2.intel
     echo "Got: \"$output\""
     echo "Exit status: $status"
     [ "$status" -eq 0 ]
@@ -334,7 +337,7 @@ scaling       3        1x0m8d_30x1_120x1
 }
 
 @test "Test -Xml option" {
-    run frelist -X -x CM2.1U.xml -p ncrc2-intel CM2.1U_Control-1990_E1.M_3B_snowmelt_static_ocn6x5
+    run frelist -X -x CM2.1U.xml -p ncrc2.intel CM2.1U_Control-1990_E1.M_3B_snowmelt_static_ocn6x5
     echo "Got: \"$output\""
     echo "Exit status: $status"
     [ "$status" -eq 0 ]
