@@ -7,6 +7,7 @@ use File::Spec::Functions;
 #bail_on_fail;
 
 if ($ENV{HSM_SITE} eq 'gfdl') {
+    ok(1);
     done_testing;
     exit;
 }
