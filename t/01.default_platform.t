@@ -2,7 +2,7 @@
 use strict;
 use warnings FATAL => 'all';
 use Test::Most;
-bail_on_fail;
+#bail_on_fail;
 
 my %tools = (
     diag_table_chk  => 0,
