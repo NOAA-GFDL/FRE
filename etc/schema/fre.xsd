@@ -54,6 +54,33 @@
     </xs:annotation>
     <xs:complexType mixed="true">
       <xs:choice minOccurs="0" maxOccurs="unbounded">
+	<xs:element name="publicMetadata">
+	  <xs:annotation>
+	    <xs:documentation>An experiments publicMetadata node helps populate Curator</xs:documentation>
+	  </xs:annotation>
+	  <xs:complexType>
+	    <xs:choice minOccurs="0" maxOccurs="unbounded">
+	      <xs:element name="project">
+		<xs:annotation>
+		  <xs:documentation>The project associated with a given experiment</xs:documentation>
+		</xs:annotation>
+	      </xs:element>
+	      <xs:element ref="model"/>
+	      <xs:element ref="modelID"/>
+	      <xs:element ref="experimentName"/>
+	      <xs:element ref="experimentID"/>
+	      <xs:element ref="comment"/>
+	      <xs:element ref="forcing"/>
+	      <xs:element ref="startTime"/>
+	      <xs:element ref="endTime"/>
+	      <xs:element ref="parentExperimentID"/>
+	      <xs:element ref="parentExperimentRIP"/>
+	      <xs:element ref="branchTime"/>
+	    </xs:choice>
+	    <xs:attribute name="DBswitch" use="required" type="DBswitchOpts"/>
+	  </xs:complexType>
+	</xs:element>
+	<xs:element name="description"/>
         <xs:element name="component">
           <xs:annotation>
             <xs:documentation>An experiments component defines the CVS paths through which the component may be acquired. The 'requires' attribute lists dependencies for that component. The 'paths' attribute lists the directory that will be search after CVS checkout.</xs:documentation>
@@ -81,19 +108,6 @@
             <xs:attribute name="requires" type="xs:string"/>
           </xs:complexType>
         </xs:element>
-        <xs:element name="description">
-          <xs:annotation>
-            <xs:documentation>A description of the experiment.</xs:documentation>
-          </xs:annotation>
-          <xs:complexType mixed="true">
-            <xs:attribute name="communityExperimentID" type="xs:string"/>
-            <xs:attribute name="communityExperimentName" type="xs:string"/>
-            <xs:attribute name="communityModel" type="xs:string"/>
-            <xs:attribute name="communityModelID" type="xs:string"/>
-            <xs:attribute name="communityProject" type="xs:string"/>
-          </xs:complexType>
-        </xs:element>
-        <xs:element ref="communityComment"/>
         <xs:element ref="executable"/>
         <xs:element ref="input"/>
         <xs:element ref="postProcess"/>
@@ -107,11 +121,81 @@
     </xs:complexType>
   </xs:element>
 
-  <xs:element name="communityComment" type="xs:string">
+  <xs:element name="modelID" type="xs:string">
     <xs:annotation>
-      <xs:documentation>This tag is used by the fre-curator tools. It is a public comment about the experiment that will be visible in the netcdf output files.</xs:documentation>
+      <xs:documentation>The model ID used for identification purposes</xs:documentation>
     </xs:annotation>
   </xs:element>
+
+  <xs:element name="experimentName" type="xs:string">
+    <xs:annotation>
+      <xs:documentation>The community experiment name</xs:documentation>
+    </xs:annotation>
+  </xs:element>
+
+  <xs:element name="experimentID" type="xs:string">
+    <xs:annotation>
+      <xs:documentation>The experiment ID for a given experiment</xs:documentation>
+    </xs:annotation>
+  </xs:element>
+
+  <xs:element name="comment" type="xs:string">
+    <xs:annotation>
+      <xs:documentation>The community comment for an experiment</xs:documentation>
+    </xs:annotation>
+  </xs:element>
+
+  <xs:element name="forcing" type="xs:string">
+    <xs:annotation>
+      <xs:documentation>The forcings used for a given experiment</xs:documentation>
+    </xs:annotation>
+  </xs:element>
+
+  <xs:element name="startTime" type="xs:string">
+    <xs:annotation>
+      <xs:documentation>The Start time for a given experiment</xs:documentation>
+    </xs:annotation>
+  </xs:element>
+
+  <xs:element name="endTime" type="xs:string">
+    <xs:annotation>
+      <xs:documentation>The end time for a given experiment</xs:documentation>
+    </xs:annotation>
+  </xs:element>
+
+  <xs:element name="parentExperimentID" type="xs:string">
+    <xs:annotation>
+      <xs:documentation>The Experiment ID for a given experiment's parent</xs:documentation>
+    </xs:annotation>
+  </xs:element>
+
+  <xs:element name="parentExperimentRIP" type="xs:string">
+    <xs:annotation>
+      <xs:documentation>The RIP values for a given experiment's parent</xs:documentation>
+    </xs:annotation>
+  </xs:element>
+
+  <xs:element name="branchTime" type="xs:string">
+    <xs:annotation>
+      <xs:documentation>The branch time for a given experiment</xs:documentation>
+    </xs:annotation>
+  </xs:element>
+
+  <xs:element name="model" type="xs:string">
+    <xs:annotation>
+      <xs:documentation>A tag in the public metadata tag to house the old communityModel name</xs:documentation>
+    </xs:annotation>
+  </xs:element>
+
+  <xs:simpleType name="DBswitchOpts">
+    <xs:annotation>
+      <xs:documentation>A switch for turning on or off the Curator ingestion for a given experiment</xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="on"/>
+      <xs:enumeration value="off"/>
+    </xs:restriction>
+  </xs:simpleType>
 
   <xs:element name="executable">
     <xs:annotation>
@@ -558,9 +642,21 @@
     <xs:complexType>
       <xs:attribute name="type" use="required" type="compilerType"/>
       <xs:attribute name="version" use="required" type="xs:string"/>
+      <xs:attribute name="doF90Cpp" type="doF90CppOpts"/>
     </xs:complexType>
   </xs:element>
 
+  <xs:simpleType name="doF90CppOpts">
+    <xs:annotation>
+      <xs:documentation>Restricts the possible values for the compiler type, all else will be considered 'off/False/no' in fre</xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="on"/>
+      <xs:enumeration value="yes"/>
+      <xs:enumeration value="true"/>
+    </xs:restriction>
+  </xs:simpleType>
+		       
   <xs:simpleType name="compilerType">
     <xs:annotation>
       <xs:documentation>Restricts the possible values for the compiler type.</xs:documentation>
@@ -572,7 +668,6 @@
       <xs:enumeration value="cce"/>
     </xs:restriction>
   </xs:simpleType>
-
 
   <xs:element name="mkmfTemplate">
     <xs:annotation>
