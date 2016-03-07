@@ -452,23 +452,26 @@ $version_head .= "-x $abs_xml_path ";
    }
    print "\nDIRECTORIES: FRE4\nworkdir $workdir\nrootdir $rootdir\narchivedir $archivedir\nanalysisdir $analysisdir\noutscriptdir $outscriptdir\naoutscriptdir $aoutscriptdir\nhistDir $histDir\nptmpDir $ptmpDir\nstatedir $statedir\n\n" if $opt_v;
 
-   #ingest the experiment into curator -- Maybe..
+   # ingest the experiment into curator -- Maybe..
    # Build our command line options for fredb
-   print "\nChecking Curator for the experiment to capture the tripleID\nThis may take a moment if experiment is being ingested for the first time.\n\n";
-   my $fredb = qx{which fredb};
-   chomp($fredb);
-   my @fredb_cmd = ( "-x", $abs_xml_path,
-		     "-t", $opt_T,
-		     "-p", $opt_P,
-		     "-d", "testcurator",
-		     "-q", "cobweb",
-		     $expt );
-   my $output = qx{$fredb @fredb_cmd};
-   my ($exper_id, $realiz_id, $run_id) = parse_triple_id($output);
-   $fre->setCurrentExperID($exper_id);
-   $fre->setCurrentRealizID($realiz_id);
-   $fre->setCurrentRunID($run_id);
-   
+   my ($exper_id, $realiz_id, $run_id) = 0;
+   if ( lc($exp->{MDBIswitch}) =~ /(on|true|yes)/ ) {
+       print "\nChecking Curator for the experiment to capture the tripleID\nThis may take a moment if experiment is being ingested for the first time.\n\n";
+       my $fredb = qx{which fredb};
+       chomp($fredb);
+       my @fredb_cmd = ( "-x", $abs_xml_path,
+			 "-t", $opt_T,
+			 "-p", $opt_P,
+			 "-d", "testcurator",
+			 "-q", "cobweb",
+			 $expt );
+       my $output = qx{$fredb @fredb_cmd};
+       ($exper_id, $realiz_id, $run_id) = parse_triple_id($output);
+       $fre->setCurrentExperID($exper_id);
+       $fre->setCurrentRealizID($realiz_id);
+       $fre->setCurrentRunID($run_id);
+   }
+
    my $refinedir = "$opt_d"."_refineDiag";
    $ptmpDir .= $archivedir;
    if ( "$opt_u" ne '' ) { $ptmpDir .= "/$opt_u"; }
