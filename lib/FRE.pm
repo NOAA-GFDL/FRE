@@ -63,6 +63,7 @@ use FREPlatforms();
 use FREProperties();
 use FRETargets();
 use FREUtil();
+use Try::Tiny;
 
 # //////////////////////////////////////////////////////////////////////////////
 # ////////////////////////////////////////////////////////// Global constants //
@@ -242,7 +243,8 @@ sub curator($$$)
   my $root = $xmlOrigDoc->getDocumentElement;
   my $experimentNode = $root->findnodes("experiment[\@label='$expName' or \@name='$expName']")->get_node(1);
   my $descriptionNode = $experimentNode->findnodes("description")->get_node(1);
-  my @curatorTags = qw{communityModel communityProject communityExperimentID};
+  my $publicMetadataNode = $experimentNode->findnodes("publicMetadata")->get_node(1);
+  my @curatorTags = qw{model project experimentID experimentName};
   my @missingCuratorTags;
   print "A well formed XML will have the following attributes and tags set in the desired experiment\n";
   print "Please consult documentation on the wiki for more information\n";
@@ -252,14 +254,25 @@ sub curator($$$)
   print "**************************************************************************************************\n";
   print "Curator tags for $expName:\n";
 
-  foreach ( @curatorTags ){
-    my $value = $descriptionNode->getAttribute($_);
-    if ( $value ){
-      print "$_: $value\n";
-    } else {
-      push @missingCuratorTags, $_;
-    }
+  if ( $publicMetadataNode ){
+      for my $tag ( @curatorTags ){
+	  try{
+	      if ($publicMetadataNode->findnodes($tag)){
+		  print $tag . ": " . $publicMetadataNode->findnodes($tag) . "\n";
+	      } 
+	      else {
+		  push @missingCuratorTags, $tag;
+	      }
+	  }  
+	  catch {
+	      push @missingCuratorTags, $tag;
+	  };
+      }
   }
+  elsif ( not $publicMetadataNode ){
+      push @missingCuratorTags, @curatorTags;
+  }
+
   my $realizationNode = $experimentNode->findnodes("realization")->get_node(1);
   my @realizationVals = qw{ r i p };
   my $realizationString = '';
@@ -280,9 +293,10 @@ sub curator($$$)
     print "realization: $realizationString\n";
   }
   if ( @missingCuratorTags ){
-    foreach ( @missingCuratorTags ){
-      print "MISSING: $_ \n";
-    }
+      print "------------------\n\n";
+      foreach ( @missingCuratorTags ){
+	  print "MISSING TAG: $_ \n";
+      }
   }
   return;
 }
