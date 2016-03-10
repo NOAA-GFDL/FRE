@@ -63,6 +63,7 @@ use FREPlatforms();
 use FREProperties();
 use FRETargets();
 use FREUtil();
+use Try::Tiny;
 
 # //////////////////////////////////////////////////////////////////////////////
 # ////////////////////////////////////////////////////////// Global constants //
@@ -242,7 +243,8 @@ sub curator($$$)
   my $root = $xmlOrigDoc->getDocumentElement;
   my $experimentNode = $root->findnodes("experiment[\@label='$expName' or \@name='$expName']")->get_node(1);
   my $descriptionNode = $experimentNode->findnodes("description")->get_node(1);
-  my @curatorTags = qw{communityModel communityProject communityExperimentID};
+  my $publicMetadataNode = $experimentNode->findnodes("publicMetadata")->get_node(1);
+  my @curatorTags = qw{model project experimentID experimentName};
   my @missingCuratorTags;
   print "A well formed XML will have the following attributes and tags set in the desired experiment\n";
   print "Please consult documentation on the wiki for more information\n";
@@ -252,14 +254,25 @@ sub curator($$$)
   print "**************************************************************************************************\n";
   print "Curator tags for $expName:\n";
 
-  foreach ( @curatorTags ){
-    my $value = $descriptionNode->getAttribute($_);
-    if ( $value ){
-      print "$_: $value\n";
-    } else {
-      push @missingCuratorTags, $_;
-    }
+  if ( $publicMetadataNode ){
+      for my $tag ( @curatorTags ){
+	  try{
+	      if ($publicMetadataNode->findnodes($tag)){
+		  print $tag . ": " . $publicMetadataNode->findnodes($tag) . "\n";
+	      } 
+	      else {
+		  push @missingCuratorTags, $tag;
+	      }
+	  }  
+	  catch {
+	      push @missingCuratorTags, $tag;
+	  };
+      }
   }
+  elsif ( not $publicMetadataNode ){
+      push @missingCuratorTags, @curatorTags;
+  }
+
   my $realizationNode = $experimentNode->findnodes("realization")->get_node(1);
   my @realizationVals = qw{ r i p };
   my $realizationString = '';
@@ -280,9 +293,10 @@ sub curator($$$)
     print "realization: $realizationString\n";
   }
   if ( @missingCuratorTags ){
-    foreach ( @missingCuratorTags ){
-      print "MISSING: $_ \n";
-    }
+      print "------------------\n\n";
+      foreach ( @missingCuratorTags ){
+	  print "MISSING TAG: $_ \n";
+      }
   }
   return;
 }
@@ -338,7 +352,22 @@ sub new($$%)
   my ($class, $caller, %o) = @_;
 
   # if platform isn't specified or contains default, print a descriptive message and exit
-  FREPlatforms::checkPlatform($o{platform});
+  # let frelist go ahead if no options are specified so it can print experiments
+  # and if -d is used so it can list experiment descriptions
+  if ($caller eq 'frelist') {
+      if (keys %o <= 3) {
+          $o{platform} = 'default';
+      }
+      elsif (keys %o == 4 and exists $o{description}) {
+          $o{platform} = 'default';
+      }
+      else {
+          FREPlatforms::checkPlatform($o{platform});
+      }
+  }
+  else {
+      FREPlatforms::checkPlatform($o{platform});
+  }
 
   my $xmlfileAbsPath = File::Spec->rel2abs($o{xmlfile});
   if (-f $xmlfileAbsPath and -r $xmlfileAbsPath)
@@ -394,7 +423,8 @@ sub new($$%)
 		  # ---------------------------------------------------------------------------- calculate and save misc values in the object 
 		  $fre->{project} = $projectGet->($fre, $o{project});
 		  $fre->{freVersion} = $fre->platformValue('freVersion');
-		  $fre->{baseCsh} = $fre->default_platform_csh . $fre->platformValue('csh');
+		  $fre->{baseCsh} = $fre->default_platform_csh . $fre->platformValue('csh')
+              unless $caller eq 'frelist';  # will bomb on lack of compiler tag otherwise
 		  # -------------------------------------------------------------------------------------------------- derive the mkmf template
 		  my $mkmfTemplate = $mkmfTemplateGet->($fre, $caller, $platformNode, $o{verbose});
 		  if ($mkmfTemplate)
@@ -980,9 +1010,16 @@ sub check_for_fre_version_mismatch {
     }
 
     if ($loaded_fre_modules[0] ne $self->{freVersion}) {
-        FREMsg::out(1, FREMsg::FATAL,
-            "FRE version mismatch between shell ($loaded_fre_modules[0]) and XML ($self->{freVersion})" );
-        exit FREDefaults::STATUS_FRE_GENERIC_PROBLEM;
+        if ($self->{freVersion}) {
+            FREMsg::out(1, FREMsg::FATAL,
+                "FRE version mismatch between shell ($loaded_fre_modules[0]) and XML ($self->{freVersion})" );
+            exit FREDefaults::STATUS_FRE_GENERIC_PROBLEM;
+        }
+        else {
+            FREMsg::out(1, FREMsg::FATAL,
+                "FRE version must be specified within <platform> in <freVersion> tag. See documentation at http://wiki.gfdl.noaa.gov/index.php/FRE_User_Documentation");
+            exit FREDefaults::STATUS_FRE_GENERIC_PROBLEM;
+        }
     }
 }
 

@@ -8,7 +8,7 @@ set argv = (`getopt Hbehmsf:t:y $*`)
  set sep =  
  set format = standard
 
- set rec = tail
+ set rec = 1
  set help = 0
 
  set hours   = 0

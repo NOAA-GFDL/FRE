@@ -105,7 +105,7 @@ use vars qw( $mosaic_type $sourceGrid $xyInterp $xyInterpRegridFile );
    Getopt::Long::GetOptions(\%opt, frepp::OPTLIST) or (print 'bad opts' and die "\n");
    if ($opt{Version}) {print frepp::VERSION,"\n" and exit(0);}
    use vars qw( $opt_d $opt_D $opt_f $opt_l $opt_p $opt_M $opt_m $opt_q $opt_Q $opt_t $opt_r $opt_x $opt_s $opt_v $opt_V  $opt_A $opt_B $opt_C $opt_O $opt_R $opt_S $opt_Y $opt_Z $opt_c $opt_H $opt_h $opt_o $opt_u $opt_z $opt_w $opt_P $opt_T );
-   $opt_d=($opt{dir} =~ s|\/$||g);
+   ($opt_d=$opt{dir}) =~ s|\/$||g;
    $opt_f=$opt{forceCombine};
    $opt_l=$opt{limitstatic};
    $opt_o=$opt{override};
@@ -165,7 +165,6 @@ Usage:    $relfrepp -P|--platform platform [-AB:C:O:RY:Z:c:d:f:hlmMp:oqr:S:st:u:
           OPTIONS FOR POSTPROCESSING DATA
           -t time      = beginning of model year to process.  To process 1982, use
                            '-t 1982' or '-t 19820101'.
-          --plus num   = "plus num years": additional years to process: OPTION NO LONGER SUPPORTED
           -c component = component to process, or keyword 'split' to process all in parallel
           -l           = limit static variable processing to the diag source file in the xml
           -d dir       = path to history data
@@ -453,23 +452,26 @@ $version_head .= "-x $abs_xml_path ";
    }
    print "\nDIRECTORIES: FRE4\nworkdir $workdir\nrootdir $rootdir\narchivedir $archivedir\nanalysisdir $analysisdir\noutscriptdir $outscriptdir\naoutscriptdir $aoutscriptdir\nhistDir $histDir\nptmpDir $ptmpDir\nstatedir $statedir\n\n" if $opt_v;
 
-   #ingest the experiment into curator -- Maybe..
+   # ingest the experiment into curator -- Maybe..
    # Build our command line options for fredb
-   print "\nChecking Curator for the experiment to capture the tripleID\nThis may take a moment if experiment is being ingested for the first time.\n\n";
-   my $fredb = qx{which fredb};
-   chomp($fredb);
-   my @fredb_cmd = ( "-x", $abs_xml_path,
-		     "-t", $opt_T,
-		     "-p", $opt_P,
-		     "-d", "testcurator",
-		     "-q", "cobweb",
-		     $expt );
-   my $output = qx{$fredb @fredb_cmd};
-   my ($exper_id, $realiz_id, $run_id) = parse_triple_id($output);
-   $fre->setCurrentExperID($exper_id);
-   $fre->setCurrentRealizID($realiz_id);
-   $fre->setCurrentRunID($run_id);
-   
+   my ($exper_id, $realiz_id, $run_id) = 0;
+   if ( lc($exp->{MDBIswitch}) =~ /(on|true|yes)/ ) {
+       print "\nChecking Curator for the experiment to capture the tripleID\nThis may take a moment if experiment is being ingested for the first time.\n\n";
+       my $fredb = qx{which fredb};
+       chomp($fredb);
+       my @fredb_cmd = ( "-x", $abs_xml_path,
+			 "-t", $opt_T,
+			 "-p", $opt_P,
+			 "-d", "testcurator",
+			 "-q", "cobweb",
+			 $expt );
+       my $output = qx{$fredb @fredb_cmd};
+       ($exper_id, $realiz_id, $run_id) = parse_triple_id($output);
+       $fre->setCurrentExperID($exper_id);
+       $fre->setCurrentRealizID($realiz_id);
+       $fre->setCurrentRunID($run_id);
+   }
+
    my $refinedir = "$opt_d"."_refineDiag";
    $ptmpDir .= $archivedir;
    if ( "$opt_u" ne '' ) { $ptmpDir .= "/$opt_u"; }

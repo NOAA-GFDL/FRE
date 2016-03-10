@@ -216,6 +216,14 @@ $experimentCreate = sub($$$)
       $r->{fre} = $fre;
       $r->{name} = $e;
       $r->{node} = $fre->experimentNode($e);
+      # ---------------------------- Figure out whether experiment belongs in database or not
+      if ( $fre->experimentNode($e)->findvalue('publicMetadata/@DBswitch')) {
+	  $r->{MDBIswitch} = $fre->experimentNode($e)->findvalue('publicMetadata/@DBswitch');
+      }
+      else {
+	  # Assume that the default is off
+	  $r->{MDBIswitch} = "off";
+      }
       # ------------------------------------------------------ create and verify directories
       $experimentDirsCreate->($r);
       unless ($experimentDirsVerify->($r, $e))
