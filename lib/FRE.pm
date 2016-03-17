@@ -182,13 +182,12 @@ my $mkmfTemplateGet = sub($$$$)
     }
     else
     {
-      my $templatesMapping = $fre->property('FRE.tool.mkmf.template.mapping');
-      my $mkFilename = FREUtil::strFindByPattern($templatesMapping, $fre->baseCsh());
-      if ($mkFilename eq 'NULL')
+      my $mkFilename = $fre->{compiler} . '.mk';
+      if ($mkFilename eq '.mk')
       {
 	$mkFilename = $fre->property('FRE.tool.mkmf.template.default');
-	FREMsg::out($v, FREMsg::WARNING, "The platform mkmf template can't be derived from the platform <csh> - using the default template '$mkFilename'");
-      }    
+	FREMsg::out($v, FREMsg::WARNING, "The platform mkmf template can't be derived from the <compiler> tag - using the default template '$mkFilename'");
+      }
       return $fre->siteDir() . '/' . $mkFilename;
     }
   }
@@ -423,6 +422,7 @@ sub new($$%)
 		  # ---------------------------------------------------------------------------- calculate and save misc values in the object 
 		  $fre->{project} = $projectGet->($fre, $o{project});
 		  $fre->{freVersion} = $fre->platformValue('freVersion');
+		  $fre->{compiler} = $fre->platformValue('compiler/@type');
 		  $fre->{baseCsh} = $fre->default_platform_csh . $fre->platformValue('csh')
               unless $caller eq 'frelist';  # will bomb on lack of compiler tag otherwise
 		  # -------------------------------------------------------------------------------------------------- derive the mkmf template

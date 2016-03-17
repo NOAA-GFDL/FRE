@@ -6,7 +6,7 @@ module unload netcdf fre
 if (`hostname` =~ gaea[1234]) then
     module load PrgEnv-gnu/4.0.46
 else
-    module load PrgEnv-gnu/5.2.40
+    module load PrgEnv-gnu/5.2.82
 endif
 module load $(FRE_VERSION)
 module load git
