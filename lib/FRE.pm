@@ -423,8 +423,7 @@ sub new($$%)
 		  $fre->{project} = $projectGet->($fre, $o{project});
 		  $fre->{freVersion} = $fre->platformValue('freVersion');
 		  $fre->{compiler} = $fre->platformValue('compiler/@type');
-		  $fre->{baseCsh} = $fre->default_platform_csh . $fre->platformValue('csh')
-              unless $caller eq 'frelist';  # will bomb on lack of compiler tag otherwise
+		  $fre->{baseCsh} = $fre->default_platform_csh . $fre->platformValue('csh');
 		  # -------------------------------------------------------------------------------------------------- derive the mkmf template
 		  my $mkmfTemplate = $mkmfTemplateGet->($fre, $caller, $platformNode, $o{verbose});
 		  if ($mkmfTemplate)
