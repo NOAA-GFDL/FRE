@@ -533,17 +533,20 @@ my $MPISizeCompatible = sub($$)
   return $compatible;
 };
 
-my $MPISizeParametersCompatible = sub($$$$)
-# ------ arguments: $exp $npes $namelistsHandle $ensembleSize
+my $MPISizeParametersCompatible = sub($$$$$)
+# ------ arguments: $exp $resources $namelistsHandle $ensembleSize
 {
 
-  my ($r, $n, $h, $s) = @_;
+  my ($r, $resources, $h, $s) = @_;
+  my $n = $resources->{npes};
 
   my ($fre, $concurrent) = ($r->fre(), $h->namelistBooleanGet('coupler_nml', 'concurrent'));
   $concurrent = 1 unless defined($concurrent);
 
-  my ($atmosNP, $atmosNT) = ($h->namelistIntegerGet('coupler_nml', 'atmos_npes') || 0, 1);
-  my ($oceanNP, $oceanNT) = ($h->namelistIntegerGet('coupler_nml', 'ocean_npes') || 0, 1);
+  my $atmosNP = $resources->{atm}->{ranks};
+  my $atmosNT = $resources->{atm}->{threads};
+  my $oceanNP = $resources->{ocn}->{ranks};
+  my $oceanNT = $resources->{ocn}->{threads};
 
   if ($atmosNP < 0)
   {
@@ -570,7 +573,7 @@ my $MPISizeParametersCompatible = sub($$$$)
   if (FRETargets::containsOpenMP($fre->target()))
   {
     my $coresPerNode = $fre->property('FRE.scheduler.run.coresPerJob.inc');
-    $atmosNT = $h->namelistIntegerGet('coupler_nml', 'atmos_nthreads') || 1;
+    $atmosNT = $resources->{atm}->{threads};
     if ($atmosNT <= 0)
     {
       $fre->out(FREMsg::FATAL, "Number '$atmosNT' of atmospheric OpenMP threads must be positive");
@@ -581,7 +584,7 @@ my $MPISizeParametersCompatible = sub($$$$)
       $fre->out(FREMsg::FATAL, "Number '$atmosNT' of atmospheric OpenMP threads must be less or equal than a number '$coresPerNode' of cores per node");
       return undef;
     }
-    $oceanNT = $h->namelistIntegerGet('coupler_nml', 'ocean_nthreads') || 1;
+    $oceanNT = $resources->{ocn}->{threads};
     if ($oceanNT <= 0)
     {
       $fre->out(FREMsg::FATAL, "Number '$oceanNT' of oceanic OpenMP threads must be positive");
@@ -671,9 +674,10 @@ my $MPISizeComponentEnabled = sub($$$)
 };
 
 my $MPISizeParametersGeneric = sub($$$$)
-# ------ arguments: $exp $npes $namelistsHandle $ensembleSize
+# ------ arguments: $exp $resources $namelistsHandle $ensembleSize
 {
-  my ($r, $n, $h, $s) = @_;
+  my ($r, $resources, $h, $s) = @_;
+  my $n = $resources->{npes};
   my $pairSplit = sub($) {return split('<', shift)};
   my $pairJoin = sub($$) {return join('<', @_)};
   my $fre = $r->fre();
@@ -801,11 +805,12 @@ my $MPISizeParametersGeneric = sub($$$$)
 };
 
 my $MPISizeParameters = sub($$$)
-# ------ arguments: $exp $npes $namelistsHandle
+# ------ arguments: $exp $resources $namelistsHandle
 {
 
-  my ($r, $n, $h) = @_;
+  my ($r, $resources, $h) = @_;
   my $fre = $r->fre();
+  my $n = $resources->{npes};
 
   my $ensembleSize = $h->namelistIntegerGet('ensemble_nml', 'ensemble_size');
   $ensembleSize = 1 unless defined($ensembleSize);
@@ -815,7 +820,7 @@ my $MPISizeParameters = sub($$$)
     if ($h->namelistExists('coupler_nml'))
     {
       my $func = ($MPISizeCompatible->($fre, $h)) ? $MPISizeParametersCompatible : $MPISizeParametersGeneric;
-      return $func->($r, $n, $h, $ensembleSize);
+      return $func->($r, $resources, $h, $ensembleSize);
     }
     elsif ($n > 0)
     {
@@ -1980,22 +1985,12 @@ sub extractProductionRunInfo($)
   {
     if (my $prdNode = $productionRunNode->($r))
     {
-      # get the namelist to get the proper number of npes
+      # get the resource specs from the <resource> tag, also does basic validity checks
+      my $resources = $r->getResourceSpecs('production');
+      my $nps = $resources->{npes};
+      # get the namelists for ensemble members and concurrent/nonconcurrent
       my $nmlsOverridden = $overrideProductionNamelists->($r, $nmls->copy());
-      # number of PEs as configured in runtime/production
-      my $nps = $r->nodeValue($prdNode, '@npes');
-      my $mpiInfo = $MPISizeParameters->($r, $nps, $nmlsOverridden);
-      if ($mpiInfo)
-      {
-        # Use the number of PEs obtained from coupler_nml instead of runtime/production/@npes
-        # as runtime/production/@npes does not take into account OpenMP threads in the pe count
-        my $totNps = 0;
-        for ( my $i = 0; $i < scalar($mpiInfo->{npesList}); $i++ )
-        {
-          $totNps += $mpiInfo->{npesList}[$i] * $mpiInfo->{ntdsList}[$i];
-        }
-        $nps = $totNps;
-      }
+      my $mpiInfo = $MPISizeParameters->($r, $resources, $nmlsOverridden);
       my $smt = $r->nodeValue($prdNode, '@simTime');
       my $smu = $r->nodeValue($prdNode, '@units');
       my $srt = $r->nodeValue($prdNode, '@runTime') || $fre->runTime($nps);
@@ -2085,6 +2080,57 @@ sub extractProductionRunInfo($)
     $fre->out(FREMsg::FATAL, "The experiment '$expName' - unable to extract namelists");
     return 0;
   }
+}
+
+# Get resource info from <runtime>/.../<resources> tag
+# ------ arguments: $exp (production|regression-type)
+# ------ returns: hashref containing resource specs
+sub getResourceSpecs($$) {
+    my ($exp, $label) = @_;
+    my $fre = $exp->fre;
+    my $site = $fre->platformSite;
+    my @realms = (qw( atm ocn lnd ice ));
+    my %data;
+
+    # Find first resource node with experiment inheritance.
+    # If not found, print error message and exit.
+    my ($node) = $exp->extractNodes('runtime', "$label/resources[\@site = '$site']");
+    #print "label is $label\n";
+    #print $node->toString;
+    if (! $node) {
+        die sprintf "No resource specification tag was found for site $site and experiment %s or its ancestors. Each production/regression run must have a <resource> tag; see FRE documentation", $exp->name;
+    }
+
+    # Extract resource info
+    for my $var (qw( jobWallclock segRuntime )) {
+        $data{$var} = $fre->nodeValue($node, "\@$var");
+    }
+    for my $realm (@realms) {
+        for my $type (qw( ranks threads layout io_layout mask_table )) {
+            $data{$realm}{$type} = $fre->nodeValue($node, "$realm/\@$type");
+        }
+    }
+
+    # Verify resource info
+    for my $var (qw( jobWallclock segRuntime )) {
+        unless ($data{$var}) {
+            die "Resource spec $var isn't in XML but needs to be. also give better error message and point to doc";
+        }
+    }
+    for my $realm (qw( atm ocn )) {
+        for my $type (qw( ranks threads layout io_layout )) {
+            unless ($data{$realm}{$type}) {
+                die "Resource realm $realm type $type isn't set in XML but needs to be. also give better error message";
+            }
+        }
+    }
+
+    # Calculate npes
+    for my $realm (@realms) {
+        $data{npes} += $data{$realm}{ranks};# * $data{$realm}{threads};
+    }
+
+    return \%data;
 }
 
 # //////////////////////////////////////////////////////////////////////////////
