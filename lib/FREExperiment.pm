@@ -694,12 +694,12 @@ my $MPISizeParametersGeneric = sub($$$$)
     $enabled = $enabled[$inx] unless defined($enabled);
     if ($enabled)
     {
-      if (my $npes = $h->namelistIntegerGet('coupler_nml', "${component}_npes"))
+      if (my $npes = $resources->{$component}->{ranks})
       {
 	$sizes{"${component}_npes"} = $npes * $s;
 	if ($openMPEnabled)
 	{
-          my $ntds = $h->namelistIntegerGet('coupler_nml', "${component}_nthreads");
+          my $ntds = $resources->{$component}->{threads};
 	  unless (defined($ntds))
 	  {
 	    $sizes{"${component}_ntds"} = 1;
@@ -1986,17 +1986,26 @@ sub extractProductionRunInfo($)
     if (my $prdNode = $productionRunNode->($r))
     {
       # get the resource specs from the <resource> tag, also does basic validity checks
-      my $resources = $r->getResourceSpecs('production');
-      my $nps = $resources->{npes};
-      # get the namelists for ensemble members and concurrent/nonconcurrent
-      my $nmlsOverridden = $overrideProductionNamelists->($r, $nmls->copy());
-      my $mpiInfo = $MPISizeParameters->($r, $resources, $nmlsOverridden);
+      my $resources = $r->getResourceRequests('production');
+
+      # some info is still collected from namelists:
+      #   * number of ensemble members, from ensemble_nml
+      #   * concurrent/nonconcurrent, from coupler_nml
+      # $mpiInfo is a hashref, usually containing
+      #   * npes - total number of MPI processes including ensemble count
+      #   * coupler - 1
+      #   * npesList - arrayref of MPI processes of atm and ocn including ensemble count
+      #                and sometimes adjusted for concurrency
+      #   * ntdsList - arrayref of threads of atm and ocn
+      my $mpiInfo = $MPISizeParameters->($r, $resources, $nmls->copy);
+
       my $smt = $r->nodeValue($prdNode, '@simTime');
       my $smu = $r->nodeValue($prdNode, '@units');
-      my $srt = $r->nodeValue($prdNode, '@runTime') || $fre->runTime($nps);
+      # note: if jobWallclock is required next line should be changed for clarity
+      my $srt = $resources->{jobWallclock} || $fre->runTime($resources->{npes});
       my $gmt = $r->nodeValue($prdNode, 'segment/@simTime');
       my $gmu = $r->nodeValue($prdNode, 'segment/@units');
-      my $grt = $r->nodeValue($prdNode, 'segment/@runTime');
+      my $grt = $resources->{segRuntime};
       my $patternUnits = qr/^(?:years|year|months|month)$/;
       if (($smt > 0) and ($smu =~ m/$patternUnits/))
       {
@@ -2015,7 +2024,6 @@ sub extractProductionRunInfo($)
 		my ($srtMinutes, $grtMinutes) = (FREUtil::makeminutes($srt), FREUtil::makeminutes($grt));
 		if ($grtMinutes <= $srtMinutes)
 		{
-		  my $nmlsOverridden = $overrideProductionNamelists->($r, $nmls->copy());
 		  if ($mpiInfo)
 		  {
 		    my %run = ();
@@ -2024,7 +2032,7 @@ sub extractProductionRunInfo($)
 		    $run{simRunTimeMinutes} = $srtMinutes;
 		    $run{segTimeMonths} = $gmt;
 		    $run{segRunTimeMinutes} = $grtMinutes;
-		    $run{namelists} = $nmlsOverridden;
+		    $run{namelists} = $nmls->copy;
 		    return \%run;
                   }
 		  else
@@ -2085,7 +2093,7 @@ sub extractProductionRunInfo($)
 # Get resource info from <runtime>/.../<resources> tag
 # ------ arguments: $exp (production|regression-type)
 # ------ returns: hashref containing resource specs
-sub getResourceSpecs($$) {
+sub getResourceRequests($$) {
     my ($exp, $label) = @_;
     my $fre = $exp->fre;
     my $site = $fre->platformSite;

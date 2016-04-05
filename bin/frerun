@@ -1304,13 +1304,13 @@ use FREUtil();
     FRETemplate::setList($fre, $r, 'timeStampOptions', $timeStampOptions);
   }
 
-  sub setMPI($$$)
+  sub setMPI($$$$)
   # ------ arguments: $refToScript $exp $refToMPIInfo
   {
-    my ($r, $z, $i) = @_;
+    my ($r, $z, $i, $resources) = @_;
     my ($fre, $coupler, $npes, $refNPes, $refNTds) = ($z->fre(), $i->{coupler}, $i->{npes}, $i->{npesList}, $i->{ntdsList});
     FRETemplate::setSchedulerSize($fre, $r, 'run', $coupler, $npes, $refNPes, $refNTds);
-    FRETemplate::setRunCommand($fre, $r, $coupler, $npes, $refNPes, $refNTds);
+    FRETemplate::setRunCommand($fre, $r, $coupler, $npes, $refNPes, $refNTds, $resources);
   }
   
   sub outputScriptJobId($$)
@@ -1507,7 +1507,7 @@ use FREUtil();
 	      (my $rc, $status) = frerun::setTables(\$rtScript, $z, $runInfo->{namelists});
 	      if ($rc)
 	      {
-		frerun::setMPI(\$rtScript, $z, $runInfo->{mpiInfo});
+		frerun::setMPI(\$rtScript, $z, $runInfo->{mpiInfo}, $z->getResourceRequests('regression'));
 		frerun::setRegressionTimeStampOptions(\$rtScript, $z, $runInfo);
 		frerun::setRegressionTimingParameters(\$rtScript, $z, $runInfo, $o{partition}, $o{queue}, $o{dual});
 		FRETemplate::setNamelists($fre, \$rtScript, $runInfo->{namelists});
@@ -1598,7 +1598,7 @@ use FREUtil();
             (my $rc, $status) = frerun::setTables(\$runScript, $z, $prdInfo->{namelists});
 	    if ($rc)
 	    {
-	      frerun::setMPI(\$runScript, $z, $prdInfo->{mpiInfo});
+	      frerun::setMPI(\$runScript, $z, $prdInfo->{mpiInfo}, $z->getResourceRequests('production'));
 	      frerun::setProductionTimeStampOptions(\$runScript, $z, $prdInfo);
 	      frerun::setProductionTimingParameters(\$runScript, $z, $prdInfo, $o{partition}, $o{queue}, $o{dual});
 	      FRETemplate::setNamelists($fre, \$runScript, $prdInfo->{namelists});
