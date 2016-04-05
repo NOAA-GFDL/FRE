@@ -746,7 +746,7 @@ sub setRunCommand($$$$$$$)
   
   if ($cf)
   {
-    foreach my $inx (0 .. @{$rp} - 1)
+    foreach my $inx (0 .. $#components)
     {
       my $component = $components[$inx];
       $runSizeInfo .= "  set ${component}_ranks = $rp->[$inx]\n";

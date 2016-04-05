@@ -2132,6 +2132,13 @@ sub getResourceRequests($$) {
             }
         }
     }
+    for my $realm (qw( lnd ice )) {
+        for my $type (qw( layout io_layout )) {
+            unless ($data{$realm}{$type}) {
+                die "Resource realm $realm type $type isn't set in XML but needs to be. also give better error message";
+            }
+        }
+    }
 
     # Calculate npes
     for my $realm (@realms) {
