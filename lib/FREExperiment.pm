@@ -461,6 +461,9 @@ my $overrideRegressionNamelists = sub($$$)
     $name =~ s/\s*//g;
     $var =~ s/\s*//g;
     unless ($name and $var) {$fre->out(FREMsg::WARNING, "Got an empty namelist in overrideParams"); next}
+    if ($var =~ /(?:npes|nthreads|layout)$/) {
+        die "Attempted outlawed override for namelist=$name var=$var";
+    }
     $fre->out(FREMsg::NOTE, "overrideParams from xml: $name:$var=$val");
     my $contentOld = $h->namelistGet($name);
     $fre->out(FREMsg::NOTE, "Original namelist: '$name'\n$contentOld");
@@ -1902,12 +1905,17 @@ sub extractRegressionRunInfo($$)
 	my ($ok, %runs) = (1, ());
 	for (my $i = 0; $i < scalar(@runNodes); $i++)
 	{
-	  my $nps = $r->nodeValue($runNodes[$i], '@npes');
+
+      my $resources = $r->getResourceRequests($runNodes[$i]);
+
+	  my $nps = $resources->{npes};
 	  my $msl = $r->nodeValue($runNodes[$i], '@months');
 	  my $dsl = $r->nodeValue($runNodes[$i], '@days');
 	  my $hsl = $r->nodeValue($runNodes[$i], '@hours');
-	  my $srt = $r->nodeValue($runNodes[$i], '@runTimePerJob');
+	  my $srt = $resources->{jobWallclock};
+
 	  my $patternRunTime = qr/^\d?\d:\d\d:\d\d$/;
+
 	  if ($srt =~ m/$patternRunTime/)
 	  {
 	    if ($msl or $dsl or $hsl)
@@ -1920,13 +1928,14 @@ sub extractRegressionRunInfo($$)
 	      while (scalar(@dsa) < $spj) {push(@dsa, '0');}
 	      while (scalar(@hsa) < $spj) {push(@hsa, '0');}
 	      my $nmlsOverridden = $overrideRegressionNamelists->($r, $nmls->copy(), $runNodes[$i]);
-	      if (my $mpiInfo = $MPISizeParameters->($r, $nps, $nmlsOverridden))
+	      if (my $mpiInfo = $MPISizeParameters->($r, $resources, $nmlsOverridden))
 	      {
         	my %run = ();
 		$run{label} = $l;
 		$run{number} = $i;
 		$run{postfix} = $regressionPostfix->($r, $l, $i, $hsl, $spj, $msa[0], $dsa[0], $hsa[0], $mpiInfo);
 		$run{mpiInfo} = $mpiInfo;
+        $run{resources} = $resources;
 		$run{months} = join(' ', @msa);
 		$run{days} = join(' ', @dsa);
 		$run{hours} = join(' ', @hsa);
@@ -1986,7 +1995,7 @@ sub extractProductionRunInfo($)
     if (my $prdNode = $productionRunNode->($r))
     {
       # get the resource specs from the <resource> tag, also does basic validity checks
-      my $resources = $r->getResourceRequests('production');
+      my $resources = $r->getResourceRequests;
 
       # some info is still collected from namelists:
       #   * number of ensemble members, from ensemble_nml
@@ -2028,6 +2037,7 @@ sub extractProductionRunInfo($)
 		  {
 		    my %run = ();
 		    $run{mpiInfo} = $mpiInfo;
+            $run{resources} = $resources;
 		    $run{simTimeMonths} = $smt;
 		    $run{simRunTimeMinutes} = $srtMinutes;
 		    $run{segTimeMonths} = $gmt;
@@ -2091,21 +2101,32 @@ sub extractProductionRunInfo($)
 }
 
 # Get resource info from <runtime>/.../<resources> tag
-# ------ arguments: $exp (production|regression-type)
+# ------ arguments: $exp           -- for production
+# ------ arguments: $exp $run_node -- for regression
 # ------ returns: hashref containing resource specs
 sub getResourceRequests($$) {
-    my ($exp, $label) = @_;
+    my ($exp, $regression_run_node) = @_;
     my $fre = $exp->fre;
     my $site = $fre->platformSite;
     my @realms = (qw( atm ocn lnd ice ));
     my %data;
+    my $node;
 
-    # Find first resource node with experiment inheritance.
-    # If not found, print error message and exit.
-    my ($node) = $exp->extractNodes('runtime', "$label/resources[\@site = '$site']");
-    #print "label is $label\n";
-    #print $node->toString;
+    # if node is given, try to find <resources> tag
+    if ($regression_run_node) {
+        $node = $regression_run_node->findnodes("resources[\@site = '$site']")->get_node(1);
+    }
+
+    # for production OR if regression <resources> tag wasn't found
     if (! $node) {
+        # Find first resource node with experiment inheritance.
+        ($node) = $exp->extractNodes('runtime', "production/resources[\@site = '$site']");
+    }
+    #print "label is $label\n";
+    #print $regression_node->toString;
+    if (! $node) {
+        #print "DEBUG: target XML node follows\n";
+        #print $regression_node->toString;
         die sprintf "No resource specification tag was found for site $site and experiment %s or its ancestors. Each production/regression run must have a <resource> tag; see FRE documentation", $exp->name;
     }
 
