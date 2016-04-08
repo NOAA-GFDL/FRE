@@ -462,7 +462,8 @@ my $overrideRegressionNamelists = sub($$$)
     $var =~ s/\s*//g;
     unless ($name and $var) {$fre->out(FREMsg::WARNING, "Got an empty namelist in overrideParams"); next}
     if ($var =~ /(?:npes|nthreads|layout)$/) {
-        die "Attempted outlawed override for namelist=$name var=$var";
+        $fre->out(FREMsg::FATAL, "You attempted to override the $name namelist for parameter $var. Overrides for some parameters (*npes, *nthreads, or *layout) are no longer allowed; specify these in the <regression>/<run>/<resources> tag. See FRE Documentation at http://wiki.gfdl.noaa.gov/index.php/FRE_User_Documentation");
+        exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
     }
     $fre->out(FREMsg::NOTE, "overrideParams from xml: $name:$var=$val");
     my $contentOld = $h->namelistGet($name);
@@ -546,10 +547,10 @@ my $MPISizeParametersCompatible = sub($$$$$)
   my ($fre, $concurrent) = ($r->fre(), $h->namelistBooleanGet('coupler_nml', 'concurrent'));
   $concurrent = 1 unless defined($concurrent);
 
-  my $atmosNP = $resources->{atm}->{ranks};
-  my $atmosNT = $resources->{atm}->{threads};
-  my $oceanNP = $resources->{ocn}->{ranks};
-  my $oceanNT = $resources->{ocn}->{threads};
+  my $atmosNP = $resources->{atm}->{ranks}   || 0;
+  my $atmosNT = $resources->{atm}->{threads} || 1;
+  my $oceanNP = $resources->{ocn}->{ranks}   || 0;
+  my $oceanNT = $resources->{ocn}->{threads} || 1;
 
   if ($atmosNP < 0)
   {
@@ -576,7 +577,6 @@ my $MPISizeParametersCompatible = sub($$$$$)
   if (FRETargets::containsOpenMP($fre->target()))
   {
     my $coresPerNode = $fre->property('FRE.scheduler.run.coresPerJob.inc');
-    $atmosNT = $resources->{atm}->{threads};
     if ($atmosNT <= 0)
     {
       $fre->out(FREMsg::FATAL, "Number '$atmosNT' of atmospheric OpenMP threads must be positive");
@@ -587,7 +587,6 @@ my $MPISizeParametersCompatible = sub($$$$$)
       $fre->out(FREMsg::FATAL, "Number '$atmosNT' of atmospheric OpenMP threads must be less or equal than a number '$coresPerNode' of cores per node");
       return undef;
     }
-    $oceanNT = $resources->{ocn}->{threads};
     if ($oceanNT <= 0)
     {
       $fre->out(FREMsg::FATAL, "Number '$oceanNT' of oceanic OpenMP threads must be positive");
