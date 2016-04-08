@@ -1930,12 +1930,14 @@ sub extractRegressionRunInfo($$)
 	      my $nmlsOverridden = $overrideRegressionNamelists->($r, $nmls->copy(), $runNodes[$i]);
 	      if (my $mpiInfo = $MPISizeParameters->($r, $resources, $nmlsOverridden))
 	      {
+            # add $resources data to $mpiInfo
+            addResourceRequestsToMpiInfo($fre, $resources, $mpiInfo);
+
         	my %run = ();
 		$run{label} = $l;
 		$run{number} = $i;
 		$run{postfix} = $regressionPostfix->($r, $l, $i, $hsl, $spj, $msa[0], $dsa[0], $hsa[0], $mpiInfo);
 		$run{mpiInfo} = $mpiInfo;
-        $run{resources} = $resources;
 		$run{months} = join(' ', @msa);
 		$run{days} = join(' ', @dsa);
 		$run{hours} = join(' ', @hsa);
@@ -2008,6 +2010,9 @@ sub extractProductionRunInfo($)
       #   * ntdsList - arrayref of threads of atm and ocn
       my $mpiInfo = $MPISizeParameters->($r, $resources, $nmls->copy);
 
+      # add $resources data to $mpiInfo
+      addResourceRequestsToMpiInfo($fre, $resources, $mpiInfo);
+
       my $smt = $r->nodeValue($prdNode, '@simTime');
       my $smu = $r->nodeValue($prdNode, '@units');
       # note: if jobWallclock is required next line should be changed for clarity
@@ -2037,7 +2042,6 @@ sub extractProductionRunInfo($)
 		  {
 		    my %run = ();
 		    $run{mpiInfo} = $mpiInfo;
-            $run{resources} = $resources;
 		    $run{simTimeMonths} = $smt;
 		    $run{simRunTimeMinutes} = $srtMinutes;
 		    $run{segTimeMonths} = $gmt;
@@ -2100,6 +2104,15 @@ sub extractProductionRunInfo($)
   }
 }
 
+sub addResourceRequestsToMpiInfo {
+    my ($fre, $resources, $info) = @_;
+    my @components = split(';', $fre->property('FRE.mpi.component.names'));
+
+    $info->{layoutList}    = [ map { $resources->{$_}->{layout} }     @components ];
+    $info->{ioLayoutList}  = [ map { $resources->{$_}->{io_layout} }  @components ];
+    $info->{maskTableList} = [ map { $resources->{$_}->{mask_table} } @components ];
+}
+
 # Get resource info from <runtime>/.../<resources> tag
 # ------ arguments: $exp           -- for production
 # ------ arguments: $exp $run_node -- for regression
@@ -2108,25 +2121,24 @@ sub getResourceRequests($$) {
     my ($exp, $regression_run_node) = @_;
     my $fre = $exp->fre;
     my $site = $fre->platformSite;
-    my @realms = (qw( atm ocn lnd ice ));
+    my @components = split(';', $fre->property('FRE.mpi.component.names'));
+    my @types = (qw( ranks threads layout io_layout ));
     my %data;
     my $node;
 
-    # if node is given, try to find <resources> tag
+    # if node is given, try to find <resources> tag with no inheritance
     if ($regression_run_node) {
         $node = $regression_run_node->findnodes("resources[\@site = '$site']")->get_node(1);
     }
 
-    # for production OR if regression <resources> tag wasn't found
+    # for production OR if regression <resources> tag wasn't found,
+    # find first resource node with experiment inheritance
     if (! $node) {
-        # Find first resource node with experiment inheritance.
         ($node) = $exp->extractNodes('runtime', "production/resources[\@site = '$site']");
     }
-    #print "label is $label\n";
-    #print $regression_node->toString;
+
+    # bail out if no resources tag can be found
     if (! $node) {
-        #print "DEBUG: target XML node follows\n";
-        #print $regression_node->toString;
         die sprintf "No resource specification tag was found for site $site and experiment %s or its ancestors. Each production/regression run must have a <resource> tag; see FRE documentation", $exp->name;
     }
 
@@ -2134,36 +2146,37 @@ sub getResourceRequests($$) {
     for my $var (qw( jobWallclock segRuntime )) {
         $data{$var} = $fre->nodeValue($node, "\@$var");
     }
-    for my $realm (@realms) {
-        for my $type (qw( ranks threads layout io_layout mask_table )) {
-            $data{$realm}{$type} = $fre->nodeValue($node, "$realm/\@$type");
+    for my $comp (@components) {
+        for my $type (@types) {
+            $data{$comp}{$type} = $fre->nodeValue($node, "$comp/\@$type");
         }
     }
 
-    # Verify resource info
-    for my $var (qw( jobWallclock segRuntime )) {
-        unless ($data{$var}) {
-            die "Resource spec $var isn't in XML but needs to be. also give better error message and point to doc";
+    # Require jobWallclock and segRuntime
+    #for my $var (qw( jobWallclock segRuntime )) {
+    #    unless ($data{$var}) {
+    #        die "Resource spec $var isn't in XML but needs to be";
+    #    }
+    #}
+
+    # Require all 4 specs for at least one component
+    my $ok;
+    COMP:
+    for my $comp (@components) {
+        for my $type (@types) {
+            next COMP unless $data{$comp}{$type};
         }
+        $ok = 1;
+        print "DEBUG: Component $comp is OK\n";
     }
-    for my $realm (qw( atm ocn )) {
-        for my $type (qw( ranks threads layout io_layout )) {
-            unless ($data{$realm}{$type}) {
-                die "Resource realm $realm type $type isn't set in XML but needs to be. also give better error message";
-            }
-        }
-    }
-    for my $realm (qw( lnd ice )) {
-        for my $type (qw( layout io_layout )) {
-            unless ($data{$realm}{$type}) {
-                die "Resource realm $realm type $type isn't set in XML but needs to be. also give better error message";
-            }
-        }
+
+    if (! $ok) {
+        die "Resources requests (ranks, threads, layout, io_layout) must be specified for at least one component";
     }
 
     # Calculate npes
-    for my $realm (@realms) {
-        $data{npes} += $data{$realm}{ranks};# * $data{$realm}{threads};
+    for my $comp (@components) {
+        $data{npes} += $data{$comp}{ranks};
     }
 
     return \%data;
