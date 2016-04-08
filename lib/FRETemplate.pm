@@ -726,7 +726,7 @@ sub setVersionInfo($$$$%)
 }
 
 sub setRunCommand($$$)
-# ------ arguments: $fre $refToScript $couplerFlag $npes $refNPes $refNTds
+# ------ arguments: $fre $refToScript $mpiInfo
 {
 
   my ($fre, $r, $mpiInfo) = @_;

@@ -1905,7 +1905,6 @@ sub extractRegressionRunInfo($$)
 	my ($ok, %runs) = (1, ());
 	for (my $i = 0; $i < scalar(@runNodes); $i++)
 	{
-
       my $resources = $r->getResourceRequests($runNodes[$i]);
 
 	  my $nps = $resources->{npes};
@@ -1930,7 +1929,6 @@ sub extractRegressionRunInfo($$)
 	      my $nmlsOverridden = $overrideRegressionNamelists->($r, $nmls->copy(), $runNodes[$i]);
 	      if (my $mpiInfo = $MPISizeParameters->($r, $resources, $nmlsOverridden))
 	      {
-            # add $resources data to $mpiInfo
             addResourceRequestsToMpiInfo($fre, $resources, $mpiInfo);
 
         	my %run = ();
@@ -1996,26 +1994,12 @@ sub extractProductionRunInfo($)
   {
     if (my $prdNode = $productionRunNode->($r))
     {
-      # get the resource specs from the <resource> tag, also does basic validity checks
       my $resources = $r->getResourceRequests;
-
-      # some info is still collected from namelists:
-      #   * number of ensemble members, from ensemble_nml
-      #   * concurrent/nonconcurrent, from coupler_nml
-      # $mpiInfo is a hashref, usually containing
-      #   * npes - total number of MPI processes including ensemble count
-      #   * coupler - 1
-      #   * npesList - arrayref of MPI processes of atm and ocn including ensemble count
-      #                and sometimes adjusted for concurrency
-      #   * ntdsList - arrayref of threads of atm and ocn
       my $mpiInfo = $MPISizeParameters->($r, $resources, $nmls->copy);
-
-      # add $resources data to $mpiInfo
       addResourceRequestsToMpiInfo($fre, $resources, $mpiInfo);
 
       my $smt = $r->nodeValue($prdNode, '@simTime');
       my $smu = $r->nodeValue($prdNode, '@units');
-      # note: if jobWallclock is required next line should be changed for clarity
       my $srt = $resources->{jobWallclock} || $fre->runTime($resources->{npes});
       my $gmt = $r->nodeValue($prdNode, 'segment/@simTime');
       my $gmu = $r->nodeValue($prdNode, 'segment/@units');
@@ -2122,7 +2106,7 @@ sub getResourceRequests($$) {
     my $fre = $exp->fre;
     my $site = $fre->platformSite;
     my @components = split(';', $fre->property('FRE.mpi.component.names'));
-    my @types = (qw( ranks threads layout io_layout ));
+    my @types = (qw( ranks threads layout io_layout mask_table ));
     my %data;
     my $node;
 
@@ -2139,12 +2123,24 @@ sub getResourceRequests($$) {
 
     # bail out if no resources tag can be found
     if (! $node) {
-        die sprintf "No resource specification tag was found for site $site and experiment %s or its ancestors. Each production/regression run must have a <resource> tag; see FRE documentation", $exp->name;
+        my $message = $regression_run_node
+            ? "No resource request tag for site=$site was found within <runtime>/<regression>/<run> OR within <runtime>/<production> or its experiment ancestors. "
+            : "No resource request tag for site=$site was found within <runtime>/<production> or its experiment ancestors. ";
+        $message .= "A site-specific <resources> tag must now be specified for every production and regression run. See FRE Documentation at http://wiki.gfdl.noaa.gov/index.php/FRE_User_Documentation";
+        $fre->out(FREMsg::FATAL, $message);
+        exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
     }
 
     # Extract resource info
+    $fre->out(FREMsg::NOTE, "Extracting resource requests...");
     for my $var (qw( jobWallclock segRuntime )) {
         $data{$var} = $fre->nodeValue($node, "\@$var");
+        if ($data{$var}) {
+            $fre->out(FREMsg::NOTE, "$var = " . $data{$var});
+        }
+        else {
+            $fre->out(FREMsg::NOTE, "$var is unspecified");
+        }
     }
     for my $comp (@components) {
         for my $type (@types) {
@@ -2152,32 +2148,36 @@ sub getResourceRequests($$) {
         }
     }
 
-    # Require jobWallclock and segRuntime
-    #for my $var (qw( jobWallclock segRuntime )) {
-    #    unless ($data{$var}) {
-    #        die "Resource spec $var isn't in XML but needs to be";
-    #    }
-    #}
-
     # Require all 4 specs for at least one component
     my $ok;
-    COMP:
     for my $comp (@components) {
-        for my $type (@types) {
-            next COMP unless $data{$comp}{$type};
+        my $message;
+        my $N = values %{$data{$comp}};
+        if ($data{$comp}{ranks} and $data{$comp}{threads}) {
+            $ok = 1;
+            $message = "$comp has complete resource request specifications: ";
         }
-        $ok = 1;
-        print "DEBUG: Component $comp is OK\n";
+        elsif ($N > 0) {
+            $message = "$comp has partial resource request specifications: ";
+        }
+        else {
+            $message = "$comp has no request specifications.  ";
+        }
+        for my $type (@types) {
+            if ($data{$comp}{$type}) {
+                $message .= "$type=$data{$comp}{$type}, ";
+            }
+        }
+        chop $message for 1, 2;
+        $fre->out(FREMsg::NOTE, $message);
     }
-
     if (! $ok) {
-        die "Resources requests (ranks, threads, layout, io_layout) must be specified for at least one component";
+        $fre->out(FREMsg::FATAL, "A resource request tag was found but was incomplete. Ranks, threads, layout, and io_layout must be specified for at least one model component. See FRE Documentation at http://wiki.gfdl.noaa.gov/index.php/FRE_User_Documentation");
+        exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
     }
 
-    # Calculate npes
-    for my $comp (@components) {
-        $data{npes} += $data{$comp}{ranks};
-    }
+    # Add up total ranks
+    $data{npes} += $data{$_}{ranks} for @components;
 
     return \%data;
 }
