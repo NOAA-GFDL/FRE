@@ -547,6 +547,12 @@ my $MPISizeParametersCompatible = sub($$$$$)
   my ($fre, $concurrent) = ($r->fre(), $h->namelistBooleanGet('coupler_nml', 'concurrent'));
   $concurrent = 1 unless defined($concurrent);
 
+  # With the hyperthreading changes this paragraph may be a problem.
+  # During the HT checking (in getResourceRequests()) components with threads specified
+  # are checked to verify they are 2+. The problem is if the threads are unspecified
+  # for an active second component (one component must have ranks/threads specified)
+  # and HT is enabled. In that case getResourceRequests() won't catch the threads=1
+  # because it's defined here.
   my $atmosNP = $resources->{atm}->{ranks}   || 0;
   my $atmosNT = $resources->{atm}->{threads} || 1;
   my $oceanNP = $resources->{ocn}->{ranks}   || 0;
