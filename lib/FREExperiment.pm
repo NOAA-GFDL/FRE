@@ -2087,6 +2087,13 @@ sub extractProductionRunInfo($$)
   }
 }
 
+# Convenience function used in extractProductionRunInfo and extractRegressionRunInfo
+# MPISizeParameters() generates $mpiInfo from resource requests,
+# but a few additional related parameters must be added as well.
+# Given the complexity of MPISizeParameters(), those additional related parameters
+# are added using this function.
+# ------ arguments: $fre $resources $mpiInfo
+# ------ returns: nothing, $mpiInfo is changed
 sub addResourceRequestsToMpiInfo {
     my ($fre, $resources, $info) = @_;
     my @components = split(';', $fre->property('FRE.mpi.component.names'));
@@ -2098,6 +2105,7 @@ sub addResourceRequestsToMpiInfo {
 }
 
 # Get resource info from <runtime>/.../<resources> tag
+# and decides whether hyperthreading will be used if --ht option is present
 # ------ arguments: $exp hyperthreading           -- for production
 # ------ arguments: $exp hyperthreading $run_node -- for regression
 # ------ returns: hashref containing resource specs
@@ -2177,10 +2185,10 @@ sub getResourceRequests($$) {
     }
 
     # Apply hyperthreading if desired and possible
-    if ($ht) {
-        if (! $fre->property('FRE.mpi.runCommand.option.ht')) {
+    if ($ht and ! $fre->property('FRE.mpi.runCommand.option.ht')) {
             $fre->out(FREMsg::WARNING, "Hyperthreading was requested but isn't supported on this platform.");
-        }
+    }
+    elsif ($ht) {
         my $ok = 1;
         for my $comp (@components) {
             if ($data{$comp}{threads} and $data{$comp}{threads} == 1) {
