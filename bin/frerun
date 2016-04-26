@@ -297,6 +297,7 @@ use FREUtil();
     'cache-history|H',
     'combine-history|M!',
     'compress|z=s',
+    'ht!',
     'mppnccombine-opts=s',
     'nc4-compress-history|Z',
     'dual|D!',
@@ -386,7 +387,8 @@ use FREUtil();
       "   -V,        --version                   print the tool version and exit\n",
       "   -v,        --verbose                   get verbose messages (repeat the option to increase verbosity level)\n", 
       "   -w NUM,    --walltime=NUM              maximum wall time (in minutes) to use for input data staging (default depends on site)\n", 
-      "   -x FILE,   --xmlfile=FILE              experiment suite XML configuration FILE (default is '$cwd/$xml')\n\n", 
+      "   -x FILE,   --xmlfile=FILE              experiment suite XML configuration FILE (default is '$cwd/$xml')\n", 
+      "              --ht                        enable hyperthreading\n\n",
       "  The platform and at least one experiment from the FILE must be listed as an argument.\n\n"
     );
   }
@@ -1492,7 +1494,7 @@ use FREUtil();
  	frerun::setAllShellCommands(\$runScript, $z);
 	FRETemplate::setVersionInfo($fre, \$runScript, $0, $expName, %o);	    
 	FRETemplate::setSchedulerAccount($fre, \$runScript, $o{windfall});
-        if (my $regInfo = $z->extractRegressionRunInfo($l))
+        if (my $regInfo = $z->extractRegressionRunInfo($l, $o{ht}))
         {
 	  my @runNos = keys %{$regInfo};
 	  my ($ok, $runsNmb) = (1, scalar(@runNos));
@@ -1590,7 +1592,7 @@ use FREUtil();
  	frerun::setAllShellCommands(\$runScript, $z);
 	FRETemplate::setVersionInfo($fre, \$runScript, $0, $expName, %o);	    
 	FRETemplate::setSchedulerAccount($fre, \$runScript, $o{windfall});
-        if (my $prdInfo = $z->extractProductionRunInfo())
+        if (my $prdInfo = $z->extractProductionRunInfo($o{ht}))
         {
 	  ($runScript, my $extension, $status) = frerun::setProductionDirectories($runScript, $z, %o);
 	  if ($runScript)

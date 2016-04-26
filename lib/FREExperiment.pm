@@ -1887,12 +1887,12 @@ sub extractRegressionLabels($$)
   }
 }
 
-sub extractRegressionRunInfo($$)
-# ------ arguments: $object $label
+sub extractRegressionRunInfo($$$)
+# ------ arguments: $object $label hyperthreading
 # ------ called as object method
 # ------ return a reference to the regression run info
 {
-  my ($r, $l) = @_;
+  my ($r, $l, $ht) = @_;
   my ($fre, $expName) = ($r->fre(), $r->name());
   if (my $nmls = $r->extractNamelists())
   {
@@ -1904,7 +1904,7 @@ sub extractRegressionRunInfo($$)
 	my ($ok, %runs) = (1, ());
 	for (my $i = 0; $i < scalar(@runNodes); $i++)
 	{
-      my $resources = $r->getResourceRequests($runNodes[$i]);
+      my $resources = $r->getResourceRequests($ht, $runNodes[$i]);
 
 	  my $nps = $resources->{npes};
 	  my $msl = $r->nodeValue($runNodes[$i], '@months');
@@ -1982,18 +1982,18 @@ sub extractRegressionRunInfo($$)
   }
 }
 
-sub extractProductionRunInfo($)
-# ------ arguments: $object
+sub extractProductionRunInfo($$)
+# ------ arguments: $object hyperthreading
 # ------ called as object method
 # ------ return a reference to the production run info
 {
-  my $r = shift;
+  my ($r, $ht) = @_;
   my ($fre, $expName) = ($r->fre(), $r->name());
   if (my $nmls = $r->extractNamelists())
   {
     if (my $prdNode = $productionRunNode->($r))
     {
-      my $resources = $r->getResourceRequests;
+      my $resources = $r->getResourceRequests($ht);
       my $mpiInfo = $MPISizeParameters->($r, $resources, $nmls->copy);
       addResourceRequestsToMpiInfo($fre, $resources, $mpiInfo);
 
@@ -2094,14 +2094,15 @@ sub addResourceRequestsToMpiInfo {
     $info->{layoutList}    = [ map { $resources->{$_}->{layout} }     @components ];
     $info->{ioLayoutList}  = [ map { $resources->{$_}->{io_layout} }  @components ];
     $info->{maskTableList} = [ map { $resources->{$_}->{mask_table} } @components ];
+    $info->{ht} = $resources->{ht};
 }
 
 # Get resource info from <runtime>/.../<resources> tag
-# ------ arguments: $exp           -- for production
-# ------ arguments: $exp $run_node -- for regression
+# ------ arguments: $exp hyperthreading           -- for production
+# ------ arguments: $exp hyperthreading $run_node -- for regression
 # ------ returns: hashref containing resource specs
 sub getResourceRequests($$) {
-    my ($exp, $regression_run_node) = @_;
+    my ($exp, $ht, $regression_run_node) = @_;
     my $fre = $exp->fre;
     my $site = $fre->platformSite;
     my @components = split(';', $fre->property('FRE.mpi.component.names'));
@@ -2147,20 +2148,20 @@ sub getResourceRequests($$) {
         }
     }
 
-    # Require all 4 specs for at least one component
+    # Require ranks/threads for at least one component
     my $ok;
     for my $comp (@components) {
         my $message;
         my $N = values %{$data{$comp}};
         if ($data{$comp}{ranks} and $data{$comp}{threads}) {
             $ok = 1;
-            $message = "$comp has complete resource request specifications: ";
+            $message = "Component $comp has complete resource request specifications: ";
         }
         elsif ($N > 0) {
-            $message = "$comp has partial resource request specifications: ";
+            $message = "Component $comp has partial resource request specifications: ";
         }
         else {
-            $message = "$comp has no request specifications.  ";
+            $message = "Component $comp has no request specifications.  ";
         }
         for my $type (@types) {
             if ($data{$comp}{$type}) {
@@ -2171,8 +2172,31 @@ sub getResourceRequests($$) {
         $fre->out(FREMsg::NOTE, $message);
     }
     if (! $ok) {
-        $fre->out(FREMsg::FATAL, "A resource request tag was found but was incomplete. Ranks, threads, layout, and io_layout must be specified for at least one model component. See FRE Documentation at http://wiki.gfdl.noaa.gov/index.php/FRE_User_Documentation");
+        $fre->out(FREMsg::FATAL, "A resource request tag was found but was incomplete. Ranks and threads must be specified for at least one model component. See FRE Documentation at http://wiki.gfdl.noaa.gov/index.php/FRE_User_Documentation");
         exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
+    }
+
+    # Apply hyperthreading if desired and possible
+    if ($ht) {
+        if (! $fre->property('FRE.mpi.runCommand.option.ht')) {
+            $fre->out(FREMsg::WARNING, "Hyperthreading was requested but isn't supported on this platform.");
+        }
+        my $ok = 1;
+        for my $comp (@components) {
+            if ($data{$comp}{threads} and $data{$comp}{threads} == 1) {
+                $fre->out(FREMsg::WARNING, "Hyperthreading was requested but component $comp requested only 1 thread.");
+                $ok = 0;
+            }
+        }
+        if ($ok) {
+            $data{ht} = 1;
+            for my $comp (@components) {
+                if ($data{$comp}{threads}) {
+                    $data{$comp}{threads} *= 2;
+                    $fre->out(FREMsg::NOTE, "Using hyperthreading on component $comp -- setting threads to $data{$comp}{threads}");
+                }
+            }
+        }
     }
 
     # Add up total ranks
