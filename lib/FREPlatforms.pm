@@ -148,7 +148,7 @@ sub siteDir($)
 # ------ arguments: $site
 {
   my ($site, $siteRoot, $siteHead) = $siteParse->(shift);
-  return (defined($site)) ? $siteDir->($site) : ''; # e.g. site is ncrc2 siteRoot is ncrc
+  return (defined($site)) ? $siteDir->($site) : '';
 }
 
 sub siteReplace($$)
