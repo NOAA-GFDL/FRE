@@ -1,6 +1,6 @@
-# template for the pathscale compiler
+# template for the PGI compiler
 # typical use with mkmf
-# mkmf -t mkmf.template.pscale -c"-Duse_libMPI -Duse_netCDF" path_names /usr/local/include
+# mkmf -t pgi.mk -c"-Duse_libMPI -Duse_netCDF" path_names /usr/local/include
 ############
 # commands #
 ############
@@ -22,7 +22,7 @@ need := 3.81
 ok := $(filter $(need),$(firstword $(sort $(MAKE_VERSION) $(need))))
 ifneq ($(need),$(ok))
 $(error Need at least make version $(need).  Load module gmake/3.81)
-endif 
+endif
 
 #################################################
 # Check version of PGI for use of -nofma option #
@@ -48,14 +48,14 @@ FFLAGS_OPT = -O3 -Mvect=nosse -Mnoscalarsse -Mallocatable=95
 FFLAGS_DEBUG = -O0 -g -traceback -Ktrap=fp
 FFLAGS_REPRO = -O2 $(NOFMA)
 FFLAGS_OPENMP = -mp
-FFLAGS_VERBOSE = -v
+FFLAGS_VERBOSE = -v -Minform=inform
 
 CPPFLAGS = $(INCLUDE)
-CFLAGS = 
+CFLAGS =
 CFLAGS_OPT = -O2
 CFLAGS_DEBUG = -O0 -g -traceback -Ktrap=fp
 CFLAGS_OPENMP = -mp
-CFLAGS_VERBOSE = -v
+CFLAGS_VERBOSE = -v -Minform=inform
 
 # Optional Testing compile flags.  Mutually exclusive from DEBUG, REPRO, and OPT
 # *_TEST will match the production if no new option(s) is(are) to be tested.
@@ -114,13 +114,13 @@ LDFLAGS += $(LIBS)
 # .f, .f90, .F, .F90. Given a sourcefile <file>.<ext>, where <ext> is one of
 # the above, this provides a number of default actions:
 
-# make <file>.opt	create an optimization report
-# make <file>.o		create an object file
-# make <file>.s		create an assembly listing
-# make <file>.x		create an executable file, assuming standalone
-#			source
-# make <file>.i		create a preprocessed file (for .F)
-# make <file>.i90	create a preprocessed file (for .F90)
+# make <file>.opt       create an optimization report
+# make <file>.o         create an object file
+# make <file>.s         create an assembly listing
+# make <file>.x         create an executable file, assuming standalone
+#                       source
+# make <file>.i         create a preprocessed file (for .F)
+# make <file>.i90       create a preprocessed file (for .F90)
 
 # The macro TMPFILES is provided to slate files like the above for removal.
 
