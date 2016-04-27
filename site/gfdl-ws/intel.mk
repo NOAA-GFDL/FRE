@@ -1,7 +1,6 @@
-# $Id: intel.mk,v 1.1.2.1.2.1.2.2.2.1.4.1 2014/06/05 19:16:00 Seth.Underwood Exp $
 # template for the Intel fortran compiler
 # typical use with mkmf
-# mkmf -t template.ifc -c"-Duse_libMPI -Duse_netCDF" path_names /usr/local/include
+# mkmf -t intel.mk -c"-Duse_libMPI -Duse_netCDF" path_names /usr/local/include
 ############
 # commands #
 ############
@@ -26,13 +25,13 @@ FFLAGS_OPT = -O2
 FFLAGS_REPRO = -fltconsistency
 FFLAGS_DEBUG = -O0 -check -check noarg_temp_created -check nopointer -warn -warn noerrors -debug variable_locations -fpe0 -ftrapuv
 FFLAGS_OPENMP = -openmp
-FFLAGS_VERBOSE = -v -V -what
-
+FFLAGS_VERBOSE = -v -V -what -warn all
 
 CFLAGS := -D__IFC -sox -traceback
 CFLAGS_OPT = -O2
 CFLAGS_OPENMP = -openmp
-CFLAGS_DEBUG = -O0 -g -ftrapuv 
+CFLAGS_DEBUG = -O0 -g -ftrapuv
+CFLAGS_VERBOSE = -w3
 
 # Optional Testing compile flags.  Mutually exclusive from DEBUG, REPRO, and OPT
 # *_TEST will match the production if no new option(s) is(are) to be tested.
@@ -89,13 +88,13 @@ LDFLAGS += $(LIBS)
 # .f, .f90, .F, .F90. Given a sourcefile <file>.<ext>, where <ext> is one of
 # the above, this provides a number of default actions:
 
-# make <file>.opt	create an optimization report
-# make <file>.o		create an object file
-# make <file>.s		create an assembly listing
-# make <file>.x		create an executable file, assuming standalone
-#			source
-# make <file>.i		create a preprocessed file (for .F)
-# make <file>.i90	create a preprocessed file (for .F90)
+# make <file>.opt       create an optimization report
+# make <file>.o         create an object file
+# make <file>.s         create an assembly listing
+# make <file>.x         create an executable file, assuming standalone
+#                       source
+# make <file>.i         create a preprocessed file (for .F)
+# make <file>.i90       create a preprocessed file (for .F90)
 
 # The macro TMPFILES is provided to slate files like the above for removal.
 

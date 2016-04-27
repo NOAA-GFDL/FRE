@@ -1,6 +1,6 @@
-# template for the pathscale compiler
+# template for the cray compiler
 # typical use with mkmf
-# mkmf -t mkmf.template.pscale -c"-Duse_libMPI -Duse_netCDF" path_names /usr/local/include
+# mkmf -t cray.mk -c"-Duse_libMPI -Duse_netCDF" path_names /usr/local/include
 ############
 # commands #
 ############
@@ -22,7 +22,7 @@ need := 3.81
 ok := $(filter $(need),$(firstword $(sort $(MAKE_VERSION) $(need))))
 ifneq ($(need),$(ok))
 $(error Need at least make version $(need).  Load module gmake/3.81)
-endif 
+endif
 
 #################################################################
 # site-dependent definitions, set by environment                #
@@ -35,18 +35,18 @@ INCLUDE = -I$(NETCDF_ROOT)/include
 FPPFLAGS = $(INCLUDE)
 FFLAGS = -s real64 -s integer32 -h byteswapio -h nosecond_underscore -e m -h keepfiles -e0 -ez
 FFLAGS_OPT = -O3 -O fp2 -G2
-FFLAGS_DEBUG = -g -R bc 
-FFLAGS_REPRO = -O2 -O fp2 -G2 
+FFLAGS_DEBUG = -g -R bc
+FFLAGS_REPRO = -O2 -O fp2 -G2
 FFLAGS_OPENMP = -h omp
-FFLAGS_VERBOSE = -e o -v 
+FFLAGS_VERBOSE = -e o -v -m 1
 
 CPPFLAGS = $(INCLUDE)
 CFLAGS_OPT = -O2
 CFLAGS_DEBUG = -g
 CFLAGS_OPENMP = -h omp
-CFLAGS_VERBOSE = -v -h display_opt
+CFLAGS_VERBOSE = -v -h display_opt -h msglevel_1
 
-# pathscale wants main program outside libraries, do
+# Cray wants main program outside libraries, do
 # setenv MAIN_PROGRAM coupler_main.o or something before make
 LDFLAGS := -h byteswapio
 LDFLAGS_VERBOSE := -v
@@ -97,13 +97,13 @@ LDFLAGS += $(LIBS)
 # .f, .f90, .F, .F90. Given a sourcefile <file>.<ext>, where <ext> is one of
 # the above, this provides a number of default actions:
 
-# make <file>.opt	create an optimization report
-# make <file>.o		create an object file
-# make <file>.s		create an assembly listing
-# make <file>.x		create an executable file, assuming standalone
-#			source
-# make <file>.i		create a preprocessed file (for .F)
-# make <file>.i90	create a preprocessed file (for .F90)
+# make <file>.opt       create an optimization report
+# make <file>.o         create an object file
+# make <file>.s         create an assembly listing
+# make <file>.x         create an executable file, assuming standalone
+#                       source
+# make <file>.i         create a preprocessed file (for .F)
+# make <file>.i90       create a preprocessed file (for .F90)
 
 # The macro TMPFILES is provided to slate files like the above for removal.
 
