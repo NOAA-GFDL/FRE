@@ -25,9 +25,9 @@ MAKEFLAGS += --jobs=8
 FPPFLAGS := -fpp -Wp,-w
 
 FFLAGS := -fno-alias -auto -safe-cray-ptr -ftz -assume byterecl -i4 -r8 -nowarn -sox -traceback
-FFLAGS_OPT = -O3 -debug minimal -fp-model source -override-limits
+FFLAGS_OPT = -O3 -debug minimal -fp-model source
 FFLAGS_DEBUG = -g -O0 -check -check noarg_temp_created -check nopointer -warn -warn noerrors -fpe0 -ftrapuv
-FFLAGS_REPRO = -O2 -debug minimal -fp-model source -override-limits
+FFLAGS_REPRO = -O2 -debug minimal -fp-model source
 FFLAGS_OPENMP = -openmp
 FFLAGS_VERBOSE = -v -V -what -warn all
 

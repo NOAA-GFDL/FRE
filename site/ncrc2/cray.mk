@@ -46,7 +46,7 @@ CFLAGS_DEBUG = -g
 CFLAGS_OPENMP = -h omp
 CFLAGS_VERBOSE = -v -h display_opt -h msglevel_1
 
-# pathscale wants main program outside libraries, do
+# Cray wants main program outside libraries, do
 # setenv MAIN_PROGRAM coupler_main.o or something before make
 LDFLAGS := -h byteswapio
 LDFLAGS_VERBOSE := -v
