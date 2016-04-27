@@ -219,7 +219,13 @@ my $projectGet = sub($$)
 # ------ arguments: $fre $project
 {
   my ($fre, $p) = @_;
-  return (defined($p)) ? $p : ($fre->platformValue('project') || $fre->property('FRE.scheduler.project'));
+  my $project = (defined($p)) ? $p : ($fre->platformValue('project') || $fre->property('FRE.scheduler.project'));
+  if ((( (split "_", $project)[-1] !~ /^[a-z\+]{1,2}$/)
+      || ($project !~ /^gfdl/)){
+      FREMsg::out(1, FREMsg::FATAL, "Your project name '$project' appears to be invalid, please double check in your XML's platform sections.");
+      exit FREDefaults::STATUS_FRE_GENERIC_PROBLEM;
+  }
+  return $project;
 };
 
 # //////////////////////////////////////////////////////////////////////////////
