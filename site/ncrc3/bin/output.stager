@@ -1,14 +1,13 @@
 #!/bin/csh -fx
 #
 # ------------------------------------------------------------------------------
-# FMS/FRE Project: Output Stager - NESCC Version
+# FMS/FRE Project: Output Stager - NCRC Version
 # ------------------------------------------------------------------------------
 # Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2000-2013, 2015
 # Designed and written by V. Balaji, Amy Langenhorst, Aleksey Yakovlev
-# Carlo Rosati and Seth Underwood
+# Carlo Rosati, and Seth Underwood
 #
 
-  set -r anyerror
   set -r echoOn = $?echo
   set -r runtimeBeg = `date "+%s"`
 
@@ -81,8 +80,6 @@
 
   set freCommandsModuleFilesDir = ""
   set freCommandsVersion = ""
-  set freCommandsModuleFilesDirRemote = ""
-  set freCommandsVersionRemote = ""
 
   set freNCToolsModuleFilesDir = ""
   set freNCToolsModuleName = 'fre-nctools'
@@ -433,7 +430,7 @@
   @ actionPPStartToPerform      = ( $stagingType == 'Online' || $actionPPStartForce )
   @ actionPPStartToDo           = ( $actionPPStartToConsider * $actionPPStartToPerform )
 
-  @ actionRetryToDo             = ( $actionRetryOn * $actionXferForce )
+  @ actionRetryToDo             = ( $actionRetryOn * ! $actionXferForce )
 
   @ freCommandsToLoad           = ( $actionCheckToDo || $actionSaveToDo || $actionRetryToDo || $actionXferToConsider || $actionPPStartToConsider )
   @ freNCToolsToLoad            = ( $actionCombineToDo )
@@ -615,40 +612,6 @@
   else
     if ( $echoOn ) unset echo
     echo "WARNING: Not using the 'freCommandsVersion' argument"
-    if ( $echoOn ) set echo
-  endif
-
-  if ( "$freCommandsModuleFilesDirRemote" != "" ) then
-    set -r freCommandsModuleFilesDirRemote = $freCommandsModuleFilesDirRemote
-    if ( $echoOn ) unset echo
-    echo "<NOTE> : freCommandsModuleFilesDirRemote = '$freCommandsModuleFilesDirRemote'"
-    if ( $echoOn ) set echo
-  else if ( $actionPPStartToConsider ) then
-    if ( $echoOn ) unset echo
-    echo "*ERROR*: The 'freCommandsModuleFilesDirRemote' argument is not defined"
-    if ( $echoOn ) set echo
-    set exitStatus = 2
-    goto END
-  else
-    if ( $echoOn ) unset echo
-    echo "WARNING: Not using the 'freCommandsModuleFilesDirRemote' argument"
-    if ( $echoOn ) set echo
-  endif
-
-  if ( "$freCommandsVersionRemote" != "" ) then
-    set -r freCommandsVersionRemote = $freCommandsVersionRemote
-    if ( $echoOn ) unset echo
-    echo "<NOTE> : freCommandsVersionRemote = '$freCommandsVersionRemote'"
-    if ( $echoOn ) set echo
-  else if ( $actionPPStartToConsider ) then
-    if ( $echoOn ) unset echo
-    echo "*ERROR*: The 'freCommandsVersionRemote' argument is not defined"
-    if ( $echoOn ) set echo
-    set exitStatus = 2
-    goto END
-  else
-    if ( $echoOn ) unset echo
-    echo "WARNING: Not using the 'freCommandsVersionRemote' argument"
     if ( $echoOn ) set echo
   endif
 
@@ -905,11 +868,6 @@
         set -r xferSrcPrefix = ""
         set -r xferDstPrefix = "gfdl:"
         alias xferTool `which gcp` --create-dirs --verbose
-        if ( $actionPPStartToDo ) then
-          set gfdlSubmit = 'external-ppan-submit.princeton.rdhpcs.noaa.gov'
-          alias callTool `which gsissh` $gfdlSubmit
-          unset gfdlSubmit
-        endif
       else
         if ( $echoOn ) unset echo
         echo "*ERROR*: The 'gcp' modulefile '$xferToolModuleFile' doesn't exist or not readable"
@@ -931,15 +889,23 @@
 #------------------------ global constants and aliases -------------------------
 ################################################################################
 
-  if ( $HOST =~ fe[1-8] ) then
+  if ( $HOST =~ gaea[0-9] || $HOST =~ gaea1[0-2] ) then
     set -r hostType = 'login'
+  else if ( $HOST =~ gaea-ldtn* ) then
+    set -r hostType = 'ldtn'
+  else if ( $HOST =~ rdtn* ) then
+    set -r hostType = 'rdtn'
   else
-    set -r hostType = 'other'
+    if ( $echoOn ) unset echo
+    echo "*ERROR*: Unknown host type"
+    if ( $echoOn ) set echo
+    set exitStatus = 2
+    goto END
   endif
 
   set -r archExt = 'tar'
 
-  alias submit `which qsub`
+  alias submit `which batch.scheduler.submit` --verbose
   alias retry `which output.retry`
 
 ################################################################################
@@ -948,17 +914,6 @@
 
   if ( $actionCombineToDo ) then
 
-    #last character of jobname == 'T' for transfer jobs
-    set jobtype = `echo -n $PBS_JOBNAME | tail -c -1`
-    if ( $jobtype == 'T' ) then
-      #rm lockfile and exit
-      if ( $echoOn ) unset echo
-      echo "*ERROR*: Cannot do a combine within a transfer job, exiting"
-      if ( $echoOn ) set echo
-      set exitStatus = 3
-      goto END
-    endif
-
     set -r patternGrepTail = '\.[0-9]{4,}$'
     set -r patternGrepRestart = '\<res\>|\<nc\>'
     set -r patternGrepHistory = '\<nc\>'
@@ -966,15 +921,23 @@
     set -r tagFail = 'fail'
     set -r patternGrepFail = '\.'$tagFail'$'
 
-    alias mppnccombine `which mppnccombine` $mppnccombineOptString
-    alias slmnccombine `which combine-ncc`
-    alias slmnccompressed `which is-compressed`
-    alias iceberg_comb `which iceberg_comb.sh`
+    if ( $hostType == 'login' || $hostType == 'ldtn' ) then
+      alias mppnccombine `which mppnccombine` $mppnccombineOptString
+      alias slmnccombine `which combine-ncc`
+      alias slmnccompressed `which is-compressed`
+      alias iceberg_comb `which iceberg_comb.sh`
+    else
+      if ( $echoOn ) unset echo
+      echo "*ERROR*: Combining on '$hostType' hosts isn't allowed"
+      if ( $echoOn ) set echo
+      set exitStatus = 2
+      goto END
+    endif
 
-    set -r memoryDownscalingFactor = '0.75'
-    set -r memorySpec = ( `free -om | grep Mem` )
-    set -r combineMemory = `echo "$memorySpec[2] * $memoryDownscalingFactor" | bc -l | xargs printf "%.0f"`
-    set -r combinesPerJob = 12
+    set -r memoryDownscalingFactor = '1.00'
+    set -r memorySpec = ( `free -m | grep '-'` )
+    set -r combineMemory = `echo "$memorySpec[4] * $memoryDownscalingFactor" | bc -l | xargs printf "%.0f"`
+    set -r combinesPerJob = 2
 
     mppnccombine -V >& /dev/null
 
@@ -1405,7 +1368,7 @@
 
     if ( $actionXferToPerform ) then
 
-      if ( $hostType == 'login' ) then
+      if ( $hostType == 'login' || $hostType == 'rdtn' ) then
 
         if ( -f $archDir.$archExt && -r $archDir.$archExt ) then
 
@@ -1481,7 +1444,7 @@
 
     if ( $actionPPStartToPerform ) then
 
-      if ( $hostType == 'login' ) then
+      if ( $hostType == 'login' || $hostType == 'rdtn' ) then
 
         # ---------------- copy XML files to GFDL
 
@@ -1537,13 +1500,34 @@
 
         set stdoutDirRemotePP = $stdoutDirRemote/postProcess
 
-        set ppCommand = ( set echo )
-        set ppCommand = ( $ppCommand && mkdir -p $stdoutDirRemotePP )
-        set ppCommand = ( $ppCommand && module use $freCommandsModuleFilesDirRemote )
-        set ppCommand = ( $ppCommand && module load fre-commands/$freCommandsVersionRemote )
-        set ppCommand = ( $ppCommand && msub $ppStarterOptions -v mppnccombineOptString=\'$mppnccombineOptString\' -d $stdoutDirRemotePP -o $stdoutDirRemotePP/ '`which pp.starter`' )
+        set dummyFile = /tmp/dummy.txt.$$
+        echo "dummy" >> $dummyFile
 
-        set ppStarterResult = `callTool "$ppCommand"`
+        if ( $status == 0 ) then
+          xferTool $xferSrcPrefix$dummyFile $xferDstPrefix$stdoutDirRemotePP/
+          if ( $status == 0 ) then
+            if ( $echoOn ) unset echo
+            echo "<NOTE> : The remote directory '$stdoutDirRemotePP' has been created successfully"
+            if ( $echoOn ) set echo
+            rm -f $dummyFile
+          else
+            if ( $echoOn ) unset echo
+            echo "-ERROR-: Can't create the remote directory '$stdoutDirRemotePP'"
+            if ( $echoOn ) set echo
+            rm -f $dummyFile
+            set exitStatus = 4
+            goto END
+          endif
+        else
+          if ( $echoOn ) unset echo
+          echo "*ERROR*: The file '$dummyFile' can't be created"
+          if ( $echoOn ) set echo
+          set exitStatus = 2
+          goto END
+        endif
+
+        set ppStarter = $FRE_COMMANDS_HOME/site/gfdl/bin/pp.starter
+        set ppStarterResult = `submit -O "$ppStarterOptions -v mppnccombineOptString='$mppnccombineOptString' -d $stdoutDirRemotePP -o $stdoutDirRemotePP/" $ppStarter`
 
         if ( $status == 0 ) then
           if ( $echoOn ) unset echo
@@ -1558,8 +1542,9 @@
         endif
 
         unset ppStarterResult
-        unset ppCommand
+        unset ppStarter
 
+        unset dummyFile
         unset stdoutDirRemotePP
 
         # ---------------- mark the success
@@ -1595,7 +1580,7 @@
     if ( $stagingType == 'Chained' ) then
 
       set outputStager = `which output.stager`
-      set outputStagerResult = `submit $xferOptions -v argFile=$argFile $outputStager`
+      set outputStagerResult = `submit -O "$xferOptions -v argFile=$argFile" $outputStager`
 
       if ( $status == 0 ) then
         if ( $echoOn ) unset echo

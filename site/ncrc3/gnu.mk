@@ -1,70 +1,71 @@
-# $Id: intel.mk,v 1.1.2.1.2.1.2.1.2.2.6.3 2014/10/15 17:59:28 Seth.Underwood Exp $
-# template for Intel compilers
-# typical use with mkmf:
-# mkmf -t intel.mk -c "-Duse_libMPI -Duse_netCDF" path_names /usr/local/include
-
+# template for the GNU fortran compiler on a Cray system
+# typical use with mkmf
+# mkmf -t gnu.mk -c"-Duse_libMPI -Duse_netCDF" path_names /usr/local/include
 ############
 # commands #
 ############
-
-FC = ifort
-CC = icc
-CXX = icpc
-LD = ifort
-
-############
-#  flags   #
-############
-
+FC = ftn
+CC = cc
+LD = ftn $(MAIN_PROGRAM)
+#########
+# flags #
+#########
 DEBUG =
 REPRO =
 VERBOSE =
 OPENMP =
 
-MAKEFLAGS += --jobs=8
+MAKEFLAGS += --jobs=2
 
-FPPFLAGS := -fpp -Wp,-w
+FPPFLAGS :=
 
-FFLAGS := -fno-alias -auto -safe-cray-ptr -ftz -assume byterecl -i4 -r8 -nowarn -sox -traceback
-FFLAGS_OPT = -O3 -debug minimal -fp-model source -override-limits
-FFLAGS_DEBUG = -g -O0 -check -check noarg_temp_created -check nopointer -warn -warn noerrors -fpe0 -ftrapuv
-FFLAGS_REPRO = -O2 -debug minimal -fp-model source -override-limits
-FFLAGS_OPENMP = -openmp
-FFLAGS_VERBOSE = -v -V -what
+FFLAGS := -fcray-pointer -fdefault-real-8 -fdefault-double-8 -Waliasing -ffree-line-length-none -fno-range-check
+FFLAGS_OPT = -O2 -fno-expensive-optimizations
+FFLAGS_REPRO =
+FFLAGS_DEBUG = -O0 -g -W -fbounds-check -ffpe-trap=invalid,zero,overflow
+FFLAGS_OPENMP = -fopenmp
+FFLAGS_VERBOSE = -Wall -Wextra
 
-CFLAGS := -D__IFC -sox -traceback
-CFLAGS_OPT = -O2 -debug minimal
-CFLAGS_OPENMP = -openmp
-CFLAGS_DEBUG = -O0 -g -ftrapuv 
+CFLAGS := -D__IFC
+CFLAGS_OPT = -O2
+CFLAGS_OPENMP = -fopenmp
+CFLAGS_DEBUG = -O0 -g
+CFLAGS_VERBOSE = -Wall -Wextra
+
+# Optional Testing compile flags.  Mutually exclusive from DEBUG, REPRO, and OPT
+# *_TEST will match the production if no new option(s) is(are) to be tested.
+FFLAGS_TEST = -O2
+CFLAGS_TEST = -O2
 
 LDFLAGS :=
-LDFLAGS_OPENMP := -openmp
-LDFLAGS_VERBOSE := -Wl,-V,--verbose,-cref,-M
-
-# start with blank LIBS
-LIBS :=
+LDFLAGS_OPENMP := -fopenmp
+LDFLAGS_VERBOSE :=
 
 ifneq ($(REPRO),)
-  CFLAGS += $(CFLAGS_REPRO)
-  FFLAGS += $(FFLAGS_REPRO)
-else ifneq ($(DEBUG),)
-  CFLAGS += $(CFLAGS_DEBUG)
-  FFLAGS += $(FFLAGS_DEBUG)
+CFLAGS += $(CFLAGS_REPRO)
+FFLAGS += $(FFLAGS_REPRO)
+endif
+ifneq ($(DEBUG),)
+CFLAGS += $(CFLAGS_DEBUG)
+FFLAGS += $(FFLAGS_DEBUG)
+else ifneq ($(TEST),)
+CFLAGS += $(CFLAGS_TEST)
+FFLAGS += $(FFLAGS_TEST)
 else
-  CFLAGS += $(CFLAGS_OPT)
-  FFLAGS += $(FFLAGS_OPT)
+CFLAGS += $(CFLAGS_OPT)
+FFLAGS += $(FFLAGS_OPT)
 endif
 
 ifneq ($(OPENMP),)
-  CFLAGS += $(CFLAGS_OPENMP)
-  FFLAGS += $(FFLAGS_OPENMP)
-  LDFLAGS += $(LDFLAGS_OPENMP)
+CFLAGS += $(CFLAGS_OPENMP)
+FFLAGS += $(FFLAGS_OPENMP)
+LDFLAGS += $(LDFLAGS_OPENMP)
 endif
 
 ifneq ($(VERBOSE),)
-  CFLAGS += $(CFLAGS_VERBOSE)
-  FFLAGS += $(FFLAGS_VERBOSE)
-  LDFLAGS += $(LDFLAGS_VERBOSE)
+CFLAGS += $(CFLAGS_VERBOSE)
+FFLAGS += $(FFLAGS_VERBOSE)
+LDFLAGS += $(LDFLAGS_VERBOSE)
 endif
 
 ifeq ($(NETCDF),3)
@@ -74,14 +75,15 @@ ifeq ($(NETCDF),3)
   endif
 endif
 
-ifneq ($(findstring netcdf/4,$(LOADEDMODULES)),)
+LIBS :=
+
+ifneq ($(findstring netcdf,$(LOADEDMODULES)),)
   LIBS += -lnetcdff -lnetcdf -lhdf5_hl -lhdf5 -lz
 else
   LIBS += -lnetcdf
 endif
 
-LIBS += -lmpi -lsma
-LIBS += -lmkl_blas95_lp64 -lmkl_lapack95_lp64 -lmkl_intel_lp64 -lmkl_core -lmkl_sequential 
+LIBS +=
 LDFLAGS += $(LIBS)
 
 #---------------------------------------------------------------------------
@@ -93,13 +95,13 @@ LDFLAGS += $(LIBS)
 # .f, .f90, .F, .F90. Given a sourcefile <file>.<ext>, where <ext> is one of
 # the above, this provides a number of default actions:
 
-# make <file>.opt	create an optimization report
-# make <file>.o		create an object file
-# make <file>.s		create an assembly listing
-# make <file>.x		create an executable file, assuming standalone
-#			source
-# make <file>.i		create a preprocessed file (for .F)
-# make <file>.i90	create a preprocessed file (for .F90)
+# make <file>.opt       create an optimization report
+# make <file>.o         create an object file
+# make <file>.s         create an assembly listing
+# make <file>.x         create an executable file, assuming standalone
+#                       source
+# make <file>.i         create a preprocessed file (for .F)
+# make <file>.i90       create a preprocessed file (for .F90)
 
 # The macro TMPFILES is provided to slate files like the above for removal.
 

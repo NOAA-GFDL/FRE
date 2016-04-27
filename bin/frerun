@@ -297,6 +297,7 @@ use FREUtil();
     'cache-history|H',
     'combine-history|M!',
     'compress|z=s',
+    'ht!',
     'mppnccombine-opts=s',
     'nc4-compress-history|Z',
     'dual|D!',
@@ -386,7 +387,8 @@ use FREUtil();
       "   -V,        --version                   print the tool version and exit\n",
       "   -v,        --verbose                   get verbose messages (repeat the option to increase verbosity level)\n", 
       "   -w NUM,    --walltime=NUM              maximum wall time (in minutes) to use for input data staging (default depends on site)\n", 
-      "   -x FILE,   --xmlfile=FILE              experiment suite XML configuration FILE (default is '$cwd/$xml')\n\n", 
+      "   -x FILE,   --xmlfile=FILE              experiment suite XML configuration FILE (default is '$cwd/$xml')\n", 
+      "              --ht                        enable hyperthreading (off by default)\n\n",
       "  The platform and at least one experiment from the FILE must be listed as an argument.\n\n"
     );
   }
@@ -1310,7 +1312,7 @@ use FREUtil();
     my ($r, $z, $i) = @_;
     my ($fre, $coupler, $npes, $refNPes, $refNTds) = ($z->fre(), $i->{coupler}, $i->{npes}, $i->{npesList}, $i->{ntdsList});
     FRETemplate::setSchedulerSize($fre, $r, 'run', $coupler, $npes, $refNPes, $refNTds);
-    FRETemplate::setRunCommand($fre, $r, $coupler, $npes, $refNPes, $refNTds);
+    FRETemplate::setRunCommand($fre, $r, $i);
   }
   
   sub outputScriptJobId($$)
@@ -1492,7 +1494,7 @@ use FREUtil();
  	frerun::setAllShellCommands(\$runScript, $z);
 	FRETemplate::setVersionInfo($fre, \$runScript, $0, $expName, %o);	    
 	FRETemplate::setSchedulerAccount($fre, \$runScript, $o{windfall});
-        if (my $regInfo = $z->extractRegressionRunInfo($l))
+        if (my $regInfo = $z->extractRegressionRunInfo($l, $o{ht}))
         {
 	  my @runNos = keys %{$regInfo};
 	  my ($ok, $runsNmb) = (1, scalar(@runNos));
@@ -1590,7 +1592,7 @@ use FREUtil();
  	frerun::setAllShellCommands(\$runScript, $z);
 	FRETemplate::setVersionInfo($fre, \$runScript, $0, $expName, %o);	    
 	FRETemplate::setSchedulerAccount($fre, \$runScript, $o{windfall});
-        if (my $prdInfo = $z->extractProductionRunInfo())
+        if (my $prdInfo = $z->extractProductionRunInfo($o{ht}))
         {
 	  ($runScript, my $extension, $status) = frerun::setProductionDirectories($runScript, $z, %o);
 	  if ($runScript)
@@ -1774,6 +1776,12 @@ use FREUtil();
   {
     FREMsg::out($opt{verbose}, FREMsg::WARNING, "Options --dual and --unique are incompatible, the --dual option is ignored");
     delete $opt{dual};
+  }
+
+  if ($opt{ht} and (!$opt{target} or $opt{target} !~ /openmp/))
+  {
+    FREMsg::out($opt{verbose}, FREMsg::WARNING, "Option --ht must be used with openmp; the --ht option is ignored");
+    delete $opt{ht};
   }
   
   my $fre = FRE->new('frerun', %opt) or exit FREDefaults::STATUS_FRE_GENERIC_PROBLEM;
