@@ -1,70 +1,6 @@
 #
-# $Id: FREExperiment.pm,v 18.1.2.21.4.1.2.2 2014/12/05 17:08:12 Seth.Underwood Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: Experiment Management Module
-# ------------------------------------------------------------------------------
-# arl    Ver   18.1  Merged revision 18.0.2.1 onto trunk            March 10
-# afy -------------- Branch 18.1.2 -------------------------------- March 10
-# afy    Ver   1.00  Modify extractCheckoutInfo (add line numbers)  March 10
-# afy    Ver   1.01  Modify createCheckoutScript (keep order)       March 10
-# afy    Ver   2.00  Remove createCheckoutScript subroutine         May 10
-# afy    Ver   2.01  Remove createCompileScript subroutine          May 10
-# afy    Ver   3.00  Remove executable subroutine                   May 10
-# arl    Ver   4.00  Modify extractCheckoutInfo (read property)     August 10
-# afy    Ver   5.00  Modify extractCheckoutInfo (no CVSROOT)        August 10
-# afy    Ver   6.00  Use new module FREMsg (symbolic levels)        January 11
-# afy    Ver   6.01  Modify extractNodes (no 'required')            January 11
-# afy    Ver   6.02  Modify extractValue (no 'required')            January 11
-# afy    Ver   6.03  Modify extractComponentValue (no 'required')   January 11
-# afy    Ver   6.04  Modify extractSourceValue (no 'required')      January 11
-# afy    Ver   6.05  Modify extractCompileValue (no 'required')     January 11
-# afy    Ver   6.06  Modify extractCheckoutInfo (hashes, checks)    January 11
-# afy    Ver   6.07  Modify extractCompileInfo (hashes, checks)     January 11
-# afy    Ver   6.08  Modify extractCompileInfo (make overrides)     January 11
-# afy    Ver   6.09  Modify extractCompileInfo (libraries order)    January 11
-# afy    Ver   7.00  Modify placeholdersExpand (check '$' presence) April 11
-# afy    Ver   7.01  Add property subroutine (similar to FRE.pm)    April 11
-# afy    Ver   7.02  Modify experimentDirsCreate (call property)    April 11
-# afy    Ver   7.03  Modify experimentDirsVerify (call property)    April 11
-# afy    Ver   7.04  Modify extractCheckoutInfo (call property)     April 11
-# afy    Ver   7.05  Modify experimentCreate (don't pass '$fre')    April 11
-# afy    Ver   8.00  Add dir subroutine                             May 11
-# afy    Ver   8.01  Add stateDir subroutine                        May 11
-# afy    Ver   8.02  Modify dir-returning subroutines (call dir)    May 11
-# afy    Ver   9.00  Modify dir-returning subroutines (cosmetics)   May 11
-# afy    Ver  10.00  Add extractRegressionRunInfo subroutine        November 11
-# afy    Ver  10.01  Add extractProductionRunInfo subroutine        November 11
-# afy    Ver  10.02  Add executable subroutine                      November 11
-# afy    Ver  10.03  Add executableCanBeBuilt subroutine            November 11
-# afy    Ver  10.04  Modify extractExecutable subroutine            November 11
-# afy    Ver  11.00  Add extractRegressionLabels subroutine         January 12
-# afy    Ver  12.00  Add sdtoutTmpDir subroutine                    February 12
-# afy    Ver  13.00  Remove tmpDir subroutine                       March 12
-# afy    Ver  14.00  Add regressionLabels utility                   June 12
-# afy    Ver  14.01  Add extractOverrideParams utility              June 12
-# afy    Ver  14.02  Add overrideRegressionNamelists utility        June 12
-# afy    Ver  14.03  Add overrideProductionNamelists utility        June 12
-# afy    Ver  14.04  Add MPISizeParameters utility                  June 12
-# afy    Ver  14.05  Add regressionPostfix utility                  June 12
-# afy    Ver  14.06  Modify extractNamelists (use FRENamelists.pm)  June 12
-# afy    Ver  14.07  Modify extractRegressionLabels (suite, all)    June 12
-# afy    Ver  14.08  Modify extractRegressionRunInfo (add option)   June 12
-# afy    Ver  14.09  Modify extractProductionRunInfo                June 12
-# afy    Ver  14.10  Modify extractRegressionRunInfo (run as key)   June 12
-# afy    Ver  15.00  Modify extractTables (return undef on errors)  July 12
-# afy    Ver  16.00  Modify extractShellCommands (no 'defined')     July 12
-# afy    Ver  16.01  Modify regressionPostfix (add suffuxes)        July 12
-# afy    Ver  17.00  Modify MPISizeParameters (fix concurrent)      August 12
-# afy    Ver  18.00  Merge with 18.1.2.17.2.1                       February 13
-# afy    Ver  19.00  Modify MPISizeParameters (generic version)     February 13
-# afy    Ver  19.01  Modify regressionPostfix (generic version)     February 13
-# afy    Ver  19.02  Modify extract*RunInfo (generic version)       February 13
-# afy    Ver  20.00  Modify MPISizeParameters (compatibility mode)  April 13
-# keo    Ver  20.01  Modify extractCheckoutInfo (/:/)               April 13
-# afy    Ver  21.00  Modify MPISizeCompatible (remove ice/land)     April 13
-# afy    Ver  21.01  Add MPISizeComponentEnabled (subcomponents)    April 13
-# afy    Ver  21.02  Modify MPISizeParametersGeneric (call ^)       April 13
-# afy    Ver  21.03  Modify MPISizeParametersCompatible (serials)   April 13
 # ------------------------------------------------------------------------------
 # Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2009-2013
 # Designed and written by V. Balaji, Amy Langenhorst and Aleksey Yakovlev
@@ -142,8 +78,8 @@ my $experimentDirsVerify = sub($$)
       my $pathsMapping = $r->property('FRE.directory.' . $t . '.paths.mapping');
       if ($pathsMapping)
       {
-        chomp(my $groupName = qx(id -gn));
-        my $paths = FREUtil::strFindByPattern($pathsMapping, $groupName);
+	chomp(my $groupName = qx(id -gn));
+	my $paths = FREUtil::strFindByPattern($pathsMapping, $groupName);
 	if ($paths)
 	{
 	  my $pathsForMatch = $paths;
@@ -152,11 +88,11 @@ my $experimentDirsVerify = sub($$)
 	  {
 	    my @paths = split('\|', $paths);
 	    my $pathsForOut = join(', ', @paths);
-            $fre->out(FREMsg::FATAL, "The '$t' directory ($d) can't be set up - it must be one of ($pathsForOut)");
+	    $fre->out(FREMsg::FATAL, "The '$t' directory ($d) can't be set up - it must be one of ($pathsForOut)");
 	    $result = 0;
 	    last;
 	  }
-        }
+	}
 	else
 	{
 	  $fre->out(FREMsg::FATAL, "The external property 'directory.$t.paths.mapping' is defined as '$pathsMapping' - this syntax is invalid");
@@ -166,7 +102,7 @@ my $experimentDirsVerify = sub($$)
       }
       else
       {
-        my $roots = $r->property('FRE.directory.' . $t . '.roots');
+	my $roots = $r->property('FRE.directory.' . $t . '.roots');
 	if ($roots)
 	{
 	  my $rootsForMatch = $roots;
@@ -176,7 +112,7 @@ my $experimentDirsVerify = sub($$)
 	    my @roots = split(';', $roots);
 	    my $rootsForOut = join(', ',  @roots);
 	    $fre->out(FREMsg::FATAL, "The '$t' directory ($d) can't be set up - it must be on one of ($rootsForOut) filesystems");
-            $result = 0;
+	    $result = 0;
 	    last;
 	  }
 	}
@@ -227,24 +163,24 @@ $experimentCreate = sub($$$)
       my $expParentName = $r->experimentValue('@inherit');
       if ($expParentName eq $e)
       {
-        $fre->out(FREMsg::FATAL, "The experiment '$e' cannot inherit itself");
-        return '';
+	$fre->out(FREMsg::FATAL, "The experiment '$e' cannot inherit itself");
+	return '';
       }
       elsif ($expParentName)
       {
-        if (scalar(grep($_ eq $expParentName, @experiments)) > 0)
-        {
-          $r->{parent} = $experimentCreate->($c, $fre, $expParentName);
-        }
-        else
-        {
-          $fre->out(FREMsg::FATAL, "The experiment '$e' inherits from non-existent experiment '$expParentName'");
-          return '';
-        }
+	if (scalar(grep($_ eq $expParentName, @experiments)) > 0)
+	{
+	  $r->{parent} = $experimentCreate->($c, $fre, $expParentName);
+	}
+	else
+	{
+	  $fre->out(FREMsg::FATAL, "The experiment '$e' inherits from non-existent experiment '$expParentName'");
+	  return '';
+	}
       }
       else
       {
-        $r->{parent} = '';
+	$r->{parent} = '';
       }
       # ----------------------------------------------------------------------- save the experiment
       $FREExperimentMap{$e} = $r;
@@ -299,9 +235,9 @@ $rankSet = sub($$$)
       my $rank = 0;
       foreach my $required (@requires)
       {
-        my $refReq = $h->{$required};
+	my $refReq = $h->{$required};
 	my $rankReq = (defined($refReq->{rank})) ? $refReq->{rank} : $rankSet->($h, $refReq, $d + 1);
-        if ($rankReq < 0)
+	if ($rankReq < 0)
 	{
 	  return -1;
 	}
@@ -616,7 +552,7 @@ my $MPISizeParametersCompatible = sub($$$$)
       }
       else
       {
-        @npes = ($n * $s, 0);
+	@npes = ($n * $s, 0);
       }
     }
     elsif ($atmosNP + $oceanNP == $n)
@@ -650,12 +586,12 @@ my $MPISizeComponentEnabled = sub($$$)
     {
       if ($enabled)
       {
-        $result = 1;
+	$result = 1;
 	last;
       }
       elsif (!defined($result))
       {
-        $result = 0;
+	$result = 0;
       }
     }
   }
@@ -687,7 +623,7 @@ my $MPISizeParametersGeneric = sub($$$$)
 	$sizes{"${component}_npes"} = $npes * $s;
 	if ($openMPEnabled)
 	{
-          my $ntds = $h->namelistIntegerGet('coupler_nml', "${component}_nthreads");
+	  my $ntds = $h->namelistIntegerGet('coupler_nml', "${component}_nthreads");
 	  unless (defined($ntds))
 	  {
 	    $sizes{"${component}_ntds"} = 1;
@@ -698,12 +634,12 @@ my $MPISizeParametersGeneric = sub($$$$)
 	  }
 	  elsif ($ntds <= 0)
 	  {
-            $fre->out(FREMsg::FATAL, "The variable 'coupler_nml:${component}_nthreads' must have a positive value");
+	    $fre->out(FREMsg::FATAL, "The variable 'coupler_nml:${component}_nthreads' must have a positive value");
 	    return undef;
 	  }
 	  else
 	  {
-            $fre->out(FREMsg::FATAL, "The variable 'coupler_nml:${component}_nthreads' value must be less or equal than a number '$coresPerNode' of cores per node");
+	    $fre->out(FREMsg::FATAL, "The variable 'coupler_nml:${component}_nthreads' value must be less or equal than a number '$coresPerNode' of cores per node");
 	    return undef;
 	  }
 	}
@@ -714,7 +650,7 @@ my $MPISizeParametersGeneric = sub($$$$)
       }
       else
       {
-        $fre->out(FREMsg::FATAL, "The variable 'coupler_nml:${component}_npes' must be defined and have a positive value");
+	$fre->out(FREMsg::FATAL, "The variable 'coupler_nml:${component}_npes' must be defined and have a positive value");
 	return undef;
       }
     }
@@ -751,13 +687,13 @@ my $MPISizeParametersGeneric = sub($$$$)
 	    }
 	    else
 	    {
-              $fre->out(FREMsg::FATAL, "Components '$componentL' and '$componentR' can't be run serially - the '$componentLExtra' and '$componentR' are already configured to run serially");
+	      $fre->out(FREMsg::FATAL, "Components '$componentL' and '$componentR' can't be run serially - the '$componentLExtra' and '$componentR' are already configured to run serially");
 	      return undef;
 	    }
 	  }
 	  else
 	  {
-            $fre->out(FREMsg::FATAL, "Components '$componentL' and '$componentR' aren't allowed to run serially");
+	    $fre->out(FREMsg::FATAL, "Components '$componentL' and '$componentR' aren't allowed to run serially");
 	    return undef;
 	  }
 	}
@@ -1271,7 +1207,7 @@ sub extractDatasets($)
 	my @sources = split(/\s+/, $sources);
 	foreach my $line (@sources)
 	{
-          next unless $line;
+	  next unless $line;
 	  if (substr($line, 0, 1) eq '/')
 	  {
 	    my @lineParts = split('=', $line);
@@ -1287,8 +1223,8 @@ sub extractDatasets($)
 	    else
 	    {
 	      $target = FREUtil::fileIsArchive($source) ? 'INPUT/' : 'INPUT/.';
-            }
-            push @results, $source;
+	    }
+	    push @results, $source;
 	    push @results, $target;
 	  }
 	  else
@@ -1338,7 +1274,7 @@ sub extractNamelists($)
 	if ($nmls->namelistExists($name))
 	{
 	  my $expName = $exp->name();
-          $fre->out(FREMsg::NOTE, "Using secondary specification of '$name' rather than the original setting in '$expName'");
+	  $fre->out(FREMsg::NOTE, "Using secondary specification of '$name' rather than the original setting in '$expName'");
 	}
 	elsif ($name)
 	{
@@ -1349,7 +1285,7 @@ sub extractNamelists($)
       my @nmlFiles = $fre->dataFilesMerged($inputNode, 'namelist', 'file');
       foreach my $filePath (@nmlFiles)
       {
-        if (-f $filePath and -r $filePath)
+	if (-f $filePath and -r $filePath)
 	{
 	  my $fileContent = qx(cat $filePath);
 	  $fileContent =~ s/^\s*$//mg;
@@ -1359,19 +1295,19 @@ sub extractNamelists($)
 	  my @fileNmls = split(/\/\s*$/m, $fileContent);
 	  foreach my $fileNml (@fileNmls)
 	  {
-            $fileNml =~ s/^\s*\&//;
-            $fileNml =~ s/\s*(?:\/\s*)?$//;
-            my ($name, $content) = split('\s', $fileNml, 2);
+	    $fileNml =~ s/^\s*\&//;
+	    $fileNml =~ s/\s*(?:\/\s*)?$//;
+	    my ($name, $content) = split('\s', $fileNml, 2);
 	    if ($nmls->namelistExists($name))
 	    {
-              $fre->out(FREMsg::NOTE, "Using secondary specification of '$name' rather than the original setting in '$filePath'");
-            }
+	      $fre->out(FREMsg::NOTE, "Using secondary specification of '$name' rather than the original setting in '$filePath'");
+	    }
 	    elsif ($name)
 	    {
 	      $nmls->namelistPut($name, $content);
-            }
+	    }
 	  }
-        }
+	}
 	else
 	{
 	  return undef;
@@ -1578,24 +1514,24 @@ sub extractCheckoutInfo($)
 	      {
 		if (-d $libraryHeaderDir)
 		{
-        	  $fre->out(FREMsg::NOTE, "You have requested library '$libraryPath' for component '$name' - we will skip the component checkout");
-        	  next;
+		  $fre->out(FREMsg::NOTE, "You have requested library '$libraryPath' for component '$name' - we will skip the component checkout");
+		  next;
 		}
 		else
 		{
-        	  $fre->out(FREMsg::FATAL, "Component '$name' specifies non-existent library header directory '$libraryHeaderDir'");
+		  $fre->out(FREMsg::FATAL, "Component '$name' specifies non-existent library header directory '$libraryHeaderDir'");
 		  return 0;
 		}
 	      }
 	      else
 	      {
-        	$fre->out(FREMsg::FATAL, "Component '$name' specifies library '$libraryPath' but no header directory");
-        	return 0;
+		$fre->out(FREMsg::FATAL, "Component '$name' specifies library '$libraryPath' but no header directory");
+		return 0;
 	      }
 	    }
 	    else
 	    {
-              $fre->out(FREMsg::FATAL, "Component '$name' specifies non-existent library '$libraryPath'");
+	      $fre->out(FREMsg::FATAL, "Component '$name' specifies non-existent library '$libraryPath'");
 	      return 0;
 	    }
 	  }
@@ -1613,13 +1549,13 @@ sub extractCheckoutInfo($)
 		if ($vcRoot =~ /:/ or (-d $vcRoot and -r $vcRoot))
 		{
 		  # ------------------------------------------------------------------------------------------ save component data into the hash
-        	  my %component = ();
+		  my %component = ();
 		  $component{codeBase} = $codeBase;
 		  $component{codeTag} = $codeTag;
 		  $component{vcBrand} = $vcBrand;
 		  $component{vcRoot} = $vcRoot;
 		  $component{sourceCsh} = $r->extractSourceValue('csh', $name);
-        	  $component{lineNumber} = $componentNode->line_number();
+		  $component{lineNumber} = $componentNode->line_number();
 		  # ----------------------------------------------------------------------------------------------- print what we got
 		  $fre->out
 		  (
@@ -1633,28 +1569,28 @@ sub extractCheckoutInfo($)
 		  );
 		  # -------------------------------------------------------------- link the component to the components hash
 		  $components{$name} = \%component;
-        	}
+		}
 		else
 		{
-        	  $fre->out(FREMsg::FATAL, "Component '$name': the directory '$vcRoot' doesn't exist or not readable");
+		  $fre->out(FREMsg::FATAL, "Component '$name': the directory '$vcRoot' doesn't exist or not readable");
 		  return 0;
 		}
-              }
+	      }
 	      else
 	      {
-        	$fre->out(FREMsg::FATAL, "Component '$name': element <source> doesn't specify a version control system");
+		$fre->out(FREMsg::FATAL, "Component '$name': element <source> doesn't specify a version control system");
 		return 0;
 	      }
 	    }
 	    else
 	    {
-              $fre->out(FREMsg::FATAL, "Component '$name': element <source> doesn't specify a version attribute for its code base");
+	      $fre->out(FREMsg::FATAL, "Component '$name': element <source> doesn't specify a version attribute for its code base");
 	      return 0;
 	    }
 	  }
 	  else
 	  {
-            $fre->out(FREMsg::FATAL, "Component '$name': element <source> doesn't specify a code base");
+	    $fre->out(FREMsg::FATAL, "Component '$name': element <source> doesn't specify a code base");
 	    return 0;
 	  }
 	}
@@ -1711,16 +1647,16 @@ sub extractCompileInfo($)
 	    {
 	      foreach my $includeDir (split(' ', $includeDirs))
 	      {
-        	if (! -d $includeDir)
-        	{
-        	  $fre->out(FREMsg::FATAL, "Component '$name' specifies non-existent include directory '$includeDir'");
-  		  return 0;
+		if (! -d $includeDir)
+		{
+		  $fre->out(FREMsg::FATAL, "Component '$name' specifies non-existent include directory '$includeDir'");
+		  return 0;
 		}
 	      }
 	    }
 	    # --------------------------------------------- get and check library data; skip the component if the library defined
 	    my $libPath = $strRemoveWS->($r->extractComponentValue('library/@path', $name));
-            my $libHeaderDir = $strRemoveWS->($r->extractComponentValue('library/@headerDir', $name));
+	    my $libHeaderDir = $strRemoveWS->($r->extractComponentValue('library/@headerDir', $name));
 	    if ($libPath)
 	    {
 	      if (-f $libPath)
@@ -1729,33 +1665,33 @@ sub extractCompileInfo($)
 		{
 		  if (-d $libHeaderDir)
 		  {
-        	    $fre->out(FREMsg::NOTE, "You have requested library '$libPath' for component '$name': we will skip the component compilation");
+		    $fre->out(FREMsg::NOTE, "You have requested library '$libPath' for component '$name': we will skip the component compilation");
 		  }
 		  else
 		  {
-        	    $fre->out(FREMsg::FATAL, "Component '$name' specifies non-existent library header directory '$libHeaderDir'");
+		    $fre->out(FREMsg::FATAL, "Component '$name' specifies non-existent library header directory '$libHeaderDir'");
 		    return 0;
 		  }
 		}
 		else
 		{
-        	  $fre->out(FREMsg::FATAL, "Component '$name' specifies library '$libPath' but no header directory");
+		  $fre->out(FREMsg::FATAL, "Component '$name' specifies library '$libPath' but no header directory");
 		  return 0;
 		}
 	      }
 	      else
 	      {
-        	$fre->out(FREMsg::FATAL, "Component '$name' specifies non-existent library '$libPath'");
+		$fre->out(FREMsg::FATAL, "Component '$name' specifies non-existent library '$libPath'");
 		return 0;
 	      }
 	    }
 	    # ----------------------------------------------------------------------------------- save component data into the hash
-            my %component = ();
+	    my %component = ();
 	    $component{paths} = $paths;
 	    $component{requires} = $strMergeWS->($r->nodeValue($componentNode, '@requires'));
 	    $component{includeDirs} = $includeDirs;
-            $component{libPath} = $libPath;
-            $component{libHeaderDir} = $libHeaderDir;
+	    $component{libPath} = $libPath;
+	    $component{libHeaderDir} = $libHeaderDir;
 	    $component{srcList} = $strMergeWS->($r->extractCompileValue('srcList', $name));
 	    $component{pathNames} = $strMergeWS->($r->extractCompileValue('pathNames/@file', $name));
 	    $component{cppDefs} = FREUtil::strStripPaired($strMergeWS->($r->extractCompileValue('cppDefs', $name)));
@@ -1763,7 +1699,7 @@ sub extractCompileInfo($)
 	    $component{compileCsh} = $r->extractCompileValue('csh', $name);
 	    $component{mkmfTemplate} = $strRemoveWS->($r->extractMkmfTemplate($name)) || $fre->mkmfTemplate();
 	    $component{doF90Cpp} = $r->extractDoF90Cpp($name);
-            $component{lineNumber} = $componentNode->line_number();
+	    $component{lineNumber} = $componentNode->line_number();
 	    $component{rank} = undef;
 	    # ------------------------------------------------------------------------------------------- print what we got
 	    $fre->out
@@ -1809,7 +1745,7 @@ sub extractCompileInfo($)
       my $ref = $components{$name};
       foreach my $required (split(' ', $ref->{requires}))
       {
-        if (!exists($components{$required}))
+	if (!exists($components{$required}))
 	{
 	  $fre->out(FREMsg::FATAL, "Component '$name' refers to a non-existent component '$required'");
 	  return 0;
@@ -1822,7 +1758,7 @@ sub extractCompileInfo($)
       my $ref = $components{$name};
       if (!defined($ref->{rank}))
       {
-        if ($rankSet->(\%components, $ref, 0) < 0)
+	if ($rankSet->(\%components, $ref, 0) < 0)
 	{
 	  $fre->out(FREMsg::FATAL, "Component '$name' refers to itself via a loop");
 	  return 0;
@@ -1860,18 +1796,18 @@ sub extractRegressionLabels($$)
       my @result = ();
       if (grep($_ eq 'all', @optLabels) > 0)
       {
-        @result = @expLabels;
+	@result = @expLabels;
       }
       elsif (grep($_ eq 'suite', @optLabels) > 0)
       {
-        foreach my $expLabel (@expLabels)
+	foreach my $expLabel (@expLabels)
 	{
 	  push @result, $expLabel if grep($_ eq $expLabel, @optLabels) > 0 || grep($_ eq $expLabel, FREExperiment::REGRESSION_SUITE) > 0;
 	}
       }
       else
       {
-        foreach my $expLabel (@expLabels)
+	foreach my $expLabel (@expLabels)
 	{
 	  push @result, $expLabel if grep($_ eq $expLabel, @optLabels) > 0;
 	}
@@ -1930,7 +1866,7 @@ sub extractRegressionRunInfo($$)
 	      my $nmlsOverridden = $overrideRegressionNamelists->($r, $nmls->copy(), $runNodes[$i]);
 	      if (my $mpiInfo = $MPISizeParameters->($r, $nps, $nmlsOverridden))
 	      {
-        	my %run = ();
+		my %run = ();
 		$run{label} = $l;
 		$run{number} = $i;
 		$run{postfix} = $regressionPostfix->($r, $l, $i, $hsl, $spj, $msa[0], $dsa[0], $hsa[0], $mpiInfo);
@@ -1939,25 +1875,25 @@ sub extractRegressionRunInfo($$)
 		$run{days} = join(' ', @dsa);
 		$run{hours} = join(' ', @hsa);
 		$run{hoursDefined} = ($hsl ne "");
- 		$run{runTimeMinutes} = FREUtil::makeminutes($srt);
+		$run{runTimeMinutes} = FREUtil::makeminutes($srt);
 		$run{namelists} = $nmlsOverridden;
 		$runs{$i} = \%run;
-              }
+	      }
 	      else
 	      {
-        	$fre->out(FREMsg::FATAL, "The experiment '$expName', the regression test '$l', run '$i' - model size parameters are invalid");
+		$fre->out(FREMsg::FATAL, "The experiment '$expName', the regression test '$l', run '$i' - model size parameters are invalid");
 		$ok = 0;
 	      }
 	    }
 	    else
 	    {
-              $fre->out(FREMsg::FATAL, "The experiment '$expName', the regression test '$l', run '$i' - timing parameters must be defined");
+	      $fre->out(FREMsg::FATAL, "The experiment '$expName', the regression test '$l', run '$i' - timing parameters must be defined");
 	      $ok = 0;
 	    }
 	  }
 	  else
 	  {
-            $fre->out(FREMsg::FATAL, "The experiment '$expName', the regression test '$l', run '$i' - the running time '$srt' must be nonempty and have the HH:MM:SS format");
+	    $fre->out(FREMsg::FATAL, "The experiment '$expName', the regression test '$l', run '$i' - the running time '$srt' must be nonempty and have the HH:MM:SS format");
 	    $ok = 0;
 	  }
 	}
@@ -2000,14 +1936,14 @@ sub extractProductionRunInfo($)
       my $mpiInfo = $MPISizeParameters->($r, $nps, $nmlsOverridden);
       if ($mpiInfo)
       {
-        # Use the number of PEs obtained from coupler_nml instead of runtime/production/@npes
-        # as runtime/production/@npes does not take into account OpenMP threads in the pe count
-        my $totNps = 0;
-        for ( my $i = 0; $i < scalar($mpiInfo->{npesList}); $i++ )
-        {
-          $totNps += $mpiInfo->{npesList}[$i] * $mpiInfo->{ntdsList}[$i];
-        }
-        $nps = $totNps;
+	# Use the number of PEs obtained from coupler_nml instead of runtime/production/@npes
+	# as runtime/production/@npes does not take into account OpenMP threads in the pe count
+	my $totNps = 0;
+	for ( my $i = 0; $i < scalar($mpiInfo->{npesList}); $i++ )
+	{
+	  $totNps += $mpiInfo->{npesList}[$i] * $mpiInfo->{ntdsList}[$i];
+	}
+	$nps = $totNps;
       }
       my $smt = $r->nodeValue($prdNode, '@simTime');
       my $smu = $r->nodeValue($prdNode, '@units');
@@ -2018,7 +1954,7 @@ sub extractProductionRunInfo($)
       my $patternUnits = qr/^(?:years|year|months|month)$/;
       if (($smt > 0) and ($smu =~ m/$patternUnits/))
       {
-        if (($gmt > 0) and ($gmu =~ m/$patternUnits/))
+	if (($gmt > 0) and ($gmu =~ m/$patternUnits/))
 	{
 	  my $patternYears = qr/^(?:years|year)$/;
 	  $smt *= 12 if $smu =~ m/$patternYears/;
@@ -2044,7 +1980,7 @@ sub extractProductionRunInfo($)
 		    $run{segRunTimeMinutes} = $grtMinutes;
 		    $run{namelists} = $nmlsOverridden;
 		    return \%run;
-                  }
+		  }
 		  else
 		  {
 		    $fre->out(FREMsg::FATAL, "The experiment '$expName' - model size parameters are invalid");
@@ -2059,13 +1995,13 @@ sub extractProductionRunInfo($)
 	      }
 	      else
 	      {
-        	$fre->out(FREMsg::FATAL, "The experiment '$expName' - the segment running time '$grt' must be nonempty and have the HH:MM:SS format");
+		$fre->out(FREMsg::FATAL, "The experiment '$expName' - the segment running time '$grt' must be nonempty and have the HH:MM:SS format");
 		return 0;
 	      }
 	    }
 	    else
 	    {
-              $fre->out(FREMsg::FATAL, "The experiment '$expName' - the simulation running time '$srt' must be nonempty and have the HH:MM:SS format");
+	      $fre->out(FREMsg::FATAL, "The experiment '$expName' - the simulation running time '$srt' must be nonempty and have the HH:MM:SS format");
 	      return 0;
 	    }
 	  }
@@ -2077,13 +2013,13 @@ sub extractProductionRunInfo($)
 	}
 	else
 	{
-          $fre->out(FREMsg::FATAL, "The experiment '$expName' - the segment model time '$gmt' must be nonempty and have one of (years|year|months|month) units defined");
+	  $fre->out(FREMsg::FATAL, "The experiment '$expName' - the segment model time '$gmt' must be nonempty and have one of (years|year|months|month) units defined");
 	  return 0;
 	}
       }
       else
       {
-        $fre->out(FREMsg::FATAL, "The experiment '$expName' - the simulation model time '$smt' must be nonempty and have one of (years|year|months|month) units defined");
+	$fre->out(FREMsg::FATAL, "The experiment '$expName' - the simulation model time '$smt' must be nonempty and have one of (years|year|months|month) units defined");
 	return 0;
       }
     }
