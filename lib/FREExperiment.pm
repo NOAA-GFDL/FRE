@@ -1962,7 +1962,7 @@ sub extractProductionRunInfo($$)
 
       my $smt = $r->nodeValue($prdNode, '@simTime');
       my $smu = $r->nodeValue($prdNode, '@units');
-      my $srt = $resources->{jobWallclock} || $fre->runTime($resources->{npes});
+      my $srt = $resources->{jobWallclock} || $fre->runTime($resources->{npes_with_threads});
       my $gmt = $r->nodeValue($prdNode, 'segment/@simTime');
       my $gmu = $r->nodeValue($prdNode, 'segment/@units');
       my $grt = $resources->{segRuntime};
@@ -2119,6 +2119,15 @@ sub getResourceRequests($$) {
         }
     }
 
+    # Set threads to 1 unless openmp
+    for my $comp (@components) {
+        next unless $data{$comp}{threads} and $data{$comp}{threads} > 1;
+        if (! FRETargets::containsOpenMP($fre->target)) {
+            $fre->out(FREMsg::WARNING, "Component $comp has requested $data{$comp}{threads} threads but not using OpenMP");
+            $data{$comp}{threads} = 1;
+        }
+    }
+
     # Require ranks/threads for at least one component
     my $ok;
     for my $comp (@components) {
@@ -2149,7 +2158,7 @@ sub getResourceRequests($$) {
 
     # Apply hyperthreading if desired and possible
     if ($ht and ! $fre->property('FRE.mpi.runCommand.option.ht')) {
-            $fre->out(FREMsg::WARNING, "Hyperthreading was requested but isn't supported on this platform.");
+        $fre->out(FREMsg::WARNING, "Hyperthreading was requested but isn't supported on this platform.");
     }
     elsif ($ht) {
         my $ok = 1;
@@ -2171,7 +2180,10 @@ sub getResourceRequests($$) {
     }
 
     # Add up total ranks
-    $data{npes} += $data{$_}{ranks} for @components;
+    for my $comp (@components) {
+        $data{npes}              += $data{$comp}{ranks};
+        $data{npes_with_threads} += $data{$comp}{ranks} * $data{$comp}{threads};
+    }
 
     return \%data;
 }
