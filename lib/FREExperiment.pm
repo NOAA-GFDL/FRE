@@ -1869,7 +1869,11 @@ sub extractRegressionRunInfo($$$)
 	{
       my $resources = $r->getResourceRequests($ht, $runNodes[$i]);
 
-	  my $nps = $resources->{npes};
+      if ($r->nodeValue($runNodes[$i], '@npes')) {
+          $fre->out(FREMsg::FATAL, "The <runtime>/<production> npes attribute is now outlawed; specify requested ranks for each component in <runtime>/<production>/<resources> tag.");
+          exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
+      }
+
 	  my $msl = $r->nodeValue($runNodes[$i], '@months');
 	  my $dsl = $r->nodeValue($runNodes[$i], '@days');
 	  my $hsl = $r->nodeValue($runNodes[$i], '@hours');
@@ -1959,6 +1963,11 @@ sub extractProductionRunInfo($$)
       my $resources = $r->getResourceRequests($ht);
       my $mpiInfo = $MPISizeParameters->($r, $resources, $nmls->copy);
       addResourceRequestsToMpiInfo($fre, $resources, $mpiInfo);
+
+      if ($r->nodeValue($prdNode, '@npes')) {
+          $fre->out(FREMsg::FATAL, "The <runtime>/<production> npes attribute is now outlawed; specify requested ranks for each component in <runtime>/<production>/<resources> tag.");
+          exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
+      }
 
       my $smt = $r->nodeValue($prdNode, '@simTime');
       my $smu = $r->nodeValue($prdNode, '@units');
@@ -2097,15 +2106,14 @@ sub getResourceRequests($$) {
     };
 
     # if node is given, try to find <resources> tag with no inheritance
-    my $xpath = "production/resources[\@site = '$site' or not(\@site)]";
     if ($regression_run_node) {
-        $node = $pick_node->($regression_run_node->findnodes($xpath));
+        $node = $pick_node->($regression_run_node->findnodes("resources[\@site = '$site' or not(\@site)]"));
     }
 
     # for production OR if regression <resources> tag wasn't found,
     # find first resource node with experiment inheritance
     if (! $node) {
-        $node = $pick_node->($exp->extractNodes('runtime', $xpath));
+        $node = $pick_node->($exp->extractNodes('runtime', "production/resources[\@site = '$site' or not(\@site)]"));
     }
 
     # bail out if no resources tag can be found
