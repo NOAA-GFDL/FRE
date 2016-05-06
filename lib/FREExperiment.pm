@@ -2081,23 +2081,39 @@ sub getResourceRequests($$) {
     my %data;
     my $node;
 
+    # given a list of suitable resource nodes, pick the site-specific one
+    my $pick_node = sub {
+        my @site_nodes    = grep {   $_->hasAttribute('site') } @_;
+        my @nonsite_nodes = grep { ! $_->hasAttribute('site') } @_;
+
+        if (my $n = @site_nodes) {
+            $fre->out(FREMsg::WARNING, "Found $n equally suitable site-specific resources tags; using first one") if $n > 1;
+            return $site_nodes[0];
+        }
+        if (my $n = @nonsite_nodes) {
+            $fre->out(FREMsg::WARNING, "Found $n equally suitable site-agnostic resources tags; using first one") if $n > 1;
+            return $nonsite_nodes[0];
+        }
+    };
+
     # if node is given, try to find <resources> tag with no inheritance
+    my $xpath = "production/resources[\@site = '$site' or not(\@site)]";
     if ($regression_run_node) {
-        $node = $regression_run_node->findnodes("resources[\@site = '$site']")->get_node(1);
+        $node = $pick_node->($regression_run_node->findnodes($xpath));
     }
 
     # for production OR if regression <resources> tag wasn't found,
     # find first resource node with experiment inheritance
     if (! $node) {
-        ($node) = $exp->extractNodes('runtime', "production/resources[\@site = '$site']");
+        $node = $pick_node->($exp->extractNodes('runtime', $xpath));
     }
 
     # bail out if no resources tag can be found
     if (! $node) {
         my $message = $regression_run_node
-            ? "No resource request tag for site=$site was found within <runtime>/<regression>/<run> OR within <runtime>/<production> or its experiment ancestors. "
-            : "No resource request tag for site=$site was found within <runtime>/<production> or its experiment ancestors. ";
-        $message .= "A site-specific <resources> tag must now be specified for every production and regression run. See FRE Documentation at http://wiki.gfdl.noaa.gov/index.php/FRE_User_Documentation";
+            ? "No resource request tag was found within <runtime>/<regression>/<run> OR within <runtime>/<production> or its experiment ancestors. "
+            : "No resource request tag was found within <runtime>/<production> or its experiment ancestors. ";
+        $message .= "A <resources> tag must now be specified for every production and regression run. See FRE Documentation at http://wiki.gfdl.noaa.gov/index.php/FRE_User_Documentation";
         $fre->out(FREMsg::FATAL, $message);
         exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
     }
