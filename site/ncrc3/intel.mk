@@ -1,6 +1,6 @@
-# template for the pathscale compiler
+# template for the Intel fortran compiler
 # typical use with mkmf
-# mkmf -t mkmf.template.pscale -c"-Duse_libMPI -Duse_netCDF" path_names /usr/local/include
+# mkmf -t intel.mk -c"-Duse_libMPI -Duse_netCDF" path_names /usr/local/include
 ############
 # commands #
 ############
@@ -14,6 +14,7 @@ LD = ftn
 DEBUG =
 REPRO =
 VERBOSE =
+OPENMP =
 
 ##############################################
 # Need to use at least GNU Make version 3.81 #
@@ -22,50 +23,44 @@ need := 3.81
 ok := $(filter $(need),$(firstword $(sort $(MAKE_VERSION) $(need))))
 ifneq ($(need),$(ok))
 $(error Need at least make version $(need).  Load module gmake/3.81)
-endif 
-
-#################################################
-# Check version of PGI for use of -nofma option #
-#################################################
-has_nofma := $(shell $(FC) -dryrun -nofma foo.f90 > /dev/null 2>&1; echo $$?)
-ifneq ($(has_nofma),0)
-NOFMA :=
-else
-NOFMA := -nofma
 endif
 
-#################################################################
-# site-dependent definitions, set by environment                #
-#################################################################
+MAKEFLAGS += --jobs=2
 
-NETCDF_ROOT = $(CRAY_NETCDF_DIR)/netcdf-pgi
+NETCDF_ROOT = $(NETCDF_DIR)
 MPI_ROOT    = $(MPICH_DIR)
 INCLUDE = -I$(NETCDF_ROOT)/include
 
-FPPFLAGS = $(INCLUDE)
-FFLAGS = -i4 -r8 -byteswapio -Mcray=pointer -Mcray=pointer -Mflushz -Mdaz -D_F2000
-FFLAGS_OPT = -O3 -Mvect=nosse -Mnoscalarsse -Mallocatable=95
-FFLAGS_DEBUG = -O0 -g -traceback -Ktrap=fp
-FFLAGS_REPRO = -O2 $(NOFMA)
-FFLAGS_OPENMP = -mp
-FFLAGS_VERBOSE = -v
+FPPFLAGS := -fpp -Wp,-w $(INCLUDE)
 
-CPPFLAGS = $(INCLUDE)
-CFLAGS = 
-CFLAGS_OPT = -O2
-CFLAGS_DEBUG = -O0 -g -traceback -Ktrap=fp
-CFLAGS_OPENMP = -mp
-CFLAGS_VERBOSE = -v
+# -msse2 is added as a workaround for reproducibility on the c3 system.  We in the
+# modeling systems group are looking for why this is needed to allow run-to-run
+# reproducibility on the c3 system.
+FFLAGS := -msse2 -fno-alias -auto -safe-cray-ptr -ftz -assume byterecl -i4 -r8 -nowarn -sox -traceback $(INCLUDE)
+FFLAGS_OPT = -O3 -debug minimal -fp-model source
+FFLAGS_DEBUG = -g -O0 -check -check noarg_temp_created -check nopointer -warn -warn noerrors -fpe0 -ftrapuv
+FFLAGS_REPRO = -O2 -debug minimal -fp-model source
+FFLAGS_OPENMP = -openmp
+FFLAGS_VERBOSE = -v -V -what -warn all
+
+CFLAGS := -D__IFC -msse2 -sox -traceback
+CFLAGS_OPT = -O2 -debug minimal
+CFLAGS_REPRO = -O2 -debug minimal
+CFLAGS_OPENMP = -openmp
+CFLAGS_DEBUG = -O0 -g -ftrapuv
+CFLAGS_VERBOSE = -w3
 
 # Optional Testing compile flags.  Mutually exclusive from DEBUG, REPRO, and OPT
 # *_TEST will match the production if no new option(s) is(are) to be tested.
-FFLAGS_TEST = -O3 -Mvect=simd:128 -Mallocatable=03
+FFLAGS_TEST = -O3 -debug minimal -fp-model source
 CFLAGS_TEST = -O2
 
-LDFLAGS := -byteswapio
-LDFLAGS_VERBOSE := -v
+LDFLAGS :=
+LDFLAGS_OPENMP := -openmp
+LDFLAGS_VERBOSE := -Wl,-V,--verbose,-cref,-M
 
-MAKEFLAGS +=--jobs=2
+# start with blank LIBS
+LIBS :=
 
 ifneq ($(REPRO),)
 CFLAGS += $(CFLAGS_REPRO)
@@ -84,6 +79,9 @@ endif
 ifneq ($(OPENMP),)
 CFLAGS += $(CFLAGS_OPENMP)
 FFLAGS += $(FFLAGS_OPENMP)
+LDFLAGS += $(LDFLAGS_OPENMP)
+# to correct a loader bug on gaea: envars below set by module load intel
+LIBS += -L$(INTEL_PATH)/$(INTEL_MAJOR_VERSION)/$(INTEL_MINOR_VERSION)/lib/intel64 -lifcoremt
 endif
 
 ifneq ($(VERBOSE),)
@@ -92,17 +90,20 @@ FFLAGS += $(FFLAGS_VERBOSE)
 LDFLAGS += $(LDFLAGS_VERBOSE)
 endif
 
-# add LIBS at the end
-LIBS := -L$(NETCDF_ROOT)/lib
 ifeq ($(NETCDF),3)
-# add the use_LARGEFILE cppdef
-ifneq ($(findstring -Duse_netCDF,$(CPPDEFS)),)
-CPPDEFS += -Duse_LARGEFILE
+  # add the use_LARGEFILE cppdef
+  ifneq ($(findstring -Duse_netCDF,$(CPPDEFS)),)
+    CPPDEFS += -Duse_LARGEFILE
+  endif
 endif
-LIBS += -lnetcdf
+
+ifneq ($(findstring netcdf-4.0.1,$(LOADEDMODULES)),)
+  LIBS += -lnetcdff -lnetcdf -lhdf5_hl -lhdf5 -lz
 else
-LIBS += -lnetcdff -lnetcdf -lhdf5_hl -lhdf5 -lz
+  LIBS += -lnetcdf
 endif
+
+LIBS +=
 LDFLAGS += $(LIBS)
 
 #---------------------------------------------------------------------------
@@ -114,13 +115,13 @@ LDFLAGS += $(LIBS)
 # .f, .f90, .F, .F90. Given a sourcefile <file>.<ext>, where <ext> is one of
 # the above, this provides a number of default actions:
 
-# make <file>.opt	create an optimization report
-# make <file>.o		create an object file
-# make <file>.s		create an assembly listing
-# make <file>.x		create an executable file, assuming standalone
-#			source
-# make <file>.i		create a preprocessed file (for .F)
-# make <file>.i90	create a preprocessed file (for .F90)
+# make <file>.opt       create an optimization report
+# make <file>.o         create an object file
+# make <file>.s         create an assembly listing
+# make <file>.x         create an executable file, assuming standalone
+#                       source
+# make <file>.i         create a preprocessed file (for .F)
+# make <file>.i90       create a preprocessed file (for .F90)
 
 # The macro TMPFILES is provided to slate files like the above for removal.
 

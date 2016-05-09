@@ -338,13 +338,6 @@ $version_head .= "-x $abs_xml_path ";
      print "tEND is $tEND (from t0 + 1 year)\n";
    }
 
-
-   #set default platform to ia64 for hpcs.*, x86_64 for gfdl.*
-   $platform = 'ia64';
-   if ( $opt_P =~ /^gfdl\./ ) { $platform = 'x86_64'; }
-   chomp $platform;
-   my $platformcsh;
-
    #These things vary by platform
    my $cp = 'cp';
    my $mv = 'mv';
@@ -378,6 +371,14 @@ $version_head .= "-x $abs_xml_path ";
    print STDERR "WARNING: This frerun is designed for version 3/4 xml and your xml is version $rtsVersion.\n";
    }
    my $project = $fre->project();
+
+   # use expanded platform (e.g. gfdl.ncrc-intel rather than ncrc-intel)
+   $opt_P = $fre->platform;
+   #set default platform to ia64 for hpcs.*, x86_64 for gfdl.*
+   $platform = 'ia64';
+   if ( $opt_P =~ /^gfdl\./ ) { $platform = 'x86_64'; }
+   chomp $platform;
+   my $platformcsh;
 
    #------------ LOOP OVER EXPTS GIVEN AS SCRIPT ARGUMENTS ----------------
    foreach $expt ( @ARGV ) {
@@ -516,8 +517,8 @@ EOF
       $platformcsh .= <<'EOF';
 
 setenv NC_BLKSZ 64K
-set ncksopt = "-a -h -F --64bit --header_pad 16384"
-set ncrcatopt = "-h -O --64bit -t 2 --header_pad 16384"
+set ncksopt = "-a -h -F --header_pad 16384"
+set ncrcatopt = "-h -O -t 2 --header_pad 16384"
 EOF
    } elsif ( "$platform" eq 'x86_64' ) {
       $cp = 'gcp -v';
@@ -528,8 +529,8 @@ EOF
       $platformcsh .= <<'EOF';
 
 setenv NC_BLKSZ 64K
-set ncksopt = "-a -h -F --64bit --header_pad 16384"
-set ncrcatopt = "-h -O --64bit -t 2 --header_pad 16384"
+set ncksopt = "-a -h -F --header_pad 16384"
+set ncrcatopt = "-h -O -t 2 --header_pad 16384"
 EOF
 
    } elsif ( "$platform" eq 'ifc' ) {
@@ -2882,6 +2883,7 @@ sub zInterpolate {
    my $outfile = $_[2];
    my $caltype = $_[3];
    my $variables = $_[4];
+   my $source = $_[5];
    if ($opt_V) {print STDERR "in zInterpolate, $zInterp $infile $outfile $caltype\n"; }
 
    my $csh = "";
@@ -2986,6 +2988,9 @@ EOF
       $check_ncatted
       $time_mv $mv plev.nc $outfile
       $time_rm rm -f $infile
+   else if ( \$reqvars < 3 && \$#vars3d > 0 ) then
+      echo ERROR: zInterp requested for $source, but missing one or more required variables
+      exit 1
    else
       $time_mv $mv $infile $outfile
    endif
@@ -4003,7 +4008,7 @@ EOF
    my $zInterp = $ppcNode->findvalue('@zInterp');
    my $zInterp_csh = "";
    if ( "$zInterp" ne "" ) {
-      $zInterp_csh = zInterpolate($zInterp,"\${prevyear}1201.$diag_source.nc",'tmp.nc',$caltype,$variables);
+      $zInterp_csh = zInterpolate($zInterp,"\${prevyear}1201.$diag_source.nc",'tmp.nc',$caltype,$variables,$diag_source);
       $zInterp_csh .= "\nmv -f tmp.nc \${prevyear}1201.$diag_source.nc";
    }
 
@@ -4203,7 +4208,7 @@ EOF
       $check_timavg
       $time_rm rm -f month.nc
 EOF
-      $csh .= zInterpolate($zInterp,'modellevels.nc',"$hDates[0]\${histmonth}01.$diag_source$tile.nc",$caltype,$variables);
+      $csh .= zInterpolate($zInterp,'modellevels.nc',"$hDates[0]\${histmonth}01.$diag_source$tile.nc",$caltype,$variables,$diag_source);
 
    } else { #no zinterp
       $csh .= <<EOF;
@@ -4306,7 +4311,7 @@ EOF
       $time_timavg \$TIMAVG -o modellevels.nc month.nc
    $check_timavg
 EOF
-         $csh .= zInterpolate($zInterp,'modellevels.nc',"$component.$range.\$monthf.nc",$caltype,$variables);
+         $csh .= zInterpolate($zInterp,'modellevels.nc',"$component.$range.\$monthf.nc",$caltype,$variables,$component);
       } else {
          $csh .= <<EOF;
    $time_timavg \$TIMAVG -o $component.$range.\$monthf.nc month.nc
@@ -4464,7 +4469,7 @@ $retry_timavg
 $check_timavg
 
 EOF
-      $csh .= zInterpolate($zInterp,"modellevels$tile.nc","$yr2do.$diag_source$tile.nc",$caltype,$variables);
+      $csh .= zInterpolate($zInterp,"modellevels$tile.nc","$yr2do.$diag_source$tile.nc",$caltype,$variables,$diag_source);
 
    } else {
       $csh .= <<EOF;
@@ -4560,7 +4565,7 @@ $retry_timavg
 $check_timavg
 
 EOF
-      $csh .= zInterpolate($zInterp,'modellevels.nc',"$component.$tENDf.ann.nc",$caltype,$variables);
+      $csh .= zInterpolate($zInterp,'modellevels.nc',"$component.$tENDf.ann.nc",$caltype,$variables,$component);
 
    } else {
       $csh .= <<EOF;
@@ -5102,7 +5107,7 @@ $check_ncrcat
 end
 EOF
          foreach my $i ( 1..6 ) {
-            $csh .= zInterpolate($zInterp,"$hDate.modellevels.tile$i.nc","$hDate.$source.tile$i.nc",$caltype,$variables);
+            $csh .= zInterpolate($zInterp,"$hDate.modellevels.tile$i.nc","$hDate.$source.tile$i.nc",$caltype,$variables,$source);
          }
          # convert tiles to latlon
          if ( "$xyInterp" ne '' ) {
@@ -5139,7 +5144,7 @@ $time_ncrcat ncrcat \$ncrcatopt *.$source.nc modellevels.nc
 $check_ncrcat
 $time_rm rm -f *.$source.nc
 EOF
-      $csh .= zInterpolate($zInterp,'modellevels.nc','all.nc',$caltype,$variables);
+      $csh .= zInterpolate($zInterp,'modellevels.nc','all.nc',$caltype,$variables,"all");
 
       # convert latlon/tripolar to latlon
       if ( "$xyInterp" ne '' ) {
@@ -6400,7 +6405,7 @@ $retry_timavg
    $time_timavg \$TIMAVG -o modellevels$t.nc sea$t.nc
 $check_timavg
 EOF
-               $csh .= zInterpolate($zInterp,"modellevels$t.nc","$component.$tSEASONf.tile$t.nc",$caltype,$variables);
+               $csh .= zInterpolate($zInterp,"modellevels$t.nc","$component.$tSEASONf.tile$t.nc",$caltype,$variables,$component);
             }
             $csh .= "$time_rm rm modellevels?.nc\n";
 
@@ -6500,7 +6505,7 @@ $retry_timavg
    $time_timavg \$TIMAVG -o modellevels\$i.nc sea\$i.nc
 $check_timavg
 EOF
-         $csh .= zInterpolate($zInterp,'modellevels$i.nc',"$component.$dates.tile\$i.nc",$caltype,$variables);
+         $csh .= zInterpolate($zInterp,'modellevels$i.nc',"$component.$dates.tile\$i.nc",$caltype,$variables,$component);
       } else {
          $csh .= <<EOF;
 $time_timavg \$TIMAVG -o $component.$dates.tile\$i.nc sea\$i.nc
@@ -6651,7 +6656,7 @@ $retry_timavg
 $check_timavg
 
 EOF
-            $csh .= zInterpolate($zInterp,'modellevels.nc',"$component.$tSEASONf.nc",$caltype,$variables);
+            $csh .= zInterpolate($zInterp,'modellevels.nc',"$component.$tSEASONf.nc",$caltype,$variables,$component);
             $csh .= <<EOF;
 $time_mv $mvfile $component.$tSEASONf.nc \$outdir/
 if ( \$status ) then
@@ -6725,7 +6730,7 @@ $retry_timavg
 $check_timavg
 
 EOF
-         $csh .= zInterpolate($zInterp,'modellevels.nc',"$component.$dates.nc",$caltype,$variables);
+         $csh .= zInterpolate($zInterp,'modellevels.nc',"$component.$dates.nc",$caltype,$variables,$component);
       } else {
          $csh .= <<EOF;
 $time_timavg \$TIMAVG -o $component.$dates.nc sea.nc

@@ -1,20 +1,19 @@
-# template for the pathscale compiler
+# template for the PGI compiler
 # typical use with mkmf
-# mkmf -t mkmf.template.pscale -c"-Duse_libMPI -Duse_netCDF" path_names /usr/local/include
+# mkmf -t pgi.mk -c"-Duse_libMPI -Duse_netCDF" path_names /usr/local/include
 ############
 # commands #
 ############
 FC = ftn
 CC = cc
 CXX = CC
-LD = ftn $(MAIN_PROGRAM)
+LD = ftn
 #########
 # flags #
 #########
 DEBUG =
 REPRO =
 VERBOSE =
-OPENMP =
 
 ##############################################
 # Need to use at least GNU Make version 3.81 #
@@ -23,38 +22,46 @@ need := 3.81
 ok := $(filter $(need),$(firstword $(sort $(MAKE_VERSION) $(need))))
 ifneq ($(need),$(ok))
 $(error Need at least make version $(need).  Load module gmake/3.81)
-endif 
+endif
+
+#################################################
+# Check version of PGI for use of -nofma option #
+#################################################
+has_nofma := $(shell $(FC) -dryrun -nofma foo.f90 > /dev/null 2>&1; echo $$?)
+ifneq ($(has_nofma),0)
+NOFMA :=
+else
+NOFMA := -nofma
+endif
 
 #################################################################
 # site-dependent definitions, set by environment                #
 #################################################################
 
-NETCDF_ROOT = $(CRAY_NETCDF_DIR)/netcdf-pathscale
+NETCDF_ROOT = $(CRAY_NETCDF_DIR)/netcdf-pgi
 MPI_ROOT    = $(MPICH_DIR)
 INCLUDE = -I$(NETCDF_ROOT)/include
 
 FPPFLAGS = $(INCLUDE)
-FFLAGS = -i4 -r8 -byteswapio -fno-second-underscore
-FFLAGS_OPT = -O3 -OPT:fast_math=on:Olimit=0:IEEE_arith=2 -TENV:X=1
-FFLAGS_DEBUG = -g -trapuv -TENV:simd_zmask=OFF:simd_umask=OFF
-FFLAGS_REPRO = -O2 -OPT:fast_math=off:Olimit=0 -TENV:X=1
+FFLAGS = -i4 -r8 -byteswapio -Mcray=pointer -Mcray=pointer -Mflushz -Mdaz -D_F2000
+FFLAGS_OPT = -O3 -Mvect=nosse -Mnoscalarsse -Mallocatable=95
+FFLAGS_DEBUG = -O0 -g -traceback -Ktrap=fp
+FFLAGS_REPRO = -O2 -Mvect=nosse -Mnoscalarsse $(NOFMA)
 FFLAGS_OPENMP = -mp
-FFLAGS_VERBOSE = -v
+FFLAGS_VERBOSE = -v -Minform=inform
 
 CPPFLAGS = $(INCLUDE)
 CFLAGS =
 CFLAGS_OPT = -O2
-CFLAGS_DEBUG = -g
+CFLAGS_DEBUG = -O0 -g -traceback -Ktrap=fp
 CFLAGS_OPENMP = -mp
-CFLAGS_VERBOSE = -v
+CFLAGS_VERBOSE = -v -Minform=inform
 
 # Optional Testing compile flags.  Mutually exclusive from DEBUG, REPRO, and OPT
 # *_TEST will match the production if no new option(s) is(are) to be tested.
-FFLAGS_TEST = -O3 -OPT:fast_math=on:Olimit=0:IEEE_arith=2 -TENV:X=1
+FFLAGS_TEST = -O3 -Mvect=simd:128 -Mallocatable=03
 CFLAGS_TEST = -O2
 
-# pathscale wants main program outside libraries, do
-# setenv MAIN_PROGRAM coupler_main.o or something before make
 LDFLAGS := -byteswapio
 LDFLAGS_VERBOSE := -v
 
@@ -70,8 +77,8 @@ else ifneq ($(TEST),)
 CFLAGS += $(CFLAGS_TEST)
 FFLAGS += $(FFLAGS_TEST)
 else
-FFLAGS += $(FFLAGS_OPT)
 CFLAGS += $(CFLAGS_OPT)
+FFLAGS += $(FFLAGS_OPT)
 endif
 
 ifneq ($(OPENMP),)
@@ -107,13 +114,13 @@ LDFLAGS += $(LIBS)
 # .f, .f90, .F, .F90. Given a sourcefile <file>.<ext>, where <ext> is one of
 # the above, this provides a number of default actions:
 
-# make <file>.opt	create an optimization report
-# make <file>.o		create an object file
-# make <file>.s		create an assembly listing
-# make <file>.x		create an executable file, assuming standalone
-#			source
-# make <file>.i		create a preprocessed file (for .F)
-# make <file>.i90	create a preprocessed file (for .F90)
+# make <file>.opt       create an optimization report
+# make <file>.o         create an object file
+# make <file>.s         create an assembly listing
+# make <file>.x         create an executable file, assuming standalone
+#                       source
+# make <file>.i         create a preprocessed file (for .F)
+# make <file>.i90       create a preprocessed file (for .F90)
 
 # The macro TMPFILES is provided to slate files like the above for removal.
 

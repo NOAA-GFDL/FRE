@@ -1,19 +1,12 @@
 source $MODULESHOME/init/csh
- 
+
 module use -a /ncrc/home2/fms/local/modulefiles
-module unload PrgEnv-pgi PrgEnv-pathscale PrgEnv-intel PrgEnv-gnu PrgEnv-cray
+module unload PrgEnv-pgi PrgEnv-intel PrgEnv-gnu PrgEnv-cray
 module unload netcdf fre
-set thishost = `hostname`
-if ($thishost =~ gaea[1234]) then
-    module load PrgEnv-gnu/4.0.46
-else if ($thishost =~ gaea[5678]) then
-    module load PrgEnv-gnu/5.2.40
-else
-    module load PrgEnv-gnu/5.2.82
-endif
+module load PrgEnv-gnu/5.2.82
 module load $(FRE_VERSION)
 module load git
- 
+
 setenv KMP_STACKSIZE 512m
 setenv NC_BLKSZ 1M
 setenv F_UFMTENDIAN big
