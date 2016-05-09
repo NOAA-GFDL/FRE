@@ -1,70 +1,6 @@
 #
-# $Id: FREExperiment.pm,v 18.1.2.21.4.1.2.2 2014/12/05 17:08:12 Seth.Underwood Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: Experiment Management Module
-# ------------------------------------------------------------------------------
-# arl    Ver   18.1  Merged revision 18.0.2.1 onto trunk            March 10
-# afy -------------- Branch 18.1.2 -------------------------------- March 10
-# afy    Ver   1.00  Modify extractCheckoutInfo (add line numbers)  March 10
-# afy    Ver   1.01  Modify createCheckoutScript (keep order)       March 10
-# afy    Ver   2.00  Remove createCheckoutScript subroutine         May 10
-# afy    Ver   2.01  Remove createCompileScript subroutine          May 10
-# afy    Ver   3.00  Remove executable subroutine                   May 10
-# arl    Ver   4.00  Modify extractCheckoutInfo (read property)     August 10
-# afy    Ver   5.00  Modify extractCheckoutInfo (no CVSROOT)        August 10
-# afy    Ver   6.00  Use new module FREMsg (symbolic levels)        January 11
-# afy    Ver   6.01  Modify extractNodes (no 'required')            January 11
-# afy    Ver   6.02  Modify extractValue (no 'required')            January 11
-# afy    Ver   6.03  Modify extractComponentValue (no 'required')   January 11
-# afy    Ver   6.04  Modify extractSourceValue (no 'required')      January 11
-# afy    Ver   6.05  Modify extractCompileValue (no 'required')     January 11
-# afy    Ver   6.06  Modify extractCheckoutInfo (hashes, checks)    January 11
-# afy    Ver   6.07  Modify extractCompileInfo (hashes, checks)     January 11
-# afy    Ver   6.08  Modify extractCompileInfo (make overrides)     January 11
-# afy    Ver   6.09  Modify extractCompileInfo (libraries order)    January 11
-# afy    Ver   7.00  Modify placeholdersExpand (check '$' presence) April 11
-# afy    Ver   7.01  Add property subroutine (similar to FRE.pm)    April 11
-# afy    Ver   7.02  Modify experimentDirsCreate (call property)    April 11
-# afy    Ver   7.03  Modify experimentDirsVerify (call property)    April 11
-# afy    Ver   7.04  Modify extractCheckoutInfo (call property)     April 11
-# afy    Ver   7.05  Modify experimentCreate (don't pass '$fre')    April 11
-# afy    Ver   8.00  Add dir subroutine                             May 11
-# afy    Ver   8.01  Add stateDir subroutine                        May 11
-# afy    Ver   8.02  Modify dir-returning subroutines (call dir)    May 11
-# afy    Ver   9.00  Modify dir-returning subroutines (cosmetics)   May 11
-# afy    Ver  10.00  Add extractRegressionRunInfo subroutine        November 11
-# afy    Ver  10.01  Add extractProductionRunInfo subroutine        November 11
-# afy    Ver  10.02  Add executable subroutine                      November 11
-# afy    Ver  10.03  Add executableCanBeBuilt subroutine            November 11
-# afy    Ver  10.04  Modify extractExecutable subroutine            November 11
-# afy    Ver  11.00  Add extractRegressionLabels subroutine         January 12
-# afy    Ver  12.00  Add sdtoutTmpDir subroutine                    February 12
-# afy    Ver  13.00  Remove tmpDir subroutine                       March 12
-# afy    Ver  14.00  Add regressionLabels utility                   June 12
-# afy    Ver  14.01  Add extractOverrideParams utility              June 12
-# afy    Ver  14.02  Add overrideRegressionNamelists utility        June 12
-# afy    Ver  14.03  Add overrideProductionNamelists utility        June 12
-# afy    Ver  14.04  Add MPISizeParameters utility                  June 12
-# afy    Ver  14.05  Add regressionPostfix utility                  June 12
-# afy    Ver  14.06  Modify extractNamelists (use FRENamelists.pm)  June 12
-# afy    Ver  14.07  Modify extractRegressionLabels (suite, all)    June 12
-# afy    Ver  14.08  Modify extractRegressionRunInfo (add option)   June 12
-# afy    Ver  14.09  Modify extractProductionRunInfo                June 12
-# afy    Ver  14.10  Modify extractRegressionRunInfo (run as key)   June 12
-# afy    Ver  15.00  Modify extractTables (return undef on errors)  July 12
-# afy    Ver  16.00  Modify extractShellCommands (no 'defined')     July 12
-# afy    Ver  16.01  Modify regressionPostfix (add suffuxes)        July 12
-# afy    Ver  17.00  Modify MPISizeParameters (fix concurrent)      August 12
-# afy    Ver  18.00  Merge with 18.1.2.17.2.1                       February 13
-# afy    Ver  19.00  Modify MPISizeParameters (generic version)     February 13
-# afy    Ver  19.01  Modify regressionPostfix (generic version)     February 13
-# afy    Ver  19.02  Modify extract*RunInfo (generic version)       February 13
-# afy    Ver  20.00  Modify MPISizeParameters (compatibility mode)  April 13
-# keo    Ver  20.01  Modify extractCheckoutInfo (/:/)               April 13
-# afy    Ver  21.00  Modify MPISizeCompatible (remove ice/land)     April 13
-# afy    Ver  21.01  Add MPISizeComponentEnabled (subcomponents)    April 13
-# afy    Ver  21.02  Modify MPISizeParametersGeneric (call ^)       April 13
-# afy    Ver  21.03  Modify MPISizeParametersCompatible (serials)   April 13
 # ------------------------------------------------------------------------------
 # Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2009-2013
 # Designed and written by V. Balaji, Amy Langenhorst and Aleksey Yakovlev
@@ -1192,6 +1128,26 @@ sub extractCompileValue($$$)
   return $value;
 }
 
+sub extractDoF90Cpp($$)
+# ------ arguments: $object $xPath $componentName
+# ------ called as object method
+# ------ return a value corresponding to the $xPath under the <component/compile> node, following inherits
+{
+  my ($r, $c) = @_;
+  my ($exp, $value) = ($r, '');
+  my $compileNode = $exp->node()->findnodes('component[@name="' . $c . '"]/compile')->get_node(1);
+  while ($exp and !$value)
+  {
+    $value = $exp->nodeValue($compileNode, '@doF90Cpp');
+    $exp = $exp->parent();
+  }
+  if ($value!~/(?i:yes|on|true)/)
+  {
+    $value = '';
+  }
+  return $value;
+}
+
 sub extractExecutable($)
 # ------ arguments: $object
 # ------ called as object method
@@ -1763,6 +1719,7 @@ sub extractCompileInfo($)
 	    $component{makeOverrides} = $strMergeWS->($r->extractCompileValue('makeOverrides', $name));
 	    $component{compileCsh} = $r->extractCompileValue('csh', $name);
 	    $component{mkmfTemplate} = $strRemoveWS->($r->extractMkmfTemplate($name)) || $fre->mkmfTemplate();
+	    $component{doF90Cpp} = $r->extractDoF90Cpp($name);
             $component{lineNumber} = $componentNode->line_number();
 	    $component{rank} = undef;
 	    # ------------------------------------------------------------------------------------------- print what we got
