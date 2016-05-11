@@ -2180,6 +2180,12 @@ sub getResourceRequests($$) {
         exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
     }
 
+    # Add up total ranks
+    for my $comp (@components) {
+        $data{npes}              += $data{$comp}{ranks};
+        $data{npes_with_threads} += $data{$comp}{ranks} * $data{$comp}{threads};
+    }
+
     # Apply hyperthreading if desired and possible
     if ($ht and ! $fre->property('FRE.mpi.runCommand.option.ht')) {
         $fre->out(FREMsg::WARNING, "Hyperthreading was requested but isn't supported on this platform.");
@@ -2201,12 +2207,6 @@ sub getResourceRequests($$) {
                 }
             }
         }
-    }
-
-    # Add up total ranks
-    for my $comp (@components) {
-        $data{npes}              += $data{$comp}{ranks};
-        $data{npes_with_threads} += $data{$comp}{ranks} * $data{$comp}{threads};
     }
 
     return \%data;

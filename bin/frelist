@@ -64,6 +64,7 @@ use FREExperiment();
 use FREMsg();
 use FRETargets();
 use FREUtil();
+use FRETemplate();
 
 # //////////////////////////////////////////////////////////////////////////////
 # ////////////////////////////////////////////////////////// Global constants //
@@ -77,6 +78,7 @@ use FREUtil();
 
   use constant OPTLIST =>
   (
+    'cores',
     'description|D',
     'directory|d=s',
     'evaluate|e=s',
@@ -125,6 +127,7 @@ use FREUtil();
       "\n",
       "  Usage: $self [option|experiment] ...\n\n",
       "  Options:\n\n",
+      "              --cores                     print number of cores that would be requested\n",
       "   -D,        --description               include experiment descriptions\n",
       "   -d STRING, --directory=STRING          list experiment directories with types, defined by the STRING\n",
       "   -e STRING, --evaluate=STRING           evaluate STRING expression (in XPath syntax) to retrieve experiment information\n",
@@ -519,6 +522,39 @@ use FREUtil();
     my $expNamePrefix = (scalar(@expNamesRequested) == 1) ? '' : "$expName ";
 
     $fre->setCurrentExperimentName($expName);
+
+    if ($opt{cores}) {
+        my $print = sub {
+            my ($mpiInfo, $label) = @_;
+            my $string = FRETemplate::schedulerSizeAsString($fre, 'run', $mpiInfo->{coupler}, $mpiInfo->{npes}, $mpiInfo->{npesList}, $mpiInfo->{ntdsList});
+            my ($cores) = $string =~ /size=(\d+)/;
+            print "$expName $label would request $cores cores\n";
+        };
+
+        if ($opt{regression}) {
+            if (my @labels = $exp->extractRegressionLabels($opt{regression})) {
+                for my $label (@labels) {
+                    my $regInfo = $exp->extractRegressionRunInfo($label, $opt{ht}) or do {
+                        $fre->out(FREMsg::FATAL, "Unable to extract parameters for the regression test '$label' in the experiment '$expName'");
+                        exit FREDefaults::STATUS_FRE_RUN_GENERIC_PROBLEM;
+                    };
+                    $print->($regInfo->{$_}->{mpiInfo}, sprintf("regression #%s", $_+1))
+                        for sort keys %$regInfo;
+                }
+            }
+            else {
+                $fre->out(FREMsg::FATAL, "Unable to select regression tests to process");
+                exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
+            }
+        }
+        else {
+            my $prdInfo = $exp->extractProductionRunInfo($opt{ht}) or do {
+                $fre->out(FREMsg::FATAL, "Unable to extract production parameters for the experiment '$expName'");
+                exit FREDefaults::STATUS_FRE_RUN_GENERIC_PROBLEM;
+            };
+            $print->($prdInfo->{mpiInfo}, 'production');
+        }
+    }
 
     if ($opt{directory})
     {
