@@ -424,10 +424,8 @@
 	<xs:element ref="resources"/>
         <xs:element ref="xi:include"/>
       </xs:choice>
-      <xs:attribute name="npes" use="required" type="xs:string"/>
       <xs:attribute name="ocean_layout" type="xs:string"/>
       <xs:attribute name="overrideParams" type="xs:string"/>
-      <xs:attribute name="runTime" type="xs:string"/>
       <xs:attribute name="simTime" use="required" type="xs:string"/>
       <xs:attribute name="units" use="required" type="xs:string"/>
     </xs:complexType>
@@ -438,7 +436,6 @@
       <xs:documentation>Runs are broken into segments because running a full production run would take too many system resources (notably, wall clock time). Segments define their own simulation time (and units), as well as their own run time. The run time defined in the production tag will be used over the run time defined in the segment tag.</xs:documentation>
     </xs:annotation>
     <xs:complexType>
-      <xs:attribute name="runTime" use="required" type="xs:string"/>
       <xs:attribute name="simTime" use="required" type="xs:integer"/>
       <xs:attribute name="units" use="required" type="xs:string"/>
     </xs:complexType>
@@ -470,10 +467,10 @@
       <xs:documentation>This tag contains all of the layout information for the atmosphere.</xs:documentation>
     </xs:annotation>
     <xs:complexType>
-      <xs:attribute name="ranks" use="required" type="xs:integer"/>
-      <xs:attribute name="threads" use="required" type="xs:integer"/>
-      <xs:attribute name="layout" use="required" type="freLayout"/>
-      <xs:attribute name="io_layout" use="required" type="freLayout"/>
+      <xs:attribute name="ranks" use="required" type="intORproperty"/>
+      <xs:attribute name="threads" use="required" type="intORproperty"/>
+      <xs:attribute name="layout" use="optional" type="freLayout"/>
+      <xs:attribute name="io_layout" use="optional" type="freLayout"/>
       <xs:attribute name="mask_table" use="optional" type="xs:string"/>
     </xs:complexType>
   </xs:element>
@@ -483,10 +480,10 @@
       <xs:documentation>This tag contains all of the layout information for the ocean.</xs:documentation>
     </xs:annotation>
     <xs:complexType>
-      <xs:attribute name="ranks" use="required" type="xs:integer"/>
-      <xs:attribute name="threads" use="required" type="xs:integer"/>
-      <xs:attribute name="layout" use="required" type="freLayout"/>
-      <xs:attribute name="io_layout" use="required" type="freLayout"/>
+      <xs:attribute name="ranks" use="required" type="intORproperty"/>
+      <xs:attribute name="threads" use="required" type="intORproperty"/>
+      <xs:attribute name="layout" use="optional" type="freLayout"/>
+      <xs:attribute name="io_layout" use="optional" type="freLayout"/>
       <xs:attribute name="mask_table" use="optional" type="xs:string"/>
     </xs:complexType>
   </xs:element>
@@ -496,10 +493,10 @@
       <xs:documentation>This tag contains all of the layout information for the land.</xs:documentation>
     </xs:annotation>
     <xs:complexType>
-      <xs:attribute name="ranks" use="required" type="xs:integer"/>
-      <xs:attribute name="threads" use="required" type="xs:integer"/>
-      <xs:attribute name="layout" use="required" type="freLayout"/>
-      <xs:attribute name="io_layout" use="required" type="freLayout"/>
+      <xs:attribute name="ranks" use="optional" type="intORproperty"/>
+      <xs:attribute name="threads" use="optional" type="intORproperty"/>
+      <xs:attribute name="layout" use="optional" type="freLayout"/>
+      <xs:attribute name="io_layout" use="optional" type="freLayout"/>
       <xs:attribute name="mask_table" use="optional" type="xs:string"/>
     </xs:complexType>
   </xs:element>
@@ -509,10 +506,10 @@
       <xs:documentation>This tag contains all of the layout information for the ice.</xs:documentation>
     </xs:annotation>
     <xs:complexType>
-      <xs:attribute name="ranks" use="required" type="xs:integer"/>
-      <xs:attribute name="threads" use="required" type="xs:integer"/>
-      <xs:attribute name="layout" use="required" type="freLayout"/>
-      <xs:attribute name="io_layout" use="required" type="freLayout"/>
+      <xs:attribute name="ranks" use="optional" type="intORproperty"/>
+      <xs:attribute name="threads" use="optional" type="intORproperty"/>
+      <xs:attribute name="layout" use="optional" type="freLayout"/>
+      <xs:attribute name="io_layout" use="optional" type="freLayout"/>
       <xs:attribute name="mask_table" use="optional" type="xs:string"/>
     </xs:complexType>
   </xs:element>
@@ -531,11 +528,22 @@
     </xs:restriction>
   </xs:simpleType>
 
-  <xs:simpleType name="freLayout">
+  <xs:simpleType name="intORproperty">
     <xs:annotation>
-      <xs:documentation>Restricts the possible options to a N+,N+ format.</xs:documentation>
+      <xs:documentation>Restricts the possible options to a integer or a property.</xs:documentation>
     </xs:annotation>
     <xs:restriction base="xs:string">
+      <xs:pattern value="$(\S+)"/>
+      <xs:pattern value="[0-9]+"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="freLayout">
+    <xs:annotation>
+      <xs:documentation>Restricts the possible options to a N+,N+ format or a property.</xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:string">
+      <xs:pattern value="$(\S+)"/>
       <xs:pattern value="[0-9]+,[0-9]+"/>
     </xs:restriction>
   </xs:simpleType>
@@ -583,9 +591,7 @@
       <xs:attribute name="days" type="xs:string"/>
       <xs:attribute name="hours" type="xs:string"/>
       <xs:attribute name="months" type="xs:string"/>
-      <xs:attribute name="npes" use="required" type="xs:string"/>
       <xs:attribute name="overrideParams" type="xs:string"/>
-      <xs:attribute name="runTimePerJob" use="required" type="xs:string"/>
     </xs:complexType>
   </xs:element>
 
@@ -660,6 +666,7 @@
         <xs:element ref="ptmp"/>
         <xs:element ref="stmp"/>
         <xs:element ref="archive"/>
+	<xs:element ref="tmp"/>
         <xs:element name="postProcess" type="xs:string">
           <xs:annotation>
             <xs:documentation>Defines the path to the post-processing directory.</xs:documentation>
@@ -738,6 +745,12 @@
   <xs:element name="stmp" type="xs:string">
     <xs:annotation>
       <xs:documentation>Cached directory for post-processed files.</xs:documentation>
+    </xs:annotation>
+  </xs:element>
+
+  <xs:element name="tmp" type="xs:string">
+    <xs:annotation>
+      <xs:documentation>Appears to be a theia-specific scratch dir.</xs:documentation>
     </xs:annotation>
   </xs:element>
 
