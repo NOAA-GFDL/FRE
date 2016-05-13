@@ -741,10 +741,11 @@ sub setRunCommand($$$)
   my @components = split(';', $fre->property('FRE.mpi.component.names'));
   my ($runCommand, $runSizeInfo) = ($runCommandLauncher, "  set -r npes = $np\n");
 
-  my $htopt
+  my ($ht, $htopt)
       = $mpiInfo->{ht}
-      ? $fre->property('FRE.mpi.runCommand.option.ht')
-      : $fre->property('FRE.mpi.runCommand.option.noht');
+      ? ('.true.', $fre->property('FRE.mpi.runCommand.option.ht'))
+      : ('.false.', $fre->property('FRE.mpi.runCommand.option.noht'));
+  $runSizeInfo .= "  set -r ht = $ht\n";
   $runSizeInfo .= "  set -r htopt = $htopt\n";
 
   if ($cf)
