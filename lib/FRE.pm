@@ -98,6 +98,20 @@ my $xmlLoad = sub($$)
   }
 };
 
+my $xmlValidateAndLoad = sub($$)
+# ------ arguments: $xmlfile $verbose
+# ------ return the loaded document 
+{
+  my ($x, $v) = @_; 
+
+  if (validate($x, $v)) {
+      return $xmlLoad->($x, $v);
+  }
+  else {
+      return undef;
+  }
+};
+
 my $versionGet = sub($$)
 # ------ arguments: $rootNode $verbose
 # ------ return the (modified) version number
@@ -304,7 +318,7 @@ sub validate($$)
 # ------ arguments: $xmlfile $verbose
 # ------ return 1 if the $xmlfile has been successfully validated
 {
-  my ($x, $s, $v) = @_;
+  my ($x, $v) = @_;
   my $document = $xmlLoad->($x, $v);
   if ($document)
   {
@@ -320,9 +334,8 @@ sub validate($$)
       }
       else
       {
-	my ($line, $message) = ($@->line(), $@->message());
-	$message =~ s/\n$//s;
-	FREMsg::out($v, FREMsg::FATAL, "The XML file '$x', line '$line' - $message"); 
+    _print_validation_errors($@);
+     FREMsg::out($v, FREMsg::FATAL, "The XML file '$x' is not valid");
 	return undef;
       }
     }
@@ -337,6 +350,31 @@ sub validate($$)
     FREMsg::out($v, FREMsg::FATAL, "The XML file '$x' can't be parsed");
     return undef;
   }
+}
+
+sub _print_validation_errors {
+# ------ argument: $LibXML::Error
+# ------ returns nothing, prints report
+    my ($error, $collection) = @_;
+
+    my ($line, $message) = ($error->line, $error->message);
+    chomp $message;
+    push @$collection, [$line, $message];
+
+    if ($error->{_prev}) {
+        _print_validation_errors($error->{_prev}, $collection);
+    }
+    else {
+        my $N = scalar @$collection;
+        my @errors = sort { $a->[0] <=> $b->[0] } @$collection;
+        if ($N > 100) {
+            print "XML contains many validation errors; first 100 shown below:\n";
+        }
+        else {
+            print "XML contains $N validation errors:\n";
+        }
+        print "Line $_->[0] - $_->[1]\n" for @errors;
+    }
 }
 
 # //////////////////////////////////////////////////////////////////////////////
@@ -373,7 +411,7 @@ sub new($$%)
   {
     FREMsg::out($o{verbose}, FREMsg::NOTE, "The '$caller' begun using the XML file '$xmlfileAbsPath'...");
     # ----------------------------------------- load the (probably validated) configuration file
-    my $document = $xmlLoad->($xmlfileAbsPath, $o{verbose});
+    my $document = $xmlValidateAndLoad->($xmlfileAbsPath, $o{verbose});
     if ($document)
     {
       my $rootNode = $document->documentElement();

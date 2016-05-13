@@ -1869,11 +1869,6 @@ sub extractRegressionRunInfo($$$)
 	{
       my $resources = $r->getResourceRequests($ht, $runNodes[$i]);
 
-      if ($r->nodeValue($runNodes[$i], '@npes')) {
-          $fre->out(FREMsg::FATAL, "The <runtime>/<production> npes attribute is now outlawed; specify requested ranks for each component in <runtime>/<production>/<resources> tag.");
-          exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
-      }
-
 	  my $msl = $r->nodeValue($runNodes[$i], '@months');
 	  my $dsl = $r->nodeValue($runNodes[$i], '@days');
 	  my $hsl = $r->nodeValue($runNodes[$i], '@hours');
@@ -1963,11 +1958,6 @@ sub extractProductionRunInfo($$)
       my $resources = $r->getResourceRequests($ht);
       my $mpiInfo = $MPISizeParameters->($r, $resources, $nmls->copy);
       addResourceRequestsToMpiInfo($fre, $resources, $mpiInfo);
-
-      if ($r->nodeValue($prdNode, '@npes')) {
-          $fre->out(FREMsg::FATAL, "The <runtime>/<production> npes attribute is now outlawed; specify requested ranks for each component in <runtime>/<production>/<resources> tag.");
-          exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
-      }
 
       my $smt = $r->nodeValue($prdNode, '@simTime');
       my $smu = $r->nodeValue($prdNode, '@units');
