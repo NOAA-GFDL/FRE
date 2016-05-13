@@ -2143,12 +2143,20 @@ sub getResourceRequests($$) {
     }
 
     # Require ranks/threads for at least one component
+    my %complete_specs = (
+        atm => 4,
+        ocn => 4,
+        lnd => 2,
+        ice => 2,
+    );
     my $ok;
     for my $comp (@components) {
         my $message;
         my $N = values %{$data{$comp}};
         if ($data{$comp}{ranks} and $data{$comp}{threads}) {
             $ok = 1;
+        }
+        if ($N >= $complete_specs{$comp}) {
             $message = "Component $comp has complete resource request specifications: ";
         }
         elsif ($N > 0) {
