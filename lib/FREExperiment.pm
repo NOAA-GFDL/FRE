@@ -2111,7 +2111,7 @@ sub getResourceRequests($$) {
         my $message = $regression_run_node
             ? "No resource request tag was found within <runtime>/<regression>/<run> OR within <runtime>/<production> or its experiment ancestors. "
             : "No resource request tag was found within <runtime>/<production> or its experiment ancestors. ";
-        $message .= "A <resources> tag must now be specified for every production and regression run. See FRE Documentation at http://wiki.gfdl.noaa.gov/index.php/FRE_User_Documentation";
+        $message .= "A <resources> tag must now be specified. See FRE Documentation at http://wiki.gfdl.noaa.gov/index.php/FRE_User_Documentation";
         $fre->out(FREMsg::FATAL, $message);
         exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
     }
