@@ -419,10 +419,11 @@
       <xs:documentation>This tag defines the simulation time (in the specified units), the number of cores to use, and the total runtime for the run.</xs:documentation>
     </xs:annotation>
     <xs:complexType>
-      <xs:sequence>
+      <xs:choice minOccurs="1" maxOccurs="unbounded">
         <xs:element ref="segment"/>
-        <xs:element minOccurs="0" ref="peLayout"/>
-      </xs:sequence>
+	<xs:element ref="resources"/>
+        <xs:element ref="xi:include"/>
+      </xs:choice>
       <xs:attribute name="npes" use="required" type="xs:string"/>
       <xs:attribute name="ocean_layout" type="xs:string"/>
       <xs:attribute name="overrideParams" type="xs:string"/>
@@ -442,6 +443,102 @@
       <xs:attribute name="units" use="required" type="xs:string"/>
     </xs:complexType>
   </xs:element>
+
+  <xs:element name="resources">
+    <xs:annotation>
+      <xs:documentation>This tag contains all of the information for configuring the processor layout specific to a machine. Multiple resources tags are allowed, but the site attribute should be unique.</xs:documentation>
+    </xs:annotation>
+    <xs:complexType>
+      <xs:choice minOccurs="1" maxOccurs="4">
+	<xs:element ref="atm"/>
+	<xs:element ref="ocn"/>
+	<xs:element ref="lnd"/>
+	<xs:element ref="ice"/>
+      </xs:choice>
+      <xs:attribute name="site" use="optional" type="resourceSite"/>
+      <xs:attribute name="jobWallclock" use="optional" type="xs:string"/>
+      <xs:attribute name="segRuntime" use="optional" type="xs:string"/>
+    </xs:complexType>
+    <xs:unique name="unique_site">
+      <xs:selector xpath="resources"/>
+      <xs:field xpath="@name"/>
+    </xs:unique>
+  </xs:element>
+
+  <xs:element name="atm">
+    <xs:annotation>
+      <xs:documentation>This tag contains all of the layout information for the atmosphere.</xs:documentation>
+    </xs:annotation>
+    <xs:complexType>
+      <xs:attribute name="ranks" use="required" type="xs:integer"/>
+      <xs:attribute name="threads" use="required" type="xs:integer"/>
+      <xs:attribute name="layout" use="required" type="freLayout"/>
+      <xs:attribute name="io_layout" use="required" type="freLayout"/>
+      <xs:attribute name="mask_table" use="optional" type="xs:string"/>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="ocn">
+    <xs:annotation>
+      <xs:documentation>This tag contains all of the layout information for the ocean.</xs:documentation>
+    </xs:annotation>
+    <xs:complexType>
+      <xs:attribute name="ranks" use="required" type="xs:integer"/>
+      <xs:attribute name="threads" use="required" type="xs:integer"/>
+      <xs:attribute name="layout" use="required" type="freLayout"/>
+      <xs:attribute name="io_layout" use="required" type="freLayout"/>
+      <xs:attribute name="mask_table" use="optional" type="xs:string"/>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="lnd">
+    <xs:annotation>
+      <xs:documentation>This tag contains all of the layout information for the land.</xs:documentation>
+    </xs:annotation>
+    <xs:complexType>
+      <xs:attribute name="ranks" use="required" type="xs:integer"/>
+      <xs:attribute name="threads" use="required" type="xs:integer"/>
+      <xs:attribute name="layout" use="required" type="freLayout"/>
+      <xs:attribute name="io_layout" use="required" type="freLayout"/>
+      <xs:attribute name="mask_table" use="optional" type="xs:string"/>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="ice">
+    <xs:annotation>
+      <xs:documentation>This tag contains all of the layout information for the ice.</xs:documentation>
+    </xs:annotation>
+    <xs:complexType>
+      <xs:attribute name="ranks" use="required" type="xs:integer"/>
+      <xs:attribute name="threads" use="required" type="xs:integer"/>
+      <xs:attribute name="layout" use="required" type="freLayout"/>
+      <xs:attribute name="io_layout" use="required" type="freLayout"/>
+      <xs:attribute name="mask_table" use="optional" type="xs:string"/>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:simpleType name="resourceSite">
+    <xs:annotation>
+      <xs:documentation>Restricts the possible values for the resource site.</xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="ncrc"/>
+      <xs:enumeration value="ncrc3"/>
+      <xs:enumeration value="theia"/>
+      <xs:enumeration value="titan"/>
+      <xs:enumeration value="eos"/>
+      <xs:enumeration value="rhea"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="freLayout">
+    <xs:annotation>
+      <xs:documentation>Restricts the possible options to a N+,N+ format.</xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:string">
+      <xs:pattern value="[0-9]+,[0-9]+"/>
+    </xs:restriction>
+  </xs:simpleType>
 
   <xs:element name="peLayout">
     <xs:annotation>
@@ -479,6 +576,10 @@
       <xs:documentation>A regression run frequency, number of cores, run time per job, and optional namelist override parameters are specified in this tag.</xs:documentation>
     </xs:annotation>
     <xs:complexType>
+      <xs:sequence>
+	<xs:element minOccurs="0" maxOccurs="unbounded" ref="resources"/>
+        <xs:element minOccurs="0" maxOccurs="unbounded" ref="xi:include"/>
+      </xs:sequence>
       <xs:attribute name="days" type="xs:string"/>
       <xs:attribute name="hours" type="xs:string"/>
       <xs:attribute name="months" type="xs:string"/>
