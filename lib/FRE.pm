@@ -55,6 +55,8 @@ use strict;
 
 use File::Spec();
 use XML::LibXML();
+use POSIX;
+use Try::Tiny;
 
 use FREDefaults();
 use FREExperiment();
@@ -63,7 +65,6 @@ use FREPlatforms();
 use FREProperties();
 use FRETargets();
 use FREUtil();
-use Try::Tiny;
 
 # //////////////////////////////////////////////////////////////////////////////
 # ////////////////////////////////////////////////////////// Global constants //
@@ -334,7 +335,7 @@ sub validate($$)
       }
       else
       {
-    _print_validation_errors($@);
+    _print_validation_errors($@, $x);
      FREMsg::out($v, FREMsg::FATAL, "The XML file '$x' is not valid");
 	return undef;
       }
@@ -355,25 +356,71 @@ sub validate($$)
 sub _print_validation_errors {
 # ------ argument: $LibXML::Error
 # ------ returns nothing, prints report
-    my ($error, $collection) = @_;
+    my ($error, $xml, $collection) = @_;
 
-    my ($line, $message) = ($error->line, $error->message);
+    my ($file, $line, $message) = ($error->file, $error->line, $error->message);
     chomp $message;
-    push @$collection, [$line, $message];
+    $collection->{$file}->{$line}->{$message} = 1;
 
     if ($error->{_prev}) {
-        _print_validation_errors($error->{_prev}, $collection);
+        _print_validation_errors($error->{_prev}, $xml, $collection);
     }
     else {
-        my $N = scalar @$collection;
-        my @errors = sort { $a->[0] <=> $b->[0] } @$collection;
-        if ($N > 100) {
-            print "XML contains many validation errors; first 100 shown below:\n";
+        my $xml_errors = $collection->{$xml};
+        my $include_errors = { map { $_ => $collection->{$_} } grep !/^$xml$/, keys %$collection };
+        my ($xml_count, $include_count, %include_count);
+
+        # include errors are double-counted so weed them out
+        for my $include (keys %$include_errors) {
+            for my $include_line (keys %{$include_errors->{$include}}) {
+                for my $include_message (keys %{$include_errors->{$include}->{$include_line}}) {
+                    ++$include_count;
+                    ++$include_count{$include};
+                    for my $xml_line (keys %$xml_errors) {
+                        for my $xml_message (keys %{$xml_errors->{$xml_line}}) {
+                            $xml_errors->{$xml_line}->{$xml_message} = 0
+                                if $include_line == $xml_line and $include_message eq $xml_message;
+                        }
+                    }
+                }
+            }
         }
-        else {
-            print "XML contains $N validation errors:\n";
+        for my $xml_line (keys %$xml_errors) {
+            for my $xml_message (keys %{$xml_errors->{$xml_line}}) {
+                ++$xml_count if $xml_errors->{$xml_line}->{$xml_message};
+            }
         }
-        print "Line $_->[0] - $_->[1]\n" for @errors;
+
+        my $N = $xml_count + $include_count;
+        my $message
+            = $N > 100
+            ? "Many XML validation errors; first 100 shown below"
+            : "$N XML validation errors";
+        my $x = 78 - length $message;
+        printf "%s $message %s\n", '*' x int($x/2), '*' x ceil($x/2);
+
+        my $y;
+        if ($xml_count) {
+            $y = "\n";
+            print "$xml:\n";
+            for my $xml_line (sort { $a <=> $b } keys %$xml_errors) {
+                for my $xml_message (sort keys %{$xml_errors->{$xml_line}}) {
+                    print "    Line $xml_line - $xml_message\n" if $xml_errors->{$xml_line}->{$xml_message};
+                }
+            }
+        }
+        for my $include (keys %$include_errors) {
+            if ($include_count{$include}) {
+                print "$y$include:\n";
+                $y = "\n";
+                for my $include_line (sort { $a <=> $b } keys %{$include_errors->{$include}}) {
+                    for my $include_message (sort keys %{$include_errors->{$include}->{$include_line}}) {
+                        print "    Line $include_line - $include_message\n";
+                    }
+                }
+            }
+        }
+        print '*' x 80 . "\n";
     }
 }
 
