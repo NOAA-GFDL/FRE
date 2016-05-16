@@ -1869,7 +1869,6 @@ sub extractRegressionRunInfo($$$)
 	{
       my $resources = $r->getResourceRequests($ht, $runNodes[$i]);
 
-	  my $nps = $resources->{npes};
 	  my $msl = $r->nodeValue($runNodes[$i], '@months');
 	  my $dsl = $r->nodeValue($runNodes[$i], '@days');
 	  my $hsl = $r->nodeValue($runNodes[$i], '@hours');
@@ -1962,7 +1961,7 @@ sub extractProductionRunInfo($$)
 
       my $smt = $r->nodeValue($prdNode, '@simTime');
       my $smu = $r->nodeValue($prdNode, '@units');
-      my $srt = $resources->{jobWallclock} || $fre->runTime($resources->{npes});
+      my $srt = $resources->{jobWallclock} || $fre->runTime($resources->{npes_with_threads});
       my $gmt = $r->nodeValue($prdNode, 'segment/@simTime');
       my $gmu = $r->nodeValue($prdNode, 'segment/@units');
       my $grt = $resources->{segRuntime};
@@ -2081,23 +2080,38 @@ sub getResourceRequests($$) {
     my %data;
     my $node;
 
+    # given a list of suitable resource nodes, pick the site-specific one
+    my $pick_node = sub {
+        my @site_nodes    = grep {   $_->hasAttribute('site') } @_;
+        my @nonsite_nodes = grep { ! $_->hasAttribute('site') } @_;
+
+        if (my $n = @site_nodes) {
+            $fre->out(FREMsg::WARNING, "Found $n equally suitable site-specific resources tags; using first one") if $n > 1;
+            return $site_nodes[0];
+        }
+        if (my $n = @nonsite_nodes) {
+            $fre->out(FREMsg::WARNING, "Found $n equally suitable site-agnostic resources tags; using first one") if $n > 1;
+            return $nonsite_nodes[0];
+        }
+    };
+
     # if node is given, try to find <resources> tag with no inheritance
     if ($regression_run_node) {
-        $node = $regression_run_node->findnodes("resources[\@site = '$site']")->get_node(1);
+        $node = $pick_node->($regression_run_node->findnodes("resources[\@site = '$site' or not(\@site)]"));
     }
 
     # for production OR if regression <resources> tag wasn't found,
     # find first resource node with experiment inheritance
     if (! $node) {
-        ($node) = $exp->extractNodes('runtime', "production/resources[\@site = '$site']");
+        $node = $pick_node->($exp->extractNodes('runtime', "production/resources[\@site = '$site' or not(\@site)]"));
     }
 
     # bail out if no resources tag can be found
     if (! $node) {
         my $message = $regression_run_node
-            ? "No resource request tag for site=$site was found within <runtime>/<regression>/<run> OR within <runtime>/<production> or its experiment ancestors. "
-            : "No resource request tag for site=$site was found within <runtime>/<production> or its experiment ancestors. ";
-        $message .= "A site-specific <resources> tag must now be specified for every production and regression run. See FRE Documentation at http://wiki.gfdl.noaa.gov/index.php/FRE_User_Documentation";
+            ? "No resource request tag was found within <runtime>/<regression>/<run> OR within <runtime>/<production> or its experiment ancestors. "
+            : "No resource request tag was found within <runtime>/<production> or its experiment ancestors. ";
+        $message .= "A <resources> tag must now be specified. See FRE Documentation at http://wiki.gfdl.noaa.gov/index.php/FRE_User_Documentation";
         $fre->out(FREMsg::FATAL, $message);
         exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
     }
@@ -2119,13 +2133,30 @@ sub getResourceRequests($$) {
         }
     }
 
+    # Set threads to 1 unless openmp
+    for my $comp (@components) {
+        next unless $data{$comp}{threads} and $data{$comp}{threads} > 1;
+        if (! FRETargets::containsOpenMP($fre->target)) {
+            $fre->out(FREMsg::WARNING, "Component $comp has requested $data{$comp}{threads} threads but not using OpenMP");
+            $data{$comp}{threads} = 1;
+        }
+    }
+
     # Require ranks/threads for at least one component
+    my %complete_specs = (
+        atm => 4,
+        ocn => 4,
+        lnd => 2,
+        ice => 2,
+    );
     my $ok;
     for my $comp (@components) {
         my $message;
         my $N = values %{$data{$comp}};
         if ($data{$comp}{ranks} and $data{$comp}{threads}) {
             $ok = 1;
+        }
+        if ($N >= $complete_specs{$comp}) {
             $message = "Component $comp has complete resource request specifications: ";
         }
         elsif ($N > 0) {
@@ -2147,9 +2178,15 @@ sub getResourceRequests($$) {
         exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
     }
 
+    # Add up total ranks
+    for my $comp (@components) {
+        $data{npes}              += $data{$comp}{ranks};
+        $data{npes_with_threads} += $data{$comp}{ranks} * $data{$comp}{threads};
+    }
+
     # Apply hyperthreading if desired and possible
     if ($ht and ! $fre->property('FRE.mpi.runCommand.option.ht')) {
-            $fre->out(FREMsg::WARNING, "Hyperthreading was requested but isn't supported on this platform.");
+        $fre->out(FREMsg::WARNING, "Hyperthreading was requested but isn't supported on this platform.");
     }
     elsif ($ht) {
         my $ok = 1;
@@ -2169,9 +2206,6 @@ sub getResourceRequests($$) {
             }
         }
     }
-
-    # Add up total ranks
-    $data{npes} += $data{$_}{ranks} for @components;
 
     return \%data;
 }
