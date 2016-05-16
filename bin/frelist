@@ -64,6 +64,7 @@ use FREExperiment();
 use FREMsg();
 use FRETargets();
 use FREUtil();
+use FRETemplate();
 
 # //////////////////////////////////////////////////////////////////////////////
 # ////////////////////////////////////////////////////////// Global constants //
@@ -83,6 +84,7 @@ use FREUtil();
     'executable|E',
     'inherit|i!',
     'namelist|N',
+    'nodes',
     'platform-csh|S',
     'postfix|P',
     'regression|r=s',
@@ -131,6 +133,7 @@ use FREUtil();
       "   -E,        --executable                retrieve an executable pathname and the experiment, where this executable is defined\n",
       "   -i,        --inherit                   include inheritance information (negatable, default is on)\n",
       "   -N,        --namelist                  print all the namelists with all substitutions and overrides and exit\n",
+      "              --nodes                     print number of nodes that would be requested\n",
       "   -S,        --platform-csh              print the platform csh setup (defined in the <csh> element) and exit\n",
       "   -P,        --postfix                   list all the regression runs with their labels, run numbers and postfixes\n",
       "   -r STRING, --regression=STRING         use regression tests STRING (usable for --postfix and --namelist options only)\n",
@@ -519,6 +522,42 @@ use FREUtil();
     my $expNamePrefix = (scalar(@expNamesRequested) == 1) ? '' : "$expName ";
 
     $fre->setCurrentExperimentName($expName);
+
+    if ($opt{nodes}) {
+        my $print = sub {
+            my ($mpiInfo, $label) = @_;
+            my $string = FRETemplate::schedulerSizeAsString($fre, 'run', $mpiInfo->{coupler}, $mpiInfo->{npes}, $mpiInfo->{npesList}, $mpiInfo->{ntdsList});
+            my ($nodes) = $string =~ /size=(\d+)/;
+            print "$expName $label would request $nodes nodes.\n";
+        };
+
+        if ($opt{regression}) {
+            if (my @labels = $exp->extractRegressionLabels($opt{regression})) {
+                for my $label (@labels) {
+                    my $regInfo = $exp->extractRegressionRunInfo($label, $opt{ht}) or do {
+                        $fre->out(FREMsg::FATAL, "Unable to extract parameters for the regression test '$label' in the experiment '$expName'");
+                        exit FREDefaults::STATUS_FRE_RUN_GENERIC_PROBLEM;
+                    };
+                    my $N = scalar keys %$regInfo;
+                    for my $n (sort keys %$regInfo) {
+                        my $x = $N > 1 ? sprintf(" #%s", $n+1) : '';
+                        $print->($regInfo->{$n}->{mpiInfo}, "regression/$label$x");
+                    }
+                }
+            }
+            else {
+                $fre->out(FREMsg::FATAL, "Unable to select regression tests to process");
+                exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
+            }
+        }
+        else {
+            my $prdInfo = $exp->extractProductionRunInfo($opt{ht}) or do {
+                $fre->out(FREMsg::FATAL, "Unable to extract production parameters for the experiment '$expName'");
+                exit FREDefaults::STATUS_FRE_RUN_GENERIC_PROBLEM;
+            };
+            $print->($prdInfo->{mpiInfo}, 'production');
+        }
+    }
 
     if ($opt{directory})
     {
