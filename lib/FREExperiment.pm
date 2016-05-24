@@ -1867,8 +1867,7 @@ sub extractRegressionRunInfo($$$)
 	my ($ok, %runs) = (1, ());
 	for (my $i = 0; $i < scalar(@runNodes); $i++)
 	{
-      my $resources = $r->getResourceRequests($ht, $runNodes[$i]);
-
+      my $resources = $r->getResourceRequests($ht, $runNodes[$i]) or return;
 	  my $msl = $r->nodeValue($runNodes[$i], '@months');
 	  my $dsl = $r->nodeValue($runNodes[$i], '@days');
 	  my $hsl = $r->nodeValue($runNodes[$i], '@hours');
@@ -1955,7 +1954,7 @@ sub extractProductionRunInfo($$)
   {
     if (my $prdNode = $productionRunNode->($r))
     {
-      my $resources = $r->getResourceRequests($ht);
+      my $resources = $r->getResourceRequests($ht) or return;
       my $mpiInfo = $MPISizeParameters->($r, $resources, $nmls->copy);
       addResourceRequestsToMpiInfo($fre, $resources, $mpiInfo);
 
@@ -2113,7 +2112,7 @@ sub getResourceRequests($$) {
             : "No resource request tag was found within <runtime>/<production> or its experiment ancestors. ";
         $message .= "A <resources> tag must now be specified. See FRE Documentation at http://wiki.gfdl.noaa.gov/index.php/FRE_User_Documentation";
         $fre->out(FREMsg::FATAL, $message);
-        exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
+        return;
     }
 
     # Extract resource info
@@ -2175,7 +2174,7 @@ sub getResourceRequests($$) {
     }
     if (! $ok) {
         $fre->out(FREMsg::FATAL, "A resource request tag was found but was incomplete. Ranks and threads must be specified for at least one model component. See FRE Documentation at http://wiki.gfdl.noaa.gov/index.php/FRE_User_Documentation");
-        exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
+        return;
     }
 
     # Add up total ranks
