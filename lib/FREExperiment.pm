@@ -2069,7 +2069,7 @@ sub addResourceRequestsToMpiInfo {
 # and decides whether hyperthreading will be used if --ht option is present
 # ------ arguments: $exp hyperthreading           -- for production
 # ------ arguments: $exp hyperthreading $run_node -- for regression
-# ------ returns: hashref containing resource specs
+# ------ returns: hashref containing resource specs or undef on failure
 sub getResourceRequests($$) {
     my ($exp, $ht, $regression_run_node) = @_;
     my $fre = $exp->fre;
