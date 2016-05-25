@@ -398,7 +398,7 @@ my $overrideRegressionNamelists = sub($$$)
     $var =~ s/\s*//g;
     unless ($name and $var) {$fre->out(FREMsg::WARNING, "Got an empty namelist in overrideParams"); next}
     if ($var =~ /(?:npes|nthreads|layout)$/) {
-        $fre->out(FREMsg::FATAL, "You attempted to override the $name namelist for parameter $var. Overrides for some parameters (*npes, *nthreads, or *layout) are no longer allowed; specify these in the <regression>/<run>/<resources> tag. See FRE Documentation at http://wiki.gfdl.noaa.gov/index.php/FRE_User_Documentation");
+        $fre->out(FREMsg::FATAL, sprintf "At XML line %s you attempted to override the $name namelist for parameter $var in experiment %s, regression run %s. Overrides for some parameters (*npes, *nthreads, or *layout) are no longer allowed; specify these in the <regression>/<run>/<resources> tag. See FRE Documentation at http://wiki.gfdl.noaa.gov/index.php/FRE_User_Documentation", $n->line_number, $r->name, $n->parentNode->getAttribute('name'));
         exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
     }
     $fre->out(FREMsg::NOTE, "overrideParams from xml: $name:$var=$val");
