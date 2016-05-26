@@ -524,6 +524,12 @@ use FRETemplate();
     $fre->setCurrentExperimentName($expName);
 
     if ($opt{nodes}) {
+        # save verbose setting
+        my $original_verbosity = $fre->{verbose};
+        # quiet even FATAL messages temporarily so production/regression runs can be extracted
+        # without displaying FATAL messages to screen
+        $fre->{verbose} = -2;
+
         my $print = sub {
             my ($mpiInfo, $label) = @_;
             my $string = FRETemplate::schedulerSizeAsString($fre, 'run', $mpiInfo->{coupler}, $mpiInfo->{npes}, $mpiInfo->{npesList}, $mpiInfo->{ntdsList});
@@ -534,29 +540,35 @@ use FRETemplate();
         if ($opt{regression}) {
             if (my @labels = $exp->extractRegressionLabels($opt{regression})) {
                 for my $label (@labels) {
-                    my $regInfo = $exp->extractRegressionRunInfo($label, $opt{ht}) or do {
-                        $fre->out(FREMsg::FATAL, "Unable to extract parameters for the regression test '$label' in the experiment '$expName'");
-                        exit FREDefaults::STATUS_FRE_RUN_GENERIC_PROBLEM;
-                    };
-                    my $N = scalar keys %$regInfo;
-                    for my $n (sort keys %$regInfo) {
-                        my $x = $N > 1 ? sprintf(" #%s", $n+1) : '';
-                        $print->($regInfo->{$n}->{mpiInfo}, "regression/$label$x");
+                    if (my $regInfo = $exp->extractRegressionRunInfo($label, $opt{ht})) {
+                        my $N = scalar keys %$regInfo;
+                        for my $n (sort keys %$regInfo) {
+                            my $x = $N > 1 ? sprintf(" #%s", $n+1) : '';
+                            $print->($regInfo->{$n}->{mpiInfo}, "regression/$label$x");
+                        }
+                    }
+                    else {
+                        print "$expName is not configured for regression $label run(s)\n";
                     }
                 }
             }
             else {
+                $fre->{verbose} = $original_verbosity;
                 $fre->out(FREMsg::FATAL, "Unable to select regression tests to process");
                 exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
             }
         }
         else {
-            my $prdInfo = $exp->extractProductionRunInfo($opt{ht}) or do {
-                $fre->out(FREMsg::FATAL, "Unable to extract production parameters for the experiment '$expName'");
-                exit FREDefaults::STATUS_FRE_RUN_GENERIC_PROBLEM;
-            };
-            $print->($prdInfo->{mpiInfo}, 'production');
+            if (my $prdInfo = $exp->extractProductionRunInfo($opt{ht})) {
+                $print->($prdInfo->{mpiInfo}, 'production');
+            }
+            else {
+                print "$expName is not configured for production run\n";
+            }
         }
+
+        # restore original verbose setting
+        $fre->{verbose} = $original_verbosity;
     }
 
     if ($opt{directory})
