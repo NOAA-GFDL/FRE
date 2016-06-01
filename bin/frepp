@@ -4574,6 +4574,7 @@ if ( "$xyInterp" ne '' ) { #CUBIC to LATLON
    $call_and_check_fregrid =~ s/#check_fregrid/$check_fregrid/;
    $call_and_check_fregrid =~ s/#check_ncrename/$check_ncrename/g;
    $call_and_check_fregrid =~ s/#check_ncatted/$check_ncatted/g;
+   my $compress = compress_csh("\$tempCache/$outdirpath/$component.$tENDf.ann.nc", $check_nccopy);
    $csh .= <<EOF;
 @ i ++
 end
@@ -4594,6 +4595,7 @@ $check_ncatted
 
 $time_mv $mv $component.$tENDf.ann.nc \$tempCache/$outdirpath/$component.$tENDf.ann.nc
 if ( \$write2arch ) then
+   $compress
    $time_mv $mvfile \$tempCache/$outdirpath/$component.$tENDf.ann.nc \$outdir/$component.$tENDf.ann.nc
    if ( \$status ) then
       echo "WARNING: data transfer failure, retrying..."
@@ -4605,6 +4607,7 @@ endif
 EOF
 
    } else { #CUBIC - no conversion
+   my $compress = compress_csh("\$tempCache/$outdirpath/$component.$tENDf.ann$tile.nc", $check_nccopy);
    $csh .= <<EOF;
 mv $yr2do.$diag_source$tile.nc $component.$tENDf.ann$tile.nc
 $time_ncatted ncatted -h -O -a filename,global,m,c,"$component.$tENDf.ann$tile.nc" $component.$tENDf.ann$tile.nc
@@ -4612,6 +4615,7 @@ $check_ncatted
 
 $time_mv $mv $component.$tENDf.ann$tile.nc \$tempCache/$outdirpath/$component.$tENDf.ann$tile.nc
 if ( \$write2arch ) then
+   $compress
    $time_mv $mvfile \$tempCache/$outdirpath/$component.$tENDf.ann$tile.nc \$outdir/$component.$tENDf.ann$tile.nc
    if ( \$status ) then
       echo "WARNING: data transfer failure, retrying..."
@@ -4690,7 +4694,7 @@ $time_ncatted ncatted -h -O -a filename,global,m,c,"$component.$tENDf.ann.nc" $c
 $check_ncatted
 $time_mv $mv $component.$tENDf.ann.nc \$tempCache/$outdirpath/$component.$tENDf.ann.nc
 if ( \$write2arch ) then
-$compress
+   $compress
    $time_mv $mvfile \$tempCache/$outdirpath/$component.$tENDf.ann.nc \$outdir/$component.$tENDf.ann.nc
    if ( \$status ) then
       echo "WARNING: data transfer failure, retrying..."
@@ -5147,6 +5151,7 @@ sub directTS{
    my $check_filesexist = errorstr("NO USABLE VARIABLES EXIST ($component $freq ts from $source)");
    my $check_fregrid = errorstr("FREGRID ($component $freq ts from $source)");
    my $check_ncrename = errorstr("NCRENAME ($component $freq ts from $source)");
+   my $check_nccopy = errorstr("NCCOPY ($component $freq ts from $source)");
    my $check_levels = '';
    if ("$caltype" eq "NOLEAP" or "$caltype" eq "noleap" ) {
       $check_levels = errorstr("WRONG NUMBER OF TIME LEVELS (contains \$length, should be $numtimelevels) IN \$outdir/$component.$start-$tENDf.\$file");
@@ -5344,6 +5349,7 @@ EOF
    # make sure file has bounds, splitncvars, adjust output, send to archive
    my $variablesopt = '';
    $variablesopt = "-v $variables" if "$variables" ne '';
+   my $compress = compress_csh("\$file", $check_nccopy);
    $csh .= <<EOF;
 foreach filetosplit ( \$filestosplit )
 
@@ -5376,6 +5382,7 @@ foreach file ( *.nc )
      set length = `echo \$tmpstring[\$len] | cut -c2-`
      test \$length = $numtimelevels
      $check_levels
+     $compress
      $time_mv $mvfile \$file \$outdir/$component.$start-$tENDf.\$label
      if ( \$status ) then
          echo "WARNING: data transfer failure, retrying..."
@@ -5477,7 +5484,9 @@ sub monthlyAVfromav {
    my $check_timavg = retryonerrorend("TIMAVG ($component $src $interval averages)");
    my $retry_timavg = retryonerrorstart("TIMAVG");
    my $check_dmget = errorstr("DMGET ($component $src $interval averages)");
+   my $check_nccopy = errorstr("NCCOPY ($component $src $interval averages)");
    my $csh = setcheckpt("monthlyAVfromav_$interval");
+   my $compress = compress_csh("$component.$start-$end.\$monthf\$tile.nc", $check_nccopy);
    $csh .= <<EOF;
 #####################################
 echo 'timeAverage ($component $src $interval averages from $subint yr averages)'
@@ -5517,6 +5526,7 @@ while (\$month <= 12)
    $check_timavg
    $time_ncatted ncatted -h -O -a filename,global,m,c,"$component.$start-$end.\$monthf\$tile.nc" $component.$start-$end.\$monthf\$tile.nc
    $check_ncatted
+   $compress
    $time_mv $mvfile $component.$start-$end.\$monthf\$tile.nc \$outdir/
    if ( \$status ) then
       echo "WARNING: data transfer failure, retrying..."
@@ -5608,6 +5618,8 @@ EOF
       my $retry_timavg = retryonerrorstart("TIMAVG");
       my $check_ncatted = errorstr("NCATTED ($component $src $interval averages)");
       my $check_dmget = errorstr("DMGET ($component $src $interval averages)");
+      my $check_nccopy = errorstr("NCCOPY ($component $src $interval averages)");
+      my $compress = compress_csh("$component.$first-$endinterval.ann\$tile.nc", $check_nccopy);
       $csh .= <<EOF;
 cd $srcdir
 $tilestart
@@ -5633,6 +5645,7 @@ $retry_timavg
 $check_timavg
 $time_ncatted ncatted -h -O -a filename,global,m,c,"$component.$first-$endinterval.ann\$tile.nc" $component.$first-$endinterval.ann\$tile.nc
 $check_ncatted
+$compress
 $time_mv $mvfile $component.$first-$endinterval.ann\$tile.nc \$outdir/$component.$first-$endinterval.ann\$tile.nc
 if ( \$status ) then
    echo "WARNING: data transfer failure, retrying..."
@@ -5978,11 +5991,14 @@ sub TSfromts {
    #my $check_cpio = errorstr("CPIO ($component $freq $chunkLength ts from $subchunk yr ts)");
    my $check_cpio_msg = "CPIO ($component $freq $chunkLength ts from $subchunk yr ts)";
    my $check_dmget = errorstr("DMGET ($component $freq $chunkLength ts from $subchunk yr ts)");
+   my $check_nccopy = errorstr("NCCOPY ($component $freq $chunkLength ts from $subchunk yr ts)");
    my $check_levels = '';
    if ("$caltype" eq "NOLEAP" or "$caltype" eq "noleap" ) {
       $check_levels = errorstr("WRONG NUMBER OF TIME LEVELS (contains \$length, should be $numtimelevels) IN \$outdir/$component.$startf-$tENDf.\$var");
    }
    my $check_vars = errorstr("NOT ALL VARIABLES EXIST FOR ($component $freq $chunkLength ts from $subchunk yr ts)");
+
+   my $compress = compress_csh("$component.$startf-$tENDf.\$var", $check_nccopy);
 
    my $csh = setcheckpt("TSfromts_$freq"."_$chunkLength");
    $csh .= <<EOF;
@@ -6066,6 +6082,7 @@ foreach var (\$varlist)
      set length = `echo \$tmpstring[\$len] | cut -c2-`
      test \$length = $numtimelevels
      $check_levels
+     $compress
      $time_mv $mvfile $component.$startf-$tENDf.\$var $outdir/
      if ( \$status ) then
          echo "WARNING: data transfer failure, retrying..."
@@ -6162,6 +6179,7 @@ sub seaTSfromts {
    my $check_ncrcat = errorstr("NCRCAT ($component $freq $chunkLength ts from $subchunk yr ts)");
    my $check_cpio_msg = "CPIO ($component $freq $chunkLength ts from $subchunk yr ts)";
    my $check_dmget = errorstr("DMGET ($component $freq $chunkLength ts from $subchunk yr ts)");
+   my $check_nccopy = errorstr("NCCOPY ($component $freq $chunkLength ts from $subchunk yr ts)");
    my $check_levels = '';
    if ("$caltype" eq "NOLEAP" or "$caltype" eq "noleap" ) {
       $check_levels = errorstr("WRONG NUMBER OF TIME LEVELS (contains \$length, should be $numtimelevels) IN \$outdir/$component.$startf-$tENDf.\$sea.\$var");
@@ -6174,6 +6192,7 @@ sub seaTSfromts {
       $piece =~ s/\$sea.\$var/*.nc/g;
       $dmgetcommand .= "$time_dmget dmget \"$piece\"\n";
    }
+   my $compress = comprss_csh("$component.$startf-$tENDf.\$sea.\$var", $check_nccopy);
    my $csh = setcheckpt("seaTSfromts_$chunkLength");
    $csh .= <<EOF;
 #####################################
@@ -6248,6 +6267,7 @@ foreach sea (DJF MAM JJA SON)
       @ len = \$#tmpstring - 1
       set length = `echo \$tmpstring[\$len] | cut -c2-`
       test \$length = $numtimelevels
+      $compress
       $time_mv $mvfile $component.$startf-$tENDf.\$sea.\$var \$outdir/
       if ( \$status ) then
          echo "WARNING: data transfer failure, retrying..."
@@ -6324,6 +6344,7 @@ sub seasonalAVfromhist {
    my $check_ncdump = errorstr("NCDUMP ($component $src $interval averages)");
    my $check_dmget = errorstr("DMGET ($component $src $interval averages)");
    my $check_ncap = errorstr("NCAP ($component $src $interval averages)");
+   my $check_nccopy = errorstr("NCCOPY ($component $src $interval averages)");
    my $check_numfiles = errorstr("INCORRECT NUMBER OF SEASONS IN SEASONAL FILE ($component $src $interval averages)");
    my $check_fregrid = errorstr("FREGRID ($component $src $interval averages)");
    my $check_ncrename = errorstr("NCRENAME ($component $src $interval averages)");
@@ -6471,6 +6492,8 @@ endif
 EOF
       }
 
+      my $compress = compress_csh("$component.$tSEASONf.nc", $check_nccopy);
+
       $csh .= <<EOF;
 if ( -e sea1.nc ) $time_rm rm -f sea?.nc
 $time_ncrcat ncrcat \$ncrcatopt $hfilelist1 sea1.nc
@@ -6535,6 +6558,7 @@ EOF
     $time_ncatted ncatted -h -O -a filename,global,m,c,"$component.$tSEASONf.nc" $component.$tSEASONf.nc
     $check_ncatted
 
+$compress
 $time_mv $mvfile $component.$tSEASONf.nc \$outdir/
 if ( \$status ) then
    echo "WARNING: data transfer failure, retrying..."
@@ -6617,6 +6641,7 @@ EOF
       $call_and_check_fregrid =~ s/#check_fregrid/$check_fregrid/;
       $call_and_check_fregrid =~ s/#check_ncrename/$check_ncrename/g;
       $call_and_check_fregrid =~ s/#check_ncatted/$check_ncatted/g;
+      my $compress = compress_csh("$component.$dates.nc", $check_nccopy);
       $csh .= <<EOF;
 @ i ++
 end
@@ -6633,6 +6658,7 @@ end
     $time_ncatted ncatted -h -O -a filename,global,m,c,"$component.$dates.nc" $component.$dates.nc
     $check_ncatted
 
+$compress
 $time_mv $mvfile $component.$dates.nc \$outdir/$component.$dates.nc
 if ( \$status ) then
    echo "WARNING: data transfer failure, retrying..."
@@ -6740,6 +6766,7 @@ $time_rm rm -f $hfilelist
 EOF
 #put code here to handle 1yr seasons case
       if ( $int == 1 ) {
+         my $compress = compress_csh("$component.$tSEASONf.nc", $check_nccopy);
          if ( $do_zInterp ) {
             $csh .= <<EOF;
 $time_timavg \$TIMAVG -o modellevels.nc sea.nc
@@ -6750,6 +6777,7 @@ $check_timavg
 EOF
             $csh .= zInterpolate($zInterp,'modellevels.nc',"$component.$tSEASONf.nc",$caltype,$variables,$component);
             $csh .= <<EOF;
+$compress
 $time_mv $mvfile $component.$tSEASONf.nc \$outdir/
 if ( \$status ) then
    echo "WARNING: data transfer failure, retrying..."
@@ -6764,6 +6792,7 @@ $time_timavg \$TIMAVG -o $component.$tSEASONf.nc sea.nc
 $retry_timavg
    $time_timavg \$TIMAVG -o $component.$tSEASONf.nc sea.nc
 $check_timavg
+$compress
 $time_mv $mvfile $component.$tSEASONf.nc \$outdir/
 if ( \$status ) then
    echo "WARNING: data transfer failure, retrying..."
@@ -6832,9 +6861,12 @@ $check_timavg
 EOF
       }
 
+   my $compress = compress_csh("$component.$dates.nc", $check_nccopy);
+
    $csh .= <<EOF;
 $time_ncatted ncatted -h -O -a filename,global,m,c,"\$outdir/$component.$dates.nc" $component.$dates.nc
 $check_ncatted
+$compress
 $time_mv $mvfile $component.$dates.nc \$outdir/$component.$dates.nc
 if ( \$status ) then
    echo "WARNING: data transfer failure, retrying..."
@@ -6912,6 +6944,7 @@ sub seasonalAVfromav {
    my $check_timavg = retryonerrorend("TIMAVG ($component $src $interval averages)");
    my $retry_timavg = retryonerrorstart("TIMAVG");
    my $check_dmget = errorstr("DMGET ($component $src $interval averages)");
+   my $check_nccopy = errorstr("NCCOPY ($component $src $interval averages)");
    my $csh = setcheckpt("seasonalAVfromav_$interval");
    $csh .= <<EOF;
 #####################################
@@ -6923,6 +6956,7 @@ if ( ! -e \$outdir ) mkdir -p \$outdir
 
 EOF
    if ($opt_z) { $csh .= begin_systime(); }
+   my $compress = compress_csh("$component.$start-$end.\$sea.nc", $check_nccopy);
    $csh .= <<EOF;
 
 cd $srcdir
@@ -6947,6 +6981,7 @@ foreach sea (DJF MAM JJA SON)
      $check_timavg
      $time_ncatted ncatted -h -O -a filename,global,m,c,"$component.$start-$end.\$sea.nc" $component.$start-$end.\$sea.nc
      $check_ncatted
+     $compress
      $time_mv $mvfile $component.$start-$end.\$sea.nc \$outdir/$component.$start-$end.\$sea.nc
      if ( \$status ) then
          echo "WARNING: data transfer failure, retrying..."
