@@ -2474,13 +2474,15 @@ EOF
 # uncompress netcdf compression
 sub uncompress_history_csh {
     my $dir = shift;
+    my $check_nccopy = errorstr("NCCOPY (uncompress history files)");
 
     return <<EOF
 # uncompress all netcdf-compressed files
 if (\$?history_deflation) then
     foreach file (`find $dir -type f -name "*.nc"`)
         if (`ncdump -sh \$file | $grep_netcdf_compression`) then
-            nccopy -d 0 \$file \$file.uncompressed
+            $time_nccopy nccopy -d 0 \$file \$file.uncompressed
+            $check_nccopy
             mv -f \$file.uncompressed \$file
             chmod 444 \$file
         endif
