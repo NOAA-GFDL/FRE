@@ -1101,7 +1101,7 @@ sub check_for_fre_version_mismatch {
         }
         else {
             FREMsg::out(1, FREMsg::FATAL,
-                "FRE version must be specified within <platform> in <freVersion> tag. See documentation at http://wiki.gfdl.noaa.gov/index.php/FRE_User_Documentation");
+                "FRE version must be specified within <platform> in <freVersion> tag. See documentation at http://wiki.gfdl.noaa.gov/index.php/FRE_User_Documentation#Platforms_and_Sites");
             exit FREDefaults::STATUS_FRE_GENERIC_PROBLEM;
         }
     }
