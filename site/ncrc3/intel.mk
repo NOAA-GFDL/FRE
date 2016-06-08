@@ -37,9 +37,9 @@ FPPFLAGS := -fpp -Wp,-w $(INCLUDE)
 # modeling systems group are looking for why this is needed to allow run-to-run
 # reproducibility on the c3 system.
 FFLAGS := -msse2 -fno-alias -auto -safe-cray-ptr -ftz -assume byterecl -i4 -r8 -nowarn -sox -traceback $(INCLUDE)
-FFLAGS_OPT = -O3 -debug minimal -fp-model source
+FFLAGS_OPT = -O3 -debug minimal -fp-model source -override-limits
 FFLAGS_DEBUG = -g -O0 -check -check noarg_temp_created -check nopointer -warn -warn noerrors -fpe0 -ftrapuv
-FFLAGS_REPRO = -O2 -debug minimal -fp-model source
+FFLAGS_REPRO = -O2 -debug minimal -fp-model source -override-limits
 FFLAGS_OPENMP = -openmp
 FFLAGS_VERBOSE = -v -V -what -warn all
 
@@ -52,7 +52,7 @@ CFLAGS_VERBOSE = -w3
 
 # Optional Testing compile flags.  Mutually exclusive from DEBUG, REPRO, and OPT
 # *_TEST will match the production if no new option(s) is(are) to be tested.
-FFLAGS_TEST = -O3 -debug minimal -fp-model source
+FFLAGS_TEST = -O3 -debug minimal -fp-model source -override-limits
 CFLAGS_TEST = -O2
 
 LDFLAGS :=

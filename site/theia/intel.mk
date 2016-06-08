@@ -28,9 +28,9 @@ FPPFLAGS := -fpp -Wp,-w
 # development libraries.
 INC = -I$(HDF5)/include $(shell nf-config --fflags)
 FFLAGS := -fno-alias -auto -safe-cray-ptr -ftz -assume byterecl -i4 -r8 -nowarn -sox -traceback $(INC)
-FFLAGS_OPT = -O3 -debug minimal -fp-model source
+FFLAGS_OPT = -O3 -debug minimal -fp-model source -override-limits
 FFLAGS_DEBUG = -g -O0 -check -check noarg_temp_created -check nopointer -warn -warn noerrors -fpe0 -ftrapuv
-FFLAGS_REPRO = -O2 -debug minimal -fp-model source
+FFLAGS_REPRO = -O2 -debug minimal -fp-model source -override-limits
 FFLAGS_OPENMP = -openmp
 FFLAGS_VERBOSE = -v -V -what -warn all
 
@@ -39,6 +39,11 @@ CFLAGS_OPT = -O2 -debug minimal
 CFLAGS_OPENMP = -openmp
 CFLAGS_DEBUG = -O0 -g -ftrapuv
 CFLAGS_VERBOSE = -w3
+
+# Optional Testing compile flags.  Mutually exclusive from DEBUG, REPRO, and OPT
+# *_TEST will match the production if no new option(s) is(are) to be tested.
+FFLAGS_TEST = -O3 -debug minimal -fp-model source -override-limits
+CFLAGS_TEST = -O2
 
 LDFLAGS := -L$(HDF5)/lib $(shell nf-config --flibs)
 LDFLAGS_OPENMP := -openmp
@@ -53,6 +58,9 @@ ifneq ($(REPRO),)
 else ifneq ($(DEBUG),)
   CFLAGS += $(CFLAGS_DEBUG)
   FFLAGS += $(FFLAGS_DEBUG)
+else ifneq ($(TEST),)
+  CFLAGS += $(CFLAGS_TEST)
+  FFLAGS += $(FFLAGS_TEST)
 else
   CFLAGS += $(CFLAGS_OPT)
   FFLAGS += $(FFLAGS_OPT)
