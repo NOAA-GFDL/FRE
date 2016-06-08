@@ -598,7 +598,15 @@ my $MPISizeComponentEnabled = sub($$$)
   my ($r, $h, $n) = @_;
   my ($fre, $result) = ($r->fre(), undef);
   my @subComponents = split(';', $fre->property("FRE.mpi.$n.subComponents"));
-  foreach my $component ($n, @subComponents)
+  my %long_component_names = do {
+      my @short = split ';', $fre->property('FRE.mpi.component.names');
+      my @long  = split ';', $fre->property('FRE.mpi.component.long_names');
+      my %hash;
+      $hash{$short[$_]} = $long[$_] for 0 .. $#short;
+      %hash;
+  };
+  # check component name (e.g. atm) and legacy long name (e.g. atmos)
+  foreach my $component ($n, $long_component_names{$n}, @subComponents)
   {
     my $enabled = $h->namelistBooleanGet('coupler_nml', "do_$component");
     if (defined($enabled))
@@ -635,7 +643,9 @@ my $MPISizeParametersGeneric = sub($$$$)
   {
     my $component = $components[$inx];
     my $enabled = $MPISizeComponentEnabled->($r, $h, $component);
-    $enabled = $enabled[$inx] unless defined($enabled);
+    # use the fre.properties enabled flag if the coupler_nml value is undefined
+    # or if the coupler_nml value is yes and the fre.properties value is no
+    $enabled = $enabled[$inx] if !defined($enabled) or $enabled && !$enabled[$inx];
     if ($enabled)
     {
       if (my $npes = $resources->{$component}->{ranks})
@@ -654,12 +664,12 @@ my $MPISizeParametersGeneric = sub($$$$)
 	  }
 	  elsif ($ntds <= 0)
 	  {
-            $fre->out(FREMsg::FATAL, "The variable 'coupler_nml:${component}_nthreads' must have a positive value");
+            $fre->out(FREMsg::FATAL, "The component $component must request a positive number of threads");
 	    return undef;
 	  }
 	  else
 	  {
-            $fre->out(FREMsg::FATAL, "The variable 'coupler_nml:${component}_nthreads' value must be less or equal than a number '$coresPerNode' of cores per node");
+            $fre->out(FREMsg::FATAL, "The component $component's thread request ($ntds) must be less or equal than      a number '$coresPerNode' of cores per node");
 	    return undef;
 	  }
 	}
@@ -670,7 +680,7 @@ my $MPISizeParametersGeneric = sub($$$$)
       }
       else
       {
-        $fre->out(FREMsg::FATAL, "The variable 'coupler_nml:${component}_npes' must be defined and have a positive value");
+        $fre->out(FREMsg::FATAL, "The component $component must request a positive number of ranks");
 	return undef;
       }
     }
@@ -2151,7 +2161,7 @@ sub getResourceRequests($$) {
     my $ok;
     for my $comp (@components) {
         my $message;
-        my $N = values %{$data{$comp}};
+        my $N = grep !/^$/, values %{$data{$comp}};
         if ($data{$comp}{ranks} and $data{$comp}{threads}) {
             $ok = 1;
         }
