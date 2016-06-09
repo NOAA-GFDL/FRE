@@ -669,7 +669,7 @@ my $MPISizeParametersGeneric = sub($$$$)
 	  }
 	  else
 	  {
-            $fre->out(FREMsg::FATAL, "The component $component's thread request ($ntds) must be less or equal than      a number '$coresPerNode' of cores per node");
+            $fre->out(FREMsg::FATAL, "The component $component's thread request ($ntds) must be less or equal than a number '$coresPerNode' of cores per node");
 	    return undef;
 	  }
 	}
