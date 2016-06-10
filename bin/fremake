@@ -331,9 +331,17 @@ use FREXML();
 	 foreach my $repo_name (@repo_names)
 	 {
 	   my $repo_path = $root . "/" . $repo_name;
-	   $scoScript .= "echo \"Cloning $repo_path on branch/tag $version\"\n";
-	   $scoScript .= "git clone -q --recursive -b $version $repo_path >& /dev/null\n";
+     # Attempt to clone repository, capturing the output to print later if an error is encountered
+     $scoScript .= "echo \"Cloning $repo_path on branch/tag $version\"\n";
+	   $scoScript .= "set git_output=`git clone -q --recursive -b $version $repo_path >& /dev/stdout`\n";
+     # Check if the git clone completed successfully.  If not, print the error messages, adding
+     # **GIT ERROR** to each line.
+     $scoScript .= "if ( \$? != 0 ) then";
+     $scoScript .= "     echo\"\$git_output\" | sed 's/^/**GIT ERROR** /' > /dev/stderr";
+     $scoScript .= "     exit 1";
+     $scoScript .= "endif";
 	 }
+   $scoScript /= "# Additional checkout commands from XML file";
 	 $scoScript .= "$csh\n\n";
        }
        else
