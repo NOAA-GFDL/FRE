@@ -457,14 +457,25 @@ my $MPISizeCompatible = sub($$)
 {
   my ($fre, $h) = @_;
   my $compatible = 1;
-  my @components = split(';', $fre->property('FRE.mpi.component.names'));
-  my @compatibleComponents = ('atmos', 'ocean');
-  foreach my $component (@components)
-  {
-    unless (scalar(grep($_ eq $component, @compatibleComponents)) > 0)
-    {
-      if (defined(FRENamelists::namelistBooleanGet($h, 'coupler_nml', "do_$component")))
-      {
+
+  # only use enabled components for MPI use
+  my @all_components     = split(';', $fre->property('FRE.mpi.component.names'));
+  my @enabled            = split(';', $fre->property('FRE.mpi.component.enabled'));
+  my @enabled_components = map { $all_components[$_] } grep { $enabled[$_] } 0 .. $#enabled;
+  my %long_names = _long_component_names($fre);
+
+  # currently only atm and ocn are enabled so the generic MPI parameters function
+  # will never be used
+  my @compatibleComponents = ('atm', 'ocn');
+
+  foreach my $component (@enabled_components) {
+    # loop thru non-compatible enabled components
+    unless (scalar(grep($_ eq $component, @compatibleComponents)) > 0) {
+      # if a non-compatible enabled component
+      # (checking both normal 3-letter name and legacy/long name)
+      # is found to be enabled in coupler, use the generic MPI parameters function
+      if (defined(FRENamelists::namelistBooleanGet($h, 'coupler_nml', "do_$component")) or
+          defined(FRENamelists::namelistBooleanGet($h, 'coupler_nml', "do_$long_names{$component}"))) {
 	$compatible = 0;
 	last;
       }
@@ -598,13 +609,7 @@ my $MPISizeComponentEnabled = sub($$$)
   my ($r, $h, $n) = @_;
   my ($fre, $result) = ($r->fre(), undef);
   my @subComponents = split(';', $fre->property("FRE.mpi.$n.subComponents"));
-  my %long_component_names = do {
-      my @short = split ';', $fre->property('FRE.mpi.component.names');
-      my @long  = split ';', $fre->property('FRE.mpi.component.long_names');
-      my %hash;
-      $hash{$short[$_]} = $long[$_] for 0 .. $#short;
-      %hash;
-  };
+  my %long_component_names = _long_component_names($fre);
   # check component name (e.g. atm) and legacy long name (e.g. atmos)
   foreach my $component ($n, $long_component_names{$n}, @subComponents)
   {
@@ -624,6 +629,18 @@ my $MPISizeComponentEnabled = sub($$$)
   }
   return $result;
 };
+
+# Returns a hash whose keys are the 3-letter standard component names
+# and value is the legacy/long name. The only use for the long names is
+# do_atmos = 1 style coupler namelist entries
+sub _long_component_names {
+    my $fre = shift;
+    my @short = split ';', $fre->property('FRE.mpi.component.names');
+    my @long  = split ';', $fre->property('FRE.mpi.component.long_names');
+    my %hash;
+    $hash{$short[$_]} = $long[$_] for 0 .. $#short;
+    return %hash;
+}
 
 my $MPISizeParametersGeneric = sub($$$$)
 # ------ arguments: $exp $resources $namelistsHandle $ensembleSize
