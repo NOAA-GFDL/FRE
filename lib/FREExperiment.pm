@@ -1894,7 +1894,7 @@ sub extractRegressionRunInfo($$$)
 	my ($ok, %runs) = (1, ());
 	for (my $i = 0; $i < scalar(@runNodes); $i++)
 	{
-      my $resources = $r->getResourceRequests($ht, $runNodes[$i]) or return;
+      my $resources = $r->getResourceRequests($ht, $nmls, $runNodes[$i]) or return;
 	  my $msl = $r->nodeValue($runNodes[$i], '@months');
 	  my $dsl = $r->nodeValue($runNodes[$i], '@days');
 	  my $hsl = $r->nodeValue($runNodes[$i], '@hours');
@@ -1981,7 +1981,7 @@ sub extractProductionRunInfo($$)
   {
     if (my $prdNode = $productionRunNode->($r))
     {
-      my $resources = $r->getResourceRequests($ht) or return;
+      my $resources = $r->getResourceRequests($ht, $nmls) or return;
       my $mpiInfo = $MPISizeParameters->($r, $resources, $nmls->copy);
       addResourceRequestsToMpiInfo($fre, $resources, $mpiInfo);
 
@@ -2094,14 +2094,17 @@ sub addResourceRequestsToMpiInfo {
 
 # Get resource info from <runtime>/.../<resources> tag
 # and decides whether hyperthreading will be used if --ht option is present
-# ------ arguments: $exp hyperthreading           -- for production
-# ------ arguments: $exp hyperthreading $run_node -- for regression
+# ------ arguments: $exp hyperthreading namelists           -- for production
+# ------ arguments: $exp hyperthreading namelists $run_node -- for regression
 # ------ returns: hashref containing resource specs or undef on failure
 sub getResourceRequests($$) {
-    my ($exp, $ht, $regression_run_node) = @_;
+    my ($exp, $ht, $namelists, $regression_run_node) = @_;
     my $fre = $exp->fre;
     my $site = $fre->platformSite;
     my @components = split(';', $fre->property('FRE.mpi.component.names'));
+    my @enabled = split(';', $fre->property('FRE.mpi.component.enabled'));
+    my @enabled_components = map { $components[$_] } grep { $enabled[$_] } 0 .. $#enabled;
+    my $concurrent = $namelists->namelistBooleanGet('coupler_nml', 'concurrent');
     my @types = (qw( ranks threads layout io_layout mask_table ));
     my %data;
     my $node;
@@ -2204,11 +2207,20 @@ sub getResourceRequests($$) {
         return;
     }
 
-    # Add up total ranks
-    for my $comp (@components) {
-        $data{npes}              += $data{$comp}{ranks};
-        $data{npes_with_threads} += $data{$comp}{ranks} * $data{$comp}{threads};
+    # Add up total ranks of MPI-enabled components (concurrent) or take the maximum (non-concurrent)
+    if ($concurrent) {
+        for my $comp (@enabled_components) {
+            $data{npes}              += $data{$comp}{ranks};
+            $data{npes_with_threads} += $data{$comp}{ranks} * $data{$comp}{threads};
+        }
     }
+    else {
+        my %ranks = map { $_ => $data{$_}{ranks} } @enabled_components;
+        my @sorted = sort { $ranks{$b} <=> $ranks{$a} } keys %ranks;
+        $data{npes}              = $data{$sorted[0]}{ranks};
+        $data{npes_with_threads} = $data{$sorted[0]}{ranks} * $data{$sorted[0]}{threads};
+    }
+    $fre->out(FREMsg::NOTE, "Setting npes=$data{npes}");
 
     # Apply hyperthreading if desired and possible
     if ($ht and ! $fre->property('FRE.mpi.runCommand.option.ht')) {
@@ -2216,7 +2228,7 @@ sub getResourceRequests($$) {
     }
     elsif ($ht) {
         my $ok = 1;
-        for my $comp (@components) {
+        for my $comp (@enabled_components) {
             if ($data{$comp}{threads} and $data{$comp}{threads} == 1) {
                 $fre->out(FREMsg::WARNING, "Hyperthreading was requested but component $comp requested only 1 thread.");
                 $ok = 0;
@@ -2224,7 +2236,7 @@ sub getResourceRequests($$) {
         }
         if ($ok) {
             $data{ht} = 1;
-            for my $comp (@components) {
+            for my $comp (@enabled_components) {
                 if ($data{$comp}{threads}) {
                     $data{$comp}{threads} *= 2;
                     $fre->out(FREMsg::NOTE, "Using hyperthreading on component $comp -- setting threads to $data{$comp}{threads}");
