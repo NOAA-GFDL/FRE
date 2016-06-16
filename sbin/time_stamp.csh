@@ -5,7 +5,7 @@ set argv = (`getopt Hbehmsf:t: $*`)
 
 #-----------------------------------------------------------------------
 
- set sep =  
+ set sep =
  set format = standard
 
  set rec = tail
@@ -68,7 +68,7 @@ END
     echo ERROR invalid format
     exit (4)
  endif
- 
+
  set hsep = $sep
  if ( $format == "standard" || $format == "european" || $format == "days" ) set hsep = h
 
@@ -93,13 +93,14 @@ END
      set  sec_num = `printf "%.2d" $time_stamp[6]`
 
 #    ---- pad ISO years to 4 digits ----
+     set year = 
      if ( $format == "digital" ) then
          set year = `printf %.4d $time_stamp[1]` # will work even if year>9999
      endif
 
 #    ---- pad days to 5 digits for no_calendar models ----
      if ( $format == "days" ) then
-         set day_num = `printf %.5d $time_stamp[3]` 
+         set day_num = `printf %.5d $time_stamp[3]`
      endif
 
 
@@ -130,4 +131,3 @@ END
  endif
 
      echo $date_name
-
