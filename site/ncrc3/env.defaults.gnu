@@ -5,7 +5,7 @@ module unload PrgEnv-pgi PrgEnv-intel PrgEnv-gnu PrgEnv-cray
 module unload netcdf fre
 module load PrgEnv-gnu/5.2.82
 module swap gcc gcc/$(COMPILER_VERSION)
-module load $(FRE_VERSION)
+module load fre/$(FRE_VERSION)
 module load git
 
 setenv KMP_STACKSIZE 512m
