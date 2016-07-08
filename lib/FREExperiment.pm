@@ -2229,7 +2229,12 @@ sub getResourceRequests($$) {
     elsif ($ht) {
         my $ok = 1;
         for my $comp (@enabled_components) {
-            if ($data{$comp}{threads} and $data{$comp}{threads} == 1) {
+            next unless $data{$comp}{ranks};
+            if (! $data{$comp}{threads}) {
+                $fre->out(FREMsg::WARNING, "Hyperthreading was requested but component $comp requested only no threads.");
+                $ok = 0;
+            }
+            elsif ($data{$comp}{threads} == 1) {
                 $fre->out(FREMsg::WARNING, "Hyperthreading was requested but component $comp requested only 1 thread.");
                 $ok = 0;
             }
@@ -2237,9 +2242,8 @@ sub getResourceRequests($$) {
         if ($ok) {
             $data{ht} = 1;
             for my $comp (@enabled_components) {
-                if ($data{$comp}{threads}) {
-                    $data{$comp}{threads} *= 2;
-                    $fre->out(FREMsg::NOTE, "Using hyperthreading on component $comp -- setting threads to $data{$comp}{threads}");
+                if ($data{$comp}{ranks}) {
+                    $fre->out(FREMsg::NOTE, "Using hyperthreading on component $comp -- will set threads to " . 2 * $data{$comp}{threads});
                 }
             }
         }
