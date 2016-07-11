@@ -2231,7 +2231,7 @@ sub getResourceRequests($$) {
         for my $comp (@enabled_components) {
             next unless $data{$comp}{ranks};
             if (! $data{$comp}{threads}) {
-                $fre->out(FREMsg::WARNING, "Hyperthreading was requested but component $comp requested only no threads.");
+                $fre->out(FREMsg::WARNING, "Hyperthreading was requested but component $comp requested no threads.");
                 $ok = 0;
             }
             elsif ($data{$comp}{threads} == 1) {
