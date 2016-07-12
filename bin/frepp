@@ -5171,10 +5171,9 @@ EOF
    $csh .= <<EOF;
 foreach filetosplit ( \$filestosplit )
 
-#set hasAVT1 = `ncdump -v average_T1 \$filetosplit | wc -l`
-#set hasbounds = `ncdump -h \$filetosplit | grep '_bounds' | wc -l`
-#if ( \$hasAVT1 && ! \$hasbounds ) then
-if ( `ncdump -h \$filetosplit | grep -c " average_T1("` == 1 && `ncdump -h \$filetosplit | grep -c "_bounds("` == 0) then
+# Determine if fields average_T1 and ( *_bounds or *_bnds ) exist in the
+# netCDF file.  If not, add in time_bounds.
+if ( `ncdump -h \$filetosplit | grep -c " average_T1("` == 1 && `ncdump -h \$filetosplit | grep -c "_b\\(ou\\)\\?nds("` == 0) then
    ncdump -v average_T1,average_T2 \$filetosplit | /home/fms/bin/addbounds.pl | ncgen -o tmp.nc
    set taxis = `ncdump -h \$filetosplit | grep -i '.*=.*unlimited.*currently' | awk '{print \$1}'`
    $time_ncks ncks \$ncksopt -C -A -v \${taxis}_bounds tmp.nc \$filetosplit
@@ -6262,19 +6261,24 @@ if ( ! -e $seahist.$diag_source.tile1.nc ) then
    else
       set t = `ncdump -h $nextdec.tile1.nc | grep -i '.*=.*unlimited.*currently' | awk '{print \$1}'`
       set att_copy = (`ncdump -h $nextdec.tile1.nc | sed -ne "s/.*\${t}:\\(.*\\) =.*/\$t@\\1=\$t@\\1;/gp"`)
-      #set hasAVT1 = `ncdump -v average_T1 $nextdec.tile1.nc | wc -l`
       if ( `ncdump -h $nextdec.tile1.nc | grep -c " average_T1("` == 1 ) then
-         $time_ncap ncap2 -h -O -s "\${t}[\${t}]=\${t}-365; average_T1=average_T1-365; average_T2=average_T2-365; \${t}_bounds=\${t}_bounds-365; \$att_copy" $nextdec.tile1.nc $seahist.$diag_source.tile1.nc
+         # A field with 'long_name =  "time axis boundary"' should be in
+         # the file.  Be sure to use the same name in the following
+         # commands.  We can rather safely assume the same field name
+         # will be used in all the tile files.
+         set tbnds_var = `ncdump -h $nextdec.tile1.nc | grep 'long_name = "time axis boundaries"' | awk -F : '{ print $1 }'`
+
+         $time_ncap ncap2 -h -O -s "\${t}[\${t}]=\${t}-365; average_T1=average_T1-365; average_T2=average_T2-365; \${tbnds_var}=\${tbnds_var}-365; \$att_copy" $nextdec.tile1.nc $seahist.$diag_source.tile1.nc
          $check_ncap
-         $time_ncap ncap2 -h -O -s "\${t}[\${t}]=\${t}-365; average_T1=average_T1-365; average_T2=average_T2-365; \${t}_bounds=\${t}_bounds-365; \$att_copy" $nextdec.tile2.nc $seahist.$diag_source.tile2.nc
+         $time_ncap ncap2 -h -O -s "\${t}[\${t}]=\${t}-365; average_T1=average_T1-365; average_T2=average_T2-365; \${tbnds_var}=\${tbnds_var}-365; \$att_copy" $nextdec.tile2.nc $seahist.$diag_source.tile2.nc
          $check_ncap
-         $time_ncap ncap2 -h -O -s "\${t}[\${t}]=\${t}-365; average_T1=average_T1-365; average_T2=average_T2-365; \${t}_bounds=\${t}_bounds-365; \$att_copy" $nextdec.tile3.nc $seahist.$diag_source.tile3.nc
+         $time_ncap ncap2 -h -O -s "\${t}[\${t}]=\${t}-365; average_T1=average_T1-365; average_T2=average_T2-365; \${tbnds_var}=\${tbnds_var}-365; \$att_copy" $nextdec.tile3.nc $seahist.$diag_source.tile3.nc
          $check_ncap
-         $time_ncap ncap2 -h -O -s "\${t}[\${t}]=\${t}-365; average_T1=average_T1-365; average_T2=average_T2-365; \${t}_bounds=\${t}_bounds-365; \$att_copy" $nextdec.tile4.nc $seahist.$diag_source.tile4.nc
+         $time_ncap ncap2 -h -O -s "\${t}[\${t}]=\${t}-365; average_T1=average_T1-365; average_T2=average_T2-365; \${tbnds_var}=\${tbnds_var}-365; \$att_copy" $nextdec.tile4.nc $seahist.$diag_source.tile4.nc
          $check_ncap
-         $time_ncap ncap2 -h -O -s "\${t}[\${t}]=\${t}-365; average_T1=average_T1-365; average_T2=average_T2-365; \${t}_bounds=\${t}_bounds-365; \$att_copy" $nextdec.tile5.nc $seahist.$diag_source.tile5.nc
+         $time_ncap ncap2 -h -O -s "\${t}[\${t}]=\${t}-365; average_T1=average_T1-365; average_T2=average_T2-365; \${tbnds_var}=\${tbnds_var}-365; \$att_copy" $nextdec.tile5.nc $seahist.$diag_source.tile5.nc
          $check_ncap
-         $time_ncap ncap2 -h -O -s "\${t}[\${t}]=\${t}-365; average_T1=average_T1-365; average_T2=average_T2-365; \${t}_bounds=\${t}_bounds-365; \$att_copy" $nextdec.tile6.nc $seahist.$diag_source.tile6.nc
+         $time_ncap ncap2 -h -O -s "\${t}[\${t}]=\${t}-365; average_T1=average_T1-365; average_T2=average_T2-365; \${tbnds_var}=\${tbnds_var}-365; \$att_copy" $nextdec.tile6.nc $seahist.$diag_source.tile6.nc
          $check_ncap
       else
          $time_ncap ncap2 -h -O -s "\${t}[\${t}]=\${t}-365; \$att_copy" $nextdec.tile1.nc $seahist.$diag_source.tile1.nc
@@ -6541,7 +6545,13 @@ if ( ! -e $seahist.$diag_source.nc ) then
       set att_copy = (`ncdump -h $nextdec | sed -ne "s/.*\${t}:\\(.*\\) =.*/\$t@\\1=\$t@\\1;/gp"`)
       #set hasAVT1 = `ncdump -v average_T1 $nextdec | wc -l`
       if ( `ncdump -h $nextdec | grep -c " average_T1("` == 1 ) then
-         $time_ncap ncap2 -h -O -s "\${t}[\${t}]=\${t}-365; average_T1=average_T1-365; average_T2=average_T2-365; \${t}_bounds=\${t}_bounds-365; \$att_copy" $nextdec $seahist.$diag_source.nc
+         # A field with 'long_name =  "time axis boundary"' should be in
+         # the file.  Be sure to use the same name in the following
+         # commands.  We can rather safely assume the same field name
+         # will be used in all the tile files.
+         set tbnds_var = `ncdump -h $nextdec.tile1.nc | grep 'long_name = "time axis boundaries"' | awk -F : '{ print $1 }'`
+
+         $time_ncap ncap2 -h -O -s "\${t}[\${t}]=\${t}-365; average_T1=average_T1-365; average_T2=average_T2-365; \${tbnds_var}=\${tbnds_var}-365; \$att_copy" $nextdec $seahist.$diag_source.nc
          $check_ncap
       else
          $time_ncap ncap2 -h -O -s "\${t}[\${t}]=\${t}-365; \$att_copy" $nextdec $seahist.$diag_source.nc
