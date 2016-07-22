@@ -384,6 +384,11 @@ sub analysis {
          my $asrcfile = "$component.$tt.$ssn.nc";
          if ($opt_V) {print "asrcfile:: $asrcfile\n"};
 
+         # only proceed if ending analysis time == -t time
+         unless ($arrayofExptsH[$ii]{time} =~ /^$arrayofExptsH[0]{aendYear}/) {
+             print STDERR "ANALYSIS: skipping accumulative $aScriptout because ending analysis year ($arrayofExptsH[0]{aendYear}) != ending time specified on command-line -t ($arrayofExptsH[$ii]{time})\n";
+             next;
+         }
 
         #----#---- fill the variables in the template
         #if ($opt_V) {print STDERR "fill these vars: @arrayofExptsH\n,$figureDir\n,$aScript\n,$aScriptout\n,$iExpt\n,$workdir\n,$mode\n"; }
@@ -421,6 +426,12 @@ sub analysis {
            $arrayofExptsH[$ii]{aendYear} = $availablechunkslast[$n];
            $arrayofExptsH[$ii]{databegyr} = $availablechunksfirst[$n];
            $arrayofExptsH[$ii]{dataendyr} = $availablechunkslast[$n];
+         }
+
+         # only proceed if ending analysis time == -t time
+         unless ($arrayofExptsH[$ii]{time} =~ /^$availablechunkslast[$n]/) {
+             print STDERR "ANALYSIS: skipping non-accumulative $aScriptout because ending analysis year ($availablechunkslast[$n]) != ending time specified on command-line -t ($arrayofExptsH[$ii]{time})\n";
+             next;
          }
 
          #----#---- fill the variables in the template
