@@ -1162,7 +1162,9 @@ sub extractDoF90Cpp($$)
 {
   my ($r, $c) = @_;
   my ($exp, $value) = ($r, '');
-  my $compileNode = $exp->node()->findnodes('component[@name="' . $c . '"]/compile')->get_node(1);
+  my $compileNodes = $exp->node()->findnodes('component[@name="' . $c . '"]/compile');
+  return '' unless $compileNodes;
+  my $compileNode = $compileNodes->get_node(1);
   while ($exp and !$value)
   {
     $value = $exp->nodeValue($compileNode, '@doF90Cpp');
