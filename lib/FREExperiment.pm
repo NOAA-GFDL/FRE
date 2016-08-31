@@ -1529,7 +1529,7 @@ sub extractPPRefineDiagScripts($)
 {
   my ($r, @results) = (shift, ());
   my @nodes = $r->extractNodes('postProcess', 'refineDiag/@script');
-  foreach my $node (@nodes) {push @results, $r->nodeValue($node, '.');}
+  foreach my $node (@nodes) {push @results, split /\s+/, $r->nodeValue($node, '.');}
   return @results;
 }
 
