@@ -1,0 +1,1 @@
+../ncrc_common/cray.mk
