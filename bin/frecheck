@@ -1,64 +1,12 @@
 #!/usr/bin/perl
 # -*- cperl -*-
 
-# $Id: frecheck,v 18.0.4.11.4.1 2013/12/03 23:36:21 Niki.Zadeh Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: Program to Check Model Restart Files
 # ------------------------------------------------------------------------------
-# arl    Ver  18.00  Merged revision 17.0.4.14 onto trunk           March 10
-# afy -------------- Branch 18.0.4 -------------------------------- July 10
-# afy    Ver   1.00  Use new FREDefaults module (SiteIsGFDL)        July 10
-# arl    Ver   2.00  Modify endDate (return 5-digit nocalendar)     February 11
-# arl    Ver   2.01  Add status return                              February 11
-# arl    Ver   2.02  Call 'ardiff' without -q option                February 11
-# afy    Ver   3.00  Use new FREUtils module (createDir)            February 11
-# afy    Ver   4.00  Use new FREDefaults module (no SiteIsGFDL)     March 11
-# afy    Ver   5.00  Reconfigure Getopt::Long ('no_auto_abbrev')    January 12
-# afy    Ver   5.01  Don't do any graphics                          January 12
-# afy    Ver   5.02  Remove option --timing                         January 12
-# afy    Ver   5.03  Rename option --Longlist => --long-list        January 12
-# afy    Ver   5.04  Rename option --Save => --save                 January 12
-# afy    Ver   5.05  Rename option --Version => --version           January 12
-# afy    Ver   5.06  Add option --end-date                          January 12
-# afy    Ver   5.07  Add option --exclude                           January 12
-# afy    Ver   5.08  Add option --ignore-attributes                 January 12
-# afy    Ver   5.09  Add option --regression                        January 12
-# afy    Ver   5.10  Add option --unique                            January 12
-# afy    Ver   5.11  Improve startDate (return YYYYMMDD, add nml)   January 12
-# afy    Ver   5.12  Redesign listing/comparing                     January 12
-# afy    Ver   6.00  Fix a bug in the --version processing          January 12
-# afy    Ver   7.00  Rename analyze => analyzeRegression            January 12
-# afy    Ver   7.01  Modify analyzeRegression (check refToRunInfo)  January 12
-# afy    Ver   7.02  Add outputFilesListing subroutine              January 12
-# afy    Ver   8.00  Modify Usage (remove ASCII escapes)            April 12
-# afy    Ver   8.01  Cosmetics in messages                          April 12
-# afy    Ver   9.00  Use new FRENamelists module (totally new)      June 12
-# afy    Ver   9.01  Use new FREExperiment module (reg*Labels)      June 12
-# afy    Ver   9.02  Modify calendarType subroutine                 June 12
-# afy    Ver   9.03  Modify startDate subroutine                    June 12
-# afy    Ver   9.04  Modify analyzeRegression subroutine            June 12
-# afy    Ver   9.05  Remove regressionLabels subroutine             June 12
-# afy    Ver   9.06  Use new FREExperiment (run as key)             June 12
-# afy    Ver  10.00  Modify Getopt::Long (add 'bundling')           October 12
-# afy    Ver  10.01  Add option --compare-history                   October 12
-# afy    Ver  10.02  Rename option --end-date => --effective-date   October 12
-# afy    Ver  10.03  Rename option --long-list => --list-long       October 12
-# afy    Ver  10.04  Add option --list-references                   October 12
-# afy    Ver  10.05  Add option --main                              October 12
-# afy    Ver  10.06  Add option --with-references                   October 12
-# afy    Ver  10.07  Don't use files/directories globbing           October 12
-# afy    Ver  11.00  Modify endDate (months, days, hours, output)   April 13
-# afy    Ver  11.01  Modify startDate (output)                      April 13
-# afy    Ver  11.02  Modify analyzeReferences (more wide pattern)   April 13
-# afy    Ver  11.03  Modify all(Production|Regression)Timestamps    April 13
-# afy    Ver  11.04  Modify all(Production|Regression)UniqueDirs    April 13
-# afy    Ver  11.05  Modify analyze(Production|Regression)          April 13
-# afy    Ver  11.06  Add allOutputFiles (with readdir)              April 13
-# afy    Ver  11.07  Modify outputFilesListing (call ^)             April 13
-# afy    Ver  11.08  Modify compare (timestamps with (M:D:H))       April 13
-# ------------------------------------------------------------------------------
-# Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2000-2012
-# Designed and written by V. Balaji, Amy Langenhorst and Aleksey Yakovlev
+# Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2000-2012, 2016
+# Designed and written by V. Balaji, Amy Langenhorst, Aleksey Yakovlev and
+# Seth Underwood
 #
 
 use strict;
@@ -82,7 +30,7 @@ use FREUtil();
   package frecheck;
 
   use constant VERSION => '$Id: frecheck,v 18.0.4.11.4.1 2013/12/03 23:36:21 Niki.Zadeh Exp $';
-  
+
   use constant OPTLIST =>
   (
     'compare-history|H',
@@ -107,7 +55,7 @@ use FREUtil();
     'version|V',
     'xmlfile|x=s'
   );
-  
+
   use constant RESTART_INFIX => '.';
   use constant HISTORY_INFIX => '.nc.';
 
@@ -117,7 +65,7 @@ use FREUtil();
   use constant LISTER_LONG_DEFAULT => 'ls -lU';
   use constant LISTER_SHORT_DEFAULT => 'ls -1U';
 
-  use constant CRASH_PATTERN => qr(_crash); 
+  use constant CRASH_PATTERN => qr(_crash);
 
 }
 
@@ -130,7 +78,7 @@ use FREUtil();
   package frecheck;
 
   use Cwd();
-  
+
   my $self = File::Basename::basename($0);
 
   sub Usage()
@@ -153,18 +101,18 @@ use FREUtil();
       "   -l,        --list                      list all the restart or history files in the short format (don't compare them)\n",
       "   -L,        --list-long                 list all the restart or history files in the long format (don't compare them)\n",
       "   -R,        --list-references           list reference files from the configuration FILE instead of files from the archive directory\n",
-      "   -m,        --main                      compare files from the main producton run (instead of regression tests)\n", 
+      "   -m,        --main                      compare files from the main producton run (instead of regression tests)\n",
       "   -r STRING, --regression=STRING         process only regression tests from the STRING (default is 'all')\n",
       "   -S,        --save                      save all the temporary files, created by the ardiff command\n",
       "   -s STRING, --start-date=STRING         use start date STRING to override the date from the configuration FILE\n",
       "   -u STRING, --unique=STRING             process additionally unique runs with numbers from the STRING (default is 'all')\n",
-      "   -w,        --with-references           include reference files into comparing (negatable, default is 'on')\n\n",          
+      "   -w,        --with-references           include reference files into comparing (negatable, default is 'on')\n\n",
       "   -h,        --help                      print this help message and exit\n",
-      "   -p STRING, --platform=STRING           hardware and software platform STRING (required)\n", 
-      "   -t STRING, --target=STRING             use compilation directives, targeted by STRING (default is '$tgt')\n", 
+      "   -p STRING, --platform=STRING           hardware and software platform STRING (required)\n",
+      "   -t STRING, --target=STRING             use compilation directives, targeted by STRING (default is '$tgt')\n",
       "   -V,        --version                   print the tool version and exit\n",
-      "   -v,        --verbose                   get verbose messages (repeat the option to increase verbosity level)\n", 
-      "   -x FILE,   --xmlfile=FILE              experiment suite XML configuration FILE (default is '$cwd/$xml')\n\n", 
+      "   -v,        --verbose                   get verbose messages (repeat the option to increase verbosity level)\n",
+      "   -x FILE,   --xmlfile=FILE              experiment suite XML configuration FILE (default is '$cwd/$xml')\n\n",
       "  The required arguments are the platform and at least one experiment from the FILE.\n\n"
     );
   }
@@ -180,7 +128,7 @@ use FREUtil();
       "\n",
       "   Synopsis: $self runs the ardiff command to compare restart or history files on\n",
       "          the output, produced by frerun-generated runs and prints a report\n",
-      "          (the ardiff command must be findable via the current user PATH).\n", 
+      "          (the ardiff command must be findable via the current user PATH).\n",
       "@usage",
       "   Use --list or --list-long to produce a list of available restart or history files.\n",
       "      Options --regression and --unique limit this list to the subset, defined by these options.\n",
@@ -198,7 +146,7 @@ use FREUtil();
       "      This option shows all the reference files from the directories, where reference files are defined,\n",
       "      not only these ones, which are explicitly defined in the XML file.\n",
       "      You can bundle single-letter option identifiers, for example, the -lHR will list history reference files.\n",
-      "   Use --regression to compare restart or history files, corresponding to labels in this option value.\n", 
+      "   Use --regression to compare restart or history files, corresponding to labels in this option value.\n",
       "      This option value can contain a number of regression labels, separated by comma.\n",
       "      The reserved value 'all' (which is default) will select all available regression labels.\n",
       "   Use --unique to compare restart or history files, corresponding to unique runs with numbers from this option value.\n",
@@ -206,16 +154,16 @@ use FREUtil();
       "      The reserved value 'all' (which is default) will select all available unique runs.\n",
       "   Use --no-with-references (or --now) to disable comparing with reference files.\n",
       "      This option is 'on' by default, so it doesn't make sense to use without 'no' prefix.\n",
-      "   Use --platform to pick a platform for experiment(s).\n", 
-      "      The <platform> node in the experiment suite configuration file is used\n", 
+      "   Use --platform to pick a platform for experiment(s).\n",
+      "      The <platform> node in the experiment suite configuration file is used\n",
       "      to set platform-specific data and instructions.\n",
       "   Use --target to define compilation and linkage directives for experiment(s).\n",
       "      Predefined targets refer to groups of directives, existing in the 'mkmf' template file.\n",
       "      Possible predefined targets are: '$tgts'.\n",
       "      Any number of targets from this list can be used here, and you can also add your own target (but not more than one).\n",
       "      Targets '$tgst' are mutually exclusive - not more than one of them is allowed in the target list.\n",
-      "      Your own target should refer to a <compile> node with the corresponding value of its 'target' attribute.\n", 
-      "      Multiple targets are separated by comma or dash. All the directives, referred by multiple targets, are merged.\n\n" 
+      "      Your own target should refer to a <compile> node with the corresponding value of its 'target' attribute.\n",
+      "      Multiple targets are separated by comma or dash. All the directives, referred by multiple targets, are merged.\n\n"
     );
   }
 
@@ -232,7 +180,7 @@ use FREUtil();
     $comp .= ' -f' if $r->{force};
     return $comp;
   }
-  
+
   sub transpose($)
   # ------ arguments: $refToInfo
   {
@@ -244,25 +192,25 @@ use FREUtil();
       foreach my $timestamp (@{$refToTimestamps})
       {
         if (exists($result{$timestamp}))
-	{
-	  push @{$result{$timestamp}}, $dir if scalar(grep($_ eq $dir, @{$result{$timestamp}})) == 0;
-	}
-	else
-	{
-	  $result{$timestamp} = [$dir];
-	}
+        {
+          push @{$result{$timestamp}}, $dir if scalar(grep($_ eq $dir, @{$result{$timestamp}})) == 0;
+        }
+        else
+        {
+          $result{$timestamp} = [$dir];
+        }
       }
     }
     return \%result;
   }
-  
+
   sub files($$@)
-  # ------ arguments: $timestamp $extension @dirs 
+  # ------ arguments: $timestamp $extension @dirs
   {
     my ($s, $x) = (shift, shift);
     return grep(-f $_ && -r $_, map("$_/$s$x", sort(@_)));
   }
-  
+
   sub calendarType($)
   # ------ arguments: $namelistsHandle
   {
@@ -273,12 +221,12 @@ use FREUtil();
       if (my $value = $h->namelistDoubleQuotedStringGet($name, 'calendar') || $h->namelistSingleQuotedStringGet($name, 'calendar'))
       {
         $result = $value;
-	last;
+        last;
       }
     }
     return $result;
   }
-  
+
   sub endDate($$$$$$)
   # ------ arguments: $startDate $months $days $hours $granularity $calendarType
   {
@@ -288,14 +236,14 @@ use FREUtil();
       $s = FREUtil::modifydate($s, "+ $m months") if $m > 0;
       $s = FREUtil::modifydate($s, "+ $d days")   if $d > 0;
       $s = FREUtil::modifydate($s, "+ $h hours")  if $h > 0;
-      return Date::Manip::UnixDate($s, ($g eq 'months' || $g eq 'days') ? '%Y%m%d' : '%Y%m%d%H');
+      return FREUtil::unixDate($s, ($g eq 'months' || $g eq 'days') ? '%Y%m%d' : '%Y%m%d%H');
     }
     else
     {
       return sprintf("%05d", $d);
     }
   }
-  
+
   sub startDate($$)
   # ------ arguments: $namelistsHandle $granularity
   {
@@ -307,20 +255,20 @@ use FREUtil();
       if (my $value = $h->namelistDateGet($name, $variable))
       {
         $result = $value;
-	last;
+        last;
       }
     }
     if (my $datetime = FREUtil::parseFortranDate($result))
     {
       $datetime = Date::Manip::Date_SetDateField($datetime, 'd', 1) if $g eq 'months';
-      return Date::Manip::UnixDate($datetime, ($g eq 'months' || $g eq 'days') ? '%Y%m%d' : '%Y%m%d%H');
+      return FREUtil::unixDate($datetime, ($g eq 'months' || $g eq 'days') ? '%Y%m%d' : '%Y%m%d%H');
     }
     else
     {
       return undef;
     }
   }
-  
+
   sub analyzeReferences($$$)
   # ------ arguments: $exp $type $extension
   {
@@ -332,55 +280,63 @@ use FREUtil();
       my $dir = File::Basename::dirname($compFile);
       if ($dir =~ m/\/$t$/)
       {
-	if (-d $dir && -r $dir)
-	{
-	  if ($compFile =~ m/\/(\d+)$x$/)
-	  {
-	    my $timestamp = $1;
-	    if (exists($result{$dir}))
-	    {
-	      push @{$result{$dir}}, $timestamp if scalar(grep($_ eq $timestamp, @{$result{$dir}})) == 0;
-	    }
-	    else
-	    {
-	      $result{$dir} = [$timestamp];
-	    }
-	  }
-	  else
-	  {
-	    $fre->out(FREMsg::WARNING, "Unable to extract a timestamp from the reference $t file '$compFile'");
-	  }
-	}
+        if (-d $dir && -r $dir)
+        {
+          if ($compFile =~ m/\/(\d+)$x$/)
+          {
+            my $timestamp = $1;
+            if (exists($result{$dir}))
+            {
+              push @{$result{$dir}}, $timestamp if scalar(grep($_ eq $timestamp, @{$result{$dir}})) == 0;
+            }
+            else
+            {
+              $result{$dir} = [$timestamp];
+            }
+          }
+          else
+          {
+            $fre->out(FREMsg::WARNING, "Unable to extract a timestamp from the reference $t file '$compFile'");
+          }
+        }
       }
     }
     return \%result;
   }
-  
+
   sub allProductionTimestamps($$$$)
   # ------ arguments: $refToPrdInfo $type $startDate $effectiveDate
   {
     my ($r, $t, $s, $e) = @_;
     if ($e)
     {
-      return ($e); 
+      return ($e);
     }
     else
     {
       my @result = ();
       my ($nmls, $simMonthsLeft) = ($r->{namelists}, $r->{simTimeMonths});
       my ($timestamp, $calendarType) = ($s || frecheck::startDate($nmls, 'months'), frecheck::calendarType($nmls));
+      # verify both timestamp and calendarType are set
+      if ($timestamp == undef || $calendarType =~ /^$/) {
+        $fre->out(FREMsg::FATAL, "allProductionTimestamps, timestamp or calendarType not set correctly");
+      }
       while ($simMonthsLeft > 0)
       {
         my $months = ($r->{segTimeMonths} <= $simMonthsLeft) ? $r->{segTimeMonths} : $simMonthsLeft;
-	my $timestampNext = frecheck::endDate($timestamp, $months, 0, 0, 'months', $calendarType);
-	push @result, ($t eq 'restart') ? $timestampNext : "$timestamp:$months:0:0";
-	$timestamp = $timestampNext;
-	$simMonthsLeft -= $months;
+        my $timestampNext = frecheck::endDate($timestamp, $months, 0, 0, 'months', $calendarType);
+        # verify timestampNext is set correctly
+        if ($timestampNext == undef) {
+          $fre->out(FREMsg::FATAL, "allProductionTimestamps, timestampNext not set correctly");
+        }
+        push @result, ($t eq 'restart') ? $timestampNext : "$timestamp:$months:0:0";
+        $timestamp = $timestampNext;
+        $simMonthsLeft -= $months;
       }
       return @result;
     }
   }
-  
+
   sub allProductionUniqueDirs($$)
   # ------ arguments: $dir $type
   {
@@ -396,7 +352,7 @@ use FREUtil();
       return ();
     }
   }
-  
+
   sub analyzeProduction($$$$$)
   # ------ arguments: $exp $type $startDate $effectiveDate $unique
   {
@@ -406,29 +362,29 @@ use FREUtil();
     {
       if (scalar(my @timestamps = frecheck::allProductionTimestamps($prdInfo, $t, $s, $e)) > 0)
       {
-	my $dir = "$archiveDir/$t";
+        my $dir = "$archiveDir/$t";
         $result{$dir} = \@timestamps if -d $dir && -r $dir;
-	if ($u eq 'all')
-	{
-	  my $crashPattern = frecheck::CRASH_PATTERN;
-	  foreach my $uniqueDir (frecheck::allProductionUniqueDirs($archiveDir, $t))
-	  {
-	    $result{$uniqueDir} = \@timestamps if -d $uniqueDir && -r $uniqueDir && ($uniqueDir !~ m/$crashPattern/o);
+        if ($u eq 'all')
+        {
+          my $crashPattern = frecheck::CRASH_PATTERN;
+          foreach my $uniqueDir (frecheck::allProductionUniqueDirs($archiveDir, $t))
+          {
+            $result{$uniqueDir} = \@timestamps if -d $uniqueDir && -r $uniqueDir && ($uniqueDir !~ m/$crashPattern/o);
           }
-	}
-	else
-	{
-	  foreach my $n (split(',', $u))
-	  {
-	    my $uniqueDir = "$archiveDir/$n/$t";
-	    $result{$uniqueDir} = \@timestamps if -d $uniqueDir && -r $uniqueDir;
-	  }
-	}
+        }
+        else
+        {
+          foreach my $n (split(',', $u))
+          {
+            my $uniqueDir = "$archiveDir/$n/$t";
+            $result{$uniqueDir} = \@timestamps if -d $uniqueDir && -r $uniqueDir;
+          }
+        }
         return \%result;
       }
       else
       {
-	$fre->out(FREMsg::FATAL, "Unable to determine timestamps for production runs");
+        $fre->out(FREMsg::FATAL, "Unable to determine timestamps for production runs");
         return undef;
       }
     }
@@ -437,14 +393,14 @@ use FREUtil();
       return undef;
     }
   }
-  
+
   sub allRegressionTimestamps($$$$)
   # ------ arguments: $refToRunInfo $type $startDate $effectiveDate
   {
     my ($r, $t, $s, $e) = @_;
     if ($e)
     {
-      return ($e); 
+      return ($e);
     }
     else
     {
@@ -454,17 +410,25 @@ use FREUtil();
       my @hours  = split(/ /, $r->{hours});
       my ($nmls, $granularity) = ($r->{namelists}, ($r->{hoursDefined}) ? 'hours' : 'days');
       my ($timestamp, $calendarType) = ($s || frecheck::startDate($nmls, $granularity), frecheck::calendarType($nmls));
+      # verify both timestamp and calendarType are set
+      if ($timestamp == undef || $calendarType =~ /^$/) {
+        $fre->out(FREMsg::FATAL, "allRegressionTimestamps, timestamp or calendarType not set correctly");
+      }
       for (my $segNo = 0; $segNo < scalar(@months); $segNo++)
       {
         my ($months, $days, $hours) = ($months[$segNo], $days[$segNo], $hours[$segNo]);
-	my $timestampNext = frecheck::endDate($timestamp, $months, $days, $hours, $granularity, $calendarType);
-	push @result, ($t eq 'restart') ? $timestampNext : "$timestamp:$months:$days:$hours";
-	$timestamp = $timestampNext;
+        my $timestampNext = frecheck::endDate($timestamp, $months, $days, $hours, $granularity, $calendarType);
+        # verify timestampNext is set correctly
+        if ($timestampNext == undef) {
+          $fre->out(FREMsg::FATAL, "allRegressionTimestamps, timestampNext not set correctly");
+        }
+        push @result, ($t eq 'restart') ? $timestampNext : "$timestamp:$months:$days:$hours";
+        $timestamp = $timestampNext;
       }
       return @result;
     }
   }
-  
+
   sub allRegressionUniqueDirs($$$)
   # ------ arguments: $dir $postfix $type
   {
@@ -480,7 +444,7 @@ use FREUtil();
       return ();
     }
   }
-  
+
   sub analyzeRegression($$$$$$)
   # ------ arguments: $exp $refToLabels $type $startDate $effectiveDate $unique
   {
@@ -490,37 +454,37 @@ use FREUtil();
     {
       if (my $regInfo = $z->extractRegressionRunInfo($label))
       {
-	foreach my $runNo (sort(keys(%{$regInfo})))
-	{
-	  my $runInfo = $regInfo->{$runNo};
+        foreach my $runNo (sort(keys(%{$regInfo})))
+        {
+          my $runInfo = $regInfo->{$runNo};
           if (scalar(my @timestamps = frecheck::allRegressionTimestamps($runInfo, $t, $s, $e)) > 0)
           {
-	    my $postfix = $runInfo->{postfix};
+            my $postfix = $runInfo->{postfix};
             my $dir = "$archiveDir/$postfix/$t";
-	    $result{$dir} = \@timestamps if -d $dir && -r $dir;
-	    if ($u eq 'all')
-	    {
-	      my $crashPattern = frecheck::CRASH_PATTERN;
-	      foreach my $uniqueDir (frecheck::allRegressionUniqueDirs($archiveDir, $postfix, $t))
-	      {
-	        $result{$uniqueDir} = \@timestamps if -d $uniqueDir && -r $uniqueDir && ($uniqueDir !~ m/$crashPattern/o);
-	      }
-	    }
-	    else
-	    {
-	      foreach my $n (split(',', $u))
-	      {
-		my $uniqueDir = "$archiveDir/$postfix$n/$t";
-		$result{$uniqueDir} = \@timestamps if -d $uniqueDir && -r $uniqueDir;
-	      }
-	    }
+            $result{$dir} = \@timestamps if -d $dir && -r $dir;
+            if ($u eq 'all')
+            {
+              my $crashPattern = frecheck::CRASH_PATTERN;
+              foreach my $uniqueDir (frecheck::allRegressionUniqueDirs($archiveDir, $postfix, $t))
+              {
+                $result{$uniqueDir} = \@timestamps if -d $uniqueDir && -r $uniqueDir && ($uniqueDir !~ m/$crashPattern/o);
+              }
+            }
+            else
+            {
+              foreach my $n (split(',', $u))
+              {
+                my $uniqueDir = "$archiveDir/$postfix$n/$t";
+                $result{$uniqueDir} = \@timestamps if -d $uniqueDir && -r $uniqueDir;
+              }
+            }
           }
-	  else
-	  {
-	    $fre->out(FREMsg::FATAL, "Unable to determine timestamps for regression test '$label', run '$runNo'");
-	    $ok = 0;
-	  }
-	}
+          else
+          {
+            $fre->out(FREMsg::FATAL, "Unable to determine timestamps for regression test '$label', run '$runNo'");
+            $ok = 0;
+          }
+        }
       }
       else
       {
@@ -529,7 +493,7 @@ use FREUtil();
     }
     return ($ok) ? \%result : undef;
   }
-  
+
   sub allOutputFiles($$)
   # ------ arguments: $dir $extension
   {
@@ -545,9 +509,9 @@ use FREUtil();
       return ();
     }
   }
-  
+
   sub outputFilesListing($$$$$)
-  # ------ arguments: $exp $refToHash $type $extension $lister 
+  # ------ arguments: $exp $refToHash $type $extension $lister
   {
     my ($z, $r, $t, $x, $l) = @_;
     my $fre = $z->fre();
@@ -560,7 +524,7 @@ use FREUtil();
       $fre->out(FREMsg::WARNING, "No $t files are found");
     }
   }
-  
+
   sub compare($$$$$$$)
   # ------ arguments: $exp $comparator $type $extension $refToCrsInfo $refToRefInfo $verbose
   {
@@ -573,58 +537,58 @@ use FREUtil();
       my $tsToPrint = (defined($tsM)) ? "timestamp '$tsHead' and length ($tsM:$tsD:$tsH)" : "timestamp '$tsHead'";
       if (exists($crsInfo->{$crsTimestamp}))
       {
-	if (scalar(my @crsFiles = frecheck::files($tsHead, $x, @{$crsInfo->{$crsTimestamp}})) > 0)
-	{
-	  if (scalar(@crsFiles) > 1)
-	  {
-	    if ($v)
-	    { 
+        if (scalar(my @crsFiles = frecheck::files($tsHead, $x, @{$crsInfo->{$crsTimestamp}})) > 0)
+        {
+          if (scalar(@crsFiles) > 1)
+          {
+            if ($v)
+            {
               print "--------------------------------------------------------------------------------\n";
               print "Crossover comparing $t files with $tsToPrint:\n";
               print "--------------------------------------------------------------------------------\n";
-              print join("\n", @crsFiles), "\n"; 
+              print join("\n", @crsFiles), "\n";
               print "--------------------------------------------------------------------------------\n";
             }
             my $files = join(' ', @crsFiles);
             my $res = system("ls -1f $files | $f");
-	    $crsPassed++ unless $res;
-	    $crsTested++;
-	  }
-	  else
-	  {
-            $fre->out(FREMsg::WARNING, "Not enough $t files in '$archiveDir' with $tsToPrint for crossover comparing");
-	  }
-	  if ($r)
-	  {
-            my $refInfo = frecheck::transpose($r);
-	    if (exists($refInfo->{$tsHead}))
-	    {
-              if (scalar(my @refFiles = ($crsFiles[0], frecheck::files($tsHead, $x, @{$refInfo->{$tsHead}}))) > 1)
-	      {
-		if ($v)
-		{ 
-        	  print "--------------------------------------------------------------------------------\n";
-        	  print "Referential comparing $t files with $tsToPrint:\n";
-        	  print "--------------------------------------------------------------------------------\n";
-        	  print join("\n", @refFiles), "\n"; 
-        	  print "--------------------------------------------------------------------------------\n";
-        	}
-        	my $files = join(' ', @refFiles);
-        	my $res = system("ls -1f $files | $f");
-		$refPassed++ unless $res;
-		$refTested++;
-	      }
-	      else
-	      {
-        	$fre->out(FREMsg::WARNING, "No $t reference files with $tsToPrint for referential comparing");
-	      }
-	    }
+            $crsPassed++ unless $res;
+            $crsTested++;
           }
-	}
-	else
-	{
+          else
+          {
+            $fre->out(FREMsg::WARNING, "Not enough $t files in '$archiveDir' with $tsToPrint for crossover comparing");
+          }
+          if ($r)
+          {
+            my $refInfo = frecheck::transpose($r);
+            if (exists($refInfo->{$tsHead}))
+            {
+              if (scalar(my @refFiles = ($crsFiles[0], frecheck::files($tsHead, $x, @{$refInfo->{$tsHead}}))) > 1)
+              {
+                if ($v)
+                {
+                  print "--------------------------------------------------------------------------------\n";
+                  print "Referential comparing $t files with $tsToPrint:\n";
+                  print "--------------------------------------------------------------------------------\n";
+                  print join("\n", @refFiles), "\n";
+                  print "--------------------------------------------------------------------------------\n";
+                }
+                my $files = join(' ', @refFiles);
+                my $res = system("ls -1f $files | $f");
+                $refPassed++ unless $res;
+                $refTested++;
+              }
+              else
+              {
+                $fre->out(FREMsg::WARNING, "No $t reference files with $tsToPrint for referential comparing");
+              }
+            }
+          }
+        }
+        else
+        {
           $fre->out(FREMsg::WARNING, "No $t files in '$archiveDir' with $tsToPrint for any comparing");
-	}
+        }
       }
       else
       {
@@ -633,9 +597,9 @@ use FREUtil();
     }
     return ($crsTested, $crsPassed, $refTested, $refPassed);
   }
-  
+
   sub skipExp($)
-  # ------ arguments: $exp 
+  # ------ arguments: $exp
   {
     my $z = shift;
     my ($expName, $fre) = ($z->name(), $z->fre());
@@ -652,11 +616,11 @@ use FREUtil();
 
   my %opt =
   (
-    'regression'	=> 'all',
-    'unique'		=> 'all',
-    'with-references'	=> 1,
-    'target'		=> FREDefaults::Target(),
-    'xmlfile'		=> FREDefaults::XMLFile()
+    'regression'        => 'all',
+    'unique'            => 'all',
+    'with-references'   => 1,
+    'target'            => FREDefaults::Target(),
+    'xmlfile'           => FREDefaults::XMLFile()
   );
 
   Getopt::Long::GetOptions(\%opt, frecheck::OPTLIST) or (print frecheck::Usage() and exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM);
@@ -679,7 +643,11 @@ use FREUtil();
     }
     elsif (Date::Manip::ParseDate($opt{'start-date'}))
     {
-      $opt{'start-date'} = Date::Manip::UnixDate($opt{'start-date'}, '%Y%m%d');
+      $opt{'start-date'} = FREUtil::unixDate($opt{'start-date'}, '%Y%m%d');
+      # verify start-date is not undef
+      if ($opt{'start-date'} == undef) {
+        FREMsg::out($opt{verbose}, FREMsg::FATAL, 'The --start-date options returned undef from FREUtil::unixDate');
+      }
       FREMsg::out($opt{verbose}, FREMsg::NOTE, "Using the --start-date option value '$opt{'start-date'}'");
     }
     else
@@ -688,7 +656,7 @@ use FREUtil();
       exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
     }
   }
-  
+
   if ($opt{'effective-date'})
   {
     if (substr($opt{'effective-date'}, 0, 1) eq '-')
@@ -698,7 +666,11 @@ use FREUtil();
     }
     elsif (Date::Manip::ParseDate($opt{'effective-date'}))
     {
-      $opt{'effective-date'} = Date::Manip::UnixDate($opt{'effective-date'}, '%Y%m%d');
+      $opt{'effective-date'} = FREUtil::unixDate($opt{'effective-date'}, '%Y%m%d');
+      # verify start-date is not undef
+      if ($opt{'effective-date'} == undef) {
+        FREMsg::out($opt{verbose}, FREMsg::FATAL, 'The --effective-date options returned undef from FREUtil::unixDate');
+      }
       FREMsg::out($opt{verbose}, FREMsg::NOTE, "Using the --effective-date option value '$opt{'effective-date'}'");
     }
     else
@@ -707,7 +679,7 @@ use FREUtil();
       exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
     }
   }
-  
+
   if ($opt{unique})
   {
     ($opt{unique}, my @messages) = FREUtil::optionIntegersListParse('unique', $opt{unique});
@@ -726,7 +698,7 @@ use FREUtil();
       exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
     }
   }
-  
+
   if ($opt{platform})
   {
     if (substr($opt{platform}, 0, 1) eq '-')
@@ -735,7 +707,7 @@ use FREUtil();
       exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
     }
   }
-  
+
   if ($opt{target})
   {
     if (substr($opt{target}, 0, 1) eq '-')
@@ -744,7 +716,7 @@ use FREUtil();
       exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
     }
   }
-  
+
   if ($opt{xmlfile})
   {
     if (substr($opt{xmlfile}, 0, 1) eq '-')
@@ -753,7 +725,7 @@ use FREUtil();
       exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
     }
   }
-  
+
   if ($opt{'list-references'})
   {
     unless ($opt{list} || $opt{'list-long'})
@@ -763,7 +735,7 @@ use FREUtil();
   }
 
   my $fre = FRE->new('frecheck', %opt) or exit FREDefaults::STATUS_FRE_GENERIC_PROBLEM;
-  
+
   my @exps = ();
   foreach my $expName (FREUtil::listUnique(@ARGV))
   {
@@ -784,45 +756,45 @@ use FREUtil();
 
     my $expName = $exp->name();
     $fre->setCurrentExperimentName($expName);
-    
+
     my $refInfo = ($opt{'with-references'}) ? frecheck::analyzeReferences($exp, $type, $ext) : undef;
-    
+
     if ($opt{main})
     {
       if (my $prdInfo = frecheck::analyzeProduction($exp, $type, $opt{'start-date'}, $opt{'effective-date'}, $opt{unique}))
       {
         if (scalar(keys(%{$prdInfo})) > 0)
-	{
-	  if ($opt{'list-long'})
-	  {
-	    my $r = ($opt{'list-references'}) ? $refInfo : $prdInfo;
-	    frecheck::outputFilesListing($exp, $r, $type, $ext, $fre->property('FRE.tool.lister.long') || frecheck::LISTER_LONG_DEFAULT);
-	  }
-	  elsif ($opt{list})
-	  {
-	    my $r = ($opt{'list-references'}) ? $refInfo : $prdInfo;
-	    frecheck::outputFilesListing($exp, $r, $type, $ext, $fre->property('FRE.tool.lister.short') || frecheck::LISTER_SHORT_DEFAULT);
-	  }
-	  else
-	  {
-	    my ($crsTested, $crsPassed, $refTested, $refPassed) = frecheck::compare($exp, $comparator, $type, $ext, $prdInfo, $refInfo, $opt{verbose});
-	    $crsResult{$expName} = ($crsTested > 0) ? (($crsTested == $crsPassed) ? 1 : -1) : 0;
-	    $refResult{$expName} = ($refTested > 0) ? (($refTested == $refPassed) ? 1 : -1) : 0;
-	    $status = FREDefaults::STATUS_DATA_NOT_EXISTS if $crsResult{$expName} == 0 && $refResult{$expName} == 0;
-	    $status = FREDefaults::STATUS_DATA_NO_MATCH if $crsResult{$expName} < 0 || $refResult{$expName} < 0;
-	    $reportOn = 1;
-	  }
-	}
-	else
-	{
-	  $fre->out(FREMsg::FATAL, "Unable to select production $type directories to process");
+        {
+          if ($opt{'list-long'})
+          {
+            my $r = ($opt{'list-references'}) ? $refInfo : $prdInfo;
+            frecheck::outputFilesListing($exp, $r, $type, $ext, $fre->property('FRE.tool.lister.long') || frecheck::LISTER_LONG_DEFAULT);
+          }
+          elsif ($opt{list})
+          {
+            my $r = ($opt{'list-references'}) ? $refInfo : $prdInfo;
+            frecheck::outputFilesListing($exp, $r, $type, $ext, $fre->property('FRE.tool.lister.short') || frecheck::LISTER_SHORT_DEFAULT);
+          }
+          else
+          {
+            my ($crsTested, $crsPassed, $refTested, $refPassed) = frecheck::compare($exp, $comparator, $type, $ext, $prdInfo, $refInfo, $opt{verbose});
+            $crsResult{$expName} = ($crsTested > 0) ? (($crsTested == $crsPassed) ? 1 : -1) : 0;
+            $refResult{$expName} = ($refTested > 0) ? (($refTested == $refPassed) ? 1 : -1) : 0;
+            $status = FREDefaults::STATUS_DATA_NOT_EXISTS if $crsResult{$expName} == 0 && $refResult{$expName} == 0;
+            $status = FREDefaults::STATUS_DATA_NO_MATCH if $crsResult{$expName} < 0 || $refResult{$expName} < 0;
+            $reportOn = 1;
+          }
+        }
+        else
+        {
+          $fre->out(FREMsg::FATAL, "Unable to select production $type directories to process");
           frecheck::skipExp($exp) if scalar(@exps) > 1;
           $status = FREDefaults::STATUS_FS_GENERIC_PROBLEM;
-	}
+        }
       }
       else
       {
-	$fre->out(FREMsg::FATAL, "Unable to select production $type directories to process");
+        $fre->out(FREMsg::FATAL, "Unable to select production $type directories to process");
         frecheck::skipExp($exp) if scalar(@exps) > 1;
         $status = FREDefaults::STATUS_FS_GENERIC_PROBLEM;
       }
@@ -833,36 +805,36 @@ use FREUtil();
       {
         if (scalar(keys(%{$regInfo})) > 0)
         {
-	  if ($opt{'list-long'})
-	  {
-	    my $r = ($opt{'list-references'}) ? $refInfo : $regInfo;
-	    frecheck::outputFilesListing($exp, $r, $type, $ext, $fre->property('FRE.tool.lister.long') || frecheck::LISTER_LONG_DEFAULT);
-	  }
-	  elsif ($opt{list})
-	  {
-	    my $r = ($opt{'list-references'}) ? $refInfo : $regInfo;
-	    frecheck::outputFilesListing($exp, $r, $type, $ext, $fre->property('FRE.tool.lister.short') || frecheck::LISTER_SHORT_DEFAULT);
-	  }
-	  else
-	  {
-	    my ($crsTested, $crsPassed, $refTested, $refPassed) = frecheck::compare($exp, $comparator, $type, $ext, $regInfo, $refInfo, $opt{verbose});
-	    $crsResult{$expName} = ($crsTested > 0) ? (($crsTested == $crsPassed) ? 1 : -1) : 0;
-	    $refResult{$expName} = ($refTested > 0) ? (($refTested == $refPassed) ? 1 : -1) : 0;
-	    $status = FREDefaults::STATUS_DATA_NOT_EXISTS if $crsResult{$expName} == 0 && $refResult{$expName} == 0;
-	    $status = FREDefaults::STATUS_DATA_NO_MATCH if $crsResult{$expName} < 0 || $refResult{$expName} < 0;
-	    $reportOn = 1;
-	  }
-	}
-	else
-	{
-	  $fre->out(FREMsg::FATAL, "Unable to select regression $type directories to process");
+          if ($opt{'list-long'})
+          {
+            my $r = ($opt{'list-references'}) ? $refInfo : $regInfo;
+            frecheck::outputFilesListing($exp, $r, $type, $ext, $fre->property('FRE.tool.lister.long') || frecheck::LISTER_LONG_DEFAULT);
+          }
+          elsif ($opt{list})
+          {
+            my $r = ($opt{'list-references'}) ? $refInfo : $regInfo;
+            frecheck::outputFilesListing($exp, $r, $type, $ext, $fre->property('FRE.tool.lister.short') || frecheck::LISTER_SHORT_DEFAULT);
+          }
+          else
+          {
+            my ($crsTested, $crsPassed, $refTested, $refPassed) = frecheck::compare($exp, $comparator, $type, $ext, $regInfo, $refInfo, $opt{verbose});
+            $crsResult{$expName} = ($crsTested > 0) ? (($crsTested == $crsPassed) ? 1 : -1) : 0;
+            $refResult{$expName} = ($refTested > 0) ? (($refTested == $refPassed) ? 1 : -1) : 0;
+            $status = FREDefaults::STATUS_DATA_NOT_EXISTS if $crsResult{$expName} == 0 && $refResult{$expName} == 0;
+            $status = FREDefaults::STATUS_DATA_NO_MATCH if $crsResult{$expName} < 0 || $refResult{$expName} < 0;
+            $reportOn = 1;
+          }
+        }
+        else
+        {
+          $fre->out(FREMsg::FATAL, "Unable to select regression $type directories to process");
           frecheck::skipExp($exp) if scalar(@exps) > 1;
           $status = FREDefaults::STATUS_FS_GENERIC_PROBLEM;
-	}
+        }
       }
       else
       {
-	$fre->out(FREMsg::FATAL, "Unable to extract regression parameters from the XML file");
+        $fre->out(FREMsg::FATAL, "Unable to extract regression parameters from the XML file");
         frecheck::skipExp($exp) if scalar(@exps) > 1;
         $status = FREDefaults::STATUS_FS_GENERIC_PROBLEM;
       }
@@ -873,7 +845,7 @@ use FREUtil();
       frecheck::skipExp($exp) if scalar(@exps) > 1;
       $status = FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
     }
-    
+
     $fre->unsetCurrentExperimentName();
 
   }
@@ -889,7 +861,7 @@ use FREUtil();
     print 'REFERENTIALLY UNTESTED: ', join(' ', grep($refResult{$_} == 0, keys %refResult)), "\n";
     print "\n";
   }
-  
+
   exit $status;
 
 }
