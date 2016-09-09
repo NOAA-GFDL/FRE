@@ -319,7 +319,7 @@ use FREUtil();
       my ($nmls, $simMonthsLeft) = ($r->{namelists}, $r->{simTimeMonths});
       my ($timestamp, $calendarType) = ($s || frecheck::startDate($nmls, 'months'), frecheck::calendarType($nmls));
       # verify both timestamp and calendarType are set
-      if ($timestamp == undef || $calendarType =~ /^$/) {
+      if (!defined($timestamp) || $calendarType =~ /^$/) {
         $fre->out(FREMsg::FATAL, "allProductionTimestamps, timestamp or calendarType not set correctly");
       }
       while ($simMonthsLeft > 0)
@@ -327,7 +327,7 @@ use FREUtil();
         my $months = ($r->{segTimeMonths} <= $simMonthsLeft) ? $r->{segTimeMonths} : $simMonthsLeft;
 	my $timestampNext = frecheck::endDate($timestamp, $months, 0, 0, 'months', $calendarType);
         # verify timestampNext is set correctly
-        if ($timestampNext == undef) {
+        if (!defined($timestampNext)) {
           $fre->out(FREMsg::FATAL, "allProductionTimestamps, timestampNext not set correctly");
         }
 	push @result, ($t eq 'restart') ? $timestampNext : "$timestamp:$months:0:0";
@@ -412,7 +412,7 @@ use FREUtil();
       my ($nmls, $granularity) = ($r->{namelists}, ($r->{hoursDefined}) ? 'hours' : 'days');
       my ($timestamp, $calendarType) = ($s || frecheck::startDate($nmls, $granularity), frecheck::calendarType($nmls));
       # verify both timestamp and calendarType are set
-      if ($timestamp == undef || $calendarType =~ /^$/) {
+      if (!defined($timestamp) || $calendarType =~ /^$/) {
         $fre->out(FREMsg::FATAL, "allRegressionTimestamps, timestamp or calendarType not set correctly");
       }
       for (my $segNo = 0; $segNo < scalar(@months); $segNo++)
@@ -420,7 +420,7 @@ use FREUtil();
         my ($months, $days, $hours) = ($months[$segNo], $days[$segNo], $hours[$segNo]);
 	my $timestampNext = frecheck::endDate($timestamp, $months, $days, $hours, $granularity, $calendarType);
         # verify timestampNext is set correctly
-        if ($timestampNext == undef) {
+        if (!defined($timestampNext)) {
           $fre->out(FREMsg::FATAL, "allRegressionTimestamps, timestampNext not set correctly");
         }
 	push @result, ($t eq 'restart') ? $timestampNext : "$timestamp:$months:$days:$hours";
@@ -647,7 +647,7 @@ use FREUtil();
     {
       $opt{'start-date'} = FREUtil::unixDate($opt{'start-date'}, '%Y%m%d');
       # verify start-date is not undef
-      if ($opt{'start-date'} == undef) {
+      if (!defined($opt{'start-date'})) {
         FREMsg::out($opt{verbose}, FREMsg::FATAL, 'The --start-date options returned undef from FREUtil::unixDate');
       }
       FREMsg::out($opt{verbose}, FREMsg::NOTE, "Using the --start-date option value '$opt{'start-date'}'");
@@ -670,7 +670,7 @@ use FREUtil();
     {
       $opt{'effective-date'} = FREUtil::unixDate($opt{'effective-date'}, '%Y%m%d');
       # verify start-date is not undef
-      if ($opt{'effective-date'} == undef) {
+      if (!defined($opt{'effective-date'})) {
         FREMsg::out($opt{verbose}, FREMsg::FATAL, 'The --effective-date options returned undef from FREUtil::unixDate');
       }
       FREMsg::out($opt{verbose}, FREMsg::NOTE, "Using the --effective-date option value '$opt{'effective-date'}'");
