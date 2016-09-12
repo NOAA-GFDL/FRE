@@ -304,11 +304,11 @@ use FREUtil();
     }
     return \%result;
   }
-  
-  sub allProductionTimestamps($$$$)
-  # ------ arguments: $refToPrdInfo $type $startDate $effectiveDate
+
+  sub allProductionTimestamps($$$$$)
+  # ------ arguments: $refToPrdInfo $type $startDate $effectiveDate $fre
   {
-    my ($r, $t, $s, $e) = @_;
+    my ($r, $t, $s, $e, $fre) = @_;
     if ($e)
     {
       return ($e); 
@@ -361,7 +361,7 @@ use FREUtil();
     my ($fre, $archiveDir, %result) = ($z->fre(), $z->archiveDir(), ());
     if (my $prdInfo = $z->extractProductionRunInfo())
     {
-      if (scalar(my @timestamps = frecheck::allProductionTimestamps($prdInfo, $t, $s, $e)) > 0)
+      if (scalar(my @timestamps = frecheck::allProductionTimestamps($prdInfo, $t, $s, $e, $fre)) > 0)
       {
 	my $dir = "$archiveDir/$t";
         $result{$dir} = \@timestamps if -d $dir && -r $dir;
@@ -394,11 +394,11 @@ use FREUtil();
       return undef;
     }
   }
-  
-  sub allRegressionTimestamps($$$$)
-  # ------ arguments: $refToRunInfo $type $startDate $effectiveDate
+
+  sub allRegressionTimestamps($$$$$)
+  # ------ arguments: $refToRunInfo $type $startDate $effectiveDate $fre
   {
-    my ($r, $t, $s, $e) = @_;
+    my ($r, $t, $s, $e, $fre) = @_;
     if ($e)
     {
       return ($e); 
@@ -455,10 +455,10 @@ use FREUtil();
     {
       if (my $regInfo = $z->extractRegressionRunInfo($label))
       {
-	foreach my $runNo (sort(keys(%{$regInfo})))
-	{
-	  my $runInfo = $regInfo->{$runNo};
-          if (scalar(my @timestamps = frecheck::allRegressionTimestamps($runInfo, $t, $s, $e)) > 0)
+        foreach my $runNo (sort(keys(%{$regInfo})))
+        {
+          my $runInfo = $regInfo->{$runNo};
+          if (scalar(my @timestamps = frecheck::allRegressionTimestamps($runInfo, $t, $s, $e, $fre)) > 0)
           {
 	    my $postfix = $runInfo->{postfix};
             my $dir = "$archiveDir/$postfix/$t";
