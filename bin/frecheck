@@ -1,64 +1,12 @@
 #!/usr/bin/perl
 # -*- cperl -*-
 
-# $Id: frecheck,v 18.0.4.11.4.1 2013/12/03 23:36:21 Niki.Zadeh Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: Program to Check Model Restart Files
 # ------------------------------------------------------------------------------
-# arl    Ver  18.00  Merged revision 17.0.4.14 onto trunk           March 10
-# afy -------------- Branch 18.0.4 -------------------------------- July 10
-# afy    Ver   1.00  Use new FREDefaults module (SiteIsGFDL)        July 10
-# arl    Ver   2.00  Modify endDate (return 5-digit nocalendar)     February 11
-# arl    Ver   2.01  Add status return                              February 11
-# arl    Ver   2.02  Call 'ardiff' without -q option                February 11
-# afy    Ver   3.00  Use new FREUtils module (createDir)            February 11
-# afy    Ver   4.00  Use new FREDefaults module (no SiteIsGFDL)     March 11
-# afy    Ver   5.00  Reconfigure Getopt::Long ('no_auto_abbrev')    January 12
-# afy    Ver   5.01  Don't do any graphics                          January 12
-# afy    Ver   5.02  Remove option --timing                         January 12
-# afy    Ver   5.03  Rename option --Longlist => --long-list        January 12
-# afy    Ver   5.04  Rename option --Save => --save                 January 12
-# afy    Ver   5.05  Rename option --Version => --version           January 12
-# afy    Ver   5.06  Add option --end-date                          January 12
-# afy    Ver   5.07  Add option --exclude                           January 12
-# afy    Ver   5.08  Add option --ignore-attributes                 January 12
-# afy    Ver   5.09  Add option --regression                        January 12
-# afy    Ver   5.10  Add option --unique                            January 12
-# afy    Ver   5.11  Improve startDate (return YYYYMMDD, add nml)   January 12
-# afy    Ver   5.12  Redesign listing/comparing                     January 12
-# afy    Ver   6.00  Fix a bug in the --version processing          January 12
-# afy    Ver   7.00  Rename analyze => analyzeRegression            January 12
-# afy    Ver   7.01  Modify analyzeRegression (check refToRunInfo)  January 12
-# afy    Ver   7.02  Add outputFilesListing subroutine              January 12
-# afy    Ver   8.00  Modify Usage (remove ASCII escapes)            April 12
-# afy    Ver   8.01  Cosmetics in messages                          April 12
-# afy    Ver   9.00  Use new FRENamelists module (totally new)      June 12
-# afy    Ver   9.01  Use new FREExperiment module (reg*Labels)      June 12
-# afy    Ver   9.02  Modify calendarType subroutine                 June 12
-# afy    Ver   9.03  Modify startDate subroutine                    June 12
-# afy    Ver   9.04  Modify analyzeRegression subroutine            June 12
-# afy    Ver   9.05  Remove regressionLabels subroutine             June 12
-# afy    Ver   9.06  Use new FREExperiment (run as key)             June 12
-# afy    Ver  10.00  Modify Getopt::Long (add 'bundling')           October 12
-# afy    Ver  10.01  Add option --compare-history                   October 12
-# afy    Ver  10.02  Rename option --end-date => --effective-date   October 12
-# afy    Ver  10.03  Rename option --long-list => --list-long       October 12
-# afy    Ver  10.04  Add option --list-references                   October 12
-# afy    Ver  10.05  Add option --main                              October 12
-# afy    Ver  10.06  Add option --with-references                   October 12
-# afy    Ver  10.07  Don't use files/directories globbing           October 12
-# afy    Ver  11.00  Modify endDate (months, days, hours, output)   April 13
-# afy    Ver  11.01  Modify startDate (output)                      April 13
-# afy    Ver  11.02  Modify analyzeReferences (more wide pattern)   April 13
-# afy    Ver  11.03  Modify all(Production|Regression)Timestamps    April 13
-# afy    Ver  11.04  Modify all(Production|Regression)UniqueDirs    April 13
-# afy    Ver  11.05  Modify analyze(Production|Regression)          April 13
-# afy    Ver  11.06  Add allOutputFiles (with readdir)              April 13
-# afy    Ver  11.07  Modify outputFilesListing (call ^)             April 13
-# afy    Ver  11.08  Modify compare (timestamps with (M:D:H))       April 13
-# ------------------------------------------------------------------------------
-# Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2000-2012
-# Designed and written by V. Balaji, Amy Langenhorst and Aleksey Yakovlev
+# Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2000-2012, 2016
+# Designed and written by V. Balaji, Amy Langenhorst, Aleksey Yakovlev and
+# Seth Underwood
 #
 
 use strict;
@@ -289,7 +237,7 @@ use FREUtil();
       $s = FREUtil::modifydate($s, "+ $m months") if $m > 0;
       $s = FREUtil::modifydate($s, "+ $d days")   if $d > 0;
       $s = FREUtil::modifydate($s, "+ $h hours")  if $h > 0;
-      return Date::Manip::UnixDate($s, ($g eq 'months' || $g eq 'days') ? '%Y%m%d' : '%Y%m%d%H');
+      return FREUtil::unixDate($s, ($g eq 'months' || $g eq 'days') ? '%Y%m%d' : '%Y%m%d%H');
     }
     else
     {
@@ -314,7 +262,7 @@ use FREUtil();
     if (my $datetime = FREUtil::parseFortranDate($result))
     {
       $datetime = Date::Manip::Date_SetDateField($datetime, 'd', 1) if $g eq 'months';
-      return Date::Manip::UnixDate($datetime, ($g eq 'months' || $g eq 'days') ? '%Y%m%d' : '%Y%m%d%H');
+      return FREUtil::unixDate($datetime, ($g eq 'months' || $g eq 'days') ? '%Y%m%d' : '%Y%m%d%H');
     }
     else
     {
@@ -356,11 +304,11 @@ use FREUtil();
     }
     return \%result;
   }
-  
-  sub allProductionTimestamps($$$$)
-  # ------ arguments: $refToPrdInfo $type $startDate $effectiveDate
+
+  sub allProductionTimestamps($$$$$)
+  # ------ arguments: $refToPrdInfo $type $startDate $effectiveDate $fre
   {
-    my ($r, $t, $s, $e) = @_;
+    my ($r, $t, $s, $e, $fre) = @_;
     if ($e)
     {
       return ($e); 
@@ -370,10 +318,18 @@ use FREUtil();
       my @result = ();
       my ($nmls, $simMonthsLeft) = ($r->{namelists}, $r->{simTimeMonths});
       my ($timestamp, $calendarType) = ($s || frecheck::startDate($nmls, 'months'), frecheck::calendarType($nmls));
+      # verify both timestamp and calendarType are set
+      if (!defined($timestamp) || $calendarType =~ /^$/) {
+        $fre->out(FREMsg::FATAL, "allProductionTimestamps, timestamp or calendarType not set correctly");
+      }
       while ($simMonthsLeft > 0)
       {
         my $months = ($r->{segTimeMonths} <= $simMonthsLeft) ? $r->{segTimeMonths} : $simMonthsLeft;
 	my $timestampNext = frecheck::endDate($timestamp, $months, 0, 0, 'months', $calendarType);
+        # verify timestampNext is set correctly
+        if (!defined($timestampNext)) {
+          $fre->out(FREMsg::FATAL, "allProductionTimestamps, timestampNext not set correctly");
+        }
 	push @result, ($t eq 'restart') ? $timestampNext : "$timestamp:$months:0:0";
 	$timestamp = $timestampNext;
 	$simMonthsLeft -= $months;
@@ -405,7 +361,7 @@ use FREUtil();
     my ($fre, $archiveDir, %result) = ($z->fre(), $z->archiveDir(), ());
     if (my $prdInfo = $z->extractProductionRunInfo())
     {
-      if (scalar(my @timestamps = frecheck::allProductionTimestamps($prdInfo, $t, $s, $e)) > 0)
+      if (scalar(my @timestamps = frecheck::allProductionTimestamps($prdInfo, $t, $s, $e, $fre)) > 0)
       {
 	my $dir = "$archiveDir/$t";
         $result{$dir} = \@timestamps if -d $dir && -r $dir;
@@ -438,11 +394,11 @@ use FREUtil();
       return undef;
     }
   }
-  
-  sub allRegressionTimestamps($$$$)
-  # ------ arguments: $refToRunInfo $type $startDate $effectiveDate
+
+  sub allRegressionTimestamps($$$$$)
+  # ------ arguments: $refToRunInfo $type $startDate $effectiveDate $fre
   {
-    my ($r, $t, $s, $e) = @_;
+    my ($r, $t, $s, $e, $fre) = @_;
     if ($e)
     {
       return ($e); 
@@ -455,10 +411,18 @@ use FREUtil();
       my @hours  = split(/ /, $r->{hours});
       my ($nmls, $granularity) = ($r->{namelists}, ($r->{hoursDefined}) ? 'hours' : 'days');
       my ($timestamp, $calendarType) = ($s || frecheck::startDate($nmls, $granularity), frecheck::calendarType($nmls));
+      # verify both timestamp and calendarType are set
+      if (!defined($timestamp) || $calendarType =~ /^$/) {
+        $fre->out(FREMsg::FATAL, "allRegressionTimestamps, timestamp or calendarType not set correctly");
+      }
       for (my $segNo = 0; $segNo < scalar(@months); $segNo++)
       {
         my ($months, $days, $hours) = ($months[$segNo], $days[$segNo], $hours[$segNo]);
 	my $timestampNext = frecheck::endDate($timestamp, $months, $days, $hours, $granularity, $calendarType);
+        # verify timestampNext is set correctly
+        if (!defined($timestampNext)) {
+          $fre->out(FREMsg::FATAL, "allRegressionTimestamps, timestampNext not set correctly");
+        }
 	push @result, ($t eq 'restart') ? $timestampNext : "$timestamp:$months:$days:$hours";
 	$timestamp = $timestampNext;
       }
@@ -491,10 +455,10 @@ use FREUtil();
     {
       if (my $regInfo = $z->extractRegressionRunInfo($label))
       {
-	foreach my $runNo (sort(keys(%{$regInfo})))
-	{
-	  my $runInfo = $regInfo->{$runNo};
-          if (scalar(my @timestamps = frecheck::allRegressionTimestamps($runInfo, $t, $s, $e)) > 0)
+        foreach my $runNo (sort(keys(%{$regInfo})))
+        {
+          my $runInfo = $regInfo->{$runNo};
+          if (scalar(my @timestamps = frecheck::allRegressionTimestamps($runInfo, $t, $s, $e, $fre)) > 0)
           {
 	    my $postfix = $runInfo->{postfix};
             my $dir = "$archiveDir/$postfix/$t";
@@ -681,7 +645,11 @@ use FREUtil();
     }
     elsif (Date::Manip::ParseDate($opt{'start-date'}))
     {
-      $opt{'start-date'} = Date::Manip::UnixDate($opt{'start-date'}, '%Y%m%d');
+      $opt{'start-date'} = FREUtil::unixDate($opt{'start-date'}, '%Y%m%d');
+      # verify start-date is not undef
+      if (!defined($opt{'start-date'})) {
+        FREMsg::out($opt{verbose}, FREMsg::FATAL, 'The --start-date options returned undef from FREUtil::unixDate');
+      }
       FREMsg::out($opt{verbose}, FREMsg::NOTE, "Using the --start-date option value '$opt{'start-date'}'");
     }
     else
@@ -700,7 +668,11 @@ use FREUtil();
     }
     elsif (Date::Manip::ParseDate($opt{'effective-date'}))
     {
-      $opt{'effective-date'} = Date::Manip::UnixDate($opt{'effective-date'}, '%Y%m%d');
+      $opt{'effective-date'} = FREUtil::unixDate($opt{'effective-date'}, '%Y%m%d');
+      # verify start-date is not undef
+      if (!defined($opt{'effective-date'})) {
+        FREMsg::out($opt{verbose}, FREMsg::FATAL, 'The --effective-date options returned undef from FREUtil::unixDate');
+      }
       FREMsg::out($opt{verbose}, FREMsg::NOTE, "Using the --effective-date option value '$opt{'effective-date'}'");
     }
     else
