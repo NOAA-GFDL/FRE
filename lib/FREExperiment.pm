@@ -79,7 +79,7 @@ my $experimentDirsVerify = sub($$)
       my $pathsMapping = $r->property('FRE.directory.' . $t . '.paths.mapping');
       if ($pathsMapping)
       {
-        chomp(my @groupName = split(/\s+/, qx(id -Gn)));
+        chomp(my @groupNames = split(/\s+/, qx(id -Gn)));
         my $paths = FREUtil::strFindByPattern($pathsMapping, @groupNames);
 	if ($paths)
 	{

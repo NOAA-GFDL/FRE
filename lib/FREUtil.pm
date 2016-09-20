@@ -616,7 +616,7 @@ sub strFindByPattern($$)
         if ($mapping =~ m/$mappingPattern/)
         {
           my ($value, $key) = ($1, $2);
-          foreach $k (@keys) {
+          foreach my $k (@keys) {
             if ($k =~ m/$key/m)
             {
               $result = $value;
