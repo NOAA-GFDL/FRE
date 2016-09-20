@@ -3,8 +3,9 @@
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: Utilities Module
 # ------------------------------------------------------------------------------
-# Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2000-2012
-# Designed and written by V. Balaji, Amy Langenhorst and Aleksey Yakovlev
+# Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2000-2012, 2016
+# Designed and written by V. Balaji, Amy Langenhorst, Aleksey Yakovlev and
+# Seth Underwood
 #
 
 package FREUtil;
@@ -602,12 +603,12 @@ sub strStripPaired($;$)
 sub strFindByPattern($$)
 # ------ arguments: $mapping $key
 {
-  my ($m, $k) = @_;
-  my @mappings = split(MAPPING_SEPARATOR, $m);
+  my ($mapPattern, @keys) = @_;
+  my @mappings = split(MAPPING_SEPARATOR, $mapPattern);
   if (scalar(@mappings) > 0)
   {
     my ($result, $mappingPattern) = ('', qr/^(.*)\{\{(.*)\}\}$/);
-    while (1)
+    MAPSEARCH: while (1)
     {
       my $mapping = shift @mappings;
       if (scalar(@mappings) > 0)
@@ -615,22 +616,24 @@ sub strFindByPattern($$)
         if ($mapping =~ m/$mappingPattern/)
         {
           my ($value, $key) = ($1, $2);
-          if ($k =~ m/$key/m)
-          {
-            $result = $value;
-            last;
+          foreach $k (@keys) {
+            if ($k =~ m/$key/m)
+            {
+              $result = $value;
+              last MAPSEARCH;
+            }
           }
         }
         else
         {
           $result = '';
-          last;
+          last MAPSEARCH;
         }
       }
       else
       {
         $result = $mapping;
-        last;
+        last MAPSEARCH;
       }
     }
     return $result;
