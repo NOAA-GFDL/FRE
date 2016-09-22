@@ -2,8 +2,9 @@
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: Experiment Management Module
 # ------------------------------------------------------------------------------
-# Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2009-2013
-# Designed and written by V. Balaji, Amy Langenhorst and Aleksey Yakovlev
+# Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2009-2013, 2016
+# Designed and written by V. Balaji, Amy Langenhorst, Aleksey Yakovlev and
+# Seth Underwood
 #
 
 package FREExperiment;
@@ -78,8 +79,8 @@ my $experimentDirsVerify = sub($$)
       my $pathsMapping = $r->property('FRE.directory.' . $t . '.paths.mapping');
       if ($pathsMapping)
       {
-        chomp(my $groupName = qx(id -gn));
-        my $paths = FREUtil::strFindByPattern($pathsMapping, $groupName);
+        chomp(my @groupNames = split(/\s+/, qx(id -Gn)));
+        my $paths = FREUtil::strFindByPattern($pathsMapping, @groupNames);
 	if ($paths)
 	{
 	  my $pathsForMatch = $paths;
