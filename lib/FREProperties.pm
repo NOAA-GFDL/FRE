@@ -129,7 +129,7 @@ my $placeholdersExpand = sub($$)
   if (index($s, '$') >= 0)
   {
     $s = $environmentVariablesExpand->($r, $s);
-    foreach my $k (keys(%{$r}))
+    foreach my $k (sort keys(%{$r}))
     {
       last unless index($s, '$') >= 0;
       my $v = $r->{$k};

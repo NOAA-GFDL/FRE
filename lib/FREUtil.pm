@@ -3,8 +3,9 @@
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: Utilities Module
 # ------------------------------------------------------------------------------
-# Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2000-2012
-# Designed and written by V. Balaji, Amy Langenhorst and Aleksey Yakovlev
+# Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2000-2012, 2016
+# Designed and written by V. Balaji, Amy Langenhorst, Aleksey Yakovlev and
+# Seth Underwood
 #
 
 package FREUtil;
@@ -65,9 +66,9 @@ sub getxpathval {
    if ("$value" eq "") {
       my $mommy = $::root->findvalue("experiment[\@label='$e' or \@name='$e']/\@inherit");
       if( "$mommy" eq "" ) {
-	 return "";
+         return "";
       } else {
-	 return getxpathval($path,$mommy);
+         return getxpathval($path,$mommy);
       }
    } else {
       return $value;
@@ -210,6 +211,41 @@ sub splitDate($) {
   my ( $date ) = @_;
 
   return $date =~ /^(\d{4,})(\d{4}(?:\d{2}:\d{2}:\d{2})?$)/;
+}
+
+# unixDate is a simplified version of Date::Manip::UnixDate.  This
+# simplified version will only return the date using two formats:
+#   "%Y%m%d", and
+#   "%Y%m%d%H"
+# The reason for this is some versions of Date::Manip::UnixDate cannot
+# deal with year 0001 --- which is needed for several of the GFDL
+# models.  The use of Date::Manip::UnixDate in FRE is to return one of
+# these two formats.
+# This subroutine expects $dateTime to be an the format:
+#   /^\d{4,}\d{4}\d{2}:\d{2}:\d{2}$/
+# or the routine will return undef.
+sub unixDate($$) {
+  my ( $dateTime, $format ) = @_;
+  my $return = undef; # The default return value.
+
+  # Parse the dateTime string to verify it is in the proper format.
+  if ($dateTime !~ /^\d{4,}\d{2}\d{2}\d{2}:\d{2}:\d{2}$/) {
+    print STDERR "WARNING: '$dateTime' is not recognized as a date format.\n";
+  } else {
+    # Separate the dateTime string into its components.  Separating into
+    # all components in case this routine needs to be expanded to do more
+    # than just the two formats.
+    my @dateArray = $dateTime =~ /^(\d{4,})(\d{2})(\d{2})(\d{2}):(\d{2}):(\d{2})$/;
+    if ($format =~ /^%Y%m%d$/) {
+      $return = "$dateArray[0]$dateArray[1]$dateArray[2]";
+    } elsif ($format =~ /^%Y%m%d%H$/) {
+      $return = "$dateArray[0]$dateArray[1]$dateArray[2]$dateArray[3]";
+    } else {
+      # Return $dateTime if none of the formats match
+      $return = $dateTime;
+    }
+  }
+  return $return;
 }
 
 # Calculate the difference between two date and returns a Date::Manip
@@ -416,17 +452,17 @@ sub dateCmp ($$) {
   if (int($yr1) == int($yr2)) {
     if (int($mo1) == int($mo2)) {
       if (int($dy1) == int($dy2)) {
-	if (int($hr1) == int($hr2)) {
-	  if (int($mn1) == int($mn2)) {
-	    $return = $sc1 cmp $sc2;
-	  } else {
-	    $return = $mn1 cmp $mn2;
-	  }
-	} else {
-	  $return = $hr1 cmp $hr2;
-	}
+        if (int($hr1) == int($hr2)) {
+          if (int($mn1) == int($mn2)) {
+            $return = $sc1 cmp $sc2;
+          } else {
+            $return = $mn1 cmp $mn2;
+          }
+        } else {
+          $return = $hr1 cmp $hr2;
+        }
       } else {
-	$return = $dy1 cmp $dy2;
+        $return = $dy1 cmp $dy2;
       }
     } else {
       $return = $mn1 cmp $mn2;
@@ -519,10 +555,10 @@ sub getppNode {
    } else {
       my $mommy = $::root->findvalue("experiment[\@label='$e' or \@name='$e']/\@inherit");
       if( "$mommy" eq "" ) {
-	 print STDERR "WARNING: Can't find postProcess node for experiment '$e'.\n";
-	 return "";
+         print STDERR "WARNING: Can't find postProcess node for experiment '$e'.\n";
+         return "";
       } else {
-	 getppNode($mommy);
+         getppNode($mommy);
       }
    }
 }
@@ -567,35 +603,37 @@ sub strStripPaired($;$)
 sub strFindByPattern($$)
 # ------ arguments: $mapping $key
 {
-  my ($m, $k) = @_;
-  my @mappings = split(MAPPING_SEPARATOR, $m);
+  my ($mapPattern, @keys) = @_;
+  my @mappings = split(MAPPING_SEPARATOR, $mapPattern);
   if (scalar(@mappings) > 0)
   {
     my ($result, $mappingPattern) = ('', qr/^(.*)\{\{(.*)\}\}$/);
-    while (1)
+    MAPSEARCH: while (1)
     {
       my $mapping = shift @mappings;
       if (scalar(@mappings) > 0)
       {
-	if ($mapping =~ m/$mappingPattern/)
-	{
-	  my ($value, $key) = ($1, $2);
-	  if ($k =~ m/$key/m)
-	  {
-	    $result = $value;
-	    last;
-	  }
-	}
-	else
-	{
-	  $result = '';
-	  last;
-	}
+        if ($mapping =~ m/$mappingPattern/)
+        {
+          my ($value, $key) = ($1, $2);
+          foreach my $k (@keys) {
+            if ($k =~ m/$key/m)
+            {
+              $result = $value;
+              last MAPSEARCH;
+            }
+          }
+        }
+        else
+        {
+          $result = '';
+          last MAPSEARCH;
+        }
       }
       else
       {
-	$result = $mapping;
-	last;
+        $result = $mapping;
+        last MAPSEARCH;
       }
     }
     return $result;
@@ -619,25 +657,25 @@ sub strFindByInterval($$)
       my $mapping = shift @mappings;
       if (scalar(@mappings) > 0)
       {
-	if ($mapping =~ m/$mappingPattern/)
-	{
-	  my ($value, $key) = ($1, $2);
-	  if ($n <= $key)
-	  {
-	    $result = $value;
-	    last;
-	  }
-	}
-	else
-	{
-	  $result = '';
-	  last;
-	}
+        if ($mapping =~ m/$mappingPattern/)
+        {
+          my ($value, $key) = ($1, $2);
+          if ($n <= $key)
+          {
+            $result = $value;
+            last;
+          }
+        }
+        else
+        {
+          $result = '';
+          last;
+        }
       }
       else
       {
-	$result = $mapping;
-	last;
+        $result = $mapping;
+        last;
       }
     }
     return $result;
@@ -745,7 +783,7 @@ sub timeString
 # ------ suitable for use in a filename (sortable, no spaces, colons, etc)
 # ------ resolution of seconds
 {
-  my $time = shift || time();	# ------ use current time by default
+  my $time = shift || time();   # ------ use current time by default
   my @time = localtime($time);
   return
   (
@@ -800,19 +838,19 @@ sub optionIntegersListParse($$)
     {
       if ($value eq 'all')
       {
-	$valuesAll = 1;
+        $valuesAll = 1;
       }
       elsif ($value =~ m/^0*(\d+)$/)
       {
-	$valuesHash{$1} = 1;
+        $valuesHash{$1} = 1;
       }
       elsif ($value =~ m/^0*(\d+)-0*(\d+)$/)
       {
-	foreach my $i ($1 .. $2) {$valuesHash{$i} = 1;}
+        foreach my $i ($1 .. $2) {$valuesHash{$i} = 1;}
       }
       else
       {
-	return ('', "The --$n option values list contains an invalid value '$value'", "Allowed list values are non-negative integers or pairs of non-negative integers, separated by dash, and 'all'");
+        return ('', "The --$n option values list contains an invalid value '$value'", "Allowed list values are non-negative integers or pairs of non-negative integers, separated by dash, and 'all'");
       }
     }
     my @values = ($valuesAll) ? 'all' : sort {$a <=> $b} keys(%valuesHash);
@@ -835,16 +873,16 @@ sub optionValuesListParse($$@)
     {
       if ($value eq 'all')
       {
-	$valuesAll = 1;
+        $valuesAll = 1;
       }
       elsif (scalar(grep($_ eq $value, @a)) > 0)
       {
-	$valuesHash{$value} = 1;
+        $valuesHash{$value} = 1;
       }
       else
       {
-	my $allowed = join("', '", @a);
-	return ('', "The --$n option values list contains the unknown '$value' value", "Allowed values are '$allowed' and 'all'");
+        my $allowed = join("', '", @a);
+        return ('', "The --$n option values list contains the unknown '$value' value", "Allowed values are '$allowed' and 'all'");
       }
     }
     my @values = ($valuesAll) ? @a : grep($valuesHash{$_}, @a);

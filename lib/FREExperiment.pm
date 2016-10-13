@@ -2,8 +2,9 @@
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: Experiment Management Module
 # ------------------------------------------------------------------------------
-# Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2009-2013
-# Designed and written by V. Balaji, Amy Langenhorst and Aleksey Yakovlev
+# Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2009-2013, 2016
+# Designed and written by V. Balaji, Amy Langenhorst, Aleksey Yakovlev and
+# Seth Underwood
 #
 
 package FREExperiment;
@@ -78,8 +79,8 @@ my $experimentDirsVerify = sub($$)
       my $pathsMapping = $r->property('FRE.directory.' . $t . '.paths.mapping');
       if ($pathsMapping)
       {
-        chomp(my $groupName = qx(id -gn));
-        my $paths = FREUtil::strFindByPattern($pathsMapping, $groupName);
+        chomp(my @groupNames = split(/\s+/, qx(id -Gn)));
+        my $paths = FREUtil::strFindByPattern($pathsMapping, @groupNames);
 	if ($paths)
 	{
 	  my $pathsForMatch = $paths;
@@ -398,7 +399,7 @@ my $overrideRegressionNamelists = sub($$$)
     $var =~ s/\s*//g;
     unless ($name and $var) {$fre->out(FREMsg::WARNING, "Got an empty namelist in overrideParams"); next}
     if ($var =~ /(?:npes|nthreads|layout)$/) {
-        $fre->out(FREMsg::FATAL, sprintf "At XML line %s you attempted to override the $name namelist for parameter $var in experiment %s, regression run %s. Overrides for some parameters (*npes, *nthreads, or *layout) are no longer allowed; specify these in the <regression>/<run>/<resources> tag. See FRE Documentation at http://wiki.gfdl.noaa.gov/index.php/FRE_User_Documentation", $n->line_number, $r->name, $n->parentNode->getAttribute('name'));
+        $fre->out(FREMsg::FATAL, sprintf "At XML line %s you attempted to override the $name namelist for parameter $var in experiment %s, regression run %s. Overrides for some parameters (*npes, *nthreads, or *layout) are no longer allowed; specify these in the <regression>/<run>/<resources> tag. See FRE Documentation at http://wiki.gfdl.noaa.gov/index.php/FRE_User_Documentation#Resource_specification", $n->line_number, $r->name, $n->parentNode->getAttribute('name'));
         exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
     }
     $fre->out(FREMsg::NOTE, "overrideParams from xml: $name:$var=$val");
@@ -457,14 +458,25 @@ my $MPISizeCompatible = sub($$)
 {
   my ($fre, $h) = @_;
   my $compatible = 1;
-  my @components = split(';', $fre->property('FRE.mpi.component.names'));
-  my @compatibleComponents = ('atmos', 'ocean');
-  foreach my $component (@components)
-  {
-    unless (scalar(grep($_ eq $component, @compatibleComponents)) > 0)
-    {
-      if (defined(FRENamelists::namelistBooleanGet($h, 'coupler_nml', "do_$component")))
-      {
+
+  # only use enabled components for MPI use
+  my @all_components     = split(';', $fre->property('FRE.mpi.component.names'));
+  my @enabled            = split(';', $fre->property('FRE.mpi.component.enabled'));
+  my @enabled_components = map { $all_components[$_] } grep { $enabled[$_] } 0 .. $#enabled;
+  my %long_names = _long_component_names($fre);
+
+  # currently only atm and ocn are enabled so the generic MPI parameters function
+  # will never be used
+  my @compatibleComponents = ('atm', 'ocn');
+
+  foreach my $component (@enabled_components) {
+    # loop thru non-compatible enabled components
+    unless (scalar(grep($_ eq $component, @compatibleComponents)) > 0) {
+      # if a non-compatible enabled component
+      # (checking both normal 3-letter name and legacy/long name)
+      # is found to be enabled in coupler, use the generic MPI parameters function
+      if (defined(FRENamelists::namelistBooleanGet($h, 'coupler_nml', "do_$component")) or
+          defined(FRENamelists::namelistBooleanGet($h, 'coupler_nml', "do_$long_names{$component}"))) {
 	$compatible = 0;
 	last;
       }
@@ -598,7 +610,9 @@ my $MPISizeComponentEnabled = sub($$$)
   my ($r, $h, $n) = @_;
   my ($fre, $result) = ($r->fre(), undef);
   my @subComponents = split(';', $fre->property("FRE.mpi.$n.subComponents"));
-  foreach my $component ($n, @subComponents)
+  my %long_component_names = _long_component_names($fre);
+  # check component name (e.g. atm) and legacy long name (e.g. atmos)
+  foreach my $component ($n, $long_component_names{$n}, @subComponents)
   {
     my $enabled = $h->namelistBooleanGet('coupler_nml', "do_$component");
     if (defined($enabled))
@@ -616,6 +630,18 @@ my $MPISizeComponentEnabled = sub($$$)
   }
   return $result;
 };
+
+# Returns a hash whose keys are the 3-letter standard component names
+# and value is the legacy/long name. The only use for the long names is
+# do_atmos = 1 style coupler namelist entries
+sub _long_component_names {
+    my $fre = shift;
+    my @short = split ';', $fre->property('FRE.mpi.component.names');
+    my @long  = split ';', $fre->property('FRE.mpi.component.long_names');
+    my %hash;
+    $hash{$short[$_]} = $long[$_] for 0 .. $#short;
+    return %hash;
+}
 
 my $MPISizeParametersGeneric = sub($$$$)
 # ------ arguments: $exp $resources $namelistsHandle $ensembleSize
@@ -635,7 +661,9 @@ my $MPISizeParametersGeneric = sub($$$$)
   {
     my $component = $components[$inx];
     my $enabled = $MPISizeComponentEnabled->($r, $h, $component);
-    $enabled = $enabled[$inx] unless defined($enabled);
+    # use the fre.properties enabled flag if the coupler_nml value is undefined
+    # or if the coupler_nml value is yes and the fre.properties value is no
+    $enabled = $enabled[$inx] if !defined($enabled) or $enabled && !$enabled[$inx];
     if ($enabled)
     {
       if (my $npes = $resources->{$component}->{ranks})
@@ -654,12 +682,12 @@ my $MPISizeParametersGeneric = sub($$$$)
 	  }
 	  elsif ($ntds <= 0)
 	  {
-            $fre->out(FREMsg::FATAL, "The variable 'coupler_nml:${component}_nthreads' must have a positive value");
+            $fre->out(FREMsg::FATAL, "The component $component must request a positive number of threads");
 	    return undef;
 	  }
 	  else
 	  {
-            $fre->out(FREMsg::FATAL, "The variable 'coupler_nml:${component}_nthreads' value must be less or equal than a number '$coresPerNode' of cores per node");
+            $fre->out(FREMsg::FATAL, "The component $component's thread request ($ntds) must be less or equal than a number '$coresPerNode' of cores per node");
 	    return undef;
 	  }
 	}
@@ -670,7 +698,7 @@ my $MPISizeParametersGeneric = sub($$$$)
       }
       else
       {
-        $fre->out(FREMsg::FATAL, "The variable 'coupler_nml:${component}_npes' must be defined and have a positive value");
+        $fre->out(FREMsg::FATAL, "The component $component must request a positive number of ranks");
 	return undef;
       }
     }
@@ -1135,7 +1163,9 @@ sub extractDoF90Cpp($$)
 {
   my ($r, $c) = @_;
   my ($exp, $value) = ($r, '');
-  my $compileNode = $exp->node()->findnodes('component[@name="' . $c . '"]/compile')->get_node(1);
+  my $compileNodes = $exp->node()->findnodes('component[@name="' . $c . '"]/compile');
+  return '' unless $compileNodes;
+  my $compileNode = $compileNodes->get_node(1);
   while ($exp and !$value)
   {
     $value = $exp->nodeValue($compileNode, '@doF90Cpp');
@@ -1500,7 +1530,7 @@ sub extractPPRefineDiagScripts($)
 {
   my ($r, @results) = (shift, ());
   my @nodes = $r->extractNodes('postProcess', 'refineDiag/@script');
-  foreach my $node (@nodes) {push @results, $r->nodeValue($node, '.');}
+  foreach my $node (@nodes) {push @results, split /\s+/, $r->nodeValue($node, '.');}
   return @results;
 }
 
@@ -1867,7 +1897,7 @@ sub extractRegressionRunInfo($$$)
 	my ($ok, %runs) = (1, ());
 	for (my $i = 0; $i < scalar(@runNodes); $i++)
 	{
-      my $resources = $r->getResourceRequests($ht, $runNodes[$i]) or return;
+      my $resources = $r->getResourceRequests($ht, $nmls, $runNodes[$i]) or return;
 	  my $msl = $r->nodeValue($runNodes[$i], '@months');
 	  my $dsl = $r->nodeValue($runNodes[$i], '@days');
 	  my $hsl = $r->nodeValue($runNodes[$i], '@hours');
@@ -1954,7 +1984,7 @@ sub extractProductionRunInfo($$)
   {
     if (my $prdNode = $productionRunNode->($r))
     {
-      my $resources = $r->getResourceRequests($ht) or return;
+      my $resources = $r->getResourceRequests($ht, $nmls) or return;
       my $mpiInfo = $MPISizeParameters->($r, $resources, $nmls->copy);
       addResourceRequestsToMpiInfo($fre, $resources, $mpiInfo);
 
@@ -2067,14 +2097,17 @@ sub addResourceRequestsToMpiInfo {
 
 # Get resource info from <runtime>/.../<resources> tag
 # and decides whether hyperthreading will be used if --ht option is present
-# ------ arguments: $exp hyperthreading           -- for production
-# ------ arguments: $exp hyperthreading $run_node -- for regression
+# ------ arguments: $exp hyperthreading namelists           -- for production
+# ------ arguments: $exp hyperthreading namelists $run_node -- for regression
 # ------ returns: hashref containing resource specs or undef on failure
 sub getResourceRequests($$) {
-    my ($exp, $ht, $regression_run_node) = @_;
+    my ($exp, $ht, $namelists, $regression_run_node) = @_;
     my $fre = $exp->fre;
     my $site = $fre->platformSite;
     my @components = split(';', $fre->property('FRE.mpi.component.names'));
+    my @enabled = split(';', $fre->property('FRE.mpi.component.enabled'));
+    my @enabled_components = map { $components[$_] } grep { $enabled[$_] } 0 .. $#enabled;
+    my $concurrent = $namelists->namelistBooleanGet('coupler_nml', 'concurrent');
     my @types = (qw( ranks threads layout io_layout mask_table ));
     my %data;
     my $node;
@@ -2110,7 +2143,7 @@ sub getResourceRequests($$) {
         my $message = $regression_run_node
             ? "No resource request tag was found within <runtime>/<regression>/<run> OR within <runtime>/<production> or its experiment ancestors. "
             : "No resource request tag was found within <runtime>/<production> or its experiment ancestors. ";
-        $message .= "A <resources> tag must now be specified. See FRE Documentation at http://wiki.gfdl.noaa.gov/index.php/FRE_User_Documentation";
+        $message .= "A <resources> tag must now be specified. See FRE Documentation at http://wiki.gfdl.noaa.gov/index.php/FRE_User_Documentation#Resource_specification";
         $fre->out(FREMsg::FATAL, $message);
         return;
     }
@@ -2151,7 +2184,7 @@ sub getResourceRequests($$) {
     my $ok;
     for my $comp (@components) {
         my $message;
-        my $N = values %{$data{$comp}};
+        my $N = grep !/^$/, values %{$data{$comp}};
         if ($data{$comp}{ranks} and $data{$comp}{threads}) {
             $ok = 1;
         }
@@ -2173,15 +2206,24 @@ sub getResourceRequests($$) {
         $fre->out(FREMsg::NOTE, $message);
     }
     if (! $ok) {
-        $fre->out(FREMsg::FATAL, "A resource request tag was found but was incomplete. Ranks and threads must be specified for at least one model component. See FRE Documentation at http://wiki.gfdl.noaa.gov/index.php/FRE_User_Documentation");
+        $fre->out(FREMsg::FATAL, "A resource request tag was found but was incomplete. Ranks and threads must be specified for at least one model component. See FRE Documentation at http://wiki.gfdl.noaa.gov/index.php/FRE_User_Documentation#Resource_specification");
         return;
     }
 
-    # Add up total ranks
-    for my $comp (@components) {
-        $data{npes}              += $data{$comp}{ranks};
-        $data{npes_with_threads} += $data{$comp}{ranks} * $data{$comp}{threads};
+    # Add up total ranks of MPI-enabled components (concurrent) or take the maximum (non-concurrent)
+    if ($concurrent) {
+        for my $comp (@enabled_components) {
+            $data{npes}              += $data{$comp}{ranks};
+            $data{npes_with_threads} += $data{$comp}{ranks} * $data{$comp}{threads};
+        }
     }
+    else {
+        my %ranks = map { $_ => $data{$_}{ranks} } @enabled_components;
+        my @sorted = sort { $ranks{$b} <=> $ranks{$a} } keys %ranks;
+        $data{npes}              = $data{$sorted[0]}{ranks};
+        $data{npes_with_threads} = $data{$sorted[0]}{ranks} * $data{$sorted[0]}{threads};
+    }
+    $fre->out(FREMsg::NOTE, "Setting npes=$data{npes}");
 
     # Apply hyperthreading if desired and possible
     if ($ht and ! $fre->property('FRE.mpi.runCommand.option.ht')) {
@@ -2189,18 +2231,22 @@ sub getResourceRequests($$) {
     }
     elsif ($ht) {
         my $ok = 1;
-        for my $comp (@components) {
-            if ($data{$comp}{threads} and $data{$comp}{threads} == 1) {
+        for my $comp (@enabled_components) {
+            next unless $data{$comp}{ranks};
+            if (! $data{$comp}{threads}) {
+                $fre->out(FREMsg::WARNING, "Hyperthreading was requested but component $comp requested no threads.");
+                $ok = 0;
+            }
+            elsif ($data{$comp}{threads} == 1) {
                 $fre->out(FREMsg::WARNING, "Hyperthreading was requested but component $comp requested only 1 thread.");
                 $ok = 0;
             }
         }
         if ($ok) {
             $data{ht} = 1;
-            for my $comp (@components) {
-                if ($data{$comp}{threads}) {
-                    $data{$comp}{threads} *= 2;
-                    $fre->out(FREMsg::NOTE, "Using hyperthreading on component $comp -- setting threads to $data{$comp}{threads}");
+            for my $comp (@enabled_components) {
+                if ($data{$comp}{ranks}) {
+                    $fre->out(FREMsg::NOTE, "Using hyperthreading on component $comp -- will set threads to " . 2 * $data{$comp}{threads});
                 }
             }
         }

@@ -435,33 +435,27 @@ sub new($$%)
 {
   my ($class, $caller, %o) = @_;
 
-  # if platform isn't specified or contains default, print a descriptive message and exit
-  # let frelist go ahead if no options are specified so it can print experiments
-  # and if -d is used so it can list experiment descriptions
-  if ($caller eq 'frelist') {
-      if (keys %o <= 3) {
-          $o{platform} = 'default';
-      }
-      elsif (keys %o == 4 and exists $o{description}) {
-          $o{platform} = 'default';
-      }
-      else {
-          FREPlatforms::checkPlatform($o{platform});
-      }
-  }
-  else {
-      FREPlatforms::checkPlatform($o{platform});
-  }
 
   my $xmlfileAbsPath = File::Spec->rel2abs($o{xmlfile});
   if (-f $xmlfileAbsPath and -r $xmlfileAbsPath)
   {
     FREMsg::out($o{verbose}, FREMsg::NOTE, "The '$caller' begun using the XML file '$xmlfileAbsPath'...");
-    # ----------------------------------------- load the (probably validated) configuration file
+    # ----------------------------------------- validate and load the configuration file
     my $document = $xmlValidateAndLoad->($xmlfileAbsPath, $o{verbose});
     if ($document)
     {
       my $rootNode = $document->documentElement();
+
+      # if platform isn't specified or contains default, print a descriptive message and exit.
+      # let frelist go ahead, setting platform to first available, if no options are specified
+      # so it can print experiments and if -d is used so it can list experiment descriptions
+      if ($caller eq 'frelist' and (keys %o <= 3 or keys %o == 4 and exists $o{description})) {
+          $o{platform} = $rootNode->findnodes('setup/platform[@name]')->get_node(1)->getAttribute('name');
+      }
+      else {
+          FREPlatforms::checkPlatform($o{platform});
+      }
+
       my $version = $versionGet->($rootNode, $o{verbose});
       # ------------------------------------ standardize the platform string and verify its correctness
       my ($platformSite, $platformTail) = FREPlatforms::parse($o{platform});
@@ -1101,7 +1095,7 @@ sub check_for_fre_version_mismatch {
         }
         else {
             FREMsg::out(1, FREMsg::FATAL,
-                "FRE version must be specified within <platform> in <freVersion> tag. See documentation at http://wiki.gfdl.noaa.gov/index.php/FRE_User_Documentation");
+                "FRE version must be specified within <platform> in <freVersion> tag. See documentation at http://wiki.gfdl.noaa.gov/index.php/FRE_User_Documentation#Platforms_and_Sites");
             exit FREDefaults::STATUS_FRE_GENERIC_PROBLEM;
         }
     }
