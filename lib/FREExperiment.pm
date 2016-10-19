@@ -2091,6 +2091,7 @@ sub addResourceRequestsToMpiInfo {
     $info->{layoutList}    = [ map { $resources->{$_}->{layout} }     @components ];
     $info->{ioLayoutList}  = [ map { $resources->{$_}->{io_layout} }  @components ];
     $info->{maskTableList} = [ map { $resources->{$_}->{mask_table} } @components ];
+    $info->{ranksPerEnsList} = [ map { $resources->{$_}->{ranks} }      @components ];
     $info->{ht} = $resources->{ht};
 }
 
