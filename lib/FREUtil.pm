@@ -600,7 +600,7 @@ sub strStripPaired($;$)
   return $s;
 }
 
-sub strFindByPattern($$)
+sub strFindByPattern($@)
 # ------ arguments: $mapping $key
 {
   my ($mapPattern, @keys) = @_;
