@@ -441,7 +441,8 @@ sub new($$%)
   {
     FREMsg::out($o{verbose}, FREMsg::NOTE, "The '$caller' begun using the XML file '$xmlfileAbsPath'...");
     # ----------------------------------------- validate and load the configuration file
-    my $document = $xmlValidateAndLoad->($xmlfileAbsPath, $o{verbose});
+    # --novalidate option is not advertised
+    my $document = $o{novalidate} ? $xmlLoad->($xmlfileAbsPath, $o{verbose}) : $xmlValidateAndLoad->($xmlfileAbsPath, $o{verbose});
     if ($document)
     {
       my $rootNode = $document->documentElement();
