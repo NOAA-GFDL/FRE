@@ -748,18 +748,22 @@ sub setRunCommand($$$)
   $runSizeInfo .= "  set -r ht = $ht\n";
   $runSizeInfo .= "  set -r htopt = $htopt\n";
 
-  if ($cf)
+  foreach my $inx (0 .. $#components)
   {
-    foreach my $inx (0 .. $#components)
-    {
       my $component = $components[$inx];
       $rt->[$inx] *= 2 if $rp->[$inx] and $mpiInfo->{ht};
-      $runSizeInfo .= "  set -r ${component}_ranks = $ranks_per_ens->[$inx]\n";
       $runSizeInfo .= "  set -r tot_${component}_ranks = $rp->[$inx]\n";
       $runSizeInfo .= "  set -r ${component}_threads = $rt->[$inx]\n";
       $runSizeInfo .= "  set -r ${component}_layout = $layout->[$inx]\n";
       $runSizeInfo .= "  set -r ${component}_io_layout = $io_layout->[$inx]\n";
       $runSizeInfo .= "  set -r ${component}_mask_table = $mask_table->[$inx]\n";
+  }
+
+  if ($cf)
+  {
+    foreach my $inx (0 .. $#components)
+    {
+      my $component = $components[$inx];
       if ($rp->[$inx] > 0)
       {
 	$runCommand .= ' :'  if $runCommand ne $runCommandLauncher;
