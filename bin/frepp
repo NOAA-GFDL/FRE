@@ -711,7 +711,7 @@ EOF
       $cshscripttmpl =~ s/#PBS -N/#PBS -N $pbs_job_name/;
       $cshscripttmpl =~ s/#PBS -l walltime/#PBS -l walltime=$maxruntime/;
       $cshscripttmpl =~ s/#PBS -o/#PBS -o $stdoutdir\/postProcess\//;
-      $cshscripttmpl =~ s/setenv FRE_STDOUT_PATH/setenv FRE_STDOUT_PATH $stdoutdir\/postProcess\/$pbs_job_name.o\$JOB_ID/;
+      $cshscripttmpl =~ s/setenv FRE_STDOUT_PATH/setenv FRE_STDOUT_PATH $stdoutdir\/postProcess\/$pbs_job_name.o\$PBS_JOBID_number/;
    }
    $cshscripttmpl =~ s/(-soft -l fre_info=)/$1ppVersion\@$relfrepp -hard/;
    $cshscripttmpl =~ s/version_info/$versionId\n$version_info/;
@@ -862,11 +862,12 @@ EOF
    $writestate = '';
    unless ( $opt_A ) {
       my $writeIDorINTER = <<EOF;
-if ( "\$JOB_ID" != '' ) then
- echo \$PBS_JOBID > \$statefile
+if ( \$?MOAB_JOBID ) then
+    echo \$MOAB_JOBID > \$statefile
+else if ( \$?PBS_JOBID ) then
+    echo \$PBS_JOBID > \$statefile
 else
- echo INTERACTIVE > \$statefile
- set PBS_JOBID = INTERACTIVE
+    echo INTERACTIVE > \$statefile
 endif
 EOF
       $cshscripttmpl =~ s/#write_to_statefile/$writeIDorINTER/;
@@ -1209,7 +1210,7 @@ EOF
 	 $pbs_job_name .= "_$component"."_$hDate";
          $cshscript =~ s/set scriptName = .*/set scriptName = $outscript/;
          $cshscript =~ s/#PBS -N .*/#PBS -N $pbs_job_name/;
-         $cshscript =~ s/setenv FRE_STDOUT_PATH.*/setenv FRE_STDOUT_PATH $stdoutdir\/postProcess\/$pbs_job_name.o\$JOB_ID/;
+         $cshscript =~ s/setenv FRE_STDOUT_PATH.*/setenv FRE_STDOUT_PATH $stdoutdir\/postProcess\/$pbs_job_name.o\$PBS_JOBID_number/;
          $cshscript =~ s/(-w $expt)/$1_$component/;
          $cshscript =~ s/(-soft -l fre_info=)/$1ppComponent\@$component+/;
          $opt_w =~ s/( -hold_jid $expt)(.*)(_\d\d\d\d\d\d\d\d)/$1_$component$3/;
@@ -2653,7 +2654,7 @@ sub setcheckpt {
 if ( \$errors_found == 0 ) then
    echo $checkpt > $ppRootDir/.checkpoint/\$checkptfile
 endif
-if ( -f /home/gfdl/flags/fre/checkpoint.\$HOST || -f /home/gfdl/flags/fre/checkpoint.all || -f /home/gfdl/flags/fre/jobs/checkpoint.\$JOB_ID || -f \$HOME/fre.checkpoint.\$JOB_ID || -f /home/gfdl/flags/fre/jobs/checkpoint.\$PBS_JOBID || -f \$HOME/fre.checkpoint.\$PBS_JOBID ) then
+if ( -f /home/gfdl/flags/fre/checkpoint.\$HOST || -f /home/gfdl/flags/fre/checkpoint.all || -f /home/gfdl/flags/fre/jobs/checkpoint.\$JOB_ID || -f \$HOME/fre.checkpoint.\$JOB_ID ) then
    set now = `date +\%s`
    echo "Exiting early by HPCS request at \$now, will resume with $checkpt"
    Mail -s "\$name job \$JOB_ID has been checkpointed by frepp" \$USER <<END
@@ -7091,7 +7092,15 @@ EOF
 EOF
       $cshscripttmpl .= <<EOF;
 
-setenv JOB_ID `echo \$PBS_JOBID |cut -f1 -d.`
+setenv PBS_JOBID_number `echo \$PBS_JOBID |cut -f1 -d.`
+if ( \$?MOAB_JOBID ) then
+    setenv JOB_ID \$MOAB_JOBID
+else if ( \$?PBS_JOBID ) then
+    setenv JOB_ID \$PBS_JOBID_number
+else
+    setenv JOB_ID `mktemp -u INT-XXXXXX`
+endif
+
 setenv FRE_STDOUT_PATH
 if ( -d "$workdir" ) then
   rm -rf $workdir
