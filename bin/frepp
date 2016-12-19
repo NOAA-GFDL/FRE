@@ -486,7 +486,6 @@ $version_head .= "-x $abs_xml_path ";
        $fre->setCurrentRealizID($realiz_id);
        $fre->setCurrentRunID($run_id);
    }
-
    my $refinedir = "$opt_d"."_refineDiag";
    $ptmpDir .= $archivedir;
    if ( "$opt_u" ne '' ) { $ptmpDir .= "/$opt_u"; }
@@ -665,7 +664,7 @@ EOF
       $outscript .= "_$opt_r";
       $maxruntime = "01:00:00";
       $pbs_job_name .= "_$opt_r";
-   } elsif ( $opt_D ) {
+   } elsif ( $opt_D or $exp->{MDBIswitch}) {
       $outscript .= "_refineDiag";
       $pbs_job_name .= "_refineDiag";
    }
@@ -815,11 +814,11 @@ EOF
    }
 
    #if refineDiag run, insert refineDiag csh here
-   if ( $opt_D ) {
-      $cshscripttmpl .= refineDiag($tmphistdir,$stdoutdir,$ptmpDir,$basedate,$refinedir,$gridspec);
+   if ( $opt_D or $exp->{MDBIswitch}) {
+      $cshscripttmpl .= refineDiag($exp,$tmphistdir,$stdoutdir,$ptmpDir,$basedate,$refinedir,$gridspec);
    }
 
-   if ( $opt_f or $opt_D ) {
+   if ( $opt_f or ( $opt_D or $exp->{MDBIswitch} )) {
       #separate mppnccombine from rest of script due to splitting components
       unless ( $opt_H ) {
          $cshscripttmpl .= "\n/usr/bin/perl $absfrepp -x $abs_xml_path -t $hDate -s -v ";
@@ -7133,12 +7132,13 @@ EOF
 #run user scripts
 #package the new data into new history file
 sub refineDiag {
-   my $tmphistdir = $_[0];
-   my $stdoutdir = $_[1];
-   my $ptmpDir = $_[2];
-   my $basedate = $_[3];
-   my $refinedir = $_[4];
-   my $gridspec = $_[5];
+   my $exp = $_[0];
+   my $tmphistdir = $_[1];
+   my $stdoutdir = $_[2];
+   my $ptmpDir = $_[3];
+   my $basedate = $_[4];
+   my $refinedir = $_[5];
+   my $gridspec = $_[6];
 
    my $newhistorydir = "$opt_d"."_refineDiag";
    my $csh  = <<EOF;
@@ -7165,14 +7165,29 @@ foreach historyfile ( `ls \$historyyear????.nc.cpio \$historyyear????.nc.tar`)
       $checktransfer
    endif
    cd \$work/\$hsmdate
-
-   #source user refineDiag scripts
 EOF
+
+   if ( $exp->{MDBIswitch} ){
+       $csh .= <<EOF;
+   #run the scalar diagnostics
+   source /home/Erik.Mason/Scripts/cm4_web_analysis/refineDiagScript/detVitals.csh
+   set refineStatus = \$status
+   if ( \$refineStatus < 0 ) then
+      echo "NOTE: RefineDiag requested no scalar processing after scalarDiagnostics have completed"
+      set refineRequestsExit = 1
+   else if ( \$refineStatus ) then
+      echo "ERROR: scalar diagnostics had an error status \$refineStatus"
+      set refineError = 1
+   endif
+
+EOF
+   }
 
    my @refineScripts = split ',',$opt_D;
    foreach my $s ( @refineScripts ) {
       if ( ! -e "$s" ) { die "ERROR: Your refineDiag script does not exist: $s\n"; }
       $csh .= <<EOF;
+   #source user refineDiag script: $s
    source $s
    set refineStatus = \$status
    if ( \$refineStatus < 0 ) then
