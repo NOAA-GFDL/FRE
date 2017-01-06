@@ -1133,7 +1133,7 @@ foreach f ( \$fregrid_in*.nc )
 EOF
       if ( $basenpes == 1 ) {
          my $exec_fregrid .= <<EOF;
-$time_fregrid fregrid --standard_dimension --input_mosaic \$input_mosaic --input_file \$fregrid_in --interp_method \$interp_method --remap_file \$remap_file --nlon \$nlon --nlat \$nlat --scalar_field \$interpvars \$fregrid_wt --output_file out.nc
+$time_fregrid \$FREGRID --standard_dimension --input_mosaic \$input_mosaic --input_file \$fregrid_in --interp_method \$interp_method --remap_file \$remap_file --nlon \$nlon --nlat \$nlat --scalar_field \$interpvars \$fregrid_wt --output_file out.nc
 mv out.nc \$fregrid_in.nc
 EOF
          $call_tile_fregrid .= $exec_fregrid;
@@ -2425,7 +2425,7 @@ $checktransfer
             endif
          end
          # Get files listed as associated_files
-         foreach hsmsrcfile ( $tmphistdir/\$hsmdate/*.\$hsmsrc.* )
+         foreach hsmsrcfile ( `ls $tmphistdir/\$hsmdate/*.\$hsmsrc.*` )
             # Get a list of all associated files
             set assocFiles = `ncdump -h \$hsmsrcfile | $grepAssocFiles`
             foreach assocFile ( \$assocFiles )
@@ -2462,7 +2462,7 @@ if ( -d $refinedir ) then
 $checktransfer
     endif
             # Get files listed as associated_files
-            foreach hsmsrcfile ( $tmphistdir/\$hsmdate/*.\$hsmsrc.* )
+            foreach hsmsrcfile ( `ls $tmphistdir/\$hsmdate/*.\$hsmsrc.*` )
                # Get a list of all associated files
                set assocFiles = `ncdump -h \$hsmsrcfile | $grepAssocFiles`
                foreach assocFile ( \$assocFiles )
@@ -2698,7 +2698,7 @@ sub call_frepp {
       $csh .= errorstr("$relfrepp had a problem creating next script $expt"."_$nextyearf");
       $csh .= mailerrors($outscript);
    } else { #call frepp -A for analysis scripts
-      $csh .= "\n/usr/bin/perl $absfrepp -A -x $abs_xml_path -t $nextyearf -s -v ";
+      $csh .= "\n/usr/bin/perl $absfrepp -A -x $abs_xml_path -t $year -s -v ";
       if ( $opt_P ) { $csh .= "-p $opt_P "; }
       if ( $opt_T ) { $csh .= "-T $opt_T "; }
       if ( $opt_d ) { $csh .= "-d $opt_d "; }
@@ -2726,7 +2726,7 @@ sub setcheckpt {
 if ( \$errors_found == 0 ) then
    echo $checkpt > $ppRootDir/.checkpoint/\$checkptfile
 endif
-if ( -f /home/gfdl/flags/fre/checkpoint.\$HOST || -f /home/gfdl/flags/fre/checkpoint.all || -f /home/gfdl/flags/fre/jobs/checkpoint.\$JOB_ID || -f \$HOME/fre.checkpoint.\$JOB_ID || -f /home/gfdl/flags/fre/jobs/checkpoint.\$MOAB_JOBID || -f \$HOME/fre.checkpoint.\$MOAB_JOBID ) || -f /home/gfdl/flags/fre/jobs/checkpoint.\$PBS_JOBID || -f \$HOME/fre.checkpoint.\$PBS_JOBID ) then
+if ( -f /home/gfdl/flags/fre/checkpoint.\$HOST || -f /home/gfdl/flags/fre/checkpoint.all || -f /home/gfdl/flags/fre/jobs/checkpoint.\$JOB_ID || -f \$HOME/fre.checkpoint.\$JOB_ID ) then
    set now = `date +\%s`
    echo "Exiting early by HPCS request at \$now, will resume with $checkpt"
    Mail -s "\$name job \$JOB_ID has been checkpointed by frepp" \$USER <<END
@@ -4322,7 +4322,7 @@ end
    set fregrid_in = $hDates[0]\${histmonth}01.$diag_source
    set nlat = $nlat ; set nlon = $nlon
    set interp_method = $interpMethod
-   set ncvars_arg = -st23
+   set ncvars_arg = -st0123
    set variables = ( $variables )
    set fregrid_remap_file = $xyInterpRegridFile
    $call_and_check_fregrid
@@ -4424,7 +4424,7 @@ EOF
     set fregrid_in = "$component.$range.\$monthf"
     set nlat = $nlat ; set nlon = $nlon
     set interp_method = $interpMethod
-    set ncvars_arg = -st23
+    set ncvars_arg = -st0123
     set variables = ( $variables )
     set fregrid_remap_file = $xyInterpRegridFile
     $call_and_check_fregrid
@@ -4593,7 +4593,7 @@ end
     set fregrid_in = $yr2do.$diag_source
     set nlat = $nlat ; set nlon = $nlon
     set interp_method = $interpMethod
-    set ncvars_arg = -st23
+    set ncvars_arg = -st0123
     set variables = ( $variables )
     set fregrid_remap_file = $xyInterpRegridFile
     $call_and_check_fregrid
@@ -4688,7 +4688,7 @@ EOF
     set fregrid_in = annual
     set nlat = $nlat ; set nlon = $nlon
     set interp_method = $interpMethod
-    set ncvars_arg = -st23
+    set ncvars_arg = -st0123
     set variables = ( $variables )
     set fregrid_remap_file = $xyInterpRegridFile
     $call_and_check_fregrid
@@ -5234,7 +5234,7 @@ EOF
     set fregrid_in = $hDate.$source
     set nlat = $nlat ; set nlon = $nlon
     set interp_method = $interpMethod
-    set ncvars_arg = -st23
+    set ncvars_arg = -st0123
     set variables = ( $variables )
     set fregrid_remap_file = $xyInterpRegridFile
     $call_and_check_fregrid
@@ -5306,7 +5306,7 @@ EOF
     set fregrid_in = $hDate.$source
     set nlat = $nlat ; set nlon = $nlon
     set interp_method = $interpMethod
-    set ncvars_arg = -st23
+    set ncvars_arg = -st0123
     set variables = ( $variables )
     set fregrid_remap_file = $xyInterpRegridFile
     $call_and_check_fregrid
@@ -5373,7 +5373,7 @@ if ( `ncdump -h \$filetosplit | grep -c " average_T1("` == 1 && `ncdump -h \$fil
    $check_ncatted
 endif
 
-$time_splitncvars \$SPLITNCVARS -o byVar $variablesopt \$filetosplit
+$time_splitncvars \$SPLITNCVARS -c -o byVar $variablesopt \$filetosplit
 $check_splitncvars
 
 cd byVar
@@ -6663,7 +6663,7 @@ end
     set fregrid_in = $component.$dates
     set nlat = $nlat ; set nlon = $nlon
     set interp_method = $interpMethod
-    set ncvars_arg = -st23
+    set ncvars_arg = -st0123
     set variables = ( $variables )
     set fregrid_remap_file = $xyInterpRegridFile
     $call_and_check_fregrid
@@ -7281,8 +7281,9 @@ setenv FMS_FRE_FREPP
 set NCVARS = list_ncvars.csh
 set TIMAVG = "timavg.csh -mb"
 set PLEVEL = plevel.sh
-set SPLITNCVARS = split_ncvars.csh
+set SPLITNCVARS = split_ncvars.pl
 set MPPNCCOMBINE = mppnccombine
+set FREGRID = fregrid
 set checkptfile = $scriptName:t
 set errors_found = 0
 if (! -d $work) mkdir -p $work
