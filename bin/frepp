@@ -1361,6 +1361,11 @@ EOF
       my $componentIM = $ppcNode->findvalue('@interpMethod');
       if ( "$componentIM" ne "" ) { $interpMethod = $componentIM; }
 
+      # make sure cmip and zInterp options aren't used together
+      if ($ppcNode->findvalue('@cmip') =~ /(?:yes|on|true)/i and $ppcNode->findvalue('@zInterp')) {
+         die "ERROR: Component $component requested incompatible cmip and zInterp options.\n";
+      }
+
       #get list of all diagnostic output files from source attributes, remove duplicates
       my @sourceatts = $ppcNode->findnodes('*/@source');
       push @sourceatts, $ppcNode->findnodes('@source');
@@ -5068,6 +5073,7 @@ sub directTS{
    my $avgatt = $_[0]->findvalue('@averageOf');
    my $freq = $_[0]->findvalue('@freq');
    my $source = $_[0]->findvalue('@source');
+   my $split_ncvars_cmip_option = ($ppcNode->findvalue('@cmip') =~ /(?:yes|on|true)/i) ? '--cmip' : '';
    if ( "$source" eq "" ) { $source = $ppcNode->findvalue('@source'); }
    if( "$avgatt" ne "" ) {
       if( "$avgatt" eq "daily" ) { return monthlyTSfromdailyTS( $_[0], $sim0, $startofrun ); }
@@ -5373,7 +5379,7 @@ if ( `ncdump -h \$filetosplit | grep -c " average_T1("` == 1 && `ncdump -h \$fil
    $check_ncatted
 endif
 
-$time_splitncvars \$SPLITNCVARS -c -o byVar $variablesopt \$filetosplit
+$time_splitncvars \$SPLITNCVARS $split_ncvars_cmip_option -o byVar $variablesopt \$filetosplit
 $check_splitncvars
 
 cd byVar
