@@ -730,8 +730,8 @@ sub setRunCommand($$$)
 {
 
   my ($fre, $r, $mpiInfo) = @_;
-  my ($cf, $np, $rp, $rt, $layout, $io_layout, $mask_table)
-      = @{$mpiInfo}{qw( coupler npes npesList ntdsList layoutList ioLayoutList maskTableList )};
+  my ($cf, $np, $rp, $rt, $layout, $io_layout, $mask_table, $ranks_per_ens)
+      = @{$mpiInfo}{qw( coupler npes npesList ntdsList layoutList ioLayoutList maskTableList ranksPerEnsList )};
   
   my $prefix = FRETemplate::PRAGMA_PREFIX;
   my $runCommandSize = FRETemplate::PRAGMA_RUN_COMMAND_SIZE;
@@ -741,10 +741,11 @@ sub setRunCommand($$$)
   my @components = split(';', $fre->property('FRE.mpi.component.names'));
   my ($runCommand, $runSizeInfo) = ($runCommandLauncher, "  set -r npes = $np\n");
 
-  my $htopt
+  my ($ht, $htopt)
       = $mpiInfo->{ht}
-      ? $fre->property('FRE.mpi.runCommand.option.ht')
-      : $fre->property('FRE.mpi.runCommand.option.noht');
+      ? ('.true.', $fre->property('FRE.mpi.runCommand.option.ht'))
+      : ('.false.', $fre->property('FRE.mpi.runCommand.option.noht'));
+  $runSizeInfo .= "  set -r ht = $ht\n";
   $runSizeInfo .= "  set -r htopt = $htopt\n";
 
   if ($cf)
@@ -752,7 +753,9 @@ sub setRunCommand($$$)
     foreach my $inx (0 .. $#components)
     {
       my $component = $components[$inx];
-      $runSizeInfo .= "  set -r ${component}_ranks = $rp->[$inx]\n";
+      $rt->[$inx] *= 2 if $rp->[$inx] and $mpiInfo->{ht};
+      $runSizeInfo .= "  set -r ${component}_ranks = $ranks_per_ens->[$inx]\n";
+      $runSizeInfo .= "  set -r tot_${component}_ranks = $rp->[$inx]\n";
       $runSizeInfo .= "  set -r ${component}_threads = $rt->[$inx]\n";
       $runSizeInfo .= "  set -r ${component}_layout = $layout->[$inx]\n";
       $runSizeInfo .= "  set -r ${component}_io_layout = $io_layout->[$inx]\n";
@@ -760,7 +763,7 @@ sub setRunCommand($$$)
       if ($rp->[$inx] > 0)
       {
 	$runCommand .= ' :'  if $runCommand ne $runCommandLauncher;
-        $runCommand .= ' $htopt ' . $fre->propertyParameterized('FRE.mpi.runCommand.option.mpiprocs', '$' . ${component} . '_ranks');
+        $runCommand .= ' $htopt ' . $fre->propertyParameterized('FRE.mpi.runCommand.option.mpiprocs', '$' . 'tot_' . ${component} . '_ranks');
         $runCommand .= ' ' . $fre->propertyParameterized('FRE.mpi.runCommand.option.nthreads', '$' . ${component} . '_threads');
         $runCommand .= ' ' . $fre->property('FRE.mpi.runCommand.executable');
       }

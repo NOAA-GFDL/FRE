@@ -64,6 +64,7 @@ use FREExperiment();
 use FREMsg();
 use FRETargets();
 use FREUtil();
+use FRETemplate();
 
 # //////////////////////////////////////////////////////////////////////////////
 # ////////////////////////////////////////////////////////// Global constants //
@@ -83,6 +84,7 @@ use FREUtil();
     'executable|E',
     'inherit|i!',
     'namelist|N',
+    'nodes',
     'platform-csh|S',
     'postfix|P',
     'regression|r=s',
@@ -131,6 +133,7 @@ use FREUtil();
       "   -E,        --executable                retrieve an executable pathname and the experiment, where this executable is defined\n",
       "   -i,        --inherit                   include inheritance information (negatable, default is on)\n",
       "   -N,        --namelist                  print all the namelists with all substitutions and overrides and exit\n",
+      "              --nodes                     print number of nodes that would be requested\n",
       "   -S,        --platform-csh              print the platform csh setup (defined in the <csh> element) and exit\n",
       "   -P,        --postfix                   list all the regression runs with their labels, run numbers and postfixes\n",
       "   -r STRING, --regression=STRING         use regression tests STRING (usable for --postfix and --namelist options only)\n",
@@ -519,6 +522,54 @@ use FREUtil();
     my $expNamePrefix = (scalar(@expNamesRequested) == 1) ? '' : "$expName ";
 
     $fre->setCurrentExperimentName($expName);
+
+    if ($opt{nodes}) {
+        # save verbose setting
+        my $original_verbosity = $fre->{verbose};
+        # quiet even FATAL messages temporarily so production/regression runs can be extracted
+        # without displaying FATAL messages to screen
+        $fre->{verbose} = -2;
+
+        my $print = sub {
+            my ($mpiInfo, $label) = @_;
+            my $string = FRETemplate::schedulerSizeAsString($fre, 'run', $mpiInfo->{coupler}, $mpiInfo->{npes}, $mpiInfo->{npesList}, $mpiInfo->{ntdsList});
+            my ($nodes) = $string =~ /size=(\d+)/;
+            print "$expName $label would request $nodes nodes.\n";
+        };
+
+        if ($opt{regression}) {
+            if (my @labels = $exp->extractRegressionLabels($opt{regression})) {
+                for my $label (@labels) {
+                    if (my $regInfo = $exp->extractRegressionRunInfo($label, $opt{ht})) {
+                        my $N = scalar keys %$regInfo;
+                        for my $n (sort keys %$regInfo) {
+                            my $x = $N > 1 ? sprintf(" #%s", $n+1) : '';
+                            $print->($regInfo->{$n}->{mpiInfo}, "regression/$label$x");
+                        }
+                    }
+                    else {
+                        print "$expName is not configured for regression $label run(s)\n";
+                    }
+                }
+            }
+            else {
+                $fre->{verbose} = $original_verbosity;
+                $fre->out(FREMsg::FATAL, "Unable to select regression tests to process");
+                exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
+            }
+        }
+        else {
+            if (my $prdInfo = $exp->extractProductionRunInfo($opt{ht})) {
+                $print->($prdInfo->{mpiInfo}, 'production');
+            }
+            else {
+                print "$expName is not configured for production run\n";
+            }
+        }
+
+        # restore original verbose setting
+        $fre->{verbose} = $original_verbosity;
+    }
 
     if ($opt{directory})
     {

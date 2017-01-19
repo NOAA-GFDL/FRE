@@ -14,7 +14,7 @@
           <xs:element ref="setup"/>
           <xs:element ref="user"/>
           <xs:element ref="institution"/>
-	  <xs:element ref="freInclude"/>
+          <xs:element ref="freInclude"/>
           <xs:element ref="experiment"/>
         </xs:choice>
       </xs:sequence>
@@ -59,7 +59,7 @@
     </xs:annotation>
     <xs:complexType>
       <xs:sequence>
-	<xs:any processContents="skip" minOccurs="1"/>
+        <xs:any processContents="skip" minOccurs="1"/>
       </xs:sequence>
       <xs:attribute name="name" use="required" type="xs:string"/>
     </xs:complexType>
@@ -71,33 +71,33 @@
     </xs:annotation>
     <xs:complexType mixed="true">
       <xs:choice minOccurs="0" maxOccurs="unbounded">
-	<xs:element name="publicMetadata">
-	  <xs:annotation>
-	    <xs:documentation>An experiments publicMetadata node helps populate Curator</xs:documentation>
-	  </xs:annotation>
-	  <xs:complexType>
-	    <xs:choice minOccurs="0" maxOccurs="unbounded">
-	      <xs:element name="project">
-		<xs:annotation>
-		  <xs:documentation>The project associated with a given experiment</xs:documentation>
-		</xs:annotation>
-	      </xs:element>
-	      <xs:element ref="model"/>
-	      <xs:element ref="modelID"/>
-	      <xs:element ref="experimentName"/>
-	      <xs:element ref="experimentID"/>
-	      <xs:element ref="comment"/>
-	      <xs:element ref="forcing"/>
-	      <xs:element ref="startTime"/>
-	      <xs:element ref="endTime"/>
-	      <xs:element ref="parentExperimentID"/>
-	      <xs:element ref="parentExperimentRIP"/>
-	      <xs:element ref="branchTime"/>
-	    </xs:choice>
-	    <xs:attribute name="DBswitch" use="required" type="DBswitchOpts"/>
-	  </xs:complexType>
-	</xs:element>
-	<xs:element name="description"/>
+        <xs:element name="publicMetadata">
+          <xs:annotation>
+            <xs:documentation>An experiments publicMetadata node helps populate Curator</xs:documentation>
+          </xs:annotation>
+          <xs:complexType>
+            <xs:choice minOccurs="0" maxOccurs="unbounded">
+              <xs:element name="project">
+                <xs:annotation>
+                  <xs:documentation>The project associated with a given experiment</xs:documentation>
+                </xs:annotation>
+              </xs:element>
+              <xs:element ref="model"/>
+              <xs:element ref="modelID"/>
+              <xs:element ref="experimentName"/>
+              <xs:element ref="experimentID"/>
+              <xs:element ref="comment"/>
+              <xs:element ref="forcing"/>
+              <xs:element ref="startTime"/>
+              <xs:element ref="endTime"/>
+              <xs:element ref="parentExperimentID"/>
+              <xs:element ref="parentExperimentRIP"/>
+              <xs:element ref="branchTime"/>
+            </xs:choice>
+            <xs:attribute name="DBswitch" use="required" type="DBswitchOpts"/>
+          </xs:complexType>
+        </xs:element>
+        <xs:element name="description"/>
         <xs:element name="component">
           <xs:annotation>
             <xs:documentation>An experiments component defines the CVS paths through which the component may be acquired. The 'requires' attribute lists dependencies for that component. The 'paths' attribute lists the directory that will be search after CVS checkout.</xs:documentation>
@@ -209,8 +209,8 @@
       <xs:documentation>A switch for turning on or off the Curator ingestion for a given experiment</xs:documentation>
     </xs:annotation>
     <xs:restriction base="xs:string">
-      <xs:enumeration value="on"/>
-      <xs:enumeration value="off"/>
+      <xs:pattern value="on|off"/>
+      <xs:pattern value="$(\S+)"/>
     </xs:restriction>
   </xs:simpleType>
 
@@ -419,14 +419,13 @@
       <xs:documentation>This tag defines the simulation time (in the specified units), the number of cores to use, and the total runtime for the run.</xs:documentation>
     </xs:annotation>
     <xs:complexType>
-      <xs:sequence>
+      <xs:choice minOccurs="1" maxOccurs="unbounded">
         <xs:element ref="segment"/>
-        <xs:element minOccurs="0" ref="peLayout"/>
-      </xs:sequence>
-      <xs:attribute name="npes" use="required" type="xs:string"/>
+        <xs:element ref="resources"/>
+        <xs:element ref="xi:include"/>
+      </xs:choice>
       <xs:attribute name="ocean_layout" type="xs:string"/>
       <xs:attribute name="overrideParams" type="xs:string"/>
-      <xs:attribute name="runTime" type="xs:string"/>
       <xs:attribute name="simTime" use="required" type="xs:string"/>
       <xs:attribute name="units" use="required" type="xs:string"/>
     </xs:complexType>
@@ -437,11 +436,103 @@
       <xs:documentation>Runs are broken into segments because running a full production run would take too many system resources (notably, wall clock time). Segments define their own simulation time (and units), as well as their own run time. The run time defined in the production tag will be used over the run time defined in the segment tag.</xs:documentation>
     </xs:annotation>
     <xs:complexType>
-      <xs:attribute name="runTime" use="required" type="xs:string"/>
       <xs:attribute name="simTime" use="required" type="xs:integer"/>
       <xs:attribute name="units" use="required" type="xs:string"/>
     </xs:complexType>
   </xs:element>
+
+  <xs:element name="resources">
+    <xs:annotation>
+      <xs:documentation>This tag contains all of the information for configuring the processor layout specific to a machine. Multiple resources tags are allowed, but the site attribute should be unique.</xs:documentation>
+    </xs:annotation>
+    <xs:complexType>
+      <xs:choice minOccurs="1" maxOccurs="4">
+        <xs:element ref="atm"/>
+        <xs:element ref="ocn"/>
+        <xs:element ref="lnd"/>
+        <xs:element ref="ice"/>
+      </xs:choice>
+      <xs:attribute name="site" use="optional" type="xs:string"/>
+      <xs:attribute name="jobWallclock" use="optional" type="xs:string"/>
+      <xs:attribute name="segRuntime" use="optional" type="xs:string"/>
+    </xs:complexType>
+    <xs:unique name="unique_site">
+      <xs:selector xpath="resources"/>
+      <xs:field xpath="@name"/>
+    </xs:unique>
+  </xs:element>
+
+  <xs:element name="atm">
+    <xs:annotation>
+      <xs:documentation>This tag contains all of the layout information for the atmosphere.</xs:documentation>
+    </xs:annotation>
+    <xs:complexType>
+      <xs:attribute name="ranks" use="required" type="intORproperty"/>
+      <xs:attribute name="threads" use="required" type="intORproperty"/>
+      <xs:attribute name="layout" use="optional" type="freLayout"/>
+      <xs:attribute name="io_layout" use="optional" type="freLayout"/>
+      <xs:attribute name="mask_table" use="optional" type="xs:string"/>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="ocn">
+    <xs:annotation>
+      <xs:documentation>This tag contains all of the layout information for the ocean.</xs:documentation>
+    </xs:annotation>
+    <xs:complexType>
+      <xs:attribute name="ranks" use="required" type="intORproperty"/>
+      <xs:attribute name="threads" use="required" type="intORproperty"/>
+      <xs:attribute name="layout" use="optional" type="freLayout"/>
+      <xs:attribute name="io_layout" use="optional" type="freLayout"/>
+      <xs:attribute name="mask_table" use="optional" type="xs:string"/>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="lnd">
+    <xs:annotation>
+      <xs:documentation>This tag contains all of the layout information for the land.</xs:documentation>
+    </xs:annotation>
+    <xs:complexType>
+      <xs:attribute name="ranks" use="optional" type="intORproperty"/>
+      <xs:attribute name="threads" use="optional" type="intORproperty"/>
+      <xs:attribute name="layout" use="optional" type="freLayout"/>
+      <xs:attribute name="io_layout" use="optional" type="freLayout"/>
+      <xs:attribute name="mask_table" use="optional" type="xs:string"/>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="ice">
+    <xs:annotation>
+      <xs:documentation>This tag contains all of the layout information for the ice.</xs:documentation>
+    </xs:annotation>
+    <xs:complexType>
+      <xs:attribute name="ranks" use="optional" type="intORproperty"/>
+      <xs:attribute name="threads" use="optional" type="intORproperty"/>
+      <xs:attribute name="layout" use="optional" type="freLayout"/>
+      <xs:attribute name="io_layout" use="optional" type="freLayout"/>
+      <xs:attribute name="mask_table" use="optional" type="xs:string"/>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:simpleType name="intORproperty">
+    <xs:annotation>
+      <xs:documentation>Restricts the possible options to a integer or a property.</xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:string">
+      <xs:pattern value="$(\S+)"/>
+      <xs:pattern value="[0-9]+"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="freLayout">
+    <xs:annotation>
+      <xs:documentation>Restricts the possible options to a N+,N+ format or a property.</xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:string">
+      <xs:pattern value="$(\S+)"/>
+      <xs:pattern value="[0-9]+,[0-9]+"/>
+    </xs:restriction>
+  </xs:simpleType>
 
   <xs:element name="peLayout">
     <xs:annotation>
@@ -479,12 +570,14 @@
       <xs:documentation>A regression run frequency, number of cores, run time per job, and optional namelist override parameters are specified in this tag.</xs:documentation>
     </xs:annotation>
     <xs:complexType>
+      <xs:sequence>
+        <xs:element minOccurs="0" maxOccurs="unbounded" ref="resources"/>
+        <xs:element minOccurs="0" maxOccurs="unbounded" ref="xi:include"/>
+      </xs:sequence>
       <xs:attribute name="days" type="xs:string"/>
       <xs:attribute name="hours" type="xs:string"/>
       <xs:attribute name="months" type="xs:string"/>
-      <xs:attribute name="npes" use="required" type="xs:string"/>
       <xs:attribute name="overrideParams" type="xs:string"/>
-      <xs:attribute name="runTimePerJob" use="required" type="xs:string"/>
     </xs:complexType>
   </xs:element>
 
@@ -526,17 +619,17 @@
     </xs:annotation>
     <xs:complexType>
       <xs:sequence>
-	<xs:element ref="compiler" minOccurs="0"/>
-	<xs:element ref="freVersion" minOccurs="1"/>
-	<xs:choice minOccurs="0" maxOccurs="unbounded">
-	  <xs:element ref="compiler"/>
+        <xs:element ref="compiler" minOccurs="0"/>
+        <xs:element ref="freVersion" minOccurs="1"/>
+        <xs:choice minOccurs="0" maxOccurs="unbounded">
+          <xs:element ref="compiler"/>
           <xs:element ref="csh"/>
           <xs:element ref="property"/>
           <xs:element ref="directory"/>
           <xs:element ref="project"/>
           <xs:element ref="xi:include"/>
           <xs:element ref="mkmfTemplate"/>
-	</xs:choice>
+        </xs:choice>
       </xs:sequence>
       <xs:attribute name="name" use="required" type="xs:string"/>
     </xs:complexType>
@@ -559,6 +652,7 @@
         <xs:element ref="ptmp"/>
         <xs:element ref="stmp"/>
         <xs:element ref="archive"/>
+        <xs:element ref="tmp"/>
         <xs:element name="postProcess" type="xs:string">
           <xs:annotation>
             <xs:documentation>Defines the path to the post-processing directory.</xs:documentation>
@@ -640,6 +734,12 @@
     </xs:annotation>
   </xs:element>
 
+  <xs:element name="tmp" type="xs:string">
+    <xs:annotation>
+      <xs:documentation>Appears to be a theia-specific scratch dir.</xs:documentation>
+    </xs:annotation>
+  </xs:element>
+
   <xs:element name="project" type="xs:string">
     <xs:annotation>
       <xs:documentation>This tag defines the user's project for accounting purposes. It can be used by a job scheduler for allocation purposes.</xs:documentation>
@@ -659,7 +759,6 @@
     <xs:complexType>
       <xs:attribute name="type" use="required" type="compilerType"/>
       <xs:attribute name="version" use="required" type="xs:string"/>
-      <xs:attribute name="doF90Cpp" type="doF90CppOpts"/>
     </xs:complexType>
   </xs:element>
 
@@ -673,7 +772,7 @@
       <xs:enumeration value="true"/>
     </xs:restriction>
   </xs:simpleType>
-		       
+
   <xs:simpleType name="compilerType">
     <xs:annotation>
       <xs:documentation>Restricts the possible values for the compiler type.</xs:documentation>
@@ -763,6 +862,7 @@
       <xs:attribute name="chunkLength" use="required" type="xs:string"/>
       <xs:attribute name="freq" use="required" type="xs:string"/>
       <xs:attribute name="from" type="xs:string"/>
+      <xs:attribute name="averageOf" type="xs:string"/>
       <xs:attribute name="source" type="xs:string"/>
     </xs:complexType>
   </xs:element>
@@ -825,6 +925,7 @@
         <xs:element ref="makeOverrides" minOccurs="0"/>
       </xs:all>
       <xs:attribute name="target" type="xs:string"/>
+      <xs:attribute name="doF90Cpp" type="doF90CppOpts"/>
     </xs:complexType>
   </xs:element>
 

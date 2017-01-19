@@ -55,6 +55,8 @@ use strict;
 
 use File::Spec();
 use XML::LibXML();
+use POSIX;
+use Try::Tiny;
 
 use FREDefaults();
 use FREExperiment();
@@ -63,7 +65,6 @@ use FREPlatforms();
 use FREProperties();
 use FRETargets();
 use FREUtil();
-use Try::Tiny;
 
 # //////////////////////////////////////////////////////////////////////////////
 # ////////////////////////////////////////////////////////// Global constants //
@@ -95,6 +96,20 @@ my $xmlLoad = sub($$)
   {
     FREMsg::out($v, FREMsg::FATAL, $@); 
     return undef;
+  }
+};
+
+my $xmlValidateAndLoad = sub($$)
+# ------ arguments: $xmlfile $verbose
+# ------ return the loaded document 
+{
+  my ($x, $v) = @_; 
+
+  if (validate($x, $v)) {
+      return $xmlLoad->($x, $v);
+  }
+  else {
+      return undef;
   }
 };
 
@@ -310,7 +325,7 @@ sub validate($$)
 # ------ arguments: $xmlfile $verbose
 # ------ return 1 if the $xmlfile has been successfully validated
 {
-  my ($x, $s, $v) = @_;
+  my ($x, $v) = @_;
   my $document = $xmlLoad->($x, $v);
   if ($document)
   {
@@ -326,9 +341,8 @@ sub validate($$)
       }
       else
       {
-	my ($line, $message) = ($@->line(), $@->message());
-	$message =~ s/\n$//s;
-	FREMsg::out($v, FREMsg::FATAL, "The XML file '$x', line '$line' - $message"); 
+    _print_validation_errors($@, $x);
+     FREMsg::out($v, FREMsg::FATAL, "The XML file '$x' is not valid");
 	return undef;
       }
     }
@@ -345,6 +359,77 @@ sub validate($$)
   }
 }
 
+sub _print_validation_errors {
+# ------ argument: $LibXML::Error
+# ------ returns nothing, prints report
+    my ($error, $xml, $collection) = @_;
+
+    my ($file, $line, $message) = ($error->file, $error->line, $error->message);
+    chomp $message;
+    $collection->{$file}->{$line}->{$message} = 1;
+
+    if ($error->{_prev}) {
+        _print_validation_errors($error->{_prev}, $xml, $collection);
+    }
+    else {
+        my $xml_errors = $collection->{$xml};
+        my $include_errors = { map { $_ => $collection->{$_} } grep !/^$xml$/, keys %$collection };
+        my ($xml_count, $include_count, %include_count);
+
+        # include errors are double-counted so weed them out
+        for my $include (keys %$include_errors) {
+            for my $include_line (keys %{$include_errors->{$include}}) {
+                for my $include_message (keys %{$include_errors->{$include}->{$include_line}}) {
+                    ++$include_count;
+                    ++$include_count{$include};
+                    for my $xml_line (keys %$xml_errors) {
+                        for my $xml_message (keys %{$xml_errors->{$xml_line}}) {
+                            $xml_errors->{$xml_line}->{$xml_message} = 0
+                                if $include_line == $xml_line and $include_message eq $xml_message;
+                        }
+                    }
+                }
+            }
+        }
+        for my $xml_line (keys %$xml_errors) {
+            for my $xml_message (keys %{$xml_errors->{$xml_line}}) {
+                ++$xml_count if $xml_errors->{$xml_line}->{$xml_message};
+            }
+        }
+
+        my $N = $xml_count + $include_count;
+        my $message
+            = $N > 100
+            ? "Many XML validation errors; first 100 shown below"
+            : "$N XML validation errors";
+        my $x = 78 - length $message;
+        printf "%s $message %s\n", '*' x int($x/2), '*' x ceil($x/2);
+
+        my $y;
+        if ($xml_count) {
+            $y = "\n";
+            print "$xml:\n";
+            for my $xml_line (sort { $a <=> $b } keys %$xml_errors) {
+                for my $xml_message (sort keys %{$xml_errors->{$xml_line}}) {
+                    print "    Line $xml_line - $xml_message\n" if $xml_errors->{$xml_line}->{$xml_message};
+                }
+            }
+        }
+        for my $include (keys %$include_errors) {
+            if ($include_count{$include}) {
+                print "$y$include:\n";
+                $y = "\n";
+                for my $include_line (sort { $a <=> $b } keys %{$include_errors->{$include}}) {
+                    for my $include_message (sort keys %{$include_errors->{$include}->{$include_line}}) {
+                        print "    Line $include_line - $include_message\n";
+                    }
+                }
+            }
+        }
+        print '*' x 80 . "\n";
+    }
+}
+
 # //////////////////////////////////////////////////////////////////////////////
 # ////////////////////////////////////////// Class initialization/termination //
 # //////////////////////////////////////////////////////////////////////////////
@@ -356,33 +441,28 @@ sub new($$%)
 {
   my ($class, $caller, %o) = @_;
 
-  # if platform isn't specified or contains default, print a descriptive message and exit
-  # let frelist go ahead if no options are specified so it can print experiments
-  # and if -d is used so it can list experiment descriptions
-  if ($caller eq 'frelist') {
-      if (keys %o <= 3) {
-          $o{platform} = 'default';
-      }
-      elsif (keys %o == 4 and exists $o{description}) {
-          $o{platform} = 'default';
-      }
-      else {
-          FREPlatforms::checkPlatform($o{platform});
-      }
-  }
-  else {
-      FREPlatforms::checkPlatform($o{platform});
-  }
 
   my $xmlfileAbsPath = File::Spec->rel2abs($o{xmlfile});
   if (-f $xmlfileAbsPath and -r $xmlfileAbsPath)
   {
     FREMsg::out($o{verbose}, FREMsg::NOTE, "The '$caller' begun using the XML file '$xmlfileAbsPath'...");
-    # ----------------------------------------- load the (probably validated) configuration file
-    my $document = $xmlLoad->($xmlfileAbsPath, $o{verbose});
+    # ----------------------------------------- validate and load the configuration file
+    # --novalidate option is not advertised
+    my $document = $o{novalidate} ? $xmlLoad->($xmlfileAbsPath, $o{verbose}) : $xmlValidateAndLoad->($xmlfileAbsPath, $o{verbose});
     if ($document)
     {
       my $rootNode = $document->documentElement();
+
+      # if platform isn't specified or contains default, print a descriptive message and exit.
+      # let frelist go ahead, setting platform to first available, if no options are specified
+      # so it can print experiments and if -d is used so it can list experiment descriptions
+      if ($caller eq 'frelist' and (keys %o <= 3 or keys %o == 4 and exists $o{description})) {
+          $o{platform} = $rootNode->findnodes('setup/platform[@name]')->get_node(1)->getAttribute('name');
+      }
+      else {
+          FREPlatforms::checkPlatform($o{platform});
+      }
+
       my $version = $versionGet->($rootNode, $o{verbose});
       # ------------------------------------ standardize the platform string and verify its correctness
       my ($platformSite, $platformTail) = FREPlatforms::parse($o{platform});
@@ -1022,7 +1102,7 @@ sub check_for_fre_version_mismatch {
         }
         else {
             FREMsg::out(1, FREMsg::FATAL,
-                "FRE version must be specified within <platform> in <freVersion> tag. See documentation at http://wiki.gfdl.noaa.gov/index.php/FRE_User_Documentation");
+                "FRE version must be specified within <platform> in <freVersion> tag. See documentation at http://wiki.gfdl.noaa.gov/index.php/FRE_User_Documentation#Platforms_and_Sites");
             exit FREDefaults::STATUS_FRE_GENERIC_PROBLEM;
         }
     }

@@ -4,7 +4,8 @@ module use -a /ncrc/home2/fms/local/modulefiles
 module unload PrgEnv-pgi PrgEnv-intel PrgEnv-gnu PrgEnv-cray
 module unload netcdf fre
 module load PrgEnv-gnu/5.2.82
-module load $(FRE_VERSION)
+module swap gcc gcc/$(COMPILER_VERSION)
+module load fre/$(FRE_VERSION)
 module load git
 
 setenv KMP_STACKSIZE 512m

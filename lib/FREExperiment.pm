@@ -1,73 +1,10 @@
 #
-# $Id: FREExperiment.pm,v 18.1.2.21.4.1.2.2 2014/12/05 17:08:12 Seth.Underwood Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: Experiment Management Module
 # ------------------------------------------------------------------------------
-# arl    Ver   18.1  Merged revision 18.0.2.1 onto trunk            March 10
-# afy -------------- Branch 18.1.2 -------------------------------- March 10
-# afy    Ver   1.00  Modify extractCheckoutInfo (add line numbers)  March 10
-# afy    Ver   1.01  Modify createCheckoutScript (keep order)       March 10
-# afy    Ver   2.00  Remove createCheckoutScript subroutine         May 10
-# afy    Ver   2.01  Remove createCompileScript subroutine          May 10
-# afy    Ver   3.00  Remove executable subroutine                   May 10
-# arl    Ver   4.00  Modify extractCheckoutInfo (read property)     August 10
-# afy    Ver   5.00  Modify extractCheckoutInfo (no CVSROOT)        August 10
-# afy    Ver   6.00  Use new module FREMsg (symbolic levels)        January 11
-# afy    Ver   6.01  Modify extractNodes (no 'required')            January 11
-# afy    Ver   6.02  Modify extractValue (no 'required')            January 11
-# afy    Ver   6.03  Modify extractComponentValue (no 'required')   January 11
-# afy    Ver   6.04  Modify extractSourceValue (no 'required')      January 11
-# afy    Ver   6.05  Modify extractCompileValue (no 'required')     January 11
-# afy    Ver   6.06  Modify extractCheckoutInfo (hashes, checks)    January 11
-# afy    Ver   6.07  Modify extractCompileInfo (hashes, checks)     January 11
-# afy    Ver   6.08  Modify extractCompileInfo (make overrides)     January 11
-# afy    Ver   6.09  Modify extractCompileInfo (libraries order)    January 11
-# afy    Ver   7.00  Modify placeholdersExpand (check '$' presence) April 11
-# afy    Ver   7.01  Add property subroutine (similar to FRE.pm)    April 11
-# afy    Ver   7.02  Modify experimentDirsCreate (call property)    April 11
-# afy    Ver   7.03  Modify experimentDirsVerify (call property)    April 11
-# afy    Ver   7.04  Modify extractCheckoutInfo (call property)     April 11
-# afy    Ver   7.05  Modify experimentCreate (don't pass '$fre')    April 11
-# afy    Ver   8.00  Add dir subroutine                             May 11
-# afy    Ver   8.01  Add stateDir subroutine                        May 11
-# afy    Ver   8.02  Modify dir-returning subroutines (call dir)    May 11
-# afy    Ver   9.00  Modify dir-returning subroutines (cosmetics)   May 11
-# afy    Ver  10.00  Add extractRegressionRunInfo subroutine        November 11
-# afy    Ver  10.01  Add extractProductionRunInfo subroutine        November 11
-# afy    Ver  10.02  Add executable subroutine                      November 11
-# afy    Ver  10.03  Add executableCanBeBuilt subroutine            November 11
-# afy    Ver  10.04  Modify extractExecutable subroutine            November 11
-# afy    Ver  11.00  Add extractRegressionLabels subroutine         January 12
-# afy    Ver  12.00  Add sdtoutTmpDir subroutine                    February 12
-# afy    Ver  13.00  Remove tmpDir subroutine                       March 12
-# afy    Ver  14.00  Add regressionLabels utility                   June 12
-# afy    Ver  14.01  Add extractOverrideParams utility              June 12
-# afy    Ver  14.02  Add overrideRegressionNamelists utility        June 12
-# afy    Ver  14.03  Add overrideProductionNamelists utility        June 12
-# afy    Ver  14.04  Add MPISizeParameters utility                  June 12
-# afy    Ver  14.05  Add regressionPostfix utility                  June 12
-# afy    Ver  14.06  Modify extractNamelists (use FRENamelists.pm)  June 12
-# afy    Ver  14.07  Modify extractRegressionLabels (suite, all)    June 12
-# afy    Ver  14.08  Modify extractRegressionRunInfo (add option)   June 12
-# afy    Ver  14.09  Modify extractProductionRunInfo                June 12
-# afy    Ver  14.10  Modify extractRegressionRunInfo (run as key)   June 12
-# afy    Ver  15.00  Modify extractTables (return undef on errors)  July 12
-# afy    Ver  16.00  Modify extractShellCommands (no 'defined')     July 12
-# afy    Ver  16.01  Modify regressionPostfix (add suffuxes)        July 12
-# afy    Ver  17.00  Modify MPISizeParameters (fix concurrent)      August 12
-# afy    Ver  18.00  Merge with 18.1.2.17.2.1                       February 13
-# afy    Ver  19.00  Modify MPISizeParameters (generic version)     February 13
-# afy    Ver  19.01  Modify regressionPostfix (generic version)     February 13
-# afy    Ver  19.02  Modify extract*RunInfo (generic version)       February 13
-# afy    Ver  20.00  Modify MPISizeParameters (compatibility mode)  April 13
-# keo    Ver  20.01  Modify extractCheckoutInfo (/:/)               April 13
-# afy    Ver  21.00  Modify MPISizeCompatible (remove ice/land)     April 13
-# afy    Ver  21.01  Add MPISizeComponentEnabled (subcomponents)    April 13
-# afy    Ver  21.02  Modify MPISizeParametersGeneric (call ^)       April 13
-# afy    Ver  21.03  Modify MPISizeParametersCompatible (serials)   April 13
-# ------------------------------------------------------------------------------
-# Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2009-2013
-# Designed and written by V. Balaji, Amy Langenhorst and Aleksey Yakovlev
+# Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2009-2013, 2016
+# Designed and written by V. Balaji, Amy Langenhorst, Aleksey Yakovlev and
+# Seth Underwood
 #
 
 package FREExperiment;
@@ -142,8 +79,8 @@ my $experimentDirsVerify = sub($$)
       my $pathsMapping = $r->property('FRE.directory.' . $t . '.paths.mapping');
       if ($pathsMapping)
       {
-        chomp(my $groupName = qx(id -gn));
-        my $paths = FREUtil::strFindByPattern($pathsMapping, $groupName);
+        chomp(my @groupNames = split(/\s+/, qx(id -Gn)));
+        my $paths = FREUtil::strFindByPattern($pathsMapping, @groupNames);
 	if ($paths)
 	{
 	  my $pathsForMatch = $paths;
@@ -462,7 +399,7 @@ my $overrideRegressionNamelists = sub($$$)
     $var =~ s/\s*//g;
     unless ($name and $var) {$fre->out(FREMsg::WARNING, "Got an empty namelist in overrideParams"); next}
     if ($var =~ /(?:npes|nthreads|layout)$/) {
-        $fre->out(FREMsg::FATAL, "You attempted to override the $name namelist for parameter $var. Overrides for some parameters (*npes, *nthreads, or *layout) are no longer allowed; specify these in the <regression>/<run>/<resources> tag. See FRE Documentation at http://wiki.gfdl.noaa.gov/index.php/FRE_User_Documentation");
+        $fre->out(FREMsg::FATAL, sprintf "At XML line %s you attempted to override the $name namelist for parameter $var in experiment %s, regression run %s. Overrides for some parameters (*npes, *nthreads, or *layout) are no longer allowed; specify these in the <regression>/<run>/<resources> tag. See FRE Documentation at http://wiki.gfdl.noaa.gov/index.php/FRE_User_Documentation#Resource_specification", $n->line_number, $r->name, $n->parentNode->getAttribute('name'));
         exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
     }
     $fre->out(FREMsg::NOTE, "overrideParams from xml: $name:$var=$val");
@@ -521,14 +458,25 @@ my $MPISizeCompatible = sub($$)
 {
   my ($fre, $h) = @_;
   my $compatible = 1;
-  my @components = split(';', $fre->property('FRE.mpi.component.names'));
-  my @compatibleComponents = ('atmos', 'ocean');
-  foreach my $component (@components)
-  {
-    unless (scalar(grep($_ eq $component, @compatibleComponents)) > 0)
-    {
-      if (defined(FRENamelists::namelistBooleanGet($h, 'coupler_nml', "do_$component")))
-      {
+
+  # only use enabled components for MPI use
+  my @all_components     = split(';', $fre->property('FRE.mpi.component.names'));
+  my @enabled            = split(';', $fre->property('FRE.mpi.component.enabled'));
+  my @enabled_components = map { $all_components[$_] } grep { $enabled[$_] } 0 .. $#enabled;
+  my %long_names = _long_component_names($fre);
+
+  # currently only atm and ocn are enabled so the generic MPI parameters function
+  # will never be used
+  my @compatibleComponents = ('atm', 'ocn');
+
+  foreach my $component (@enabled_components) {
+    # loop thru non-compatible enabled components
+    unless (scalar(grep($_ eq $component, @compatibleComponents)) > 0) {
+      # if a non-compatible enabled component
+      # (checking both normal 3-letter name and legacy/long name)
+      # is found to be enabled in coupler, use the generic MPI parameters function
+      if (defined(FRENamelists::namelistBooleanGet($h, 'coupler_nml', "do_$component")) or
+          defined(FRENamelists::namelistBooleanGet($h, 'coupler_nml', "do_$long_names{$component}"))) {
 	$compatible = 0;
 	last;
       }
@@ -662,7 +610,9 @@ my $MPISizeComponentEnabled = sub($$$)
   my ($r, $h, $n) = @_;
   my ($fre, $result) = ($r->fre(), undef);
   my @subComponents = split(';', $fre->property("FRE.mpi.$n.subComponents"));
-  foreach my $component ($n, @subComponents)
+  my %long_component_names = _long_component_names($fre);
+  # check component name (e.g. atm) and legacy long name (e.g. atmos)
+  foreach my $component ($n, $long_component_names{$n}, @subComponents)
   {
     my $enabled = $h->namelistBooleanGet('coupler_nml', "do_$component");
     if (defined($enabled))
@@ -680,6 +630,18 @@ my $MPISizeComponentEnabled = sub($$$)
   }
   return $result;
 };
+
+# Returns a hash whose keys are the 3-letter standard component names
+# and value is the legacy/long name. The only use for the long names is
+# do_atmos = 1 style coupler namelist entries
+sub _long_component_names {
+    my $fre = shift;
+    my @short = split ';', $fre->property('FRE.mpi.component.names');
+    my @long  = split ';', $fre->property('FRE.mpi.component.long_names');
+    my %hash;
+    $hash{$short[$_]} = $long[$_] for 0 .. $#short;
+    return %hash;
+}
 
 my $MPISizeParametersGeneric = sub($$$$)
 # ------ arguments: $exp $resources $namelistsHandle $ensembleSize
@@ -699,7 +661,9 @@ my $MPISizeParametersGeneric = sub($$$$)
   {
     my $component = $components[$inx];
     my $enabled = $MPISizeComponentEnabled->($r, $h, $component);
-    $enabled = $enabled[$inx] unless defined($enabled);
+    # use the fre.properties enabled flag if the coupler_nml value is undefined
+    # or if the coupler_nml value is yes and the fre.properties value is no
+    $enabled = $enabled[$inx] if !defined($enabled) or $enabled && !$enabled[$inx];
     if ($enabled)
     {
       if (my $npes = $resources->{$component}->{ranks})
@@ -718,12 +682,12 @@ my $MPISizeParametersGeneric = sub($$$$)
 	  }
 	  elsif ($ntds <= 0)
 	  {
-            $fre->out(FREMsg::FATAL, "The variable 'coupler_nml:${component}_nthreads' must have a positive value");
+            $fre->out(FREMsg::FATAL, "The component $component must request a positive number of threads");
 	    return undef;
 	  }
 	  else
 	  {
-            $fre->out(FREMsg::FATAL, "The variable 'coupler_nml:${component}_nthreads' value must be less or equal than a number '$coresPerNode' of cores per node");
+            $fre->out(FREMsg::FATAL, "The component $component's thread request ($ntds) must be less or equal than a number '$coresPerNode' of cores per node");
 	    return undef;
 	  }
 	}
@@ -734,7 +698,7 @@ my $MPISizeParametersGeneric = sub($$$$)
       }
       else
       {
-        $fre->out(FREMsg::FATAL, "The variable 'coupler_nml:${component}_npes' must be defined and have a positive value");
+        $fre->out(FREMsg::FATAL, "The component $component must request a positive number of ranks");
 	return undef;
       }
     }
@@ -1192,6 +1156,28 @@ sub extractCompileValue($$$)
   return $value;
 }
 
+sub extractDoF90Cpp($$)
+# ------ arguments: $object $xPath $componentName
+# ------ called as object method
+# ------ return a value corresponding to the $xPath under the <component/compile> node, following inherits
+{
+  my ($r, $c) = @_;
+  my ($exp, $value) = ($r, '');
+  my $compileNodes = $exp->node()->findnodes('component[@name="' . $c . '"]/compile');
+  return '' unless $compileNodes;
+  my $compileNode = $compileNodes->get_node(1);
+  while ($exp and !$value)
+  {
+    $value = $exp->nodeValue($compileNode, '@doF90Cpp');
+    $exp = $exp->parent();
+  }
+  if ($value!~/(?i:yes|on|true)/)
+  {
+    $value = '';
+  }
+  return $value;
+}
+
 sub extractExecutable($)
 # ------ arguments: $object
 # ------ called as object method
@@ -1544,7 +1530,7 @@ sub extractPPRefineDiagScripts($)
 {
   my ($r, @results) = (shift, ());
   my @nodes = $r->extractNodes('postProcess', 'refineDiag/@script');
-  foreach my $node (@nodes) {push @results, $r->nodeValue($node, '.');}
+  foreach my $node (@nodes) {push @results, split /\s+/, $r->nodeValue($node, '.');}
   return @results;
 }
 
@@ -1763,6 +1749,7 @@ sub extractCompileInfo($)
 	    $component{makeOverrides} = $strMergeWS->($r->extractCompileValue('makeOverrides', $name));
 	    $component{compileCsh} = $r->extractCompileValue('csh', $name);
 	    $component{mkmfTemplate} = $strRemoveWS->($r->extractMkmfTemplate($name)) || $fre->mkmfTemplate();
+	    $component{doF90Cpp} = $r->extractDoF90Cpp($name);
             $component{lineNumber} = $componentNode->line_number();
 	    $component{rank} = undef;
 	    # ------------------------------------------------------------------------------------------- print what we got
@@ -1910,9 +1897,7 @@ sub extractRegressionRunInfo($$$)
 	my ($ok, %runs) = (1, ());
 	for (my $i = 0; $i < scalar(@runNodes); $i++)
 	{
-      my $resources = $r->getResourceRequests($ht, $runNodes[$i]);
-
-	  my $nps = $resources->{npes};
+      my $resources = $r->getResourceRequests($ht, $nmls, $runNodes[$i]) or return;
 	  my $msl = $r->nodeValue($runNodes[$i], '@months');
 	  my $dsl = $r->nodeValue($runNodes[$i], '@days');
 	  my $hsl = $r->nodeValue($runNodes[$i], '@hours');
@@ -1999,13 +1984,13 @@ sub extractProductionRunInfo($$)
   {
     if (my $prdNode = $productionRunNode->($r))
     {
-      my $resources = $r->getResourceRequests($ht);
+      my $resources = $r->getResourceRequests($ht, $nmls) or return;
       my $mpiInfo = $MPISizeParameters->($r, $resources, $nmls->copy);
       addResourceRequestsToMpiInfo($fre, $resources, $mpiInfo);
 
       my $smt = $r->nodeValue($prdNode, '@simTime');
       my $smu = $r->nodeValue($prdNode, '@units');
-      my $srt = $resources->{jobWallclock} || $fre->runTime($resources->{npes});
+      my $srt = $resources->{jobWallclock} || $fre->runTime($resources->{npes_with_threads});
       my $gmt = $r->nodeValue($prdNode, 'segment/@simTime');
       my $gmu = $r->nodeValue($prdNode, 'segment/@units');
       my $grt = $resources->{segRuntime};
@@ -2107,42 +2092,61 @@ sub addResourceRequestsToMpiInfo {
     $info->{layoutList}    = [ map { $resources->{$_}->{layout} }     @components ];
     $info->{ioLayoutList}  = [ map { $resources->{$_}->{io_layout} }  @components ];
     $info->{maskTableList} = [ map { $resources->{$_}->{mask_table} } @components ];
+    $info->{ranksPerEnsList} = [ map { $resources->{$_}->{ranks} }      @components ];
     $info->{ht} = $resources->{ht};
 }
 
 # Get resource info from <runtime>/.../<resources> tag
 # and decides whether hyperthreading will be used if --ht option is present
-# ------ arguments: $exp hyperthreading           -- for production
-# ------ arguments: $exp hyperthreading $run_node -- for regression
-# ------ returns: hashref containing resource specs
+# ------ arguments: $exp hyperthreading namelists           -- for production
+# ------ arguments: $exp hyperthreading namelists $run_node -- for regression
+# ------ returns: hashref containing resource specs or undef on failure
 sub getResourceRequests($$) {
-    my ($exp, $ht, $regression_run_node) = @_;
+    my ($exp, $ht, $namelists, $regression_run_node) = @_;
     my $fre = $exp->fre;
     my $site = $fre->platformSite;
     my @components = split(';', $fre->property('FRE.mpi.component.names'));
+    my @enabled = split(';', $fre->property('FRE.mpi.component.enabled'));
+    my @enabled_components = map { $components[$_] } grep { $enabled[$_] } 0 .. $#enabled;
+    my $concurrent = $namelists->namelistBooleanGet('coupler_nml', 'concurrent');
     my @types = (qw( ranks threads layout io_layout mask_table ));
     my %data;
     my $node;
 
+    # given a list of suitable resource nodes, pick the site-specific one
+    my $pick_node = sub {
+        my @site_nodes    = grep {   $_->hasAttribute('site') } @_;
+        my @nonsite_nodes = grep { ! $_->hasAttribute('site') } @_;
+
+        if (my $n = @site_nodes) {
+            $fre->out(FREMsg::WARNING, "Found $n equally suitable site-specific resources tags; using first one") if $n > 1;
+            return $site_nodes[0];
+        }
+        if (my $n = @nonsite_nodes) {
+            $fre->out(FREMsg::WARNING, "Found $n equally suitable site-agnostic resources tags; using first one") if $n > 1;
+            return $nonsite_nodes[0];
+        }
+    };
+
     # if node is given, try to find <resources> tag with no inheritance
     if ($regression_run_node) {
-        $node = $regression_run_node->findnodes("resources[\@site = '$site']")->get_node(1);
+        $node = $pick_node->($regression_run_node->findnodes("resources[\@site = '$site' or not(\@site)]"));
     }
 
     # for production OR if regression <resources> tag wasn't found,
     # find first resource node with experiment inheritance
     if (! $node) {
-        ($node) = $exp->extractNodes('runtime', "production/resources[\@site = '$site']");
+        $node = $pick_node->($exp->extractNodes('runtime', "production/resources[\@site = '$site' or not(\@site)]"));
     }
 
     # bail out if no resources tag can be found
     if (! $node) {
         my $message = $regression_run_node
-            ? "No resource request tag for site=$site was found within <runtime>/<regression>/<run> OR within <runtime>/<production> or its experiment ancestors. "
-            : "No resource request tag for site=$site was found within <runtime>/<production> or its experiment ancestors. ";
-        $message .= "A site-specific <resources> tag must now be specified for every production and regression run. See FRE Documentation at http://wiki.gfdl.noaa.gov/index.php/FRE_User_Documentation";
+            ? "No resource request tag was found within <runtime>/<regression>/<run> OR within <runtime>/<production> or its experiment ancestors. "
+            : "No resource request tag was found within <runtime>/<production> or its experiment ancestors. ";
+        $message .= "A <resources> tag must now be specified. See FRE Documentation at http://wiki.gfdl.noaa.gov/index.php/FRE_User_Documentation#Resource_specification";
         $fre->out(FREMsg::FATAL, $message);
-        exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
+        return;
     }
 
     # Extract resource info
@@ -2162,13 +2166,30 @@ sub getResourceRequests($$) {
         }
     }
 
+    # Set threads to 1 unless openmp
+    for my $comp (@components) {
+        next unless $data{$comp}{threads} and $data{$comp}{threads} > 1;
+        if (! FRETargets::containsOpenMP($fre->target)) {
+            $fre->out(FREMsg::WARNING, "Component $comp has requested $data{$comp}{threads} threads but not using OpenMP");
+            $data{$comp}{threads} = 1;
+        }
+    }
+
     # Require ranks/threads for at least one component
+    my %complete_specs = (
+        atm => 4,
+        ocn => 4,
+        lnd => 2,
+        ice => 2,
+    );
     my $ok;
     for my $comp (@components) {
         my $message;
-        my $N = values %{$data{$comp}};
+        my $N = grep !/^$/, values %{$data{$comp}};
         if ($data{$comp}{ranks} and $data{$comp}{threads}) {
             $ok = 1;
+        }
+        if ($N >= $complete_specs{$comp}) {
             $message = "Component $comp has complete resource request specifications: ";
         }
         elsif ($N > 0) {
@@ -2186,35 +2207,51 @@ sub getResourceRequests($$) {
         $fre->out(FREMsg::NOTE, $message);
     }
     if (! $ok) {
-        $fre->out(FREMsg::FATAL, "A resource request tag was found but was incomplete. Ranks and threads must be specified for at least one model component. See FRE Documentation at http://wiki.gfdl.noaa.gov/index.php/FRE_User_Documentation");
-        exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
+        $fre->out(FREMsg::FATAL, "A resource request tag was found but was incomplete. Ranks and threads must be specified for at least one model component. See FRE Documentation at http://wiki.gfdl.noaa.gov/index.php/FRE_User_Documentation#Resource_specification");
+        return;
     }
+
+    # Add up total ranks of MPI-enabled components (concurrent) or take the maximum (non-concurrent)
+    if ($concurrent) {
+        for my $comp (@enabled_components) {
+            $data{npes}              += $data{$comp}{ranks};
+            $data{npes_with_threads} += $data{$comp}{ranks} * $data{$comp}{threads};
+        }
+    }
+    else {
+        my %ranks = map { $_ => $data{$_}{ranks} } @enabled_components;
+        my @sorted = sort { $ranks{$b} <=> $ranks{$a} } keys %ranks;
+        $data{npes}              = $data{$sorted[0]}{ranks};
+        $data{npes_with_threads} = $data{$sorted[0]}{ranks} * $data{$sorted[0]}{threads};
+    }
+    $fre->out(FREMsg::NOTE, "Setting npes=$data{npes}");
 
     # Apply hyperthreading if desired and possible
     if ($ht and ! $fre->property('FRE.mpi.runCommand.option.ht')) {
-            $fre->out(FREMsg::WARNING, "Hyperthreading was requested but isn't supported on this platform.");
+        $fre->out(FREMsg::WARNING, "Hyperthreading was requested but isn't supported on this platform.");
     }
     elsif ($ht) {
         my $ok = 1;
-        for my $comp (@components) {
-            if ($data{$comp}{threads} and $data{$comp}{threads} == 1) {
+        for my $comp (@enabled_components) {
+            next unless $data{$comp}{ranks};
+            if (! $data{$comp}{threads}) {
+                $fre->out(FREMsg::WARNING, "Hyperthreading was requested but component $comp requested no threads.");
+                $ok = 0;
+            }
+            elsif ($data{$comp}{threads} == 1) {
                 $fre->out(FREMsg::WARNING, "Hyperthreading was requested but component $comp requested only 1 thread.");
                 $ok = 0;
             }
         }
         if ($ok) {
             $data{ht} = 1;
-            for my $comp (@components) {
-                if ($data{$comp}{threads}) {
-                    $data{$comp}{threads} *= 2;
-                    $fre->out(FREMsg::NOTE, "Using hyperthreading on component $comp -- setting threads to $data{$comp}{threads}");
+            for my $comp (@enabled_components) {
+                if ($data{$comp}{ranks}) {
+                    $fre->out(FREMsg::NOTE, "Using hyperthreading on component $comp -- will set threads to " . 2 * $data{$comp}{threads});
                 }
             }
         }
     }
-
-    # Add up total ranks
-    $data{npes} += $data{$_}{ranks} for @components;
 
     return \%data;
 }

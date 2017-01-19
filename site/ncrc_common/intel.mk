@@ -1,41 +1,51 @@
-# template for Intel compilers
-# typical use with mkmf:
-# mkmf -t intel.mk -c "-Duse_libMPI -Duse_netCDF" path_names /usr/local/include
-
+# template for the Intel fortran compiler
+# typical use with mkmf
+# mkmf -t intel.mk -c"-Duse_libMPI -Duse_netCDF" path_names /usr/local/include
 ############
 # commands #
 ############
-
-FC = mpiifort
-CC = mpiicc
-CXX = mpiicpc
-LD = mpiifort
-
-############
-#  flags   #
-############
-
+FC = ftn
+CC = cc
+CXX = CC
+LD = ftn
+#########
+# flags #
+#########
 DEBUG =
 REPRO =
 VERBOSE =
 OPENMP =
 
-MAKEFLAGS += --jobs=1
+##############################################
+# Need to use at least GNU Make version 3.81 #
+##############################################
+need := 3.81
+ok := $(filter $(need),$(firstword $(sort $(MAKE_VERSION) $(need))))
+ifneq ($(need),$(ok))
+$(error Need at least make version $(need).  Load module gmake/3.81)
+endif
 
-FPPFLAGS := -fpp -Wp,-w
+MAKEFLAGS += --jobs=2
 
-# NESCC systems set HDF5 as the root directory to the HDF5
-# development libraries.
-INC = -I$(HDF5)/include $(shell nf-config --fflags)
-FFLAGS := -fno-alias -auto -safe-cray-ptr -ftz -assume byterecl -i4 -r8 -nowarn -sox -traceback $(INC)
+NETCDF_ROOT = $(NETCDF_DIR)
+MPI_ROOT    = $(MPICH_DIR)
+INCLUDE = -I$(NETCDF_ROOT)/include
+
+FPPFLAGS := -fpp -Wp,-w $(INCLUDE)
+
+# -msse2 is added as a workaround for reproducibility on the c3 system.  We in the
+# modeling systems group are looking for why this is needed to allow run-to-run
+# reproducibility on the c3 system.
+FFLAGS := -msse2 -fno-alias -auto -safe-cray-ptr -ftz -assume byterecl -i4 -r8 -nowarn -sox -traceback $(INCLUDE)
 FFLAGS_OPT = -O3 -debug minimal -fp-model source -override-limits
 FFLAGS_DEBUG = -g -O0 -check -check noarg_temp_created -check nopointer -warn -warn noerrors -fpe0 -ftrapuv
 FFLAGS_REPRO = -O2 -debug minimal -fp-model source -override-limits
 FFLAGS_OPENMP = -openmp
 FFLAGS_VERBOSE = -v -V -what -warn all
 
-CFLAGS := -D__IFC -sox -traceback $(INC)
+CFLAGS := -D__IFC -msse2 -sox -traceback
 CFLAGS_OPT = -O2 -debug minimal
+CFLAGS_REPRO = -O2 -debug minimal
 CFLAGS_OPENMP = -openmp
 CFLAGS_DEBUG = -O0 -g -ftrapuv
 CFLAGS_VERBOSE = -w3
@@ -45,7 +55,7 @@ CFLAGS_VERBOSE = -w3
 FFLAGS_TEST = -O3 -debug minimal -fp-model source -override-limits
 CFLAGS_TEST = -O2
 
-LDFLAGS := -L$(HDF5)/lib $(shell nf-config --flibs)
+LDFLAGS :=
 LDFLAGS_OPENMP := -openmp
 LDFLAGS_VERBOSE := -Wl,-V,--verbose,-cref,-M
 
@@ -53,29 +63,31 @@ LDFLAGS_VERBOSE := -Wl,-V,--verbose,-cref,-M
 LIBS :=
 
 ifneq ($(REPRO),)
-  CFLAGS += $(CFLAGS_REPRO)
-  FFLAGS += $(FFLAGS_REPRO)
+CFLAGS += $(CFLAGS_REPRO)
+FFLAGS += $(FFLAGS_REPRO)
 else ifneq ($(DEBUG),)
-  CFLAGS += $(CFLAGS_DEBUG)
-  FFLAGS += $(FFLAGS_DEBUG)
+CFLAGS += $(CFLAGS_DEBUG)
+FFLAGS += $(FFLAGS_DEBUG)
 else ifneq ($(TEST),)
-  CFLAGS += $(CFLAGS_TEST)
-  FFLAGS += $(FFLAGS_TEST)
+CFLAGS += $(CFLAGS_TEST)
+FFLAGS += $(FFLAGS_TEST)
 else
-  CFLAGS += $(CFLAGS_OPT)
-  FFLAGS += $(FFLAGS_OPT)
+CFLAGS += $(CFLAGS_OPT)
+FFLAGS += $(FFLAGS_OPT)
 endif
 
 ifneq ($(OPENMP),)
-  CFLAGS += $(CFLAGS_OPENMP)
-  FFLAGS += $(FFLAGS_OPENMP)
-  LDFLAGS += $(LDFLAGS_OPENMP)
+CFLAGS += $(CFLAGS_OPENMP)
+FFLAGS += $(FFLAGS_OPENMP)
+LDFLAGS += $(LDFLAGS_OPENMP)
+# to correct a loader bug on gaea: envars below set by module load intel
+LIBS += -L$(INTEL_PATH)/$(INTEL_MAJOR_VERSION)/$(INTEL_MINOR_VERSION)/lib/intel64 -lifcoremt
 endif
 
 ifneq ($(VERBOSE),)
-  CFLAGS += $(CFLAGS_VERBOSE)
-  FFLAGS += $(FFLAGS_VERBOSE)
-  LDFLAGS += $(LDFLAGS_VERBOSE)
+CFLAGS += $(CFLAGS_VERBOSE)
+FFLAGS += $(FFLAGS_VERBOSE)
+LDFLAGS += $(LDFLAGS_VERBOSE)
 endif
 
 ifeq ($(NETCDF),3)
@@ -85,14 +97,13 @@ ifeq ($(NETCDF),3)
   endif
 endif
 
-ifneq ($(findstring netcdf/4,$(LOADEDMODULES)),)
+ifneq ($(findstring netcdf-4.0.1,$(LOADEDMODULES)),)
   LIBS += -lnetcdff -lnetcdf -lhdf5_hl -lhdf5 -lz
 else
   LIBS += -lnetcdf
 endif
 
 LIBS +=
-LIBS += -lmkl_blas95_lp64 -lmkl_lapack95_lp64 -lmkl_intel_lp64 -lmkl_core -lmkl_sequential
 LDFLAGS += $(LIBS)
 
 #---------------------------------------------------------------------------

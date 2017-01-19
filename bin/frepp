@@ -89,7 +89,9 @@ use vars qw( $mosaic_type $sourceGrid $xyInterp $xyInterpRegridFile );
       'Segment|S=s',
       'oldStyleTimestamps|e',
       'statistics|z',
-      'mppnccombine-opts=s'
+      'mppnccombine-opts=s',
+
+      'novalidate',
   );
 
 }
@@ -206,6 +208,9 @@ EOF
    exit 1;
    }
 
+   # debugging/developer options
+   #          --novalidate = skip the XML validation
+
    #still there but no longer advertised / DEBUGGING
    #          OPTIONS REQUIRED WHEN FULL XML IS NOT AVAILABLE
    #          -C calendar  = specify calendar type from coupler_nml, ie julian
@@ -264,6 +269,12 @@ grep ':associated_files' | cut -d '"' -f2 | sed "s/\w*://g" | tr ' ' '\n' | sort
 EOF
    chomp $grepAssocFiles;
 
+   # for netcdf compression querying
+   my $grep_netcdf_compression =
+       q(grep '_DeflateLevel' | cut -d '=' -f2 | sed s/\\;// | sort -r | head -n 1);
+   my $grep_netcdf_shuffle =
+       q(grep '_Shuffle' | cut -d '=' -f2 | sed s/\\;// | sed s/\\"//g | sort -r | head -n 1);
+
 #begin generating version string
 my $abs_xml_path = File::Spec->rel2abs($opt_x);
 my $createdate = Date::Manip::ParseDate('now');
@@ -301,6 +312,7 @@ $version_head .= "-x $abs_xml_path ";
    my $time_hsmget = "";
    my $time_hsmput = "";
    my $time_combine = "";
+   my $time_nccopy = "";
 
    # When frepp is run with -A option, the -t option is not required.
    # Then set the date to a valid date.  This isn't really ideal, but
@@ -463,7 +475,7 @@ $version_head .= "-x $abs_xml_path ";
        my @fredb_cmd = ( "-x", $abs_xml_path,
 			 "-t", $opt_T,
 			 "-p", $opt_P,
-			 "-d", "testcurator",
+			 "-d", "curator",
 			 "-q", "cobweb",
 			 $expt );
        my $output = qx{$fredb @fredb_cmd};
@@ -620,15 +632,16 @@ EOF
      $time_hsmget      = "$timecmd".' -f "     TIME for hsmget:    real %'."$timereal".' user %U sys %S"';
      $time_hsmput      = "$timecmd".' -f "     TIME for hsmput:    real %'."$timereal".' user %U sys %S"';
      $time_combine     = "$timecmd".' -f "     TIME for combine:   real %'."$timereal".' user %U sys %S"';
+     $time_nccopy      = "$timecmd".' -f "     TIME for nccopy:    real %'."$timereal".' user %U sys %S"';
   }
 
    my $version_info = "$version_head";
    if ( $opt_f ) { $version_info .= "-f "; }
-   if ( $opt_P ) { $version_info .= "-P $opt_P "; }
+   if ( $opt_P ) { $version_info .= "-p $opt_P "; }
    if ( $opt_T ) { $version_info .= "-T $opt_T "; }
    if ( $opt_D ) { $version_info .= "-D $opt_D "; }
    if ( $opt_t ) { $version_info .= "-t $hDate "; } # Using corrected $opt_t value
-   if ( $opt_p ) { $version_info .= "-p $opt_p "; }
+   if ( $opt_p ) { $version_info .= "--plus $opt_p "; }
    if ( $opt_c ) { $version_info .= "-c $opt_c "; }
    if ( $opt_d ) { $version_info .= "-d $opt_d "; }
    if ( $opt_u ) { $version_info .= "-u $opt_u "; }
@@ -711,7 +724,7 @@ EOF
       $cshscripttmpl =~ s/#PBS -N/#PBS -N $pbs_job_name/;
       $cshscripttmpl =~ s/#PBS -l walltime/#PBS -l walltime=$maxruntime/;
       $cshscripttmpl =~ s/#PBS -o/#PBS -o $stdoutdir\/postProcess\//;
-      $cshscripttmpl =~ s/setenv FRE_STDOUT_PATH/setenv FRE_STDOUT_PATH $stdoutdir\/postProcess\/$pbs_job_name.o\$JOB_ID/;
+      $cshscripttmpl =~ s/setenv FRE_STDOUT_PATH/setenv FRE_STDOUT_PATH $stdoutdir\/postProcess\/$pbs_job_name.o\$PBS_JOBID_number/;
    }
    $cshscripttmpl =~ s/(-soft -l fre_info=)/$1ppVersion\@$relfrepp -hard/;
    $cshscripttmpl =~ s/version_info/$versionId\n$version_info/;
@@ -835,6 +848,8 @@ EOF
             closedir(DIR);
             my $hsmget_history = hsmget_history_csh($ptmpDir,$tmphistdir,$refinedir,$this_frepp_cmd,join(' ',@hf),join(' ',@hsmf));
             $cshscripttmpl =~ s/#hsmget_history_files/$hsmget_history/;
+            my $uncompress = uncompress_history_csh($tmphistdir);
+            $cshscripttmpl =~ s/#uncompress_history_files/$uncompress/;
             my @sorted = sort { $a cmp $b } @hf;
             my $check_history = checkHistComplete($tmphistdir,$sorted[0],$this_frepp_cmd,\@hsmf,\@diagtablecontent);
             $cshscripttmpl =~ s/#check_history_files/$check_history/;
@@ -862,11 +877,12 @@ EOF
    $writestate = '';
    unless ( $opt_A ) {
       my $writeIDorINTER = <<EOF;
-if ( "\$JOB_ID" != '' ) then
- echo \$PBS_JOBID > \$statefile
+if ( \$?MOAB_JOBID ) then
+    echo \$MOAB_JOBID > \$statefile
+else if ( \$?PBS_JOBID ) then
+    echo \$PBS_JOBID > \$statefile
 else
- echo INTERACTIVE > \$statefile
- set PBS_JOBID = INTERACTIVE
+    echo INTERACTIVE > \$statefile
 endif
 EOF
       $cshscripttmpl =~ s/#write_to_statefile/$writeIDorINTER/;
@@ -922,6 +938,8 @@ END
 EOF
    $cshscripttmpl .= <<EOF;
 #hsmget_history_files
+
+#uncompress_history_files
 
 #check_history_files
 EOF
@@ -1115,7 +1133,7 @@ foreach f ( \$fregrid_in*.nc )
 EOF
       if ( $basenpes == 1 ) {
          my $exec_fregrid .= <<EOF;
-$time_fregrid fregrid --standard_dimension --input_mosaic \$input_mosaic --input_file \$fregrid_in --interp_method \$interp_method --remap_file \$remap_file --nlon \$nlon --nlat \$nlat --scalar_field \$interpvars \$fregrid_wt --output_file out.nc
+$time_fregrid \$FREGRID --standard_dimension --input_mosaic \$input_mosaic --input_file \$fregrid_in --interp_method \$interp_method --remap_file \$remap_file --nlon \$nlon --nlat \$nlat --scalar_field \$interpvars \$fregrid_wt --output_file out.nc
 mv out.nc \$fregrid_in.nc
 EOF
          $call_tile_fregrid .= $exec_fregrid;
@@ -1209,7 +1227,7 @@ EOF
 	 $pbs_job_name .= "_$component"."_$hDate";
          $cshscript =~ s/set scriptName = .*/set scriptName = $outscript/;
          $cshscript =~ s/#PBS -N .*/#PBS -N $pbs_job_name/;
-         $cshscript =~ s/setenv FRE_STDOUT_PATH.*/setenv FRE_STDOUT_PATH $stdoutdir\/postProcess\/$pbs_job_name.o\$JOB_ID/;
+         $cshscript =~ s/setenv FRE_STDOUT_PATH.*/setenv FRE_STDOUT_PATH $stdoutdir\/postProcess\/$pbs_job_name.o\$PBS_JOBID_number/;
          $cshscript =~ s/(-w $expt)/$1_$component/;
          $cshscript =~ s/(-soft -l fre_info=)/$1ppComponent\@$component+/;
          $opt_w =~ s/( -hold_jid $expt)(.*)(_\d\d\d\d\d\d\d\d)/$1_$component$3/;
@@ -2104,6 +2122,8 @@ EOF
          if ( scalar @hf ) {
             my $hsmget_history = hsmget_history_csh($ptmpDir,$tmphistdir,$refinedir,$this_frepp_cmd,join(' ',@hf),join(' ',@hsmf));
             $cshscript =~ s/#hsmget_history_files/$hsmget_history/;
+            my $uncompress = uncompress_history_csh($tmphistdir);
+            $cshscript =~ s/#uncompress_history_files/$uncompress/;
             my @sorted = sort { $a cmp $b } @hf;
             my $check_history = checkHistComplete($tmphistdir,$sorted[0],$this_frepp_cmd,\@hsmf,\@diagtablecontent);
             $cshscript =~ s/#check_history_files/$check_history/;
@@ -2111,7 +2131,8 @@ EOF
          $cshscript .= call_frepp($abs_xml_path, $outscript, $component, "");
          if ( "$platform" eq 'ia64' ) { $cshscript .= "qstat -j \$PBS_JOBID | grep ^usage\n"; }
          $cshscript .= "echo END-OF-SCRIPT for postprocessing job $t0-$tEND for $expt\n";
-         if ( $maxyrs < 2 ) {
+         # if the user sets -W, don't override the wallclock even for 1-year postprocessing
+         if ( $maxyrs < 2 and !$opt{Walltime}) {
             if ( "$platform" eq 'ia64' ) {
                $cshscript =~ s/#\$ -l h_cpu.*/#\$ -l h_cpu=20:00:00/;
             } else {
@@ -2394,8 +2415,17 @@ END
       $time_hsmget \$hsmget -a $opt_d -p $ptmpDir/history -w $tmphistdir \$hsmdate/\\*.\$hsmsrc.\\*
 $checktransfer
   endif
+         # Set original history compression variables to restore before placing in archive.
+         # (Have to use the ptmp version as the vftmp version may already be uncompressed
+         # from a previous run attempt.)
+         foreach ptmpfile ( $ptmpDir/history/\$hsmdate/*.\$hsmsrc.* )
+            if (! \$?history_deflation) then
+                set -r history_deflation = `ncdump -sh \$ptmpfile | $grep_netcdf_compression`
+                set -r history_shuffle = `ncdump -sh \$ptmpfile | $grep_netcdf_shuffle`
+            endif
+         end
          # Get files listed as associated_files
-         foreach hsmsrcfile ( $tmphistdir/\$hsmdate/*.\$hsmsrc.* )
+         foreach hsmsrcfile ( `ls $tmphistdir/\$hsmdate/*.\$hsmsrc.*` )
             # Get a list of all associated files
             set assocFiles = `ncdump -h \$hsmsrcfile | $grepAssocFiles`
             foreach assocFile ( \$assocFiles )
@@ -2406,6 +2436,17 @@ $checktransfer
    end
 #end loop over history year
 end
+
+# Set nccopy netcdf compression flags
+if (\$history_deflation) then
+    if (\$history_shuffle == "true") then
+        set -r nc_compression_flags = "-d \$history_deflation -s"
+    else
+        set -r nc_compression_flags = "-d \$history_deflation"
+    endif
+else
+    set -r nc_compression_flags = ""
+endif
 
 if ( -d $refinedir ) then
   cd $refinedir
@@ -2421,7 +2462,7 @@ if ( -d $refinedir ) then
 $checktransfer
     endif
             # Get files listed as associated_files
-            foreach hsmsrcfile ( $tmphistdir/\$hsmdate/*.\$hsmsrc.* )
+            foreach hsmsrcfile ( `ls $tmphistdir/\$hsmdate/*.\$hsmsrc.*` )
                # Get a list of all associated files
                set assocFiles = `ncdump -h \$hsmsrcfile | $grepAssocFiles`
                foreach assocFile ( \$assocFiles )
@@ -2435,6 +2476,39 @@ endif
 EOF
 
    return $hsmget_history;
+}
+
+# uncompress netcdf compression
+sub uncompress_history_csh {
+    my $dir = shift;
+    my $check_nccopy = errorstr("NCCOPY (uncompress history files)");
+
+    return <<EOF
+# uncompress all netcdf-compressed files
+if (\$?history_deflation) then
+    foreach file (`find $dir -type f -name "*.nc"`)
+        if (`ncdump -sh \$file | $grep_netcdf_compression`) then
+            $time_nccopy nccopy -d 0 \$file \$file.uncompressed
+            $check_nccopy
+            mv -f \$file.uncompressed \$file
+            chmod 444 \$file
+        endif
+    end
+endif
+EOF
+}
+
+# compress pp files before placing in archive
+sub compress_csh {
+    my ($file, $check_nccopy) = @_;
+
+    return <<EOF
+if ("\$nc_compression_flags" != "") then
+    $time_nccopy nccopy \$nc_compression_flags $file $file.compressed
+    $check_nccopy
+    mv $file.compressed $file
+endif
+EOF
 }
 
 #check for complete history data
@@ -2595,7 +2669,7 @@ sub call_frepp {
    if ( "$year" ne "" ) {
       $year .= $userstartmo;
       $csh .= "\n/usr/bin/perl $absfrepp -x $abs_xml_path -t $year -s -q $depjobs";
-      if ( $opt_P ) { $csh .= "-P $opt_P "; }
+      if ( $opt_P ) { $csh .= "-p $opt_P "; }
       if ( $opt_T ) { $csh .= "-T $opt_T "; }
       if ( $opt_d ) { $csh .= "-d $opt_d "; }
       if ( $opt_D ) { $csh .= "-D '$opt_D' "; }
@@ -2608,9 +2682,9 @@ sub call_frepp {
       $csh .= "$expt\n";
    } elsif ( $opt_p ) {
       my $togo = $opt_p - 1;
-      if ( $togo > 0 ) { $togo = "-p $togo"; } else { $togo = ''; }
+      if ( $togo > 0 ) { $togo = "--plus $togo"; } else { $togo = ''; }
       $csh .= "\n/usr/bin/perl $absfrepp -x $abs_xml_path -t $nextyearf $togo -s -v ";
-      if ( $opt_P ) { $csh .= "-P $opt_P "; }
+      if ( $opt_P ) { $csh .= "-p $opt_P "; }
       if ( $opt_T ) { $csh .= "-T $opt_T "; }
       if ( $opt_d ) { $csh .= "-d $opt_d "; }
       if ( $opt_D ) { $csh .= "-D '$opt_D' "; }
@@ -2624,8 +2698,8 @@ sub call_frepp {
       $csh .= errorstr("$relfrepp had a problem creating next script $expt"."_$nextyearf");
       $csh .= mailerrors($outscript);
    } else { #call frepp -A for analysis scripts
-      $csh .= "\n/usr/bin/perl $absfrepp -A -x $abs_xml_path -t $nextyearf -s -v ";
-      if ( $opt_P ) { $csh .= "-P $opt_P "; }
+      $csh .= "\n/usr/bin/perl $absfrepp -A -x $abs_xml_path -t $year -s -v ";
+      if ( $opt_P ) { $csh .= "-p $opt_P "; }
       if ( $opt_T ) { $csh .= "-T $opt_T "; }
       if ( $opt_d ) { $csh .= "-d $opt_d "; }
       if ( $opt_u ) { $csh .= "-u $opt_u "; }
@@ -2652,7 +2726,7 @@ sub setcheckpt {
 if ( \$errors_found == 0 ) then
    echo $checkpt > $ppRootDir/.checkpoint/\$checkptfile
 endif
-if ( -f /home/gfdl/flags/fre/checkpoint.\$HOST || -f /home/gfdl/flags/fre/checkpoint.all || -f /home/gfdl/flags/fre/jobs/checkpoint.\$JOB_ID || -f \$HOME/fre.checkpoint.\$JOB_ID || -f /home/gfdl/flags/fre/jobs/checkpoint.\$PBS_JOBID || -f \$HOME/fre.checkpoint.\$PBS_JOBID ) then
+if ( -f /home/gfdl/flags/fre/checkpoint.\$HOST || -f /home/gfdl/flags/fre/checkpoint.all || -f /home/gfdl/flags/fre/jobs/checkpoint.\$JOB_ID || -f \$HOME/fre.checkpoint.\$JOB_ID ) then
    set now = `date +\%s`
    echo "Exiting early by HPCS request at \$now, will resume with $checkpt"
    Mail -s "\$name job \$JOB_ID has been checkpointed by frepp" \$USER <<END
@@ -3647,6 +3721,7 @@ sub annualTS {
    my $check_ncrcat = errorstr("NCRCAT ($component $freq ts from $source)");
    my $check_ncatted = errorstr("NCATTED ($component $freq ts from $source)");
    my $check_dmget = errorstr("DMGET ($component $freq ts from $source)");
+   my $check_nccopy = errorstr("NCCOPY ($component $freq ts from $source)");
    my $csh = setcheckpt("annualTS_$chunkLength");
    $csh .= <<EOF;
 
@@ -3685,12 +3760,14 @@ EOF
          if ( $aggregateTS ) {
             $makecpio = createcpio( "\$tempCache/$outdirpath", $outdir,"$component.$begin-$tYEARf",FREUtil::timeabbrev($freq),1);
          }
+         my $compress = compress_csh($chunkedoutfile, $check_nccopy);
          $catfiles = <<EOF;
 if ( -e $chunkedoutfile ) rm -f $chunkedoutfile
 $time_ncrcat ncrcat \$ncrcatopt $filelist $chunkedoutfile
 $check_ncrcat
 $time_ncatted ncatted -h -O -a filename,global,m,c,"$chunkedoutfile" $chunkedoutfile
 $check_ncatted
+$compress
 $time_mv $mvfile $chunkedoutfile $outdir/
 if ( \$status ) then
    echo "WARNING: data transfer failure, retrying..."
@@ -3860,6 +3937,7 @@ EOF
    my $check_dmget = errorstr("DMGET ($component seasonal ts)");
    my $check_splitncvars = errorstr("SPLITNCVARS ($component seasonal ts)");
    my $check_cpio = errorstr("CPIO/TAR ($component seasonal ts)");
+   my $check_nccopy = errorstr("NCCOPY ($component seasonal ts)");
    my $csh = setcheckpt("seasonalTS_$chunkLength");
    $csh .= <<EOF;
 
@@ -3899,10 +3977,12 @@ EOF
          if( $abbrev =~ "SON" and $aggregateTS ) {
             $makecpio = createcpio( "\$tempCache/$outdirpath",$outdir,"$component.$begin-$year",FREUtil::timeabbrev($freq),1 );
          }
+         my $compress = compress_csh($chunkedoutfile, $check_nccopy);
          $catfiles = <<EOF;
 if ( -e $chunkedoutfile ) rm -f $chunkedoutfile
 $time_ncrcat ncrcat \$ncrcatopt $filelist $chunkedoutfile
 $check_ncrcat
+$compress
 $time_mv $mvfile $chunkedoutfile \$outdir/
 if ( \$status ) then
    echo "WARNING: data transfer failure, retrying..."
@@ -4159,6 +4239,7 @@ sub monthlyAVfromhist {
    my $check_ncdump = errorstr("NCDUMP ($component $src $interval averages)");
    my $check_fregrid = errorstr("FREGRID ($component $src $interval averages)");
    my $check_ncrename = errorstr("NCRENAME ($component $src $interval averages)");
+   my $check_nccopy = errorstr("NCCOPY ($component $src $interval averages)");
 
 
    my $csh = setcheckpt("monthlyAVfromhist_$interval");
@@ -4231,6 +4312,7 @@ EOF
    $call_and_check_fregrid =~ s/#check_fregrid/$check_fregrid/;
    $call_and_check_fregrid =~ s/#check_ncrename/$check_ncrename/g;
    $call_and_check_fregrid =~ s/#check_ncatted/$check_ncatted/g;
+   my $compress = compress_csh("$component.$range.\$monthf.nc", $check_nccopy);
    $csh .= <<EOF;
 @ i ++
 end
@@ -4240,7 +4322,7 @@ end
    set fregrid_in = $hDates[0]\${histmonth}01.$diag_source
    set nlat = $nlat ; set nlon = $nlon
    set interp_method = $interpMethod
-   set ncvars_arg = -st23
+   set ncvars_arg = -st0123
    set variables = ( $variables )
    set fregrid_remap_file = $xyInterpRegridFile
    $call_and_check_fregrid
@@ -4248,6 +4330,8 @@ end
    mv \$fregrid_in.nc $component.$range.\$monthf.nc
    $time_ncatted ncatted -h -O -a filename,global,m,c,"$component.$range.\$monthf.nc" $component.$range.\$monthf.nc
    $check_ncatted
+
+   $compress
 
    $time_mv $mvfile $component.$range.\$monthf.nc \$outdir/$component.$range.\$monthf.nc
    if ( \$status ) then
@@ -4261,10 +4345,12 @@ end
 EOF
 
 } else { #CUBIC - no conversion
+   my $compress = compress_csh("$component.$range.\$monthf$tile.nc", $check_nccopy);
    $csh .= <<EOF;
    mv $hDates[0]\${histmonth}01.$diag_source$tile.nc $component.$range.\$monthf$tile.nc
    $time_ncatted ncatted -h -O -a filename,global,m,c,"$component.$range.\$monthf$tile.nc" $component.$range.\$monthf$tile.nc
    $check_ncatted
+   $compress
    $time_mv $mvfile $component.$range.\$monthf$tile.nc \$outdir/$component.$range.\$monthf$tile.nc
    if ( \$status ) then
       echo "WARNING: data transfer failure, retrying..."
@@ -4338,7 +4424,7 @@ EOF
     set fregrid_in = "$component.$range.\$monthf"
     set nlat = $nlat ; set nlon = $nlon
     set interp_method = $interpMethod
-    set ncvars_arg = -st23
+    set ncvars_arg = -st0123
     set variables = ( $variables )
     set fregrid_remap_file = $xyInterpRegridFile
     $call_and_check_fregrid
@@ -4346,9 +4432,12 @@ EOF
 EOF
       }
 
+      my $compress = compress_csh("$component.$range.\$monthf.nc", $check_nccopy);
+
       $csh .= <<EOF;
    $time_ncatted ncatted -h -O -a filename,global,m,c,"$component.$range.\$monthf.nc" $component.$range.\$monthf.nc
    $check_ncatted
+   $compress
    $time_mv $mvfile $component.$range.\$monthf.nc \$outdir/$component.$range.\$monthf.nc
    if ( \$status ) then
       echo "WARNING: data transfer failure, retrying..."
@@ -4427,6 +4516,7 @@ sub annualAV1yrfromhist {
    my $check_ncdump = errorstr("NCDUMP ($component $src averages)");
    my $check_fregrid = errorstr("FREGRID ($component $src averages)");
    my $check_ncrename = errorstr("NCRENAME ($component $src averages)");
+   my $check_nccopy = errorstr("NCCOPY ($component $src averages)");
    my $csh = setcheckpt('annualAV1yrfromhist');
    if ( "$write2arch" eq "1" ) {
       $csh .= "set write2arch = 1\n";
@@ -4493,6 +4583,7 @@ if ( "$xyInterp" ne '' ) { #CUBIC to LATLON
    $call_and_check_fregrid =~ s/#check_fregrid/$check_fregrid/;
    $call_and_check_fregrid =~ s/#check_ncrename/$check_ncrename/g;
    $call_and_check_fregrid =~ s/#check_ncatted/$check_ncatted/g;
+   my $compress = compress_csh("\$tempCache/$outdirpath/$component.$tENDf.ann.nc", $check_nccopy);
    $csh .= <<EOF;
 @ i ++
 end
@@ -4502,7 +4593,7 @@ end
     set fregrid_in = $yr2do.$diag_source
     set nlat = $nlat ; set nlon = $nlon
     set interp_method = $interpMethod
-    set ncvars_arg = -st23
+    set ncvars_arg = -st0123
     set variables = ( $variables )
     set fregrid_remap_file = $xyInterpRegridFile
     $call_and_check_fregrid
@@ -4513,6 +4604,7 @@ $check_ncatted
 
 $time_mv $mv $component.$tENDf.ann.nc \$tempCache/$outdirpath/$component.$tENDf.ann.nc
 if ( \$write2arch ) then
+   $compress
    $time_mv $mvfile \$tempCache/$outdirpath/$component.$tENDf.ann.nc \$outdir/$component.$tENDf.ann.nc
    if ( \$status ) then
       echo "WARNING: data transfer failure, retrying..."
@@ -4524,6 +4616,7 @@ endif
 EOF
 
    } else { #CUBIC - no conversion
+   my $compress = compress_csh("\$tempCache/$outdirpath/$component.$tENDf.ann$tile.nc", $check_nccopy);
    $csh .= <<EOF;
 mv $yr2do.$diag_source$tile.nc $component.$tENDf.ann$tile.nc
 $time_ncatted ncatted -h -O -a filename,global,m,c,"$component.$tENDf.ann$tile.nc" $component.$tENDf.ann$tile.nc
@@ -4531,6 +4624,7 @@ $check_ncatted
 
 $time_mv $mv $component.$tENDf.ann$tile.nc \$tempCache/$outdirpath/$component.$tENDf.ann$tile.nc
 if ( \$write2arch ) then
+   $compress
    $time_mv $mvfile \$tempCache/$outdirpath/$component.$tENDf.ann$tile.nc \$outdir/$component.$tENDf.ann$tile.nc
    if ( \$status ) then
       echo "WARNING: data transfer failure, retrying..."
@@ -4594,7 +4688,7 @@ EOF
     set fregrid_in = annual
     set nlat = $nlat ; set nlon = $nlon
     set interp_method = $interpMethod
-    set ncvars_arg = -st23
+    set ncvars_arg = -st0123
     set variables = ( $variables )
     set fregrid_remap_file = $xyInterpRegridFile
     $call_and_check_fregrid
@@ -4602,11 +4696,14 @@ EOF
 EOF
       }
 
+   my $compress = compress_csh("\$tempCache/$outdirpath/$component.$tENDf.ann.nc", $check_nccopy);
+
    $csh .= <<EOF;
 $time_ncatted ncatted -h -O -a filename,global,m,c,"$component.$tENDf.ann.nc" $component.$tENDf.ann.nc
 $check_ncatted
 $time_mv $mv $component.$tENDf.ann.nc \$tempCache/$outdirpath/$component.$tENDf.ann.nc
 if ( \$write2arch ) then
+   $compress
    $time_mv $mvfile \$tempCache/$outdirpath/$component.$tENDf.ann.nc \$outdir/$component.$tENDf.ann.nc
    if ( \$status ) then
       echo "WARNING: data transfer failure, retrying..."
@@ -4716,9 +4813,11 @@ EOF
       my $retry_timavg = retryonerrorstart("TIMAVG");
       my $check_ncatted = errorstr("NCATTED ($component $src $interval averages)");
       my $check_dmget = errorstr("DMGET ($component $src $interval averages)");
+      my $check_nccopy = errorstr("NCCOPY ($component $src $interval averages)");
 
    if ("$sourceGrid" eq 'cubedsphere' and "$xyInterp" eq '') { # CUBIC
       my $tile = '.tile$i';
+      my $compress = compress_csh("\$tempCache/$outdirpath/$component.$first-$endinterval.ann$tile.nc", $check_nccopy);
       $csh .= <<EOF;
 foreach file ($filelist)
    set f = \$file:t
@@ -4746,6 +4845,7 @@ while ( \$i <= 6 )
    $check_timavg
    $time_ncatted ncatted -h -O -a filename,global,m,c,"$component.$first-$endinterval.ann$tile.nc" \$tempCache/$outdirpath/$component.$first-$endinterval.ann$tile.nc
    $check_ncatted
+   $compress
    $time_mv $mvfile \$tempCache/$outdirpath/$component.$first-$endinterval.ann$tile.nc \$outdir/$component.$first-$endinterval.ann$tile.nc
    if ( \$status ) then
       echo "WARNING: data transfer failure, retrying..."
@@ -4758,6 +4858,7 @@ end
 EOF
 
    } else { # LATLON
+      my $compress = compress_csh("\$tempCache/$outdirpath/$component.$first-$endinterval.ann.nc", $check_nccopy);
       $csh .= <<EOF;
 foreach file ($filelist)
    set f = \$file:t
@@ -4779,6 +4880,7 @@ $retry_timavg
 $check_timavg
 $time_ncatted ncatted -h -O -a filename,global,m,c,"$component.$first-$endinterval.ann.nc" \$tempCache/$outdirpath/$component.$first-$endinterval.ann.nc
 $check_ncatted
+$compress
 $time_mv $mvfile \$tempCache/$outdirpath/$component.$first-$endinterval.ann.nc \$outdir/$component.$first-$endinterval.ann.nc
 if ( \$status ) then
    echo "WARNING: data transfer failure, retrying..."
@@ -4851,6 +4953,7 @@ sub monthlyTSfromdailyTS {
    my $retry_timavg = retryonerrorstart("TIMAVG");
    my $check_ncks = errorstr("NCKS ($component $freq ts calculated from $avgatt ts)");
    my $check_ncap = errorstr("NCAP ($component $freq ts calculated from $avgatt ts)");
+   my $check_nccopy = errorstr("NCCOPY ($component $freq ts calculated from $avgatt ts)");
    my $check_levels = '';
    if ("$caltype" eq "NOLEAP" or "$caltype" eq "noleap") {
       $check_levels = errorstr("WRONG NUMBER OF TIME LEVELS (contains \$length, should be $numtimelevels) IN \$outdir/\$out.\$var.nc");
@@ -4866,6 +4969,7 @@ if ( ! -e \$outdir ) mkdir -p \$outdir
 
 EOF
    if ($opt_z) { $csh .= begin_systime(); }
+   my $compress = compress_csh("\$out.\$var.nc", $check_nccopy);
    $csh .= <<EOF;
 set in = '$component.$in_start-$in_end'
 set out = '$component.$out_start-$out_end'
@@ -4931,6 +5035,7 @@ foreach var ( $variables )
    $check_ncrcat
    $time_ncatted ncatted -h -O -a filename,global,m,c,"\$out.\$var.nc" \$out.\$var.nc
    $check_ncatted
+   $compress
    set tmpstring = `ncdump -h \$out.\$var.nc | grep UNLIMITED`
    $time_mv $mvfile \$out.\$var.nc $outdir/
    if ( \$status ) then
@@ -5055,6 +5160,7 @@ sub directTS{
    my $check_filesexist = errorstr("NO USABLE VARIABLES EXIST ($component $freq ts from $source)");
    my $check_fregrid = errorstr("FREGRID ($component $freq ts from $source)");
    my $check_ncrename = errorstr("NCRENAME ($component $freq ts from $source)");
+   my $check_nccopy = errorstr("NCCOPY ($component $freq ts from $source)");
    my $check_levels = '';
    if ("$caltype" eq "NOLEAP" or "$caltype" eq "noleap" ) {
       $check_levels = errorstr("WRONG NUMBER OF TIME LEVELS (contains \$length, should be $numtimelevels) IN \$outdir/$component.$start-$tENDf.\$file");
@@ -5128,7 +5234,7 @@ EOF
     set fregrid_in = $hDate.$source
     set nlat = $nlat ; set nlon = $nlon
     set interp_method = $interpMethod
-    set ncvars_arg = -st23
+    set ncvars_arg = -st0123
     set variables = ( $variables )
     set fregrid_remap_file = $xyInterpRegridFile
     $call_and_check_fregrid
@@ -5200,7 +5306,7 @@ EOF
     set fregrid_in = $hDate.$source
     set nlat = $nlat ; set nlon = $nlon
     set interp_method = $interpMethod
-    set ncvars_arg = -st23
+    set ncvars_arg = -st0123
     set variables = ( $variables )
     set fregrid_remap_file = $xyInterpRegridFile
     $call_and_check_fregrid
@@ -5252,13 +5358,13 @@ EOF
    # make sure file has bounds, splitncvars, adjust output, send to archive
    my $variablesopt = '';
    $variablesopt = "-v $variables" if "$variables" ne '';
+   my $compress = compress_csh("\$file", $check_nccopy);
    $csh .= <<EOF;
 foreach filetosplit ( \$filestosplit )
 
-#set hasAVT1 = `ncdump -v average_T1 \$filetosplit | wc -l`
-#set hasbounds = `ncdump -h \$filetosplit | grep '_bounds' | wc -l`
-#if ( \$hasAVT1 && ! \$hasbounds ) then
-if ( `ncdump -h \$filetosplit | grep -c " average_T1("` == 1 && `ncdump -h \$filetosplit | grep -c "_bounds("` == 0) then
+# Determine if fields average_T1 and ( *_bounds or *_bnds ) exist in the
+# netCDF file.  If not, add in time_bounds.
+if ( `ncdump -h \$filetosplit | grep -c " average_T1("` == 1 && `ncdump -h \$filetosplit | grep -c "_b\\(ou\\)\\?nds("` == 0) then
    ncdump -v average_T1,average_T2 \$filetosplit | /home/fms/bin/addbounds.pl | ncgen -o tmp.nc
    set taxis = `ncdump -h \$filetosplit | grep -i '.*=.*unlimited.*currently' | awk '{print \$1}'`
    $time_ncks ncks \$ncksopt -C -A -v \${taxis}_bounds tmp.nc \$filetosplit
@@ -5267,7 +5373,7 @@ if ( `ncdump -h \$filetosplit | grep -c " average_T1("` == 1 && `ncdump -h \$fil
    $check_ncatted
 endif
 
-$time_splitncvars \$SPLITNCVARS -o byVar $variablesopt \$filetosplit
+$time_splitncvars \$SPLITNCVARS -c -o byVar $variablesopt \$filetosplit
 $check_splitncvars
 
 cd byVar
@@ -5284,6 +5390,7 @@ foreach file ( *.nc )
      set length = `echo \$tmpstring[\$len] | cut -c2-`
      test \$length = $numtimelevels
      $check_levels
+     $compress
      $time_mv $mvfile \$file \$outdir/$component.$start-$tENDf.\$label
      if ( \$status ) then
          echo "WARNING: data transfer failure, retrying..."
@@ -5385,7 +5492,9 @@ sub monthlyAVfromav {
    my $check_timavg = retryonerrorend("TIMAVG ($component $src $interval averages)");
    my $retry_timavg = retryonerrorstart("TIMAVG");
    my $check_dmget = errorstr("DMGET ($component $src $interval averages)");
+   my $check_nccopy = errorstr("NCCOPY ($component $src $interval averages)");
    my $csh = setcheckpt("monthlyAVfromav_$interval");
+   my $compress = compress_csh("$component.$start-$end.\$monthf\$tile.nc", $check_nccopy);
    $csh .= <<EOF;
 #####################################
 echo 'timeAverage ($component $src $interval averages from $subint yr averages)'
@@ -5425,6 +5534,7 @@ while (\$month <= 12)
    $check_timavg
    $time_ncatted ncatted -h -O -a filename,global,m,c,"$component.$start-$end.\$monthf\$tile.nc" $component.$start-$end.\$monthf\$tile.nc
    $check_ncatted
+   $compress
    $time_mv $mvfile $component.$start-$end.\$monthf\$tile.nc \$outdir/
    if ( \$status ) then
       echo "WARNING: data transfer failure, retrying..."
@@ -5516,6 +5626,8 @@ EOF
       my $retry_timavg = retryonerrorstart("TIMAVG");
       my $check_ncatted = errorstr("NCATTED ($component $src $interval averages)");
       my $check_dmget = errorstr("DMGET ($component $src $interval averages)");
+      my $check_nccopy = errorstr("NCCOPY ($component $src $interval averages)");
+      my $compress = compress_csh("$component.$first-$endinterval.ann\$tile.nc", $check_nccopy);
       $csh .= <<EOF;
 cd $srcdir
 $tilestart
@@ -5541,6 +5653,7 @@ $retry_timavg
 $check_timavg
 $time_ncatted ncatted -h -O -a filename,global,m,c,"$component.$first-$endinterval.ann\$tile.nc" $component.$first-$endinterval.ann\$tile.nc
 $check_ncatted
+$compress
 $time_mv $mvfile $component.$first-$endinterval.ann\$tile.nc \$outdir/$component.$first-$endinterval.ann\$tile.nc
 if ( \$status ) then
    echo "WARNING: data transfer failure, retrying..."
@@ -5886,11 +5999,14 @@ sub TSfromts {
    #my $check_cpio = errorstr("CPIO ($component $freq $chunkLength ts from $subchunk yr ts)");
    my $check_cpio_msg = "CPIO ($component $freq $chunkLength ts from $subchunk yr ts)";
    my $check_dmget = errorstr("DMGET ($component $freq $chunkLength ts from $subchunk yr ts)");
+   my $check_nccopy = errorstr("NCCOPY ($component $freq $chunkLength ts from $subchunk yr ts)");
    my $check_levels = '';
    if ("$caltype" eq "NOLEAP" or "$caltype" eq "noleap" ) {
       $check_levels = errorstr("WRONG NUMBER OF TIME LEVELS (contains \$length, should be $numtimelevels) IN \$outdir/$component.$startf-$tENDf.\$var");
    }
    my $check_vars = errorstr("NOT ALL VARIABLES EXIST FOR ($component $freq $chunkLength ts from $subchunk yr ts)");
+
+   my $compress = compress_csh("$component.$startf-$tENDf.\$var", $check_nccopy);
 
    my $csh = setcheckpt("TSfromts_$freq"."_$chunkLength");
    $csh .= <<EOF;
@@ -5974,6 +6090,7 @@ foreach var (\$varlist)
      set length = `echo \$tmpstring[\$len] | cut -c2-`
      test \$length = $numtimelevels
      $check_levels
+     $compress
      $time_mv $mvfile $component.$startf-$tENDf.\$var $outdir/
      if ( \$status ) then
          echo "WARNING: data transfer failure, retrying..."
@@ -6070,6 +6187,7 @@ sub seaTSfromts {
    my $check_ncrcat = errorstr("NCRCAT ($component $freq $chunkLength ts from $subchunk yr ts)");
    my $check_cpio_msg = "CPIO ($component $freq $chunkLength ts from $subchunk yr ts)";
    my $check_dmget = errorstr("DMGET ($component $freq $chunkLength ts from $subchunk yr ts)");
+   my $check_nccopy = errorstr("NCCOPY ($component $freq $chunkLength ts from $subchunk yr ts)");
    my $check_levels = '';
    if ("$caltype" eq "NOLEAP" or "$caltype" eq "noleap" ) {
       $check_levels = errorstr("WRONG NUMBER OF TIME LEVELS (contains \$length, should be $numtimelevels) IN \$outdir/$component.$startf-$tENDf.\$sea.\$var");
@@ -6082,6 +6200,7 @@ sub seaTSfromts {
       $piece =~ s/\$sea.\$var/*.nc/g;
       $dmgetcommand .= "$time_dmget dmget \"$piece\"\n";
    }
+   my $compress = comprss_csh("$component.$startf-$tENDf.\$sea.\$var", $check_nccopy);
    my $csh = setcheckpt("seaTSfromts_$chunkLength");
    $csh .= <<EOF;
 #####################################
@@ -6156,6 +6275,7 @@ foreach sea (DJF MAM JJA SON)
       @ len = \$#tmpstring - 1
       set length = `echo \$tmpstring[\$len] | cut -c2-`
       test \$length = $numtimelevels
+      $compress
       $time_mv $mvfile $component.$startf-$tENDf.\$sea.\$var \$outdir/
       if ( \$status ) then
          echo "WARNING: data transfer failure, retrying..."
@@ -6232,6 +6352,7 @@ sub seasonalAVfromhist {
    my $check_ncdump = errorstr("NCDUMP ($component $src $interval averages)");
    my $check_dmget = errorstr("DMGET ($component $src $interval averages)");
    my $check_ncap = errorstr("NCAP ($component $src $interval averages)");
+   my $check_nccopy = errorstr("NCCOPY ($component $src $interval averages)");
    my $check_numfiles = errorstr("INCORRECT NUMBER OF SEASONS IN SEASONAL FILE ($component $src $interval averages)");
    my $check_fregrid = errorstr("FREGRID ($component $src $interval averages)");
    my $check_ncrename = errorstr("NCRENAME ($component $src $interval averages)");
@@ -6346,19 +6467,24 @@ if ( ! -e $seahist.$diag_source.tile1.nc ) then
    else
       set t = `ncdump -h $nextdec.tile1.nc | grep -i '.*=.*unlimited.*currently' | awk '{print \$1}'`
       set att_copy = (`ncdump -h $nextdec.tile1.nc | sed -ne "s/.*\${t}:\\(.*\\) =.*/\$t@\\1=\$t@\\1;/gp"`)
-      #set hasAVT1 = `ncdump -v average_T1 $nextdec.tile1.nc | wc -l`
       if ( `ncdump -h $nextdec.tile1.nc | grep -c " average_T1("` == 1 ) then
-         $time_ncap ncap2 -h -O -s "\${t}[\${t}]=\${t}-365; average_T1=average_T1-365; average_T2=average_T2-365; \${t}_bounds=\${t}_bounds-365; \$att_copy" $nextdec.tile1.nc $seahist.$diag_source.tile1.nc
+         # A field with 'long_name =  "time axis boundary"' should be in
+         # the file.  Be sure to use the same name in the following
+         # commands.  We can rather safely assume the same field name
+         # will be used in all the tile files.
+         set tbnds_var = `ncdump -h $nextdec.tile1.nc | grep 'long_name = "time axis boundaries"' | awk -F : '{ print $1 }'`
+
+         $time_ncap ncap2 -h -O -s "\${t}[\${t}]=\${t}-365; average_T1=average_T1-365; average_T2=average_T2-365; \${tbnds_var}=\${tbnds_var}-365; \$att_copy" $nextdec.tile1.nc $seahist.$diag_source.tile1.nc
          $check_ncap
-         $time_ncap ncap2 -h -O -s "\${t}[\${t}]=\${t}-365; average_T1=average_T1-365; average_T2=average_T2-365; \${t}_bounds=\${t}_bounds-365; \$att_copy" $nextdec.tile2.nc $seahist.$diag_source.tile2.nc
+         $time_ncap ncap2 -h -O -s "\${t}[\${t}]=\${t}-365; average_T1=average_T1-365; average_T2=average_T2-365; \${tbnds_var}=\${tbnds_var}-365; \$att_copy" $nextdec.tile2.nc $seahist.$diag_source.tile2.nc
          $check_ncap
-         $time_ncap ncap2 -h -O -s "\${t}[\${t}]=\${t}-365; average_T1=average_T1-365; average_T2=average_T2-365; \${t}_bounds=\${t}_bounds-365; \$att_copy" $nextdec.tile3.nc $seahist.$diag_source.tile3.nc
+         $time_ncap ncap2 -h -O -s "\${t}[\${t}]=\${t}-365; average_T1=average_T1-365; average_T2=average_T2-365; \${tbnds_var}=\${tbnds_var}-365; \$att_copy" $nextdec.tile3.nc $seahist.$diag_source.tile3.nc
          $check_ncap
-         $time_ncap ncap2 -h -O -s "\${t}[\${t}]=\${t}-365; average_T1=average_T1-365; average_T2=average_T2-365; \${t}_bounds=\${t}_bounds-365; \$att_copy" $nextdec.tile4.nc $seahist.$diag_source.tile4.nc
+         $time_ncap ncap2 -h -O -s "\${t}[\${t}]=\${t}-365; average_T1=average_T1-365; average_T2=average_T2-365; \${tbnds_var}=\${tbnds_var}-365; \$att_copy" $nextdec.tile4.nc $seahist.$diag_source.tile4.nc
          $check_ncap
-         $time_ncap ncap2 -h -O -s "\${t}[\${t}]=\${t}-365; average_T1=average_T1-365; average_T2=average_T2-365; \${t}_bounds=\${t}_bounds-365; \$att_copy" $nextdec.tile5.nc $seahist.$diag_source.tile5.nc
+         $time_ncap ncap2 -h -O -s "\${t}[\${t}]=\${t}-365; average_T1=average_T1-365; average_T2=average_T2-365; \${tbnds_var}=\${tbnds_var}-365; \$att_copy" $nextdec.tile5.nc $seahist.$diag_source.tile5.nc
          $check_ncap
-         $time_ncap ncap2 -h -O -s "\${t}[\${t}]=\${t}-365; average_T1=average_T1-365; average_T2=average_T2-365; \${t}_bounds=\${t}_bounds-365; \$att_copy" $nextdec.tile6.nc $seahist.$diag_source.tile6.nc
+         $time_ncap ncap2 -h -O -s "\${t}[\${t}]=\${t}-365; average_T1=average_T1-365; average_T2=average_T2-365; \${tbnds_var}=\${tbnds_var}-365; \$att_copy" $nextdec.tile6.nc $seahist.$diag_source.tile6.nc
          $check_ncap
       else
          $time_ncap ncap2 -h -O -s "\${t}[\${t}]=\${t}-365; \$att_copy" $nextdec.tile1.nc $seahist.$diag_source.tile1.nc
@@ -6378,6 +6504,8 @@ if ( ! -e $seahist.$diag_source.tile1.nc ) then
 endif
 EOF
       }
+
+      my $compress = compress_csh("$component.$tSEASONf.nc", $check_nccopy);
 
       $csh .= <<EOF;
 if ( -e sea1.nc ) $time_rm rm -f sea?.nc
@@ -6443,6 +6571,7 @@ EOF
     $time_ncatted ncatted -h -O -a filename,global,m,c,"$component.$tSEASONf.nc" $component.$tSEASONf.nc
     $check_ncatted
 
+$compress
 $time_mv $mvfile $component.$tSEASONf.nc \$outdir/
 if ( \$status ) then
    echo "WARNING: data transfer failure, retrying..."
@@ -6525,6 +6654,7 @@ EOF
       $call_and_check_fregrid =~ s/#check_fregrid/$check_fregrid/;
       $call_and_check_fregrid =~ s/#check_ncrename/$check_ncrename/g;
       $call_and_check_fregrid =~ s/#check_ncatted/$check_ncatted/g;
+      my $compress = compress_csh("$component.$dates.nc", $check_nccopy);
       $csh .= <<EOF;
 @ i ++
 end
@@ -6533,7 +6663,7 @@ end
     set fregrid_in = $component.$dates
     set nlat = $nlat ; set nlon = $nlon
     set interp_method = $interpMethod
-    set ncvars_arg = -st23
+    set ncvars_arg = -st0123
     set variables = ( $variables )
     set fregrid_remap_file = $xyInterpRegridFile
     $call_and_check_fregrid
@@ -6541,6 +6671,7 @@ end
     $time_ncatted ncatted -h -O -a filename,global,m,c,"$component.$dates.nc" $component.$dates.nc
     $check_ncatted
 
+$compress
 $time_mv $mvfile $component.$dates.nc \$outdir/$component.$dates.nc
 if ( \$status ) then
    echo "WARNING: data transfer failure, retrying..."
@@ -6625,7 +6756,13 @@ if ( ! -e $seahist.$diag_source.nc ) then
       set att_copy = (`ncdump -h $nextdec | sed -ne "s/.*\${t}:\\(.*\\) =.*/\$t@\\1=\$t@\\1;/gp"`)
       #set hasAVT1 = `ncdump -v average_T1 $nextdec | wc -l`
       if ( `ncdump -h $nextdec | grep -c " average_T1("` == 1 ) then
-         $time_ncap ncap2 -h -O -s "\${t}[\${t}]=\${t}-365; average_T1=average_T1-365; average_T2=average_T2-365; \${t}_bounds=\${t}_bounds-365; \$att_copy" $nextdec $seahist.$diag_source.nc
+         # A field with 'long_name =  "time axis boundary"' should be in
+         # the file.  Be sure to use the same name in the following
+         # commands.  We can rather safely assume the same field name
+         # will be used in all the tile files.
+         set tbnds_var = `ncdump -h $nextdec.tile1.nc | grep 'long_name = "time axis boundaries"' | awk -F : '{ print $1 }'`
+
+         $time_ncap ncap2 -h -O -s "\${t}[\${t}]=\${t}-365; average_T1=average_T1-365; average_T2=average_T2-365; \${tbnds_var}=\${tbnds_var}-365; \$att_copy" $nextdec $seahist.$diag_source.nc
          $check_ncap
       else
          $time_ncap ncap2 -h -O -s "\${t}[\${t}]=\${t}-365; \$att_copy" $nextdec $seahist.$diag_source.nc
@@ -6648,6 +6785,7 @@ $time_rm rm -f $hfilelist
 EOF
 #put code here to handle 1yr seasons case
       if ( $int == 1 ) {
+         my $compress = compress_csh("$component.$tSEASONf.nc", $check_nccopy);
          if ( $do_zInterp ) {
             $csh .= <<EOF;
 $time_timavg \$TIMAVG -o modellevels.nc sea.nc
@@ -6658,6 +6796,7 @@ $check_timavg
 EOF
             $csh .= zInterpolate($zInterp,'modellevels.nc',"$component.$tSEASONf.nc",$caltype,$variables,$component);
             $csh .= <<EOF;
+$compress
 $time_mv $mvfile $component.$tSEASONf.nc \$outdir/
 if ( \$status ) then
    echo "WARNING: data transfer failure, retrying..."
@@ -6672,6 +6811,7 @@ $time_timavg \$TIMAVG -o $component.$tSEASONf.nc sea.nc
 $retry_timavg
    $time_timavg \$TIMAVG -o $component.$tSEASONf.nc sea.nc
 $check_timavg
+$compress
 $time_mv $mvfile $component.$tSEASONf.nc \$outdir/
 if ( \$status ) then
    echo "WARNING: data transfer failure, retrying..."
@@ -6740,9 +6880,12 @@ $check_timavg
 EOF
       }
 
+   my $compress = compress_csh("$component.$dates.nc", $check_nccopy);
+
    $csh .= <<EOF;
 $time_ncatted ncatted -h -O -a filename,global,m,c,"\$outdir/$component.$dates.nc" $component.$dates.nc
 $check_ncatted
+$compress
 $time_mv $mvfile $component.$dates.nc \$outdir/$component.$dates.nc
 if ( \$status ) then
    echo "WARNING: data transfer failure, retrying..."
@@ -6820,6 +6963,7 @@ sub seasonalAVfromav {
    my $check_timavg = retryonerrorend("TIMAVG ($component $src $interval averages)");
    my $retry_timavg = retryonerrorstart("TIMAVG");
    my $check_dmget = errorstr("DMGET ($component $src $interval averages)");
+   my $check_nccopy = errorstr("NCCOPY ($component $src $interval averages)");
    my $csh = setcheckpt("seasonalAVfromav_$interval");
    $csh .= <<EOF;
 #####################################
@@ -6831,6 +6975,7 @@ if ( ! -e \$outdir ) mkdir -p \$outdir
 
 EOF
    if ($opt_z) { $csh .= begin_systime(); }
+   my $compress = compress_csh("$component.$start-$end.\$sea.nc", $check_nccopy);
    $csh .= <<EOF;
 
 cd $srcdir
@@ -6855,6 +7000,7 @@ foreach sea (DJF MAM JJA SON)
      $check_timavg
      $time_ncatted ncatted -h -O -a filename,global,m,c,"$component.$start-$end.\$sea.nc" $component.$start-$end.\$sea.nc
      $check_ncatted
+     $compress
      $time_mv $mvfile $component.$start-$end.\$sea.nc \$outdir/$component.$start-$end.\$sea.nc
      if ( \$status ) then
          echo "WARNING: data transfer failure, retrying..."
@@ -7080,7 +7226,15 @@ EOF
 EOF
       $cshscripttmpl .= <<EOF;
 
-setenv JOB_ID `echo \$PBS_JOBID |cut -f1 -d.`
+setenv PBS_JOBID_number `echo \$PBS_JOBID |cut -f1 -d.`
+if ( \$?MOAB_JOBID ) then
+    setenv JOB_ID \$MOAB_JOBID
+else if ( \$?PBS_JOBID ) then
+    setenv JOB_ID \$PBS_JOBID_number
+else
+    setenv JOB_ID `mktemp -u INT-XXXXXX`
+endif
+
 setenv FRE_STDOUT_PATH
 if ( -d "$workdir" ) then
   rm -rf $workdir
@@ -7127,8 +7281,9 @@ setenv FMS_FRE_FREPP
 set NCVARS = list_ncvars.csh
 set TIMAVG = "timavg.csh -mb"
 set PLEVEL = plevel.sh
-set SPLITNCVARS = split_ncvars.csh
+set SPLITNCVARS = split_ncvars.pl
 set MPPNCCOMBINE = mppnccombine
+set FREGRID = fregrid
 set checkptfile = $scriptName:t
 set errors_found = 0
 if (! -d $work) mkdir -p $work
