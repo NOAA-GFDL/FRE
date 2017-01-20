@@ -1009,6 +1009,7 @@ else
    set interpvars = `echo $interpvars |sed 's/ /,/g'`
 endif
 set order1 = ( precip prec_ls snow_ls prec_conv snow_conv uw_precip prec_uwc snow_uwc prc_deep_donner snow_deep_donner prc1_deep_donner prc_mca_donner snow_mca_donner ice_mask land_mask zsurf cld_amt_2d conv_freq IWP_all_clouds WP_all_clouds WVP tot_cloud_area tot_ice_amt tot_liq_amt swdn_sfc_clr swdn_sfc swdn_toa_clr swdn_toa swdn_tot_dif swup_sfc_clr swup_sfc swup_toa_clr swup_toa wind_ref wind_ref_max wind_ref_min )
+set non_regrid_vars = ( lat lon )
 set attCmds = ()
 unset echo
 EOF
@@ -1029,6 +1030,17 @@ foreach order1var ( $order1 )
     endif
   end
 end
+foreach non_regrid_var ( $non_regrid_vars )
+  foreach modelvar ( `echo $interpvars | sed -e "s/,/ /g"` )
+    if ( $modelvar == $non_regrid_var ) then
+      if ( `ncexists -f $fregrid_in.tile1.nc -v $non_regrid_var` ) then
+        if ( ! `ncexists -f $fregrid_in.tile1.nc -v $non_regrid_var -a interp_method` ) then
+          set attCmds = ( $attCmds -a interp_method,$non_regrid_var,a,c,"none" )
+        endif
+      endif
+    endif
+  end
+end
 set echo
 EOF
 
@@ -1037,8 +1049,9 @@ EOF
 
       $call_fregrid .= <<EOF;
 if (\$#attCmds > 0) then
-   $time_ncatted ncatted -h -O \$attCmds \$fregrid_in.nc
+   $time_ncatted ncatted -h -O \$attCmds \$fregrid_in.nc \$fregrid_in.nc.tmp
    #check_ncatted
+   mv -f \$fregrid_in.nc.tmp \$fregrid_in.nc
 endif
 
 if ( "\$fregrid_wt" != '' ) then
