@@ -235,9 +235,9 @@ my $projectGet = sub($$)
 {
   my ($fre, $p) = @_;
   my $project = (defined($p)) ? $p : ($fre->platformValue('project') || $fre->property('FRE.scheduler.project'));
-  if ((( (split "_", $project)[-1] !~ /^[a-z\+]{1,2}$/)
-      || ($project !~ /^gfdl/)){
-      FREMsg::out(1, FREMsg::FATAL, "Your project name '$project' appears to be invalid, please double check in your XML's platform sections.");
+  my $regex = $fre->property('FRE.scheduler.project.regex');
+  if ( $project !~ /$regex/ ){
+      FREMsg::out(1, FREMsg::FATAL, "Your project name '$project' appears to be invalid, please correct your XML's platform sections.");
       exit FREDefaults::STATUS_FRE_GENERIC_PROBLEM;
   }
   return $project;
@@ -247,7 +247,7 @@ my $projectGet = sub($$)
 # ///////////////////////////////////////////////////////////// Class methods //
 # //////////////////////////////////////////////////////////////////////////////
 
-sub home()
+sub home
 # ------ arguments: none
 # ------ called as class method
 # ------ return the FRE commands home 
