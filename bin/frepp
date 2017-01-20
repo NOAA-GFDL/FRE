@@ -1134,14 +1134,12 @@ EOF
       if ( $basenpes == 1 ) {
          my $exec_fregrid .= <<EOF;
 $time_fregrid \$FREGRID --standard_dimension --input_mosaic \$input_mosaic --input_file \$fregrid_in --interp_method \$interp_method --remap_file \$remap_file --nlon \$nlon --nlat \$nlat --scalar_field \$interpvars \$fregrid_wt --output_file out.nc
-mv out.nc \$fregrid_in.nc
 EOF
          $call_tile_fregrid .= $exec_fregrid;
          $call_fregrid .= $exec_fregrid;
       } else {
          my $exec_fregrid .= <<EOF;
 $time_fregrid mpirun -np $basenpes fregrid_parallel --standard_dimension --input_mosaic \$input_mosaic --input_file \$fregrid_in --interp_method \$interp_method --remap_file \$remap_file --nlon \$nlon --nlat \$nlat --scalar_field \$interpvars \$fregrid_wt --output_file out.nc
-mv out.nc \$fregrid_in.nc
 EOF
          $call_tile_fregrid .= $exec_fregrid;
          $call_fregrid .= $exec_fregrid;
@@ -1150,7 +1148,7 @@ EOF
    my $rename_regridded = <<EOF;
 #check_fregrid
 
-if ( ! -e \$fregrid_remap_file ) then
+if ( ! -e \$fregrid_remap_file && -e out.nc ) then
    ls -l \$remap_file*
    $time_hsmput hsmput -v -t -p \$remap_dir -w . \$remap_file
    if ( \$status ) then
@@ -1159,6 +1157,8 @@ if ( ! -e \$fregrid_remap_file ) then
       $checktransfer
    endif
 endif
+
+mv out.nc \$fregrid_in.nc
 
 EOF
       $call_tile_fregrid .= $rename_regridded;
