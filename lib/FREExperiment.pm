@@ -1304,8 +1304,19 @@ sub extractNamelists($)
   my $r = shift;
   my ($exp, $fre, $nmls) = ($r, $r->fre(), FRENamelists->new());
 
+  my $clean_namelist_content = sub {
+    my $content = shift;
+    for ($content) {
+        s/^\s*$//mg;
+        s/^\n//;
+        s/\s*(?:\/\s*)?$//;
+    }
+    return $content;
+  };
+
   $fre->out(FREMsg::NOTE, "Extracting namelists...");
 
+  my $exp_count = 0;
   while ($exp)
   {
     # -------------------------------------------- get the input node
@@ -1313,15 +1324,66 @@ sub extractNamelists($)
     # ------------------------------------------------ process the input node
     if ($inputNode)
     {
+      # ----------------------------------- handle override namelists
+      my @overrideNmlNodes = grep { $_->getAttribute('override') =~ /(?:yes|on|true)/i }
+          $inputNode->findnodes('namelist[@name and @override]');
+      # If child experiment, apply the override
+      if ($exp_count == 0) {
+        for my $overrideNmlNode (@overrideNmlNodes) {
+            my $namelist_name = FREUtil::cleanstr($exp->nodeValue($overrideNmlNode, '@name'));
+            # Get the child namelist
+            my $content = $clean_namelist_content->($exp->nodeValue($overrideNmlNode, 'text()'));
+            my %child_namelist = map { (split '=', $_)[0] => $_ } split "\n", $content;
+            $fre->out(FREMsg::NOTE, "Namelist override for $namelist_name, child settings:");
+            $fre->out(FREMsg::NOTE, values %child_namelist);
+            # Get the base namelist
+            my %base_namelist;
+            my $e = $exp->parent;
+            while ($e) {
+                if (my $node = $e->node()->findnodes('input')->get_node(1)) {
+                    if (my $nml = $node->findnodes("namelist[\@name='$namelist_name']")->get_node(1)) {
+                        my $content = $clean_namelist_content->($e->nodeValue($nml, 'text()'));
+                        %base_namelist = map { (split '=', $_)[0] => $_ } split "\n", $content;
+                        $fre->out(FREMsg::NOTE, "Namelist override for $namelist_name, base settings:");
+                        $fre->out(FREMsg::NOTE, values %base_namelist);
+                        last;
+                    }
+                }
+                $e = $e->parent();
+            }
+            $fre->out(FREMsg::NOTE, "Namelist override for $namelist_name, base settings: none")
+                unless %base_namelist;
+            # Combine the namelists
+            my %combined_nml;
+            for my $key (keys %base_namelist) {
+                $combined_nml{$key}
+                    = $child_namelist{$key} ? $child_namelist{$key} : $base_namelist{$key};
+            }
+            for my $key (keys %child_namelist) {
+                $combined_nml{$key} = $child_namelist{$key} unless $combined_nml{$key};
+            }
+            $fre->out(FREMsg::NOTE, "Namelist override for $namelist_name, combined settings:");
+            $fre->out(FREMsg::NOTE, values %combined_nml);
+            $content = join("\n", values %combined_nml) . "\n";
+	        $nmls->namelistPut($namelist_name, $content);
+        }
+      }
+      # If ancestor experiment, search for overrides and die if found
+      else {
+        if (@overrideNmlNodes) {
+            $fre->out(FREMsg::FATAL, sprintf "Ancestor experiments not allowed to have namelist overrides; %s offending namelists:\n", scalar @overrideNmlNodes);
+            for my $nml (@overrideNmlNodes) {
+                $fre->out(FREMsg::FATAL, $nml->toString);
+            }
+            return undef;
+        }
+      }
       # ----------------------------------- get inline namelists (they take precedence)
       my @inlineNmlNodes = $inputNode->findnodes('namelist[@name]');
       foreach my $inlineNmlNode (@inlineNmlNodes)
       {
 	my $name = FREUtil::cleanstr($exp->nodeValue($inlineNmlNode, '@name'));
-	my $content = $exp->nodeValue($inlineNmlNode, 'text()');
-	$content =~ s/^\s*$//mg;
-	$content =~ s/^\n//;
-	$content =~ s/\s*(?:\/\s*)?$//;
+	my $content = $clean_namelist_content->($exp->nodeValue($inlineNmlNode, 'text()'));
 	if ($nmls->namelistExists($name))
 	{
 	  my $expName = $exp->name();
@@ -1367,6 +1429,7 @@ sub extractNamelists($)
     }
     # ---------------------------- repeat for the parent
     $exp = $exp->parent();
+    ++$exp_count;
   }
 
   return $nmls;
