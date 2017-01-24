@@ -309,6 +309,7 @@
     alias mppnccombine `which mppnccombine` $mppnccombineOptString
     alias slmnccombine `which combine-ncc`
     alias slmnccompressed `which is-compressed`
+    alias slmncdecompress `which decompress-ncc`
     alias iceberg_comb `which iceberg_comb.sh`
 
     set -r memoryDownscalingFactor = '0.75'
@@ -351,7 +352,7 @@
             slmnccompressed $inputFiles[1]
             if ( $status == 0 ) then
               ( slmnccombine $inputFiles $file && ( echo $inputFiles | xargs rm --force ) || touch $file.$tagFail ) &
-            else if ( ($type == 'restart' && $file == 'icebergs.res.nc') || ($type == 'history' && $file =~ '*iceberg_trajectories.nc') ) then
+            else if ( ($type == 'restart' && $file == 'icebergs.res*.nc') || ($type == 'history' && $file =~ '*iceberg_trajectories*.nc') ) then
               ( iceberg_comb $inputFiles $file && ( echo $inputFiles | xargs rm --force ) || touch $file.$tagFail ) &
             else
               if ( $?mppnccombineWithBuffering ) then
@@ -413,6 +414,64 @@
       else
         if ( $echoOn ) unset echo
         echo "<NOTE> : No uncombined $type files have been found"
+        if ( $echoOn ) set echo
+      endif
+
+      unset filesNotOK
+
+      if ( $type == 'history' ) then
+        set filesToDecompress = ( `ls -1 | egrep "($patternGrepHistory)" | sort -u` )
+      else then
+        set filesToDecompress = ( )
+      endif
+
+      if ( $#filesToDecompress > 0 ) then
+        @ counter = 1
+        set -r decompressTimeBeg = `date "+%s"`
+        foreach file ( $filesToDecompress )
+	  slmnccompressed $file
+	  if ( $status == 0 ) then
+	    set tmpFile=$file.tmp
+            mv --force $file $tmpFile
+            ( slmncdecompress $tmpFile $file && rm --force $tmpFile || touch $file.$tagFail ) &
+	  endif
+	  if ( $counter < $combinesPerJob ) then
+            @ counter ++
+          else
+            @ counter = 1
+            wait
+          endif
+        end
+        wait
+        unset counter
+      endif
+
+      unset filesToDecompress
+
+      set filesNotOk = ( `ls -1 | egrep "$patternGrepFail"` )
+
+      if ( $#filesNotOK > 0 ) then
+        foreach file ( $filesNotOK )
+          if ( $echoOn ) unset echo
+          echo "*ERROR*: A problem during decompressing the $type file '$file:r'"
+          if ( $echoOn ) set echo
+          rm -f $file
+        end
+        if ( $echoOn ) unset echo
+        echo "-ERROR-: Failed to decompress $type files"
+        if ( $echoOn ) set echo
+        set exitStatus = 3
+        goto END
+      else if ( $?decompressTimeBeg ) then
+        set -r decompressTimeEnd = `date "+%s"`
+        set -r decompressTime = `echo "$decompressTimeEnd - $decompressTimeBeg" | bc -l`
+        if ( $echoOn ) unset echo
+        echo "<NOTE> : All the $type files have been decompress successfully"
+        echo "<NOTE> : Time to decompress = '$decompressTime' (seconds)"
+        if ( $echoOn ) set echo
+      else
+        if ( $echoOn ) unset echo
+        echo "<NOTE> : No decompress $type files have been found"
         if ( $echoOn ) set echo
       endif
 
