@@ -166,8 +166,9 @@ sub siteIsLocal($)
 # ------ arguments: $site
 # ------ return 1 if the $site and the current site have common "site" directory 
 {
-  my $s = shift;
-  if ($s eq $FREPlatformsSite || $s eq $FREPlatformsSiteRoot)
+  my $site = shift;
+  my $site_root = ($siteParse->($site))[1];
+  if ($site eq $FREPlatformsSite || $site eq $FREPlatformsSiteRoot || $site_root eq $FREPlatformsSiteRoot)
   {
     return 1;
   }
