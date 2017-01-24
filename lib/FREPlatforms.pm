@@ -71,10 +71,14 @@ use constant SITE_TAIL_SEPARATOR => '-';
 
 use constant DEFAULT_PLATFORM_ERROR_MSG => <<EOF;
 Default platforms are no longer supported.
-Define platforms in experiment XML and use with -p|--platform site.name (e.g. -p ncrc2.intel)
-or -p|--platform name (current site will be used), e.g. -p intel.
-At GFDL, use -p gfdl.<remote_site>-<compiler> (e.g. gfdl.ncrc2-intel)
-or -p <remote_site>-<compiler> (e.g. ncrc2-intel)
+Define platforms in experiment XML and use with -p|--platform site.compiler (e.g. -p ncrc3.intel15).
+At GFDL, use -p gfdl.<remote_site>-<compiler> (e.g. gfdl.ncrc3-intel15).
+See documentation at http://wiki.gfdl.noaa.gov/index.php/FRE_User_Documentation#Platforms_and_Sites.
+EOF
+
+use constant PLATFORM_SITE_ERROR_MSG => <<EOF;
+Full site specification is now required in the -p|--platform option (e.g. -p ncrc3.intel15).
+At GFDL, use -p gfdl.<remote_site>-<compiler> (e.g. gfdl.ncrc3-intel15).
 See documentation at http://wiki.gfdl.noaa.gov/index.php/FRE_User_Documentation#Platforms_and_Sites.
 EOF
 
@@ -110,7 +114,10 @@ my $platformParse = sub($)
 # ------ arguments: $platform
 {
   my ($p, $t, $z) = (shift, $sitePattern->(), FREPlatforms::PLATFORM_TAIL_LETTER); 
-  $p = FREDefaults::Site() . '.' . $p if index($p, '.') < 0;
+  if ($p !~ /\./) {
+    FREMsg::out(FREMsg::FATAL, 0, FREPlatforms::PLATFORM_SITE_ERROR_MSG);
+    exit FREDefaults::STATUS_COMMAND_PLATFORM_PROBLEM;
+  }
   return ($p =~ m/^($t)\.($z(?:$z|-)*)$/o) ? ($1, $2, $3, $4) : ();
 };
 
