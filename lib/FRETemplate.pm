@@ -752,6 +752,7 @@ sub setRunCommand($$$)
   {
       my $component = $components[$inx];
       $rt->[$inx] *= 2 if $rp->[$inx] and $mpiInfo->{ht};
+      $runSizeInfo .= "  set -r ${component}_ranks = $ranks_per_ens->[$inx]\n";
       $runSizeInfo .= "  set -r tot_${component}_ranks = $rp->[$inx]\n";
       $runSizeInfo .= "  set -r ${component}_threads = $rt->[$inx]\n";
       $runSizeInfo .= "  set -r ${component}_layout = $layout->[$inx]\n";
