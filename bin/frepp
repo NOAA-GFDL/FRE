@@ -978,19 +978,7 @@ endif
 EOF
       }
 
-      $call_tile_fregrid = $getgridspec . <<EOF;
-set remap_dir = \$fregrid_remap_file:h
-set remap_file = \$fregrid_remap_file:t
-if ( -e \$fregrid_remap_file ) then
-   $time_cp $cp \$fregrid_remap_file \$remap_file
-   if ( \$status ) then
-      echo "WARNING: data transfer failure, retrying..."
-      $time_cp $cp \$fregrid_remap_file \$remap_file
-      $checktransfer
-   endif
-endif
-EOF
-      $call_tile_fregrid .= <<'EOF';
+      $call_tile_fregrid = $getgridspec . <<'EOF';
 if ( -e mosaic.nc ) then
    set input_mosaic = `ncks -H -v $mosaic_type mosaic.nc | sed 's/.*="//;s/"//'`
 else if ( -e grid_spec.nc ) then
@@ -1001,6 +989,42 @@ else
 endif
 
 ls -l $input_mosaic
+
+# Check for a suitable regrid file in FMS-land
+set mosaic_gridfile = `ncks -H -v gridfiles $input_mosaic | head -n 1 | sed 's/.*="//;s/"//'`
+@ remap_source_x = `ncdump -h $mosaic_gridfile | grep "nx =" | sed 's/.*=//;s/;//;s/ //g'` / 2
+@ remap_source_y = `ncdump -h $mosaic_gridfile | grep "ny =" | sed 's/.*=//;s/;//;s/ //g'` / 2
+set fms_remap_file = $fregrid_remap_file:t
+set fms_remap_file = `echo $fms_remap_file | sed 's/^\.//'`
+EOF
+
+      my $fms_remap_dir = $fre->property('FRE.directory.fms_shared_fregrid_remap_files');
+      $call_tile_fregrid .= <<EOF;
+set fms_remap_file = "$fms_remap_dir/\$source_grid/\${remap_source_x}_by_\$remap_source_y/\$fms_remap_file"
+EOF
+
+      $call_tile_fregrid .= <<'EOF';
+if (-e $fms_remap_file) then
+    echo "NOTE: Using shared FMS remap file $fms_remap_file"
+    set fregrid_remap_file = $fms_remap_file
+    set remap_dir = $fms_remap_file:h
+    set remap_file = $fms_remap_file:t
+else
+    set remap_dir = $fregrid_remap_file:h
+    set remap_file = $fregrid_remap_file:t
+endif
+EOF
+      $call_tile_fregrid .= <<EOF;
+if ( -e \$fregrid_remap_file ) then
+   $time_cp $cp \$fregrid_remap_file \$remap_file
+   if ( \$status ) then
+      echo "WARNING: data transfer failure, retrying..."
+      $time_cp $cp \$fregrid_remap_file \$remap_file
+      $checktransfer
+   endif
+endif
+EOF
+      $call_tile_fregrid .= <<'EOF';
 if ( $?variables && "$variables" != '' ) then
    set interpvars = "$variables"
    unset variables
@@ -4325,6 +4349,7 @@ end
    set ncvars_arg = -st0123
    set variables = ( $variables )
    set fregrid_remap_file = $xyInterpRegridFile
+   set source_grid = $sourceGrid
    $call_and_check_fregrid
 
    mv \$fregrid_in.nc $component.$range.\$monthf.nc
@@ -4427,6 +4452,7 @@ EOF
     set ncvars_arg = -st0123
     set variables = ( $variables )
     set fregrid_remap_file = $xyInterpRegridFile
+    set source_grid = $sourceGrid
     $call_and_check_fregrid
 
 EOF
@@ -4596,6 +4622,7 @@ end
     set ncvars_arg = -st0123
     set variables = ( $variables )
     set fregrid_remap_file = $xyInterpRegridFile
+    set source_grid = $sourceGrid
     $call_and_check_fregrid
 
 mv \$fregrid_in.nc $component.$tENDf.ann.nc
@@ -4691,6 +4718,7 @@ EOF
     set ncvars_arg = -st0123
     set variables = ( $variables )
     set fregrid_remap_file = $xyInterpRegridFile
+    set source_grid = $sourceGrid
     $call_and_check_fregrid
 
 EOF
@@ -5237,6 +5265,7 @@ EOF
     set ncvars_arg = -st0123
     set variables = ( $variables )
     set fregrid_remap_file = $xyInterpRegridFile
+    set source_grid = $sourceGrid
     $call_and_check_fregrid
 
 mv \$fregrid_in.nc all.nc
@@ -5272,6 +5301,7 @@ EOF
     set ncvars_arg = -st23
     set variables = ( $variables )
     set fregrid_remap_file = $xyInterpRegridFile
+    set source_grid = $sourceGrid
     $call_and_check_fregrid
 
 EOF
@@ -5309,6 +5339,7 @@ EOF
     set ncvars_arg = -st0123
     set variables = ( $variables )
     set fregrid_remap_file = $xyInterpRegridFile
+    set source_grid = $sourceGrid
     $call_and_check_fregrid
 
 mv \$fregrid_in.nc all.nc
@@ -5344,6 +5375,7 @@ EOF
     set ncvars_arg = -st23
     set variables = ( $variables )
     set fregrid_remap_file = $xyInterpRegridFile
+    set source_grid = $sourceGrid
     $call_and_check_fregrid
 
 EOF
@@ -5837,6 +5869,7 @@ EOF
      set ncvars_arg = -s2
      set variables = ( )
      set fregrid_remap_file = $xyInterpRegridFile
+     set source_grid = $sourceGrid
 
      set onedvars = `\$NCVARS -s01 \$fregrid_in.tile1.nc`
      if ( "\$onedvars" != "" ) then
@@ -5881,6 +5914,7 @@ EOF
            set ncvars_arg = -s2
            set variables = ( )
            set fregrid_remap_file = $xyInterpRegridFile
+           set source_grid = $sourceGrid
 
            $call_and_check_fregrid
 
@@ -6566,6 +6600,7 @@ EOF
     set ncvars_arg = -st23
     set variables = ( $variables )
     set fregrid_remap_file = $xyInterpRegridFile
+    set source_grid = $sourceGrid
     $call_and_check_fregrid
 
     $time_ncatted ncatted -h -O -a filename,global,m,c,"$component.$tSEASONf.nc" $component.$tSEASONf.nc
@@ -6666,6 +6701,7 @@ end
     set ncvars_arg = -st0123
     set variables = ( $variables )
     set fregrid_remap_file = $xyInterpRegridFile
+    set source_grid = $sourceGrid
     $call_and_check_fregrid
 
     $time_ncatted ncatted -h -O -a filename,global,m,c,"$component.$dates.nc" $component.$dates.nc
