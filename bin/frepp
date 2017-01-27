@@ -5086,12 +5086,20 @@ sub directTS{
    my $outdirpath = "$component/ts/$freq/$chunkLength";
    my $outdir = "$ppRootDir/$outdirpath";
 
-   my $iunit = "months";
-   if($chunkLength =~ /yr/) {
-      $chunkLength =~ s/yr//;
+   my $iunit;
+   if ($chunkLength =~ /(\d*)(?:y|yr|years?)/i) {
       $iunit = "years";
+      $chunkLength = $1;
    }
-   $chunkLength =~ s/mo//;
+   elsif ($chunkLength =~ /(\d*)(?:mo|mon|months)/i) {
+      $iunit = "months";
+      $chunkLength = $1;
+   }
+   else {
+      print STDERR "ERROR: Cannot create $component $freq timeSeries because can't parse chunkLength=$chunkLength.\n";
+      mailuser("ERROR: Cannot create $component $freq timeSeries because can't parse chunkLength=$chunkLength.");
+      return;
+   }
 
    my $yrsSoFar=&Delta_Format( FREUtil::dateCalc($sim0,$t0) ,0,"%yd");
    my $mod = ($yrsSoFar+1) % $chunkLength;
