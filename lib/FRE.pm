@@ -234,14 +234,24 @@ my $projectGet = sub($$)
 # ------ arguments: $fre $project
 {
   my ($fre, $p) = @_;
-  return (defined($p)) ? $p : ($fre->platformValue('project') || $fre->property('FRE.scheduler.project'));
+  my $project = (defined($p)) ? $p : $fre->platformValue('project');
+  my $regex = $fre->property('FRE.project.regex');
+  if ( ! $project ){
+      FREMsg::out(1, FREMsg::FATAL, "Your project name is not specified, please correct your XML's platform section.");
+      exit FREDefaults::STATUS_FRE_GENERIC_PROBLEM;
+  }
+  elsif ( $project !~ /$regex/ ){
+      FREMsg::out(1, FREMsg::FATAL, "Your project name '$project' appears to be invalid, please correct your XML's platform section.");
+      exit FREDefaults::STATUS_FRE_GENERIC_PROBLEM;
+  }
+  return $project;
 };
 
 # //////////////////////////////////////////////////////////////////////////////
 # ///////////////////////////////////////////////////////////// Class methods //
 # //////////////////////////////////////////////////////////////////////////////
 
-sub home()
+sub home
 # ------ arguments: none
 # ------ called as class method
 # ------ return the FRE commands home 
