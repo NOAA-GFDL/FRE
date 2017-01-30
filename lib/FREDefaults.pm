@@ -115,7 +115,7 @@ use constant XMLFILE_DEFAULT	=> 'rts.xml';
 use constant TARGET_DEFAULT 	=> 'prod';
 
 use constant GLOBAL_NAMES	=> 'site,siteDir,suite,platform,target,name,root,stem';
-use constant EXPERIMENT_DIRS	=> 'root,src,exec,scripts,stdout,stdoutTmp,state,work,ptmp,stmp,archive,postProcess,analysis';
+use constant EXPERIMENT_DIRS	=> 'root,src,exec,scripts,stdout,stdoutTmp,state,work,ptmp,stmp,archive,postProcess,analysis,include';
 use constant DEFERRED_NAMES	=> 'name';
 
 # //////////////////////////////////////////////////////////////////////////////
