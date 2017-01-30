@@ -236,6 +236,7 @@ my $projectGet = sub($$)
   my ($fre, $p) = @_;
   my $project = (defined($p)) ? $p : $fre->platformValue('project');
   my $regex = $fre->property('FRE.project.regex');
+  return "" unless $regex;
   if ( ! $project ){
       FREMsg::out(1, FREMsg::FATAL, "Your project name is not specified, please correct your XML's platform section.");
       exit FREDefaults::STATUS_FRE_GENERIC_PROBLEM;
