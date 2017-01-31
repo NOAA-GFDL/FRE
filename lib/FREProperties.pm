@@ -72,6 +72,7 @@ package FREProperties;
 use strict;
 
 use File::Basename();
+use File::Spec();
 
 use FREDefaults();
 use FREExternalProperties();
@@ -720,7 +721,7 @@ sub new($$$%)
     $r->{suite} = File::Basename::fileparse($o{xmlfile}, qr/\.xml(?:\.\S+)?/);
     $r->{platform} = $o{platform};
     $r->{target} = $o{target};
-    $r->{xmlDir}  = File::Basename::dirname($o{xmlfile});
+    $r->{xmlDir} = File::Spec->rel2abs(File::Basename::dirname($o{xmlfile}));
     return $treeProcess->($r, $n, $o{verbose});
   }
   else
