@@ -75,6 +75,8 @@
 
   set xmlFiles = ( )
   set xmlFilesRemote = ( )
+  set includeDir = ""
+  set includeDirRemote = ""
   set ppStarterOptions = ( )
   set stdoutDirRemote = ""
 
@@ -1494,6 +1496,27 @@
           set exitStatus = 2
           goto END
 
+        endif
+
+        # ---------------- copy include directory to GFDL
+
+        if ( $includeDir != "" && $includeDirRemote != "" ) then
+            if ( -d $includeDir && -r $includeDir ) then
+                xferTool -r -cd --sync $xferSrcPrefix$includeDir $xferDstPrefix$includeDirRemote:h/
+                if ( $status == 0 ) then
+                    echo "<NOTE> : The include directory $includeDir has been copied to the remote location $includeDirRemote successfully"
+                else
+                    echo "*ERROR* : Can't copy the include directory $includeDir to the remote location $includeDirRemote"
+                    set exitStatus = 4
+                    goto END
+                endif
+            else
+                echo "*ERROR* : Can't copy the include directory $includeDir because it doesn't exist or not readable"
+                set exitStatus = 2
+                goto END
+            endif
+        else
+            echo "<NOTE> : Not configured to transfer include directory to GFDL"
         endif
 
         # ---------------- create the stdout directory for the pp.starter and submit the pp.starter job

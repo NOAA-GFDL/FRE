@@ -547,7 +547,7 @@ use FREUtil();
     my ($z, $p, $u) = @_;
     my ($fre, $expName) = ($z->fre(), $z->name());
     my ($target, $xmlfile) = ($fre->target(), $fre->configFileAbsPathName());
-    my $cmd = "frelist --xmlfile=$xmlfile --platform=$p --target=$target --novalidate --directory=stdout,stmp,archive $expName";
+    my $cmd = "frelist --xmlfile=$xmlfile --platform=$p --target=$target --novalidate --directory=stdout,stmp,archive,include $expName";
     $cmd .= " --remote-user=$u" if $u;
     my $res = qx($cmd);
     if ($? == 0)
@@ -761,7 +761,7 @@ use FREUtil();
 	@remoteDirs = frerun::getRemoteDirs($z, $remotePlatform, $remoteUser);
 	if (scalar(@remoteDirs) > 0)
 	{
-          $fre->out(FREMsg::NOTE, "Remote directories to be used:", "stdout  = $remoteDirs[0]", "stmp    = $remoteDirs[1]", "archive = $remoteDirs[2]");
+          $fre->out(FREMsg::NOTE, "Remote directories to be used:", "stdout  = $remoteDirs[0]", "stmp    = $remoteDirs[1]", "archive = $remoteDirs[2]", "include = $remoteDirs[3]");
 	}
 	else
 	{
@@ -787,6 +787,28 @@ use FREUtil();
           $fre->out(FREMsg::FATAL, "Unable to determine remote platform csh - please check your platform '$remotePlatform'");
           return (0, FREDefaults::STATUS_FS_GENERIC_PROBLEM);
 	}
+      }
+
+      # ------------------------------------------------------------ verify include directory
+      my ($includeDir, $includeDirRemote) = ($z->includeDir, $remoteDirs[3]);
+      if (! -e $includeDir) {
+          $fre->out(FREMsg::NOTE, sprintf "Include directory '$includeDir' doesn't exist");
+          $includeDir = $includeDirRemote = "";
+      }
+      elsif (-d $includeDir) {
+          chomp(my $du = `du -smL $includeDir`);
+          my $size = (split ' ', $du)[0];
+          if ($size <= 300) {
+            $fre->out(FREMsg::NOTE, "Size of include directory '$includeDir': $size MB");
+          }
+          else {
+            $fre->out(FREMsg::FATAL, "Size of include directory '$includeDir' ($size MB) exceeds 300MB limit; please reduce the directory's size");
+            return (0, FREDefaults::STATUS_FS_GENERIC_PROBLEM);
+          }
+      }
+      else {
+          $fre->out(FREMsg::FATAL, sprintf "Include directory '$includeDir' exists, but isn't a directory");
+          return (0, FREDefaults::STATUS_FS_GENERIC_PROBLEM);
       }
       
       # ------------------------------------------------------------------------- setting constants/variables 
@@ -827,12 +849,14 @@ use FREUtil();
       FRETemplate::setVariable($fre, \$s, 'archiveDir', $z->archiveDir());
       FRETemplate::setVariable($fre, \$s, 'executable', $execName);
       FRETemplate::setVariable($fre, \$s, 'mailMode', $fre->mailMode());
+      FRETemplate::setVariable($fre, \$s, 'includeDir', $includeDir);
       
       FRETemplate::setVariable($fre, \$s, 'platformRemote', "'$remotePlatform'");
       FRETemplate::setVariable($fre, \$s, 'userRemote', "'$remoteUser'"); 
       FRETemplate::setVariable($fre, \$s, 'stdoutDirRemote', "'$remoteDirs[0]'");
       FRETemplate::setVariable($fre, \$s, 'stmpDirRemote', "'$remoteDirs[1]'");
       FRETemplate::setVariable($fre, \$s, 'archiveDirRemote', "'$remoteDirs[2]'");
+      FRETemplate::setVariable($fre, \$s, 'includeDirRemote', $includeDirRemote);
       FRETemplate::setVariable($fre, \$s, 'freCommandsModuleFilesDirRemote', "'$remoteModuleFilesDir'");
       FRETemplate::setVariable($fre, \$s, 'freCommandsVersionRemote', "'$remoteVersion'");
       FRETemplate::setVariable($fre, \$s, 'envRemote', "'$remotePlatformCsh'");

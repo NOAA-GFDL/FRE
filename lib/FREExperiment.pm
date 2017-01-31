@@ -993,6 +993,14 @@ sub analysisDir($)
   return $r->dir('analysis');
 }
 
+sub includeDir($)
+# ------ arguments: $object
+# ------ called as object method
+{
+  my $r = shift;
+  return $r->dir('include');
+}
+
 sub placeholdersExpand($$)
 # ------ arguments: $object $string
 # ------ called as object method
