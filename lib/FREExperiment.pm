@@ -1312,14 +1312,28 @@ sub extractNamelists($)
   my $r = shift;
   my ($exp, $fre, $nmls) = ($r, $r->fre(), FRENamelists->new());
 
-  my $clean_namelist_content = sub {
-    my $content = shift;
-    for ($content) {
-        s/^\s*$//mg;
-        s/^\n//;
-        s/\s*(?:\/\s*)?$//;
-    }
-    return $content;
+  my $clean_inline_namelist_content = sub {
+      my $content = shift;
+      for ($content) {
+          s/^\s*$//mg;
+          s/^\n//;
+          s/\s*(?:\/\s*)?$//;
+      }
+      return $content;
+  };
+
+  my $split_file_into_namelists = sub {
+      my $filePath = shift;
+      my $content = qx(cat $filePath);
+      $content =~ s/^\s*$//mg;
+      $content =~ s/^\s*#.*$//mg;
+      $content = $fre->placeholdersExpand($content);
+      $content = $exp->placeholdersExpand($content);
+      return split /\/\s*$/m, $content;
+  };
+
+  my $namelist_content_to_hash = sub {
+      return map { (split '=', $_)[0] => $_ } grep /=/, grep !/^\s*!/, split "\n", shift;
   };
 
   $fre->out(FREMsg::NOTE, "Extracting namelists...");
@@ -1340,27 +1354,48 @@ sub extractNamelists($)
         for my $overrideNmlNode (@overrideNmlNodes) {
             my $namelist_name = FREUtil::cleanstr($exp->nodeValue($overrideNmlNode, '@name'));
             # Get the child namelist
-            my $content = $clean_namelist_content->($exp->nodeValue($overrideNmlNode, 'text()'));
+            my $content = $clean_inline_namelist_content->($exp->nodeValue($overrideNmlNode, 'text()'));
             my %child_namelist = map { (split '=', $_)[0] => $_ } split "\n", $content;
             $fre->out(FREMsg::NOTE, "Namelist override for $namelist_name, child settings:");
             $fre->out(FREMsg::NOTE, values %child_namelist);
             # Get the base namelist
             my %base_namelist;
             my $e = $exp->parent;
+            GET_BASE_NAMELIST:
             while ($e) {
                 if (my $node = $e->node()->findnodes('input')->get_node(1)) {
+                    # Check for inline namelists first
                     if (my $nml = $node->findnodes("namelist[\@name='$namelist_name']")->get_node(1)) {
-                        my $content = $clean_namelist_content->($e->nodeValue($nml, 'text()'));
-                        %base_namelist = map { (split '=', $_)[0] => $_ } split "\n", $content;
-                        $fre->out(FREMsg::NOTE, "Namelist override for $namelist_name, base settings:");
-                        $fre->out(FREMsg::NOTE, values %base_namelist);
-                        last;
+                        my $content = $clean_inline_namelist_content->($e->nodeValue($nml, 'text()'));
+                        %base_namelist = $namelist_content_to_hash->($content);
+                        last GET_BASE_NAMELIST;
+                    }
+                    # Then external namelists
+                    else {
+                        # Main namelist parsing code returns error if any nmlFiles don't exist,
+                        # so just filter out the missing ones here for simplicity
+                        for my $filePath (grep { -f and -r } $fre->dataFilesMerged($node, 'namelist', 'file')) {
+                            for my $fileNml ($split_file_into_namelists->($filePath)) {
+                                $fileNml =~ s/^\s*\&//;
+                                $fileNml =~ s/\s*(?:\/\s*)?$//;
+                                my ($name, $content) = split('\s', $fileNml, 2);
+                                if ($name eq $namelist_name) {
+                                    %base_namelist = $namelist_content_to_hash->($content);
+                                    last GET_BASE_NAMELIST;
+                                }
+                            }
+                        }
                     }
                 }
                 $e = $e->parent();
             }
-            $fre->out(FREMsg::NOTE, "Namelist override for $namelist_name, base settings: none")
-                unless %base_namelist;
+            if (%base_namelist) {
+                $fre->out(FREMsg::NOTE, "Namelist override for $namelist_name, base settings:");
+                $fre->out(FREMsg::NOTE, values %base_namelist);
+            }
+            else {
+                $fre->out(FREMsg::NOTE, "Namelist override for $namelist_name, base settings: none");
+            }
             # Combine the namelists
             my %combined_nml;
             for my $key (keys %base_namelist) {
@@ -1391,7 +1426,7 @@ sub extractNamelists($)
       foreach my $inlineNmlNode (@inlineNmlNodes)
       {
 	my $name = FREUtil::cleanstr($exp->nodeValue($inlineNmlNode, '@name'));
-	my $content = $clean_namelist_content->($exp->nodeValue($inlineNmlNode, 'text()'));
+	my $content = $clean_inline_namelist_content->($exp->nodeValue($inlineNmlNode, 'text()'));
 	if ($nmls->namelistExists($name))
 	{
 	  my $expName = $exp->name();
@@ -1408,12 +1443,7 @@ sub extractNamelists($)
       {
         if (-f $filePath and -r $filePath)
 	{
-	  my $fileContent = qx(cat $filePath);
-	  $fileContent =~ s/^\s*$//mg;
-	  $fileContent =~ s/^\s*#.*$//mg;
-	  $fileContent = $fre->placeholdersExpand($fileContent);
-	  $fileContent = $exp->placeholdersExpand($fileContent);
-	  my @fileNmls = split(/\/\s*$/m, $fileContent);
+      my @fileNmls = $split_file_into_namelists->($filePath);
 	  foreach my $fileNml (@fileNmls)
 	  {
             $fileNml =~ s/^\s*\&//;
