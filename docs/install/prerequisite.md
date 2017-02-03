@@ -15,8 +15,9 @@ The following software and libraries are required
 * [HDF5](https://www.hdfgroup.org) (Needed for netCDF)
 * [nccmp](http://nccmp.sourceforge.net/)
 
-The following Perl packages are required.  All are available on CPAN.
-The latest version of each should work.
+The following Perl packages are required.  All are available on
+[CPAN](http://search.cpan.org).  The latest version of each should
+work.
 
 * [File::NFSLock](http://search.cpan.org/~bbb/File-NFSLock-1.27/lib/File/NFSLock.pm)
 * [XML::Parser](http://search.cpan.org/~toddr/XML-Parser-2.44/Parser.pm)
