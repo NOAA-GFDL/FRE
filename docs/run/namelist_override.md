@@ -13,19 +13,21 @@ Currently, namelists are inherited on an entire namelist/all-or-nothing basis ba
 
 If a namelist is specified twice, the one with the higher priority is included and the others are ignored.
 
-A common task is creating an experiment to be identical to another experiment except one or two parameters of one namelist. Currently, you must copy the entire namelist to the child experiment, then add or change the desired parameters.
+A common task is creating an experiment to be identical to another experiment except one or two parameters of one namelist. Currently, you must copy the entire namelist to the child experiment, then add or change the desired parameters. To make that exercise easier and less error-prone, users have requested a partial namelist inheritance option. For a namelist using this requested option, its values would be combined with the immediate lower priority namelist, with the child settings overwriting any values that they both have.
 
-To make that exercise easier and less error-prone, users have requested a partial namelist inheritance option. For a namelist using this requested option, its values would be combined with the immediate lower priority namelist, with the child settings overwriting any values that they both have.
+MS has been concerned this feature could result in greater confusion of which namelist settings are actually used in the experiment. In today's inheritance and xinclude-rich XMLs, having some namelists partially inherit and some not would undoubtedly be harder to visually inspect, and may do more harm than good for experiment XML maintenance, inspection, and clarity.
 
-MS has been hesitant to support this feature request, believing it will result in greater confusion of which namelist settings are actually used in the experiment. In today's inheritance and xinclude-rich XMLs, having some namelists partially inherit and some not would undoubtedly be harder to visually inspect, and overall we feel do more harm than good for experiment XML maintenance, inspection, and clarity.
+Moreover, FRE's namelist management code doesn't yet use a proper namelist parser; the result is that this override feature is limited to simple namelists (one key/value pair per line). In particular, multiple declarations per line and embedded newlines in values aren't handled properly, AND doesn't warn the user about the mis-handling.
 
-However, we consider single-level namelist inheritance safe, and will add this feature to Bronx-12. This new feature is intended for one-off model development use by advanced FRE users, and is described next.
+Thus, we consider this override feature experimental in Bronx-12, intended for one-off model development use by advanced FRE users. More proper namelist parsing may be added to a future FRE version.
 
 ## Usage summary
 
 This feature will allow a child experiment's namelist to override/partially inherit the namelist values of the next inherited namelist. The child namelist will be combined with the parent namelist, using the child's values for keys shared by both namelists.
 
 Activate the feature by setting a new <namelist> attribute *override* to *yes*, *true*, or *on*. The feature is not supported in external namelists. This feature may only be used in child experiments; FRE will throw a fatal error if an inherited experiment's namelist has the `override="yes"` attribute set.
+
+The overridden resulting namelist's order should be sensible and expected. Settings in the child namelist that exist in the base namelist will be placed identically to facilitate diff tools. Settings in the child namelist that don't exist in the base are added to the top of the resulting namelist.
 
 ## Example
 

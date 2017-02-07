@@ -1332,10 +1332,6 @@ sub extractNamelists($)
       return split /\/\s*$/m, $content;
   };
 
-  my $namelist_content_to_hash = sub {
-      return map { (split '=', $_)[0] => $_ } grep /=/, grep !/^\s*!/, split "\n", shift;
-  };
-
   $fre->out(FREMsg::NOTE, "Extracting namelists...");
 
   my $exp_count = 0;
@@ -1354,20 +1350,18 @@ sub extractNamelists($)
         for my $overrideNmlNode (@overrideNmlNodes) {
             my $namelist_name = FREUtil::cleanstr($exp->nodeValue($overrideNmlNode, '@name'));
             # Get the child namelist
-            my $content = $clean_inline_namelist_content->($exp->nodeValue($overrideNmlNode, 'text()'));
-            my %child_namelist = map { (split '=', $_)[0] => $_ } split "\n", $content;
+            my $child_namelist_content = $clean_inline_namelist_content->($exp->nodeValue($overrideNmlNode, 'text()'));
             $fre->out(FREMsg::NOTE, "Namelist override for $namelist_name, child settings:");
-            $fre->out(FREMsg::NOTE, values %child_namelist);
+            $fre->out(FREMsg::NOTE, "\n$child_namelist_content");
             # Get the base namelist
-            my %base_namelist;
+            my $base_namelist_content;
             my $e = $exp->parent;
             GET_BASE_NAMELIST:
             while ($e) {
                 if (my $node = $e->node()->findnodes('input')->get_node(1)) {
                     # Check for inline namelists first
                     if (my $nml = $node->findnodes("namelist[\@name='$namelist_name']")->get_node(1)) {
-                        my $content = $clean_inline_namelist_content->($e->nodeValue($nml, 'text()'));
-                        %base_namelist = $namelist_content_to_hash->($content);
+                        $base_namelist_content = $clean_inline_namelist_content->($e->nodeValue($nml, 'text()'));
                         last GET_BASE_NAMELIST;
                     }
                     # Then external namelists
@@ -1380,7 +1374,7 @@ sub extractNamelists($)
                                 $fileNml =~ s/\s*(?:\/\s*)?$//;
                                 my ($name, $content) = split('\s', $fileNml, 2);
                                 if ($name eq $namelist_name) {
-                                    %base_namelist = $namelist_content_to_hash->($content);
+                                    $base_namelist_content = $content;
                                     last GET_BASE_NAMELIST;
                                 }
                             }
@@ -1389,26 +1383,18 @@ sub extractNamelists($)
                 }
                 $e = $e->parent();
             }
-            if (%base_namelist) {
+            if ($base_namelist_content) {
                 $fre->out(FREMsg::NOTE, "Namelist override for $namelist_name, base settings:");
-                $fre->out(FREMsg::NOTE, values %base_namelist);
+                $fre->out(FREMsg::NOTE, "\n$base_namelist_content");
             }
             else {
                 $fre->out(FREMsg::NOTE, "Namelist override for $namelist_name, base settings: none");
             }
             # Combine the namelists
-            my %combined_nml;
-            for my $key (keys %base_namelist) {
-                $combined_nml{$key}
-                    = $child_namelist{$key} ? $child_namelist{$key} : $base_namelist{$key};
-            }
-            for my $key (keys %child_namelist) {
-                $combined_nml{$key} = $child_namelist{$key} unless $combined_nml{$key};
-            }
+            my $combined_namelist_content = FRENamelists::mergeNamelistContent($base_namelist_content, $child_namelist_content);
             $fre->out(FREMsg::NOTE, "Namelist override for $namelist_name, combined settings:");
-            $fre->out(FREMsg::NOTE, values %combined_nml);
-            $content = join("\n", values %combined_nml) . "\n";
-	        $nmls->namelistPut($namelist_name, $content);
+            $fre->out(FREMsg::NOTE, "\n$combined_namelist_content");
+            $nmls->namelistPut($namelist_name, $combined_namelist_content);
         }
       }
       # If ancestor experiment, search for overrides and die if found
