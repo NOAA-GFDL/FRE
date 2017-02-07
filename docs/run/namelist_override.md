@@ -44,7 +44,7 @@ As an example, consider an experiment identical to *c96_solo_lm3p6*, except over
 </experiment>
 ```
 
-To see what the ancestor/base namelist settings would be, use the `frelist --evaluate` option, which allows one to retrieve parts of the XML using xpath syntax. For example,
+For inline namelists only, use the `frelist --evaluate` option to see what the ancestor/base namelist settings would be. For example,
 ```
 > frelist --evaluate "input/namelist[@name='atmos_prescr_nml']" -x lm3.xml -p ncrc3.intel c96_solo_lm3p6
          read_forcing = .true.,
