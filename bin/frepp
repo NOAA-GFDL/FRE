@@ -1034,10 +1034,13 @@ else
    set interpvars = `echo $interpvars |sed 's/ /,/g'`
 endif
 set order1 = ( precip prec_ls snow_ls prec_conv snow_conv uw_precip prec_uwc snow_uwc prc_deep_donner snow_deep_donner prc1_deep_donner prc_mca_donner snow_mca_donner ice_mask land_mask zsurf cld_amt_2d conv_freq IWP_all_clouds WP_all_clouds WVP tot_cloud_area tot_ice_amt tot_liq_amt swdn_sfc_clr swdn_sfc swdn_toa_clr swdn_toa swdn_tot_dif swup_sfc_clr swup_sfc swup_toa_clr swup_toa wind_ref wind_ref_max wind_ref_min )
+set non_regrid_vars = ( lat lon )
+EOF
+      my $non_regrid_vars = $fre->property('FRE.frepp.fregrid.non_regrid_vars');
+      $call_tile_fregrid .= <<EOF;
+set non_regrid_vars = ( \$non_regrid_vars $non_regrid_vars )
 set attCmds = ()
 unset echo
-EOF
-      $call_tile_fregrid .= <<EOF;
 if ( -e $ppRootDir/.non_default_interp_method ) then
   source $ppRootDir/.non_default_interp_method
 endif
@@ -1054,6 +1057,17 @@ foreach order1var ( $order1 )
     endif
   end
 end
+foreach non_regrid_var ( $non_regrid_vars )
+  foreach modelvar ( `echo $interpvars | sed -e "s/,/ /g"` )
+    if ( $modelvar == $non_regrid_var ) then
+      if ( `ncexists -f $fregrid_in.tile1.nc -v $non_regrid_var` ) then
+        if ( ! `ncexists -f $fregrid_in.tile1.nc -v $non_regrid_var -a interp_method` ) then
+          set attCmds = ( $attCmds -a interp_method,$non_regrid_var,a,c,"none" )
+        endif
+      endif
+    endif
+  end
+end
 set echo
 EOF
 
@@ -1062,8 +1076,9 @@ EOF
 
       $call_fregrid .= <<EOF;
 if (\$#attCmds > 0) then
-   $time_ncatted ncatted -h -O \$attCmds \$fregrid_in.nc
+   $time_ncatted ncatted -h -O \$attCmds \$fregrid_in.nc \$fregrid_in.nc.tmp
    #check_ncatted
+   mv -f \$fregrid_in.nc.tmp \$fregrid_in.nc
 endif
 
 if ( "\$fregrid_wt" != '' ) then
@@ -1159,14 +1174,12 @@ EOF
       if ( $basenpes == 1 ) {
          my $exec_fregrid .= <<EOF;
 $time_fregrid \$FREGRID --standard_dimension --input_mosaic \$input_mosaic --input_file \$fregrid_in --interp_method \$interp_method --remap_file \$remap_file --nlon \$nlon --nlat \$nlat --scalar_field \$interpvars \$fregrid_wt --output_file out.nc
-mv out.nc \$fregrid_in.nc
 EOF
          $call_tile_fregrid .= $exec_fregrid;
          $call_fregrid .= $exec_fregrid;
       } else {
          my $exec_fregrid .= <<EOF;
 $time_fregrid mpirun -np $basenpes fregrid_parallel --standard_dimension --input_mosaic \$input_mosaic --input_file \$fregrid_in --interp_method \$interp_method --remap_file \$remap_file --nlon \$nlon --nlat \$nlat --scalar_field \$interpvars \$fregrid_wt --output_file out.nc
-mv out.nc \$fregrid_in.nc
 EOF
          $call_tile_fregrid .= $exec_fregrid;
          $call_fregrid .= $exec_fregrid;
@@ -1175,7 +1188,7 @@ EOF
    my $rename_regridded = <<EOF;
 #check_fregrid
 
-if ( ! -e \$fregrid_remap_file ) then
+if ( ! -e \$fregrid_remap_file && -e out.nc ) then
    ls -l \$remap_file*
    $time_hsmput hsmput -v -t -p \$remap_dir -w . \$remap_file
    if ( \$status ) then
@@ -1183,6 +1196,12 @@ if ( ! -e \$fregrid_remap_file ) then
       $time_hsmput hsmput -v -t -p \$remap_dir -w . \$remap_file
       $checktransfer
    endif
+endif
+
+if ( -e out.nc ) then
+    mv out.nc \$fregrid_in.nc
+else
+    rm \$fregrid_in.nc
 endif
 
 EOF
@@ -5850,7 +5869,7 @@ EOF
 
       foreach my $i ( 1 .. 6 ) {
       $csh .= <<EOF;
-   set files = (`ls -1 $hDate.$diag_source*tile$i.nc | grep -v grid_spec`)
+   set files = (`ls -1 $hDate.$diag_source*tile$i.nc | grep -v grid_spec | grep -v ocean_geometry`)
    set static = (`\$NCVARS -s012 \$files`) # only support up to 2D static fields
    if ( "\$static" != "" ) then
       foreach file ( \$files )
@@ -5882,7 +5901,7 @@ EOF
       my $cubiccsh = <<EOF;
 
    set output_files = ( )
-   set tiles = (`ls -1 $hDate.$diag_source*.tile1.nc | grep -v grid_spec`)
+   set tiles = (`ls -1 $hDate.$diag_source*.tile1.nc | grep -v grid_spec | grep -v ocean_geometry`)
    foreach tfile ( \$tiles )
      if ( ! -w \$tfile ) then
       set i = 1
@@ -5913,7 +5932,7 @@ EOF
 
 # call and check fregrid start
 $call_and_check_fregrid
-set output_files = (\$output_files \$fregrid_in.nc)
+if (-e \$fregrid_in.nc) set output_files = (\$output_files \$fregrid_in.nc)
 endif
 # call and check fregrid end
 
@@ -5938,7 +5957,7 @@ EOF
          $call_and_check_fregrid =~ s/set order1/if ( "\$interpvars" != "" ) then\n set order1/;
          $csh .= <<EOF;
          set output_files = ( )
-         set files = (`ls -1 $hDate.$diag_source*.nc | grep -v grid_spec`)
+         set files = (`ls -1 $hDate.$diag_source*.nc | grep -v grid_spec | grep -v ocean_geometry`)
          foreach file ( \$files )
            set fregrid_wt = "$fregrid_wt"
            set fregrid_in_date = $hDate
@@ -5952,7 +5971,7 @@ EOF
 
            $call_and_check_fregrid
 
-           set output_files = (\$output_files \$fregrid_in.nc)
+           if (-e \$fregrid_in.nc ) set output_files = (\$output_files \$fregrid_in.nc)
          endif
          end
 
@@ -5960,7 +5979,7 @@ EOF
       } else {
 
       $csh .= <<EOF;
-   set output_files = (`ls -1 $hDate.$diag_source*.nc | grep -v grid_spec`)
+   set output_files = (`ls -1 $hDate.$diag_source*.nc | grep -v grid_spec | grep -v ocean_geometry`)
 EOF
       }
    }
