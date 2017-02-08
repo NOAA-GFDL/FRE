@@ -776,11 +776,20 @@ use FREUtil();
       if ($flagOutputTransfer eq 'On' && $flagOutputPostProcess eq 'On')
       {
         $remoteModuleFilesDir = $fre->property('FRE.tool.modules.use.remote');
-        $remoteVersion = $fre->property('FRE.tool.modules.version.remote');
         $remotePlatformCsh = frerun::getRemotePlatformCsh($z, $remotePlatform);
 	if ($remotePlatformCsh)
 	{
           $fre->out(FREMsg::NOTE, "Remote platform csh to be used - '$remotePlatformCsh'");
+          # set remote FRE version, currently only used in the runscript to send the pp.starter job
+          # to pancylc queue if /chaco/
+          $remotePlatformCsh =~ m|fre/([\w-]+)|;
+          $remoteVersion = $1 if $1;
+          if ($remoteVersion) {
+            $fre->out(FREMsg::NOTE, "Remote FRE version - $remoteVersion");
+          }
+          else {
+            $fre->out(FREMsg::NOTE, "Unable to determine remote FRE version");
+          }
 	}
 	else
 	{

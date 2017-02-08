@@ -91,6 +91,7 @@
   #FRE const(stmpDirRemote)
   #FRE const(archiveDirRemote)
   #FRE const(envRemote)
+  #FRE const(freCommandsVersionRemote)
 
   #FRE const(outputStagerSavePartition)
   #FRE const(outputStagerSaveQueue)
@@ -1706,6 +1707,10 @@
               set ppStarterOptionsQueueAndRuntime = ( -q $ppStarterCombineOffLargeOffQueue -l walltime=$ppStarterCombineOffLargeOffRuntime )
 	    endif	    
 	  endif
+          # Chaco jobs require the pancylc queue on analysis
+          if ( $freCommandsVersionRemote =~ '*chaco*' ) then
+            set ppStarterOptionsQueueAndRuntime = `echo $ppStarterOptionsQueueAndRuntime | sed -r 's/-q \S+/-q pancylc/'`
+          endif
           set ppStarterOptions = ( $submitOptionsPPStarter $submitOptionsProject )
           set ppStarterOptions = ( $ppStarterOptions -N $FRE_JOBID.pp.starter.$firstDate )
           set ppStarterOptions = ( $ppStarterOptions $ppStarterOptionsQueueAndRuntime -l $ppStarterCoreSpec )
