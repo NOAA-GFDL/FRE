@@ -39,6 +39,7 @@ use vars qw( $archivedir $rootdir $workdir $tempCache $rtsVersion $platform $ver
 use vars qw( $maxyrs $maxdisk $cubic $nlat $nlon $interpMethod $getgridspec $basenpes $call_fregrid );
 use vars qw( $checktransfer $statefile $state $writestate $didsomething $userstartyear $userstartmo $call_tile_fregrid );
 use vars qw( $mosaic_type $sourceGrid $xyInterp $xyInterpRegridFile );
+our @frepp_plus_calls;
 
 {
 
@@ -106,12 +107,11 @@ use vars qw( $mosaic_type $sourceGrid $xyInterp $xyInterpRegridFile );
 
    Getopt::Long::GetOptions(\%opt, frepp::OPTLIST) or (print 'bad opts' and die "\n");
    if ($opt{Version}) {print frepp::VERSION,"\n" and exit(0);}
-   use vars qw( $opt_d $opt_D $opt_f $opt_l $opt_p $opt_M $opt_m $opt_q $opt_Q $opt_t $opt_r $opt_x $opt_s $opt_v $opt_V  $opt_A $opt_B $opt_C $opt_O $opt_R $opt_S $opt_Y $opt_Z $opt_c $opt_H $opt_h $opt_o $opt_u $opt_z $opt_w $opt_P $opt_T );
+   use vars qw( $opt_d $opt_D $opt_f $opt_l $opt_M $opt_m $opt_q $opt_Q $opt_t $opt_r $opt_x $opt_s $opt_v $opt_V  $opt_A $opt_B $opt_C $opt_O $opt_R $opt_S $opt_Y $opt_Z $opt_c $opt_H $opt_h $opt_o $opt_u $opt_z $opt_w $opt_P $opt_T );
    ($opt_d=$opt{dir}) =~ s|\/$||g;
    $opt_f=$opt{forceCombine};
    $opt_l=$opt{limitstatic};
    $opt_o=$opt{override};
-   $opt_p=$opt{plus};
    $opt_M=$opt{MailOnComplete};
    $opt_m=$opt{moab};
    $opt_q=$opt{quiet};
@@ -167,6 +167,7 @@ Usage:    $relfrepp -P|--platform platform [-AB:C:O:RY:Z:c:d:f:hlmMp:oqr:S:st:u:
           OPTIONS FOR POSTPROCESSING DATA
           -t time      = beginning of model year to process.  To process 1982, use
                            '-t 1982' or '-t 19820101'.
+          --plus num   = "plus num years": additional years to process
           -c component = component to process, or keyword 'split' to process all in parallel
           -l           = limit static variable processing to the diag source file in the xml
           -d dir       = path to history data
@@ -238,7 +239,7 @@ EOF
 
    if ( $opt_V ) { $opt_v = 1; }
 
-   if ( $opt_M and not $opt_p ) { $opt_M = "#\$ -m e";} else { $opt_M = ""; }
+   if ( $opt_M and not $opt{plus} ) { $opt_M = "#\$ -m e";} else { $opt_M = ""; }
 
    if ( $opt_O ) { print STDERR "NOTE: There has been a change to the behavior of the -O option. Your scripts will be written directly to '$opt_O' and not to '$opt_O/scripts/postProcess'\n"; }
 
@@ -637,11 +638,11 @@ EOF
 
    my $version_info = "$version_head";
    if ( $opt_f ) { $version_info .= "-f "; }
-   if ( $opt_P ) { $version_info .= "-p $opt_P "; }
+   if ( $opt_P ) { $version_info .= "--platform $opt_P "; }
    if ( $opt_T ) { $version_info .= "-T $opt_T "; }
    if ( $opt_D ) { $version_info .= "-D $opt_D "; }
    if ( $opt_t ) { $version_info .= "-t $hDate "; } # Using corrected $opt_t value
-   if ( $opt_p ) { $version_info .= "--plus $opt_p "; }
+   if ( $opt{plus} ) { $version_info .= "--plus $opt{plus} "; }
    if ( $opt_c ) { $version_info .= "-c $opt_c "; }
    if ( $opt_d ) { $version_info .= "-d $opt_d "; }
    if ( $opt_u ) { $version_info .= "-u $opt_u "; }
@@ -831,7 +832,7 @@ EOF
          if ( $opt_o ) { $cshscripttmpl .= "-o "; }
          #add hold for prerequisite job
          #this only works for SGE, not moab, so commenting this now
-         #if ( $opt_p ) {
+         #if ( $opt{plus} ) {
          #   my $prev = FREUtil::modifydate($opt_t,"- 1 years");
          #   $prev = FREUtil::graindate($prev,"day");
          #   $cshscripttmpl .= "-w $expt"."_$prev ";
@@ -855,7 +856,7 @@ EOF
             $cshscripttmpl =~ s/#check_history_files/$check_history/;
       }
 
-      if ( $opt_D and $opt_p ) {
+      if ( $opt_D and $opt{plus} ) {
          $cshscripttmpl .= call_frepp($abs_xml_path, $outscript, $opt_c, "");
          $cshscripttmpl .= errorstr("$relfrepp had a problem creating next script $expt"."_$hDate");
       }
@@ -1269,7 +1270,8 @@ EOF
                      print "Redoing anyway because 'overwrite state files' was specified...\n";
                   } else {
                      print "This year ($hDate) has already been completed for $component.\n";
-                     #should we continue here in case of opt_p?
+                     # if --plus option is used, store next year's frepp command to call at the end
+                     push @frepp_plus_calls, form_frepp_call_for_plus_option() if $opt{plus};
                      next;
                   }
                } elsif ("$state" eq "FATAL") {
@@ -1990,6 +1992,8 @@ EOF
          $didsomething = 0;
       } else {
          print STDERR "NOTE: No calculations necessary for year $hDate for $component.\n\n";
+         # if --plus option is used, store next year's frepp command to call at the end
+         push @frepp_plus_calls, form_frepp_call_for_plus_option() if $opt{plus};
          next;
       }
 
@@ -2196,6 +2200,17 @@ EOF
 
    sysmailuser();
    print "\n";
+
+   if (@frepp_plus_calls) {
+       my $N = @frepp_plus_calls;
+       print "\nNormal frepp processing done; about to run $N frepp commands for next year, due to --plus $opt{plus}\n";
+       my $i = 1;
+       for my $cmd (@frepp_plus_calls) {
+           printf "\n%s$cmd\n\n", $N > 1 ? "#$i/$N: " : '>';
+           system $cmd;
+           ++$i;
+       }
+   }
 }
 
 ##############################################
@@ -2693,7 +2708,7 @@ sub call_frepp {
    if ( "$year" ne "" ) {
       $year .= $userstartmo;
       $csh .= "\n/usr/bin/perl $absfrepp -x $abs_xml_path -t $year -s -q $depjobs";
-      if ( $opt_P ) { $csh .= "-p $opt_P "; }
+      if ( $opt_P ) { $csh .= "--platform $opt_P "; }
       if ( $opt_T ) { $csh .= "-T $opt_T "; }
       if ( $opt_d ) { $csh .= "-d $opt_d "; }
       if ( $opt_D ) { $csh .= "-D '$opt_D' "; }
@@ -2704,26 +2719,11 @@ sub call_frepp {
       if ( $opt_H ) { $csh .= "-H "; }
       if ( $opt_o ) { $csh .= "-o "; }
       $csh .= "$expt\n";
-   } elsif ( $opt_p ) {
-      my $togo = $opt_p - 1;
-      if ( $togo > 0 ) { $togo = "--plus $togo"; } else { $togo = ''; }
-      $csh .= "\n/usr/bin/perl $absfrepp -x $abs_xml_path -t $nextyearf $togo -s -v ";
-      if ( $opt_P ) { $csh .= "-p $opt_P "; }
-      if ( $opt_T ) { $csh .= "-T $opt_T "; }
-      if ( $opt_d ) { $csh .= "-d $opt_d "; }
-      if ( $opt_D ) { $csh .= "-D '$opt_D' "; }
-      if ( $opt_u ) { $csh .= "-u $opt_u "; }
-      if ( $opt_c ) { $csh .= "-c $component "; }
-      if ( $opt_m ) { $csh .= "-m '$opt_m' "; }
-      if ( $opt_M ) { $csh .= "-M "; }
-      if ( $opt_H ) { $csh .= "-H "; }
-      if ( $opt_o ) { $csh .= "-o "; }
-      $csh .= "$expt\n";
-      $csh .= errorstr("$relfrepp had a problem creating next script $expt"."_$nextyearf");
-      $csh .= mailerrors($outscript);
-   } else { #call frepp -A for analysis scripts
+   }
+   else {
+      #call frepp -A for analysis scripts
       $csh .= "\n/usr/bin/perl $absfrepp -A -x $abs_xml_path -t $hDate -s -v ";
-      if ( $opt_P ) { $csh .= "-p $opt_P "; }
+      if ( $opt_P ) { $csh .= "--platform $opt_P "; }
       if ( $opt_T ) { $csh .= "-T $opt_T "; }
       if ( $opt_d ) { $csh .= "-d $opt_d "; }
       if ( $opt_u ) { $csh .= "-u $opt_u "; }
@@ -2733,10 +2733,36 @@ sub call_frepp {
       if ( $opt_H ) { $csh .= "-H "; }
       $csh .= "$expt\n";
       $csh .= errorstr("$relfrepp had a problem creating final analysis script $expt"."_$nextyearf");
+      if ( $opt{plus} ) {
+         $csh .= "\n" . form_frepp_call_for_plus_option() . "\n";
+         $csh .= errorstr("$relfrepp had a problem creating next script $expt"."_$nextyearf");
+      }
       $csh .= mailerrors($outscript);
    }
 
    return $csh;
+}
+
+# Generate the frepp command for next year's frepp call when using the --plus option
+sub form_frepp_call_for_plus_option {
+    return unless $opt{plus};
+    my $nextyear = FREUtil::modifydate($tEND,"+ 1 sec");
+    my $nextyearf = FREUtil::graindate($nextyear,"day");
+    my $togo = $opt{plus} - 1;
+    my $plus = $togo > 0 ? "--plus $togo" : '';
+    my $cmd = "/usr/bin/perl $absfrepp -x $abs_xml_path -t $nextyearf $plus -s -v ";
+    if ( $opt_P ) { $cmd .= "--platform $opt_P "; }
+    if ( $opt_T ) { $cmd .= "-T $opt_T "; }
+    if ( $opt_d ) { $cmd .= "-d $opt_d "; }
+    if ( $opt_D ) { $cmd .= "-D '$opt_D' "; }
+    if ( $opt_u ) { $cmd .= "-u $opt_u "; }
+    if ( $opt_c ) { $cmd .= "-c $component "; }
+    if ( $opt_m ) { $cmd .= "-m '$opt_m' "; }
+    if ( $opt_M ) { $cmd .= "-M "; }
+    if ( $opt_H ) { $cmd .= "-H "; }
+    if ( $opt_o ) { $cmd .= "-o "; }
+    $cmd .= $expt;
+    return $cmd;
 }
 
 #set up checkpointing
