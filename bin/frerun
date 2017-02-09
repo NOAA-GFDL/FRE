@@ -275,6 +275,7 @@ use FREDefaults();
 use FREExperiment();
 use FREMsg();
 use FRENamelists();
+use FREPlatforms();
 use FRETargets();
 use FRETemplate();
 use FREUtil();
@@ -923,6 +924,9 @@ use FREUtil();
       FRETemplate::setVariable($fre, \$s, 'mppnccombineOptsRestart', $mppnccombineOptsRestart );
       FRETemplate::setVariable($fre, \$s, 'mppnccombineOptsHistory', $mppnccombineOptsHistory );
 
+      FRETemplate::setVariable($fre, \$s, 'FreCommandsSrcDir', $z->extractExecutable()->srcDir());
+      FRETemplate::setVariable($fre, \$s, 'FreCommandsBldDir', $z->extractExecutable()->execDir());
+
       # ------------------------------------------ normal return
 
       return ($s, FREDefaults::STATUS_OK);
@@ -984,6 +988,7 @@ use FREUtil();
 
     FRETemplate::setShellCommands($fre, $r, 'platformCsh',
                                   $fre->default_platform_csh . $fre->platformValue('csh'));
+    FRETemplate::setShellCommands($fre, $r, 'NiNaCplatformCsh', FREPlatforms::getPlatformSpecificNiNaCLoadCommands());
     FRETemplate::setShellCommands($fre, $r, 'expRuntimeCsh', $z->extractShellCommands('runtime/csh'));
     FRETemplate::setShellCommands($fre, $r, 'expInputCshInit', $z->extractShellCommands('input/csh[not(@type="always") and not(@type="postInit")]', %adjustment));
     FRETemplate::setShellCommands($fre, $r, 'expInputCshAlwaysOrNotInit', $z->extractShellCommands('input/csh[@type="always" or @type="postInit"]', %adjustment));
@@ -2110,6 +2115,28 @@ use FREUtil();
 
   }
   
+  # ------------------------ Call NiNaC on successful runscript creation if NiNaC module is loaded
+
+  if ( $status == FREDefaults::STATUS_OK and exists( $ENV{'NiNaC_LVL'} ) and $ENV{'NiNaC_LVL'} > 0 )
+  {
+    # Ensure that the xml path is an absolute path
+    my $xmlpath = File::Spec->rel2abs( $opt{'xmlfile'} );
+
+    # Split the xml path into file name and directory path
+    my $xmlfile = File::Basename::basename( $xmlpath );
+    my $xmldir = File::Basename::dirname( $xmlpath );
+
+    # Get the xml dir signature
+    system( $ENV{'NiNaC_XmlRx'}, $xmlfile, $xmldir );
+
+    # Alert the user on NiNaC_XmlRx failure
+    if ( $? != 0 ) {
+      print "NiNaC Note: While NiNaC loaded attempt at NiNaC_XmlRx "
+          . FREUtil::decodeChildStatus($?, $!)
+          . " : FRE continuing as normal.\n";
+    }
+  }
+
   exit $status;
 
 }
