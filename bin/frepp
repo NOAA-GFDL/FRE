@@ -39,6 +39,7 @@ use vars qw( $archivedir $rootdir $workdir $tempCache $rtsVersion $platform $ver
 use vars qw( $maxyrs $maxdisk $cubic $nlat $nlon $interpMethod $getgridspec $basenpes $call_fregrid );
 use vars qw( $checktransfer $statefile $state $writestate $didsomething $userstartyear $userstartmo $call_tile_fregrid );
 use vars qw( $mosaic_type $sourceGrid $xyInterp $xyInterpRegridFile );
+our @frepp_plus_calls;
 
 {
 
@@ -106,12 +107,11 @@ use vars qw( $mosaic_type $sourceGrid $xyInterp $xyInterpRegridFile );
 
    Getopt::Long::GetOptions(\%opt, frepp::OPTLIST) or (print 'bad opts' and die "\n");
    if ($opt{Version}) {print frepp::VERSION,"\n" and exit(0);}
-   use vars qw( $opt_d $opt_D $opt_f $opt_l $opt_p $opt_M $opt_m $opt_q $opt_Q $opt_t $opt_r $opt_x $opt_s $opt_v $opt_V  $opt_A $opt_B $opt_C $opt_O $opt_R $opt_S $opt_Y $opt_Z $opt_c $opt_H $opt_h $opt_o $opt_u $opt_z $opt_w $opt_P $opt_T );
+   use vars qw( $opt_d $opt_D $opt_f $opt_l $opt_M $opt_m $opt_q $opt_Q $opt_t $opt_r $opt_x $opt_s $opt_v $opt_V  $opt_A $opt_B $opt_C $opt_O $opt_R $opt_S $opt_Y $opt_Z $opt_c $opt_H $opt_h $opt_o $opt_u $opt_z $opt_w $opt_P $opt_T );
    ($opt_d=$opt{dir}) =~ s|\/$||g;
    $opt_f=$opt{forceCombine};
    $opt_l=$opt{limitstatic};
    $opt_o=$opt{override};
-   $opt_p=$opt{plus};
    $opt_M=$opt{MailOnComplete};
    $opt_m=$opt{moab};
    $opt_q=$opt{quiet};
@@ -167,6 +167,7 @@ Usage:    $relfrepp -P|--platform platform [-AB:C:O:RY:Z:c:d:f:hlmMp:oqr:S:st:u:
           OPTIONS FOR POSTPROCESSING DATA
           -t time      = beginning of model year to process.  To process 1982, use
                            '-t 1982' or '-t 19820101'.
+          --plus num   = "plus num years": additional years to process
           -c component = component to process, or keyword 'split' to process all in parallel
           -l           = limit static variable processing to the diag source file in the xml
           -d dir       = path to history data
@@ -238,7 +239,7 @@ EOF
 
    if ( $opt_V ) { $opt_v = 1; }
 
-   if ( $opt_M and not $opt_p ) { $opt_M = "#\$ -m e";} else { $opt_M = ""; }
+   if ( $opt_M and not $opt{plus} ) { $opt_M = "#\$ -m e";} else { $opt_M = ""; }
 
    if ( $opt_O ) { print STDERR "NOTE: There has been a change to the behavior of the -O option. Your scripts will be written directly to '$opt_O' and not to '$opt_O/scripts/postProcess'\n"; }
 
@@ -637,11 +638,11 @@ EOF
 
    my $version_info = "$version_head";
    if ( $opt_f ) { $version_info .= "-f "; }
-   if ( $opt_P ) { $version_info .= "-p $opt_P "; }
+   if ( $opt_P ) { $version_info .= "--platform $opt_P "; }
    if ( $opt_T ) { $version_info .= "-T $opt_T "; }
    if ( $opt_D ) { $version_info .= "-D $opt_D "; }
    if ( $opt_t ) { $version_info .= "-t $hDate "; } # Using corrected $opt_t value
-   if ( $opt_p ) { $version_info .= "--plus $opt_p "; }
+   if ( $opt{plus} ) { $version_info .= "--plus $opt{plus} "; }
    if ( $opt_c ) { $version_info .= "-c $opt_c "; }
    if ( $opt_d ) { $version_info .= "-d $opt_d "; }
    if ( $opt_u ) { $version_info .= "-u $opt_u "; }
@@ -831,7 +832,7 @@ EOF
          if ( $opt_o ) { $cshscripttmpl .= "-o "; }
          #add hold for prerequisite job
          #this only works for SGE, not moab, so commenting this now
-         #if ( $opt_p ) {
+         #if ( $opt{plus} ) {
          #   my $prev = FREUtil::modifydate($opt_t,"- 1 years");
          #   $prev = FREUtil::graindate($prev,"day");
          #   $cshscripttmpl .= "-w $expt"."_$prev ";
@@ -855,7 +856,7 @@ EOF
             $cshscripttmpl =~ s/#check_history_files/$check_history/;
       }
 
-      if ( $opt_D and $opt_p ) {
+      if ( $opt_D and $opt{plus} ) {
          $cshscripttmpl .= call_frepp($abs_xml_path, $outscript, $opt_c, "");
          $cshscripttmpl .= errorstr("$relfrepp had a problem creating next script $expt"."_$hDate");
       }
@@ -978,19 +979,7 @@ endif
 EOF
       }
 
-      $call_tile_fregrid = $getgridspec . <<EOF;
-set remap_dir = \$fregrid_remap_file:h
-set remap_file = \$fregrid_remap_file:t
-if ( -e \$fregrid_remap_file ) then
-   $time_cp $cp \$fregrid_remap_file \$remap_file
-   if ( \$status ) then
-      echo "WARNING: data transfer failure, retrying..."
-      $time_cp $cp \$fregrid_remap_file \$remap_file
-      $checktransfer
-   endif
-endif
-EOF
-      $call_tile_fregrid .= <<'EOF';
+      $call_tile_fregrid = $getgridspec . <<'EOF';
 if ( -e mosaic.nc ) then
    set input_mosaic = `ncks -H -v $mosaic_type mosaic.nc | sed 's/.*="//;s/"//'`
 else if ( -e grid_spec.nc ) then
@@ -1001,6 +990,42 @@ else
 endif
 
 ls -l $input_mosaic
+
+# Check for a suitable regrid file in FMS-land
+set mosaic_gridfile = `ncks -H -v gridfiles $input_mosaic | head -n 1 | sed 's/.*="//;s/"//'`
+@ remap_source_x = `ncdump -h $mosaic_gridfile | grep "nx =" | sed 's/.*=//;s/;//;s/ //g'` / 2
+@ remap_source_y = `ncdump -h $mosaic_gridfile | grep "ny =" | sed 's/.*=//;s/;//;s/ //g'` / 2
+set fms_remap_file = $fregrid_remap_file:t
+set fms_remap_file = `echo $fms_remap_file | sed 's/^\.//'`
+EOF
+
+      my $fms_remap_dir = $fre->property('FRE.directory.fms_shared_fregrid_remap_files');
+      $call_tile_fregrid .= <<EOF;
+set fms_remap_file = "$fms_remap_dir/\$source_grid/\${remap_source_x}_by_\$remap_source_y/\$fms_remap_file"
+EOF
+
+      $call_tile_fregrid .= <<'EOF';
+if (-e $fms_remap_file) then
+    echo "NOTE: Using shared FMS remap file $fms_remap_file"
+    set fregrid_remap_file = $fms_remap_file
+    set remap_dir = $fms_remap_file:h
+    set remap_file = $fms_remap_file:t
+else
+    set remap_dir = $fregrid_remap_file:h
+    set remap_file = $fregrid_remap_file:t
+endif
+EOF
+      $call_tile_fregrid .= <<EOF;
+if ( -e \$fregrid_remap_file ) then
+   $time_cp $cp \$fregrid_remap_file \$remap_file
+   if ( \$status ) then
+      echo "WARNING: data transfer failure, retrying..."
+      $time_cp $cp \$fregrid_remap_file \$remap_file
+      $checktransfer
+   endif
+endif
+EOF
+      $call_tile_fregrid .= <<'EOF';
 if ( $?variables && "$variables" != '' ) then
    set interpvars = "$variables"
    unset variables
@@ -1009,10 +1034,13 @@ else
    set interpvars = `echo $interpvars |sed 's/ /,/g'`
 endif
 set order1 = ( precip prec_ls snow_ls prec_conv snow_conv uw_precip prec_uwc snow_uwc prc_deep_donner snow_deep_donner prc1_deep_donner prc_mca_donner snow_mca_donner ice_mask land_mask zsurf cld_amt_2d conv_freq IWP_all_clouds WP_all_clouds WVP tot_cloud_area tot_ice_amt tot_liq_amt swdn_sfc_clr swdn_sfc swdn_toa_clr swdn_toa swdn_tot_dif swup_sfc_clr swup_sfc swup_toa_clr swup_toa wind_ref wind_ref_max wind_ref_min )
+set non_regrid_vars = ( lat lon )
+EOF
+      my $non_regrid_vars = $fre->property('FRE.frepp.fregrid.non_regrid_vars');
+      $call_tile_fregrid .= <<EOF;
+set non_regrid_vars = ( \$non_regrid_vars $non_regrid_vars )
 set attCmds = ()
 unset echo
-EOF
-      $call_tile_fregrid .= <<EOF;
 if ( -e $ppRootDir/.non_default_interp_method ) then
   source $ppRootDir/.non_default_interp_method
 endif
@@ -1029,6 +1057,17 @@ foreach order1var ( $order1 )
     endif
   end
 end
+foreach non_regrid_var ( $non_regrid_vars )
+  foreach modelvar ( `echo $interpvars | sed -e "s/,/ /g"` )
+    if ( $modelvar == $non_regrid_var ) then
+      if ( `ncexists -f $fregrid_in.tile1.nc -v $non_regrid_var` ) then
+        if ( ! `ncexists -f $fregrid_in.tile1.nc -v $non_regrid_var -a interp_method` ) then
+          set attCmds = ( $attCmds -a interp_method,$non_regrid_var,a,c,"none" )
+        endif
+      endif
+    endif
+  end
+end
 set echo
 EOF
 
@@ -1037,8 +1076,9 @@ EOF
 
       $call_fregrid .= <<EOF;
 if (\$#attCmds > 0) then
-   $time_ncatted ncatted -h -O \$attCmds \$fregrid_in.nc
+   $time_ncatted ncatted -h -O \$attCmds \$fregrid_in.nc \$fregrid_in.nc.tmp
    #check_ncatted
+   mv -f \$fregrid_in.nc.tmp \$fregrid_in.nc
 endif
 
 if ( "\$fregrid_wt" != '' ) then
@@ -1134,14 +1174,12 @@ EOF
       if ( $basenpes == 1 ) {
          my $exec_fregrid .= <<EOF;
 $time_fregrid \$FREGRID --standard_dimension --input_mosaic \$input_mosaic --input_file \$fregrid_in --interp_method \$interp_method --remap_file \$remap_file --nlon \$nlon --nlat \$nlat --scalar_field \$interpvars \$fregrid_wt --output_file out.nc
-mv out.nc \$fregrid_in.nc
 EOF
          $call_tile_fregrid .= $exec_fregrid;
          $call_fregrid .= $exec_fregrid;
       } else {
          my $exec_fregrid .= <<EOF;
 $time_fregrid mpirun -np $basenpes fregrid_parallel --standard_dimension --input_mosaic \$input_mosaic --input_file \$fregrid_in --interp_method \$interp_method --remap_file \$remap_file --nlon \$nlon --nlat \$nlat --scalar_field \$interpvars \$fregrid_wt --output_file out.nc
-mv out.nc \$fregrid_in.nc
 EOF
          $call_tile_fregrid .= $exec_fregrid;
          $call_fregrid .= $exec_fregrid;
@@ -1150,7 +1188,7 @@ EOF
    my $rename_regridded = <<EOF;
 #check_fregrid
 
-if ( ! -e \$fregrid_remap_file ) then
+if ( ! -e \$fregrid_remap_file && -e out.nc ) then
    ls -l \$remap_file*
    $time_hsmput hsmput -v -t -p \$remap_dir -w . \$remap_file
    if ( \$status ) then
@@ -1158,6 +1196,12 @@ if ( ! -e \$fregrid_remap_file ) then
       $time_hsmput hsmput -v -t -p \$remap_dir -w . \$remap_file
       $checktransfer
    endif
+endif
+
+if ( -e out.nc ) then
+    mv out.nc \$fregrid_in.nc
+else
+    rm \$fregrid_in.nc
 endif
 
 EOF
@@ -1245,7 +1289,8 @@ EOF
                      print "Redoing anyway because 'overwrite state files' was specified...\n";
                   } else {
                      print "This year ($hDate) has already been completed for $component.\n";
-                     #should we continue here in case of opt_p?
+                     # if --plus option is used, store next year's frepp command to call at the end
+                     push @frepp_plus_calls, form_frepp_call_for_plus_option() if $opt{plus};
                      next;
                   }
                } elsif ("$state" eq "FATAL") {
@@ -1360,6 +1405,11 @@ EOF
       #check if non-default interpMethod specified
       my $componentIM = $ppcNode->findvalue('@interpMethod');
       if ( "$componentIM" ne "" ) { $interpMethod = $componentIM; }
+
+      # make sure cmip and zInterp options aren't used together
+      if ($ppcNode->findvalue('@cmip') =~ /(?:yes|on|true)/i and $ppcNode->findvalue('@zInterp')) {
+         die "ERROR: Component $component requested incompatible cmip and zInterp options.\n";
+      }
 
       #get list of all diagnostic output files from source attributes, remove duplicates
       my @sourceatts = $ppcNode->findnodes('*/@source');
@@ -1966,6 +2016,8 @@ EOF
          $didsomething = 0;
       } else {
          print STDERR "NOTE: No calculations necessary for year $hDate for $component.\n\n";
+         # if --plus option is used, store next year's frepp command to call at the end
+         push @frepp_plus_calls, form_frepp_call_for_plus_option() if $opt{plus};
          next;
       }
 
@@ -2172,6 +2224,17 @@ EOF
 
    sysmailuser();
    print "\n";
+
+   if (@frepp_plus_calls) {
+       my $N = @frepp_plus_calls;
+       print "\nNormal frepp processing done; about to run $N frepp commands for next year, due to --plus $opt{plus}\n";
+       my $i = 1;
+       for my $cmd (@frepp_plus_calls) {
+           printf "\n%s$cmd\n\n", $N > 1 ? "#$i/$N: " : '>';
+           system $cmd;
+           ++$i;
+       }
+   }
 }
 
 ##############################################
@@ -2669,7 +2732,7 @@ sub call_frepp {
    if ( "$year" ne "" ) {
       $year .= $userstartmo;
       $csh .= "\n/usr/bin/perl $absfrepp -x $abs_xml_path -t $year -s -q $depjobs";
-      if ( $opt_P ) { $csh .= "-p $opt_P "; }
+      if ( $opt_P ) { $csh .= "--platform $opt_P "; }
       if ( $opt_T ) { $csh .= "-T $opt_T "; }
       if ( $opt_d ) { $csh .= "-d $opt_d "; }
       if ( $opt_D ) { $csh .= "-D '$opt_D' "; }
@@ -2680,26 +2743,11 @@ sub call_frepp {
       if ( $opt_H ) { $csh .= "-H "; }
       if ( $opt_o ) { $csh .= "-o "; }
       $csh .= "$expt\n";
-   } elsif ( $opt_p ) {
-      my $togo = $opt_p - 1;
-      if ( $togo > 0 ) { $togo = "--plus $togo"; } else { $togo = ''; }
-      $csh .= "\n/usr/bin/perl $absfrepp -x $abs_xml_path -t $nextyearf $togo -s -v ";
-      if ( $opt_P ) { $csh .= "-p $opt_P "; }
-      if ( $opt_T ) { $csh .= "-T $opt_T "; }
-      if ( $opt_d ) { $csh .= "-d $opt_d "; }
-      if ( $opt_D ) { $csh .= "-D '$opt_D' "; }
-      if ( $opt_u ) { $csh .= "-u $opt_u "; }
-      if ( $opt_c ) { $csh .= "-c $component "; }
-      if ( $opt_m ) { $csh .= "-m '$opt_m' "; }
-      if ( $opt_M ) { $csh .= "-M "; }
-      if ( $opt_H ) { $csh .= "-H "; }
-      if ( $opt_o ) { $csh .= "-o "; }
-      $csh .= "$expt\n";
-      $csh .= errorstr("$relfrepp had a problem creating next script $expt"."_$nextyearf");
-      $csh .= mailerrors($outscript);
-   } else { #call frepp -A for analysis scripts
+   }
+   else {
+      #call frepp -A for analysis scripts
       $csh .= "\n/usr/bin/perl $absfrepp -A -x $abs_xml_path -t $hDate -s -v ";
-      if ( $opt_P ) { $csh .= "-p $opt_P "; }
+      if ( $opt_P ) { $csh .= "--platform $opt_P "; }
       if ( $opt_T ) { $csh .= "-T $opt_T "; }
       if ( $opt_d ) { $csh .= "-d $opt_d "; }
       if ( $opt_u ) { $csh .= "-u $opt_u "; }
@@ -2709,10 +2757,36 @@ sub call_frepp {
       if ( $opt_H ) { $csh .= "-H "; }
       $csh .= "$expt\n";
       $csh .= errorstr("$relfrepp had a problem creating final analysis script $expt"."_$nextyearf");
+      if ( $opt{plus} ) {
+         $csh .= "\n" . form_frepp_call_for_plus_option() . "\n";
+         $csh .= errorstr("$relfrepp had a problem creating next script $expt"."_$nextyearf");
+      }
       $csh .= mailerrors($outscript);
    }
 
    return $csh;
+}
+
+# Generate the frepp command for next year's frepp call when using the --plus option
+sub form_frepp_call_for_plus_option {
+    return unless $opt{plus};
+    my $nextyear = FREUtil::modifydate($tEND,"+ 1 sec");
+    my $nextyearf = FREUtil::graindate($nextyear,"day");
+    my $togo = $opt{plus} - 1;
+    my $plus = $togo > 0 ? "--plus $togo" : '';
+    my $cmd = "/usr/bin/perl $absfrepp -x $abs_xml_path -t $nextyearf $plus -s -v ";
+    if ( $opt_P ) { $cmd .= "--platform $opt_P "; }
+    if ( $opt_T ) { $cmd .= "-T $opt_T "; }
+    if ( $opt_d ) { $cmd .= "-d $opt_d "; }
+    if ( $opt_D ) { $cmd .= "-D '$opt_D' "; }
+    if ( $opt_u ) { $cmd .= "-u $opt_u "; }
+    if ( $opt_c ) { $cmd .= "-c $component "; }
+    if ( $opt_m ) { $cmd .= "-m '$opt_m' "; }
+    if ( $opt_M ) { $cmd .= "-M "; }
+    if ( $opt_H ) { $cmd .= "-H "; }
+    if ( $opt_o ) { $cmd .= "-o "; }
+    $cmd .= $expt;
+    return $cmd;
 }
 
 #set up checkpointing
@@ -4325,6 +4399,7 @@ end
    set ncvars_arg = -st0123
    set variables = ( $variables )
    set fregrid_remap_file = $xyInterpRegridFile
+   set source_grid = $sourceGrid
    $call_and_check_fregrid
 
    mv \$fregrid_in.nc $component.$range.\$monthf.nc
@@ -4427,6 +4502,7 @@ EOF
     set ncvars_arg = -st0123
     set variables = ( $variables )
     set fregrid_remap_file = $xyInterpRegridFile
+    set source_grid = $sourceGrid
     $call_and_check_fregrid
 
 EOF
@@ -4596,6 +4672,7 @@ end
     set ncvars_arg = -st0123
     set variables = ( $variables )
     set fregrid_remap_file = $xyInterpRegridFile
+    set source_grid = $sourceGrid
     $call_and_check_fregrid
 
 mv \$fregrid_in.nc $component.$tENDf.ann.nc
@@ -4691,6 +4768,7 @@ EOF
     set ncvars_arg = -st0123
     set variables = ( $variables )
     set fregrid_remap_file = $xyInterpRegridFile
+    set source_grid = $sourceGrid
     $call_and_check_fregrid
 
 EOF
@@ -5068,6 +5146,7 @@ sub directTS{
    my $avgatt = $_[0]->findvalue('@averageOf');
    my $freq = $_[0]->findvalue('@freq');
    my $source = $_[0]->findvalue('@source');
+   my $split_ncvars_cmip_option = ($ppcNode->findvalue('@cmip') =~ /(?:yes|on|true)/i) ? '--cmip' : '';
    if ( "$source" eq "" ) { $source = $ppcNode->findvalue('@source'); }
    if( "$avgatt" ne "" ) {
       if( "$avgatt" eq "daily" ) { return monthlyTSfromdailyTS( $_[0], $sim0, $startofrun ); }
@@ -5086,12 +5165,20 @@ sub directTS{
    my $outdirpath = "$component/ts/$freq/$chunkLength";
    my $outdir = "$ppRootDir/$outdirpath";
 
-   my $iunit = "months";
-   if($chunkLength =~ /yr/) {
-      $chunkLength =~ s/yr//;
+   my $iunit;
+   if ($chunkLength =~ /(\d*)(?:y|yr|years?)/i) {
       $iunit = "years";
+      $chunkLength = $1;
    }
-   $chunkLength =~ s/mo//;
+   elsif ($chunkLength =~ /(\d*)(?:mo|mon|months)/i) {
+      $iunit = "months";
+      $chunkLength = $1;
+   }
+   else {
+      print STDERR "ERROR: Cannot create $component $freq timeSeries because can't parse chunkLength=$chunkLength.\n";
+      mailuser("ERROR: Cannot create $component $freq timeSeries because can't parse chunkLength=$chunkLength.");
+      return;
+   }
 
    my $yrsSoFar=&Delta_Format( FREUtil::dateCalc($sim0,$t0) ,0,"%yd");
    my $mod = ($yrsSoFar+1) % $chunkLength;
@@ -5237,6 +5324,7 @@ EOF
     set ncvars_arg = -st0123
     set variables = ( $variables )
     set fregrid_remap_file = $xyInterpRegridFile
+    set source_grid = $sourceGrid
     $call_and_check_fregrid
 
 mv \$fregrid_in.nc all.nc
@@ -5272,6 +5360,7 @@ EOF
     set ncvars_arg = -st23
     set variables = ( $variables )
     set fregrid_remap_file = $xyInterpRegridFile
+    set source_grid = $sourceGrid
     $call_and_check_fregrid
 
 EOF
@@ -5309,6 +5398,7 @@ EOF
     set ncvars_arg = -st0123
     set variables = ( $variables )
     set fregrid_remap_file = $xyInterpRegridFile
+    set source_grid = $sourceGrid
     $call_and_check_fregrid
 
 mv \$fregrid_in.nc all.nc
@@ -5344,6 +5434,7 @@ EOF
     set ncvars_arg = -st23
     set variables = ( $variables )
     set fregrid_remap_file = $xyInterpRegridFile
+    set source_grid = $sourceGrid
     $call_and_check_fregrid
 
 EOF
@@ -5373,7 +5464,7 @@ if ( `ncdump -h \$filetosplit | grep -c " average_T1("` == 1 && `ncdump -h \$fil
    $check_ncatted
 endif
 
-$time_splitncvars \$SPLITNCVARS -c -o byVar $variablesopt \$filetosplit
+$time_splitncvars \$SPLITNCVARS $split_ncvars_cmip_option -o byVar $variablesopt \$filetosplit
 $check_splitncvars
 
 cd byVar
@@ -5784,7 +5875,7 @@ EOF
 
       foreach my $i ( 1 .. 6 ) {
       $csh .= <<EOF;
-   set files = (`ls -1 $hDate.$diag_source*tile$i.nc | grep -v grid_spec`)
+   set files = (`ls -1 $hDate.$diag_source*tile$i.nc | grep -v grid_spec | grep -v ocean_geometry`)
    set static = (`\$NCVARS -s012 \$files`) # only support up to 2D static fields
    if ( "\$static" != "" ) then
       foreach file ( \$files )
@@ -5816,7 +5907,7 @@ EOF
       my $cubiccsh = <<EOF;
 
    set output_files = ( )
-   set tiles = (`ls -1 $hDate.$diag_source*.tile1.nc | grep -v grid_spec`)
+   set tiles = (`ls -1 $hDate.$diag_source*.tile1.nc | grep -v grid_spec | grep -v ocean_geometry`)
    foreach tfile ( \$tiles )
      if ( ! -w \$tfile ) then
       set i = 1
@@ -5837,6 +5928,7 @@ EOF
      set ncvars_arg = -s2
      set variables = ( )
      set fregrid_remap_file = $xyInterpRegridFile
+     set source_grid = $sourceGrid
 
      set onedvars = `\$NCVARS -s01 \$fregrid_in.tile1.nc`
      if ( "\$onedvars" != "" ) then
@@ -5846,7 +5938,7 @@ EOF
 
 # call and check fregrid start
 $call_and_check_fregrid
-set output_files = (\$output_files \$fregrid_in.nc)
+if (-e \$fregrid_in.nc) set output_files = (\$output_files \$fregrid_in.nc)
 endif
 # call and check fregrid end
 
@@ -5871,7 +5963,7 @@ EOF
          $call_and_check_fregrid =~ s/set order1/if ( "\$interpvars" != "" ) then\n set order1/;
          $csh .= <<EOF;
          set output_files = ( )
-         set files = (`ls -1 $hDate.$diag_source*.nc | grep -v grid_spec`)
+         set files = (`ls -1 $hDate.$diag_source*.nc | grep -v grid_spec | grep -v ocean_geometry`)
          foreach file ( \$files )
            set fregrid_wt = "$fregrid_wt"
            set fregrid_in_date = $hDate
@@ -5881,10 +5973,11 @@ EOF
            set ncvars_arg = -s2
            set variables = ( )
            set fregrid_remap_file = $xyInterpRegridFile
+           set source_grid = $sourceGrid
 
            $call_and_check_fregrid
 
-           set output_files = (\$output_files \$fregrid_in.nc)
+           if (-e \$fregrid_in.nc ) set output_files = (\$output_files \$fregrid_in.nc)
          endif
          end
 
@@ -5892,7 +5985,7 @@ EOF
       } else {
 
       $csh .= <<EOF;
-   set output_files = (`ls -1 $hDate.$diag_source*.nc | grep -v grid_spec`)
+   set output_files = (`ls -1 $hDate.$diag_source*.nc | grep -v grid_spec | grep -v ocean_geometry`)
 EOF
       }
    }
@@ -6566,6 +6659,7 @@ EOF
     set ncvars_arg = -st23
     set variables = ( $variables )
     set fregrid_remap_file = $xyInterpRegridFile
+    set source_grid = $sourceGrid
     $call_and_check_fregrid
 
     $time_ncatted ncatted -h -O -a filename,global,m,c,"$component.$tSEASONf.nc" $component.$tSEASONf.nc
@@ -6666,6 +6760,7 @@ end
     set ncvars_arg = -st0123
     set variables = ( $variables )
     set fregrid_remap_file = $xyInterpRegridFile
+    set source_grid = $sourceGrid
     $call_and_check_fregrid
 
     $time_ncatted ncatted -h -O -a filename,global,m,c,"$component.$dates.nc" $component.$dates.nc

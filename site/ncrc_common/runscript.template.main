@@ -83,12 +83,15 @@
   #FRE const(mailMode)
   #FRE const(windfallOptionsSet)
   #FRE const(windfallOptionsUnset)
+  #FRE const(includeDir)
+  #FRE const(includeDirRemote)
 
   #FRE const(platformRemote)
   #FRE const(stdoutDirRemote)
   #FRE const(stmpDirRemote)
   #FRE const(archiveDirRemote)
   #FRE const(envRemote)
+  #FRE const(freCommandsVersionRemote)
 
   #FRE const(outputStagerSavePartition)
   #FRE const(outputStagerSaveQueue)
@@ -154,6 +157,9 @@
 
   #FRE const(mppnccombineOptsRestart)
   #FRE const(mppnccombineOptsHistory)
+
+  #FRE const(FreCommandsSrcDir)
+  #FRE const(FreCommandsBldDir)
 
 ################################################################################
 #------------------------ global constants and aliases -------------------------
@@ -249,6 +255,7 @@
   alias prepareDir `which prepare_dir.csh`
   alias timeStamp `which time_stamp.csh` $timeStampOptions
   alias workDirCleaner `which batch_rmdir.csh`
+  alias adjust_dry_mass_tool `which adjust_dry_mass.csh`
 
   set -r workDirCleaner = `alias workDirCleaner`
   set -r finisher = `alias finisher`
@@ -455,6 +462,10 @@
     if ( $echoOn ) set echo
     exit 1
   endif
+
+  # ---------------- setup NiNaC
+
+  #FRE ninac-platform-csh
 
 ################################################################################
 #----------------------------- global variables --------------------------------
@@ -721,6 +732,7 @@
   if ( $echoOn ) unset echo
   ls -l INPUT/*
   if ( $echoOn ) set echo
+  set adjust_dry_mass = `adjust_dry_mass_tool`
 
   # ---------------- executable and tables loading
 
@@ -1704,6 +1716,10 @@
               set ppStarterOptionsQueueAndRuntime = ( -q $ppStarterCombineOffLargeOffQueue -l walltime=$ppStarterCombineOffLargeOffRuntime )
 	    endif	    
 	  endif
+          # Chaco jobs require the pancylc queue on analysis
+          if ( $freCommandsVersionRemote =~ '*chaco*' ) then
+            set ppStarterOptionsQueueAndRuntime = `echo $ppStarterOptionsQueueAndRuntime | sed -r 's/-q \S+/-q pancylc/'`
+          endif
           set ppStarterOptions = ( $submitOptionsPPStarter $submitOptionsProject )
           set ppStarterOptions = ( $ppStarterOptions -N $FRE_JOBID.pp.starter.$firstDate )
           set ppStarterOptions = ( $ppStarterOptions $ppStarterOptionsQueueAndRuntime -l $ppStarterCoreSpec )
@@ -1781,6 +1797,8 @@
       echo "set xferRetry			=   0"				>> $historyArgFile 
       echo "set xmlFiles			= ( $xmlFiles )"		>> $historyArgFile
       echo "set xmlFilesRemote			= ( $xmlFilesRemote )"		>> $historyArgFile
+      echo "set includeDir              	=   $includeDir"                >> $historyArgFile
+      echo "set includeDirRemote        	=   $includeDirRemote"          >> $historyArgFile
       echo "set ppStarterOptions		= ( $ppStarterOptions )"	>> $historyArgFile
       echo "set stdoutDirRemote			=   $stdoutDirRemote"		>> $historyArgFile
       echo "set freCommandsModuleFilesDir	=   $freCommandsModuleFilesDir"	>> $historyArgFile
@@ -2180,7 +2198,33 @@
 
   endif
 
-  # ---------------- normal end of script 
+  # ---------------- Run NiNaC
+
+  if ( $?NiNaC_LVL ) then
+    if ( $NiNaC_LVL > 0 ) then
+
+      set NiNaC_RunRx_Script = `which "$NiNaC_RunRx"`
+      set NiNaC_RunRx_SubOpts = "-v NiNaC_SRCDIR='$FreCommandsSrcDir' -v NiNaC_BLDDIR='$FreCommandsBldDir' -v NiNaC_RUNDIR='$workDir' -N '$FRE_JOBID'"
+      set NiNaC_RunRx_JobId = `submit -O "$NiNaC_RunRx_SubOpts" "$NiNaC_RunRx_Script"`
+
+      if ( $status == 0 ) then
+        if ( $echoOn ) unset echo
+        echo "NiNaC Note: The NiNaC_RunRx job '$NiNaC_RunRx_JobId' has been submitted successfully"
+        if ( $echoOn ) set echo
+      else
+        if ( $echoOn ) unset echo
+        echo "NiNaC Note: While NiNaC loaded attempt to submit the NiNaC_RunRx job failed with exit status $status : FRE continuing as normal."
+        if ( $echoOn ) set echo
+      endif
+
+      unset NiNaC_RunRx_Script
+      unset NiNaC_RunRx_SubOpts
+      unset NiNaC_RunRx_JobId
+
+    endif
+  endif
+
+  # ---------------- normal end of script
 
   set -r runtimeEnd = `date "+%s"`
   set -r runtime = `echo "$runtimeEnd - $runtimeBeg" | bc -l`

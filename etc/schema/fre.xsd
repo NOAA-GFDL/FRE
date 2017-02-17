@@ -31,6 +31,21 @@
     </xs:unique>
   </xs:element>
 
+  <xs:simpleType name="fmsBoolean">
+    <xs:annotation>
+      <xs:documentation>A generice on/off/true/false/yes/no switch</xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:string">
+      <xs:pattern value="[Oo][Nn]"/>
+      <xs:pattern value="[Oo][Ff][Ff]"/>
+      <xs:pattern value="[Tt][Rr][Uu][Ee]"/>
+      <xs:pattern value="[Ff][Aa][Ll][Ss][Ee]"/>
+      <xs:pattern value="[Yy][Ee][Ss]"/>
+      <xs:pattern value="[Nn][Oo]"/>
+      <xs:pattern value="$(\S+)"/>
+    </xs:restriction>
+  </xs:simpleType>
+
   <xs:element name="user">
     <xs:annotation>
       <xs:documentation>Used by the curator tools to specify user information.</xs:documentation>
@@ -59,7 +74,7 @@
     </xs:annotation>
     <xs:complexType>
       <xs:sequence>
-        <xs:any processContents="skip" minOccurs="1"/>
+        <xs:any processContents="skip" minOccurs="1" maxOccurs="unbounded"/>
       </xs:sequence>
       <xs:attribute name="name" use="required" type="xs:string"/>
     </xs:complexType>
@@ -94,13 +109,13 @@
               <xs:element ref="parentExperimentRIP"/>
               <xs:element ref="branchTime"/>
             </xs:choice>
-            <xs:attribute name="DBswitch" use="required" type="DBswitchOpts"/>
+            <xs:attribute name="DBswitch" use="required" type="fmsBoolean"/>
           </xs:complexType>
         </xs:element>
         <xs:element name="description"/>
         <xs:element name="component">
           <xs:annotation>
-            <xs:documentation>An experiments component defines the CVS paths through which the component may be acquired. The 'requires' attribute lists dependencies for that component. The 'paths' attribute lists the directory that will be search after CVS checkout.</xs:documentation>
+            <xs:documentation>An experiments component defines the SCM repository URL through which the component may be acquired. The 'requires' attribute lists dependencies for that component. The 'paths' attribute lists the directory that will be searched after aquring the component from the SCM repository.</xs:documentation>
           </xs:annotation>
           <xs:complexType>
             <xs:choice minOccurs="0" maxOccurs="unbounded">
@@ -133,10 +148,19 @@
         <xs:element ref="scenario"/>
       </xs:choice>
       <xs:attribute name="inherit" type="xs:string"/>
-      <xs:attribute name="name" use="required" type="xs:string"/>
+      <xs:attribute name="name" use="required" type="experimentName"/>
       <xs:attribute name="modelClass" use="optional" type="xs:string"/>
     </xs:complexType>
   </xs:element>
+
+  <xs:simpleType name="experimentName">
+    <xs:annotation>
+      <xs:documentation>Restricts the options for experiment names.</xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:string">
+      <xs:pattern value="[^+]+"/>
+    </xs:restriction>
+  </xs:simpleType>
 
   <xs:element name="modelID" type="xs:string">
     <xs:annotation>
@@ -203,16 +227,6 @@
       <xs:documentation>A tag in the public metadata tag to house the old communityModel name</xs:documentation>
     </xs:annotation>
   </xs:element>
-
-  <xs:simpleType name="DBswitchOpts">
-    <xs:annotation>
-      <xs:documentation>A switch for turning on or off the Curator ingestion for a given experiment</xs:documentation>
-    </xs:annotation>
-    <xs:restriction base="xs:string">
-      <xs:pattern value="on|off"/>
-      <xs:pattern value="$(\S+)"/>
-    </xs:restriction>
-  </xs:simpleType>
 
   <xs:element name="executable">
     <xs:annotation>
@@ -304,6 +318,7 @@
     <xs:complexType mixed="true">
       <xs:attribute name="file" type="xs:string"/>
       <xs:attribute name="name" type="xs:string"/>
+      <xs:attribute name="override" type="fmsBoolean"/>
     </xs:complexType>
   </xs:element>
 
@@ -318,17 +333,16 @@
             <xs:documentation>The csh tag can be used to issue shell commands that will be run before post processing occurs.</xs:documentation>
           </xs:annotation>
         </xs:element>
-        <xs:element ref="refineDiag">
-          <xs:annotation>
-            <xs:documentation/>
-          </xs:annotation>
-        </xs:element>
+        <xs:element ref="refineDiag"/>
+	<xs:element ref="preAnalysis"/>
         <xs:element name="component">
           <xs:annotation>
             <xs:documentation>The component defines the type of output component (which will be the output directory name that contains the post processed files), the z-interpolation method, the start year (in the event that you wish to account for spin up time), the source component (which should link back to a component defined in the experiment tag, an interpolation method, and finally a cubed-sphere to lat/lon grid conversion factor.</xs:documentation>
           </xs:annotation>
           <xs:complexType>
             <xs:choice minOccurs="0" maxOccurs="unbounded">
+	      <xs:element ref="refineDiag"/>
+	      <xs:element ref="static"/>
               <xs:element ref="timeSeries"/>
               <xs:element ref="timeAverage"/>
               <xs:element ref="dataFile">
@@ -337,14 +351,14 @@
                 </xs:annotation>
               </xs:element>
             </xs:choice>
-            <xs:attribute name="cubicToLatLon" type="xs:string"/>
             <xs:attribute name="sourceGrid" type="srcGrd"/>
             <xs:attribute name="xyInterp" type="xyInterpMethod"/>
+            <xs:attribute name="zInterp" type="zInterpMethod"/>
             <xs:attribute name="interpMethod" type="xs:string"/>
+	    <xs:attribute name="cmip" type="fmsBoolean"/>
             <xs:attribute name="source" type="xs:string"/>
             <xs:attribute name="start" type="xs:string"/>
             <xs:attribute name="type" type="xs:string"/>
-            <xs:attribute name="zInterp" type="xs:string"/>
           </xs:complexType>
         </xs:element>
       </xs:choice>
@@ -368,6 +382,22 @@
     </xs:restriction>
   </xs:simpleType>
 
+  <xs:simpleType name="zInterpMethod">
+    <xs:annotation>
+      <xs:documentation>Restricts the options for Z interpolation in the XML.</xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="ncep"/>
+      <xs:enumeration value="am3"/>
+      <xs:enumeration value="hs20"/>
+      <xs:enumeration value="era40"/>
+      <xs:enumeration value="narcaap"/>
+      <xs:enumeration value="ar5daily"/>
+      <xs:enumeration value="ncep_subset"/>
+      <xs:enumeration value="none"/>
+    </xs:restriction>
+  </xs:simpleType>
+
   <xs:simpleType name="xyInterpMethod">
     <xs:annotation>
       <xs:documentation>Restricts the options for XY interpolation in the XML.</xs:documentation>
@@ -383,6 +413,24 @@
     </xs:annotation>
     <xs:complexType>
       <xs:attribute name="script" use="required" type="xs:string"/>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="preAnalysis">
+    <xs:annotation>
+      <xs:documentation>The chaco preAnalysis tag that will pre-process any data necessary for post-processing.</xs:documentation>
+    </xs:annotation>
+    <xs:complexType>
+      <xs:attribute name="script" use="required" type="xs:string"/>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="static">
+    <xs:annotation>
+      <xs:documentation>USed to help fre/chaco-N determine what sources the workflow should include in the static files. </xs:documentation>
+    </xs:annotation>
+    <xs:complexType>
+      <xs:attribute name="additionalSources" use="required" type="xs:string"/>
     </xs:complexType>
   </xs:element>
 
@@ -653,6 +701,7 @@
         <xs:element ref="stmp"/>
         <xs:element ref="archive"/>
         <xs:element ref="tmp"/>
+        <xs:element ref="include"/>
         <xs:element name="postProcess" type="xs:string">
           <xs:annotation>
             <xs:documentation>Defines the path to the post-processing directory.</xs:documentation>
@@ -740,6 +789,12 @@
     </xs:annotation>
   </xs:element>
 
+  <xs:element name="include" type="xs:string">
+    <xs:annotation>
+      <xs:documentation>Experiment include directory for namelists, diag tables, and friends</xs:documentation>
+    </xs:annotation>
+  </xs:element>
+
   <xs:element name="project" type="xs:string">
     <xs:annotation>
       <xs:documentation>This tag defines the user's project for accounting purposes. It can be used by a job scheduler for allocation purposes.</xs:documentation>
@@ -761,17 +816,6 @@
       <xs:attribute name="version" use="required" type="xs:string"/>
     </xs:complexType>
   </xs:element>
-
-  <xs:simpleType name="doF90CppOpts">
-    <xs:annotation>
-      <xs:documentation>Restricts the possible values for the compiler type, all else will be considered 'off/False/no' in fre</xs:documentation>
-    </xs:annotation>
-    <xs:restriction base="xs:string">
-      <xs:enumeration value="on"/>
-      <xs:enumeration value="yes"/>
-      <xs:enumeration value="true"/>
-    </xs:restriction>
-  </xs:simpleType>
 
   <xs:simpleType name="compilerType">
     <xs:annotation>
@@ -906,7 +950,7 @@
 
   <xs:element name="codeBase">
     <xs:annotation>
-      <xs:documentation>Defines the branch name and CVS location for the source files.</xs:documentation>
+      <xs:documentation>Defines the branch name and SCM repository URL for the source files.</xs:documentation>
     </xs:annotation>
     <xs:complexType mixed="true">
       <xs:attribute name="version" use="required" type="xs:string"/>
@@ -925,7 +969,7 @@
         <xs:element ref="makeOverrides" minOccurs="0"/>
       </xs:all>
       <xs:attribute name="target" type="xs:string"/>
-      <xs:attribute name="doF90Cpp" type="doF90CppOpts"/>
+      <xs:attribute name="doF90Cpp" type="fmsBoolean"/>
     </xs:complexType>
   </xs:element>
 
