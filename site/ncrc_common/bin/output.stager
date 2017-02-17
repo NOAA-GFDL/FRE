@@ -959,6 +959,65 @@
 
       pushd $srcDir
 
+      # Land restart files _MUST_ be run through combine-ncc for
+      # regression runs to put the indexes in a canonical order, so
+      # `nccmp -d` can compare them correctly.  This is only run
+      # if the land wrote out non-distributed compressed restart files.
+      if ( $type == 'restart' ) then
+        # Look for non-distributed restart files
+        set singleResFiles = ( `ls -1 | egrep "($patternGrepRestart)\$" | sort -u` )
+        if ( $#singleResFiles > 0 ) then
+           @ counter = 1
+           set -r singleCombineTimeBeg = `date "+%s"`
+           foreach file ( $singleResFiles )
+              slmnccompressed $file
+              if ( $status == 0 ) then
+                # Run only the compressed restart files through combine-ncc
+                set tmpFile = `mktemp -u $file.XXXXX`
+                ( slmnccombine $file $tmpFile && mv --force $tmpFile $file || ( touch $file.$tagFail; rm --force $tmpfile ) ) &
+              endif
+              if ( $counter < $combinesPerJob ) then
+                @ counter++
+              else
+                @ counter = 1
+                wait
+              endif
+           end
+           wait
+           unset counter
+        endif
+        unset singleResFile
+      endif
+
+      set filesNotOK = ( `ls -1 | egrep "$patternGrepFail"` )
+
+      if ( $#filesNotOK > 0 ) then
+        foreach file ( $filesNotOK )
+          if ( $echoOn ) unset echo
+          echo "*ERROR*: A problem during combining the non-distributed compressed $type file '$file:r'"
+          if ( $echoOn ) set echo
+          rm -f $file
+        end
+        if ( $echoOn ) unset echo
+        echo "-ERROR-: Failed to combine the non-distributed compressed $type files"
+        if ( $echoOn ) set echo
+        set exitStatus = 3
+        goto END
+      else if ( $?singleCombineTimeBeg ) then
+        set -r singleCombineTimeEnd = `date "+%s"`
+        set -r singleCombineTime = `echo "$singleCombineTimeEnd - $singleCombineTimeBeg" | bc -l`
+        if ( $echoOn ) unset echo
+        echo "<NOTE> : All the non-distributed compressed $type files have been combined successfully"
+        echo "<NOTE> : Time to combine = '$singleCombineTime' (seconds)"
+        if ( $echoOn ) set echo
+      else
+        if ( $echoOn ) unset echo
+        echo "<NOTE> : No non-distributed compressed $type files needing combined have been found"
+        if ( $echoOn ) set echo
+      endif
+
+      unset filesNotOK
+
       if ( $type == 'history' ) then
         set filesToCombine = ( `ls -1 | egrep "($patternGrepHistory).*$patternGrepTail" | sed -r "s/$patternGrepTail//g" | sort -u` )
       else if ( $type == 'restart' ) then
@@ -1054,13 +1113,13 @@
         @ counter = 1
         set -r decompressTimeBeg = `date "+%s"`
         foreach file ( $filesToDecompress )
-	  slmnccompressed $file
-	  if ( $status == 0 ) then
-	    set tmpFile=$file.tmp
+          slmnccompressed $file
+          if ( $status == 0 ) then
+            set tmpFile=$file.tmp
             mv --force $file $tmpFile
             ( slmncdecompress $tmpFile $file && rm --force $tmpFile || touch $file.$tagFail ) &
-	  endif
-	  if ( $counter < $combinesPerJob ) then
+          endif
+          if ( $counter < $combinesPerJob ) then
             @ counter ++
           else
             @ counter = 1
@@ -1101,7 +1160,7 @@
       endif
 
       unset filesNotOK
-      
+
       popd
 
     else
