@@ -1056,9 +1056,11 @@
         foreach file ( $filesToDecompress )
 	  slmnccompressed $file
 	  if ( $status == 0 ) then
-	    set tmpFile=$file.tmp
-            mv --force $file $tmpFile
-            ( slmncdecompress $tmpFile $file && rm --force $tmpFile || touch $file.$tagFail ) &
+            set tmpFile = `mktemp $file.XXXXX`
+            # Use a temporary file to hold the decompressed output
+            # If the decompress is successful, the tmpFile will be moved
+            # on top of the original name
+            ( slmncdecompress $file $tmpFile && mv --force $tmpFile $file || ( touch $file.$tagFail; rm --force $tmpFile ) ) &
 	  endif
 	  if ( $counter < $combinesPerJob ) then
             @ counter ++
