@@ -2795,7 +2795,7 @@ sub form_frepp_call_for_plus_option {
     if ( $opt_M ) { $cmd .= "-M "; }
     if ( $opt_H ) { $cmd .= "-H "; }
     if ( $opt_o ) { $cmd .= "-o "; }
-    if ( $opt{compress} ) { $csh .= "--compress "; }
+    if ( $opt{compress} ) { $cmd .= "--compress "; }
     $cmd .= $expt;
     return $cmd;
 }
@@ -5791,6 +5791,8 @@ sub staticvars {
    my $check_fregrid = errorstr("FREGRID ($component static variables)");
    my $check_ncrename = errorstr("NCRENAME ($component static variables)");
    my $check_ncatted = errorstr("NCATTED ($component static variables)");
+   my $check_nccopy = errorstr("NCCOPY ($component static variables)");
+   my $compress = compress_csh("$ppRootDir/$component/$component.static.nc", $check_nccopy);
 
    $historyfiles .= "$hDate".".nc.tar ";
 
@@ -6015,6 +6017,7 @@ EOF
          end
       endif
    endif
+   $compress
 endif
 EOF
    return $csh;
@@ -6304,7 +6307,7 @@ sub seaTSfromts {
       $piece =~ s/\$sea.\$var/*.nc/g;
       $dmgetcommand .= "$time_dmget dmget \"$piece\"\n";
    }
-   my $compress = comprss_csh("$component.$startf-$tENDf.\$sea.\$var", $check_nccopy);
+   my $compress = compress_csh("$component.$startf-$tENDf.\$sea.\$var", $check_nccopy);
    my $csh = setcheckpt("seaTSfromts_$chunkLength");
    $csh .= <<EOF;
 #####################################
