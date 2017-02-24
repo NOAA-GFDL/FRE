@@ -157,7 +157,8 @@ $experimentCreate = sub($$$)
       if ( $fre->experimentNode($e)->findvalue('publicMetadata/@DBswitch')) {
 	  $r->{MDBIswitch} = $fre->experimentNode($e)->findvalue('publicMetadata/@DBswitch');
 	  if ( $fre->experimentNode($e)->findvalue('publicMetadata/project') =~ /cmip\d/i ){
-	      FRE::curator($fre->{xmlfileAbsPath}, $e , 1);
+	      FRE::curator($fre->{xmlfileAbsPath}, $e , 1)
+		    if $fre->{caller} =~ /(frepp|frerun)/;
 	  }
       }
       else {
