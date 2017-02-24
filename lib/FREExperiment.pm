@@ -156,7 +156,8 @@ $experimentCreate = sub($$$)
       # ---------------------------- Figure out whether experiment belongs in database or not
       if ( $fre->experimentNode($e)->findvalue('publicMetadata/@DBswitch')) {
 	  $r->{MDBIswitch} = $fre->experimentNode($e)->findvalue('publicMetadata/@DBswitch');
-	  if ( $fre->experimentNode($e)->findvalue('publicMetadata/project') =~ /cmip\d/i ){
+	  if ( $fre->experimentNode($e)->findvalue('publicMetadata/project') =~ /^cmip\d$/i ){
+	      # Run publicMetadata validation if it is a CMIP experiment
 	      FRE::curator($fre->{xmlfileAbsPath}, $e , 1)
 		    if $fre->{caller} =~ /(frepp|frerun)/;
 	  }
