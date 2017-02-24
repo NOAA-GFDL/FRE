@@ -156,6 +156,9 @@ $experimentCreate = sub($$$)
       # ---------------------------- Figure out whether experiment belongs in database or not
       if ( $fre->experimentNode($e)->findvalue('publicMetadata/@DBswitch')) {
 	  $r->{MDBIswitch} = $fre->experimentNode($e)->findvalue('publicMetadata/@DBswitch');
+	  if ( $fre->experimentNode($e)->findvalue('publicMetadata/project') =~ /cmip\d/i ){
+	      $r->{CMIP_Experiment} = $fre->experimentNode($e)->findvalue('publicMetadata/project');
+	  }
       }
       else {
 	  # Assume that the default is off
