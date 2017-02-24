@@ -267,11 +267,19 @@ sub curator($$$)
   my $experimentNode = $root->findnodes("experiment[\@label='$expName' or \@name='$expName']")->get_node(1);
   my $publicMetadataNode = $experimentNode->findnodes("publicMetadata")->get_node(1);
 
-  print $publicMetadataNode->toString() . "\n";
   my $document = XML::LibXML->load_xml(string => $publicMetadataNode->toString());
-  validate({ document => $document,
-	     verbose => 1,
-	     curator => 1});
+  my $documentURI = "publicMetadata";
+  $document->setURI($documentURI);
+
+  my $return = validate({ document => $document,
+			  verbose => 1,
+			  curator => 1});
+
+  if ( not $return ){
+      FREMsg::out($v, FREMsg::FATAL, "CMIP Curator tags are not valid.");
+      exit FREDefaults::STATUS_FRE_GENERIC_PROBLEM;
+      return '';
+  }
 
   return;
 }
@@ -281,14 +289,14 @@ sub validate
   my $args = shift;
   my ( $document, $validateWhat, $schemaName );
   if ( $args->{curator} ) {
-      $document = $args->{document},
       $validateWhat = 'publicMetadata';
       $schemaName = 'curator.xsd';
+      $document = $args->{document};
   }
   else {
-      $document = $xmlLoad->($args->{document}, $args->{verbose});
       $validateWhat = $args->{document};
       $schemaName = 'fre.xsd';
+      $document = $xmlLoad->($args->{document}, $args->{verbose});
   }
 
   if ( $document )
@@ -305,7 +313,6 @@ sub validate
       }
       else
       {
-	print $@ . "\n";
 	_print_validation_errors($@, $validateWhat);
 	FREMsg::out($args->{verbose}, FREMsg::FATAL, "The XML file '$validateWhat' is not valid");
 	return undef;
