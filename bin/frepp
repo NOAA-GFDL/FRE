@@ -58,6 +58,7 @@ our @frepp_plus_calls;
       'unique|u=s',
       'moab|m=s',
       'override|o',
+      'compress',
 
       'wait|w=s',
       'plus=i',
@@ -174,6 +175,7 @@ Usage:    $relfrepp -P|--platform platform [-AB:C:O:RY:Z:c:d:f:hlmMp:oqr:S:st:u:
           -w jobid     = place hold on current job so that it waits for jobid to complete
                          (PP/AN cannot set holds based on job names, it is not supported by moab)
           -o           = override job dependencies
+          --compress   = compress pp files using NetCDF4 compression, deflation=2 and shuffle
 
           OPTIONS FOR ANALYSIS FIGURES
           -A           = run analysis only
@@ -717,7 +719,6 @@ EOF
       }
    }
    $cshscripttmpl =~ s/#platform_csh_from_xml/$platformcsh/;
-
    if ( "$platform" eq 'ia64' ) {
       $cshscripttmpl =~ s/#\$ -l h_cpu/#\$ -l h_cpu=$maxruntime/;
       $cshscripttmpl =~ s/#\$ -o/#\$ -o $stdoutdir\/postProcess/;
@@ -1274,6 +1275,12 @@ EOF
          $cshscript =~ s/setenv FRE_STDOUT_PATH.*/setenv FRE_STDOUT_PATH $stdoutdir\/postProcess\/$pbs_job_name.o\$PBS_JOBID_number/;
          $cshscript =~ s/(-w $expt)/$1_$component/;
          $cshscript =~ s/(-soft -l fre_info=)/$1ppComponent\@$component+/;
+
+	 if ( $component =~ /ocean_(annual|monthly)/ and not $pbsqueue ){
+	     $cshscript =~ s/#PBS -q batch/#PBS -q bigmem/;
+	 } elsif ( $pbsqueue ){
+	     $cshscript =~ s/#PBS -q batch/#PBS -q $pbsqueue/;
+	 }
          $opt_w =~ s/( -hold_jid $expt)(.*)(_\d\d\d\d\d\d\d\d)/$1_$component$3/;
          $statefile = "$statedir/$component.".$userstartyear;
 
@@ -2501,7 +2508,9 @@ $checktransfer
 end
 
 # Set nccopy netcdf compression flags
-if (\$history_deflation) then
+if ($opt{compress}) then
+    set -r nc_compression_flags = "-d 2 -s"
+else if (\$?history_deflation) then
     if (\$history_shuffle == "true") then
         set -r nc_compression_flags = "-d \$history_deflation -s"
     else
@@ -2742,6 +2751,7 @@ sub call_frepp {
       if ( $opt_M ) { $csh .= "-M "; }
       if ( $opt_H ) { $csh .= "-H "; }
       if ( $opt_o ) { $csh .= "-o "; }
+      if ( $opt{compress} ) { $csh .= "--compress "; }
       $csh .= "$expt\n";
    }
    else {
@@ -2785,6 +2795,7 @@ sub form_frepp_call_for_plus_option {
     if ( $opt_M ) { $cmd .= "-M "; }
     if ( $opt_H ) { $cmd .= "-H "; }
     if ( $opt_o ) { $cmd .= "-o "; }
+    if ( $opt{compress} ) { $cmd .= "--compress "; }
     $cmd .= $expt;
     return $cmd;
 }
@@ -5780,6 +5791,8 @@ sub staticvars {
    my $check_fregrid = errorstr("FREGRID ($component static variables)");
    my $check_ncrename = errorstr("NCRENAME ($component static variables)");
    my $check_ncatted = errorstr("NCATTED ($component static variables)");
+   my $check_nccopy = errorstr("NCCOPY ($component static variables)");
+   my $compress = compress_csh("$ppRootDir/$component/$component.static.nc", $check_nccopy);
 
    $historyfiles .= "$hDate".".nc.tar ";
 
@@ -6004,6 +6017,7 @@ EOF
          end
       endif
    endif
+   $compress
 endif
 EOF
    return $csh;
@@ -6293,7 +6307,7 @@ sub seaTSfromts {
       $piece =~ s/\$sea.\$var/*.nc/g;
       $dmgetcommand .= "$time_dmget dmget \"$piece\"\n";
    }
-   my $compress = comprss_csh("$component.$startf-$tENDf.\$sea.\$var", $check_nccopy);
+   my $compress = compress_csh("$component.$startf-$tENDf.\$sea.\$var", $check_nccopy);
    my $csh = setcheckpt("seaTSfromts_$chunkLength");
    $csh .= <<EOF;
 #####################################
@@ -7317,6 +7331,7 @@ EOF
 #PBS -o
 #PBS -r y
 #PBS -S /bin/csh
+#PBS -q batch
 #$ -soft -l fre_info=
 EOF
       $cshscripttmpl .= <<EOF;
