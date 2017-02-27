@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" elementFormDefault="qualified" xmlns:xi="http://www.w3.org/2001/XInclude">
-  <xs:import namespace="http://www.w3.org/2001/XInclude" schemaLocation="xi.xsd"/>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" elementFormDefault="qualified" xmlns:xi="http://www.w3.org/2003/XInclude">
+  <xs:import namespace="http://www.w3.org/2003/XInclude" schemaLocation="xi.xsd"/>
   <xs:import namespace="http://www.w3.org/XML/1998/namespace" schemaLocation="xml.xsd"/>
+  <xs:include schemaLocation="postprocessing.xsd"/>
   <xs:element name="experimentSuite">
     <xs:annotation>
       <xs:documentation>The "experimentSuite" tag is the root element and should contain the "setup" tag as well as all of your experiments. The name attribute is not required and the rtsVersion specifies the version of the schema.</xs:documentation>
@@ -86,33 +87,8 @@
     </xs:annotation>
     <xs:complexType mixed="true">
       <xs:choice minOccurs="0" maxOccurs="unbounded">
-        <xs:element name="publicMetadata">
-          <xs:annotation>
-            <xs:documentation>An experiments publicMetadata node helps populate Curator</xs:documentation>
-          </xs:annotation>
-          <xs:complexType>
-            <xs:choice minOccurs="0" maxOccurs="unbounded">
-              <xs:element name="project">
-                <xs:annotation>
-                  <xs:documentation>The project associated with a given experiment</xs:documentation>
-                </xs:annotation>
-              </xs:element>
-              <xs:element ref="model"/>
-              <xs:element ref="modelID"/>
-              <xs:element ref="experimentName"/>
-              <xs:element ref="experimentID"/>
-              <xs:element ref="comment"/>
-              <xs:element ref="forcing"/>
-              <xs:element ref="startTime"/>
-              <xs:element ref="endTime"/>
-              <xs:element ref="parentExperimentID"/>
-              <xs:element ref="parentExperimentRIP"/>
-              <xs:element ref="branchTime"/>
-            </xs:choice>
-            <xs:attribute name="DBswitch" use="required" type="fmsBoolean"/>
-          </xs:complexType>
-        </xs:element>
-        <xs:element name="description"/>
+	<xs:element name="publicMetadata"/>
+	<xs:element name="description"/>
         <xs:element name="component">
           <xs:annotation>
             <xs:documentation>An experiments component defines the SCM repository URL through which the component may be acquired. The 'requires' attribute lists dependencies for that component. The 'paths' attribute lists the directory that will be searched after aquring the component from the SCM repository.</xs:documentation>
@@ -145,13 +121,34 @@
         <xs:element ref="postProcess"/>
         <xs:element ref="realization"/>
         <xs:element ref="runtime"/>
-        <xs:element ref="scenario"/>
       </xs:choice>
       <xs:attribute name="inherit" type="xs:string"/>
       <xs:attribute name="name" use="required" type="experimentName"/>
       <xs:attribute name="modelClass" use="optional" type="xs:string"/>
     </xs:complexType>
   </xs:element>
+
+  <xs:element name="realization">
+    <xs:annotation>
+      <xs:documentation>This tag is part of the fre-curator tools and is not required for the main part of FRE. What follows is the CMIP5 definition of what values these ensemble members should contain. When multiple simulations are derived form the same experiment, the 'r' value should be incremented. When the initialization method or input files are altered, the 'i' value should be incremented. When forcings cause the physics version to differ between simulations, the 'p' value should be incremented. If the forcings are different, then the "f" should be incremented.</xs:documentation>
+    </xs:annotation>
+    <xs:complexType>
+      <xs:attribute name="r" use="required" type="ensembles"/>
+      <xs:attribute name="i" use="required" type="xs:integer"/>
+      <xs:attribute name="p" use="required" type="xs:integer"/>
+      <xs:attribute name="f" type="xs:integer"/> 
+    </xs:complexType>
+  </xs:element>
+
+  <xs:simpleType name="ensembles">
+    <xs:annotation>
+      <xs:documentation>Restricts the possible values realization to a single ensemble member or format N:N.</xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:string">
+      <xs:pattern value="[0-9]+"/>
+      <xs:pattern value="[0-9]+:[0-9]+"/>
+    </xs:restriction>
+  </xs:simpleType>
 
   <xs:simpleType name="experimentName">
     <xs:annotation>
@@ -161,72 +158,6 @@
       <xs:pattern value="[^+]+"/>
     </xs:restriction>
   </xs:simpleType>
-
-  <xs:element name="modelID" type="xs:string">
-    <xs:annotation>
-      <xs:documentation>The model ID used for identification purposes</xs:documentation>
-    </xs:annotation>
-  </xs:element>
-
-  <xs:element name="experimentName" type="xs:string">
-    <xs:annotation>
-      <xs:documentation>The community experiment name</xs:documentation>
-    </xs:annotation>
-  </xs:element>
-
-  <xs:element name="experimentID" type="xs:string">
-    <xs:annotation>
-      <xs:documentation>The experiment ID for a given experiment</xs:documentation>
-    </xs:annotation>
-  </xs:element>
-
-  <xs:element name="comment" type="xs:string">
-    <xs:annotation>
-      <xs:documentation>The community comment for an experiment</xs:documentation>
-    </xs:annotation>
-  </xs:element>
-
-  <xs:element name="forcing" type="xs:string">
-    <xs:annotation>
-      <xs:documentation>The forcings used for a given experiment</xs:documentation>
-    </xs:annotation>
-  </xs:element>
-
-  <xs:element name="startTime" type="xs:string">
-    <xs:annotation>
-      <xs:documentation>The Start time for a given experiment</xs:documentation>
-    </xs:annotation>
-  </xs:element>
-
-  <xs:element name="endTime" type="xs:string">
-    <xs:annotation>
-      <xs:documentation>The end time for a given experiment</xs:documentation>
-    </xs:annotation>
-  </xs:element>
-
-  <xs:element name="parentExperimentID" type="xs:string">
-    <xs:annotation>
-      <xs:documentation>The Experiment ID for a given experiment's parent</xs:documentation>
-    </xs:annotation>
-  </xs:element>
-
-  <xs:element name="parentExperimentRIP" type="xs:string">
-    <xs:annotation>
-      <xs:documentation>The RIP values for a given experiment's parent</xs:documentation>
-    </xs:annotation>
-  </xs:element>
-
-  <xs:element name="branchTime" type="xs:string">
-    <xs:annotation>
-      <xs:documentation>The branch time for a given experiment</xs:documentation>
-    </xs:annotation>
-  </xs:element>
-
-  <xs:element name="model" type="xs:string">
-    <xs:annotation>
-      <xs:documentation>A tag in the public metadata tag to house the old communityModel name</xs:documentation>
-    </xs:annotation>
-  </xs:element>
 
   <xs:element name="executable">
     <xs:annotation>
@@ -319,129 +250,6 @@
       <xs:attribute name="file" type="xs:string"/>
       <xs:attribute name="name" type="xs:string"/>
       <xs:attribute name="override" type="fmsBoolean"/>
-    </xs:complexType>
-  </xs:element>
-
-  <xs:element name="postProcess">
-    <xs:annotation>
-      <xs:documentation>This tag holds all of the post processing settings. Inside of this tag, the components, time ranges, and variable subsets are declared for post processing.</xs:documentation>
-    </xs:annotation>
-    <xs:complexType>
-      <xs:choice minOccurs="0" maxOccurs="unbounded">
-        <xs:element ref="csh">
-          <xs:annotation>
-            <xs:documentation>The csh tag can be used to issue shell commands that will be run before post processing occurs.</xs:documentation>
-          </xs:annotation>
-        </xs:element>
-        <xs:element ref="refineDiag"/>
-	<xs:element ref="preAnalysis"/>
-        <xs:element name="component">
-          <xs:annotation>
-            <xs:documentation>The component defines the type of output component (which will be the output directory name that contains the post processed files), the z-interpolation method, the start year (in the event that you wish to account for spin up time), the source component (which should link back to a component defined in the experiment tag, an interpolation method, and finally a cubed-sphere to lat/lon grid conversion factor.</xs:documentation>
-          </xs:annotation>
-          <xs:complexType>
-            <xs:choice minOccurs="0" maxOccurs="unbounded">
-	      <xs:element ref="refineDiag"/>
-	      <xs:element ref="static"/>
-              <xs:element ref="timeSeries"/>
-              <xs:element ref="timeAverage"/>
-              <xs:element ref="dataFile">
-                <xs:annotation>
-                  <xs:documentation>This dataFile tag is used to define the xyInterp regrid file location to use for this component.  The type for this file must be 'xyInterpRegridFile'.</xs:documentation>
-                </xs:annotation>
-              </xs:element>
-            </xs:choice>
-            <xs:attribute name="sourceGrid" type="srcGrd"/>
-            <xs:attribute name="xyInterp" type="xyInterpMethod"/>
-            <xs:attribute name="zInterp" type="zInterpMethod"/>
-            <xs:attribute name="interpMethod" type="xs:string"/>
-	    <xs:attribute name="cmip" type="fmsBoolean"/>
-            <xs:attribute name="source" type="xs:string"/>
-            <xs:attribute name="start" type="xs:string"/>
-            <xs:attribute name="type" type="xs:string"/>
-          </xs:complexType>
-        </xs:element>
-      </xs:choice>
-      <xs:attribute name="combine" type="xs:string"/>
-      <xs:attribute name="npes" type="xs:integer"/>
-    </xs:complexType>
-  </xs:element>
-
-  <xs:simpleType name="srcGrd">
-    <xs:annotation>
-      <xs:documentation>Restricts the possible inputs for the input into SourceGrid to a few allocated options.</xs:documentation>
-    </xs:annotation>
-    <xs:restriction base="xs:string">
-      <xs:enumeration value="atmos-latlon"/>
-      <xs:enumeration value="atmos-cubedsphere"/>
-      <xs:enumeration value="ocean-latlon"/>
-      <xs:enumeration value="ocean-tripolar"/>
-      <xs:enumeration value="land-latlon"/>
-      <xs:enumeration value="land-cubedsphere"/>
-      <xs:enumeration value="none"/>
-    </xs:restriction>
-  </xs:simpleType>
-
-  <xs:simpleType name="zInterpMethod">
-    <xs:annotation>
-      <xs:documentation>Restricts the options for Z interpolation in the XML.</xs:documentation>
-    </xs:annotation>
-    <xs:restriction base="xs:string">
-      <xs:enumeration value="ncep"/>
-      <xs:enumeration value="am3"/>
-      <xs:enumeration value="hs20"/>
-      <xs:enumeration value="era40"/>
-      <xs:enumeration value="narcaap"/>
-      <xs:enumeration value="ar5daily"/>
-      <xs:enumeration value="ncep_subset"/>
-      <xs:enumeration value="none"/>
-    </xs:restriction>
-  </xs:simpleType>
-
-  <xs:simpleType name="xyInterpMethod">
-    <xs:annotation>
-      <xs:documentation>Restricts the options for XY interpolation in the XML.</xs:documentation>
-    </xs:annotation>
-    <xs:restriction base="xs:string">
-      <xs:pattern value="[0-9]+,[0-9]+"/>
-    </xs:restriction>
-  </xs:simpleType>
-
-  <xs:element name="refineDiag">
-    <xs:annotation>
-      <xs:documentation>The refineDiag tag points to a script that will be run on the post processed data.</xs:documentation>
-    </xs:annotation>
-    <xs:complexType>
-      <xs:attribute name="script" use="required" type="xs:string"/>
-    </xs:complexType>
-  </xs:element>
-
-  <xs:element name="preAnalysis">
-    <xs:annotation>
-      <xs:documentation>The chaco preAnalysis tag that will pre-process any data necessary for post-processing.</xs:documentation>
-    </xs:annotation>
-    <xs:complexType>
-      <xs:attribute name="script" use="required" type="xs:string"/>
-    </xs:complexType>
-  </xs:element>
-
-  <xs:element name="static">
-    <xs:annotation>
-      <xs:documentation>USed to help fre/chaco-N determine what sources the workflow should include in the static files. </xs:documentation>
-    </xs:annotation>
-    <xs:complexType>
-      <xs:attribute name="additionalSources" use="required" type="xs:string"/>
-    </xs:complexType>
-  </xs:element>
-
-  <xs:element name="realization">
-    <xs:annotation>
-      <xs:documentation>This tag is part of the fre-curator tools and is not required for the main part of FRE. What follows is the CMIP5 definition of what values these ensemble members should contain. When multiple simulations are derived form the same experiment, the 'r' value should be incremented. When the initialization method or input files are altered, the 'i' value should be incremented. When forcings cause the physics version to differ between simulations, the 'p' value should be incremented.</xs:documentation>
-    </xs:annotation>
-    <xs:complexType>
-      <xs:attribute name="i" use="required" type="xs:integer"/>
-      <xs:attribute name="p" use="required" type="xs:integer"/>
-      <xs:attribute name="r" use="required" type="ensembles"/>
     </xs:complexType>
   </xs:element>
 
@@ -626,20 +434,6 @@
       <xs:attribute name="hours" type="xs:string"/>
       <xs:attribute name="months" type="xs:string"/>
       <xs:attribute name="overrideParams" type="xs:string"/>
-    </xs:complexType>
-  </xs:element>
-
-  <xs:element name="scenario">
-    <xs:annotation>
-      <xs:documentation>This tag is only used by fre-curator and does not impact general usage of FRE. It defines: forcings used in the simulation, the start and end time of the simulation, and parent experiment information (including name, ensemble member values, and the branch time).</xs:documentation>
-    </xs:annotation>
-    <xs:complexType mixed="true">
-      <xs:attribute name="branch_time" type="xs:decimal"/>
-      <xs:attribute name="communityForcing" use="required" type="xs:string"/>
-      <xs:attribute name="endTime" use="required" type="xs:string"/>
-      <xs:attribute name="parentExperimentID" type="xs:string"/>
-      <xs:attribute name="parentExperimentRIP" type="xs:string"/>
-      <xs:attribute name="startTime" use="required" type="xs:string"/>
     </xs:complexType>
   </xs:element>
 
@@ -892,48 +686,6 @@
     </xs:complexType>
   </xs:element>
 
-  <xs:element name="timeSeries">
-    <xs:annotation>
-      <xs:documentation>Used in the creation of time series files, it defines the frequency, source of the time series files, and the chunk length. </xs:documentation>
-    </xs:annotation>
-    <xs:complexType>
-      <xs:sequence>
-        <xs:element minOccurs="0" ref="variables"/>
-        <xs:element minOccurs="0" maxOccurs="unbounded" ref="analysis"/>
-        <xs:element minOccurs="0" ref="xi:include"/>
-        <xs:element minOccurs="0" ref="null"/>
-      </xs:sequence>
-      <xs:attribute name="chunkLength" use="required" type="xs:string"/>
-      <xs:attribute name="freq" use="required" type="xs:string"/>
-      <xs:attribute name="from" type="xs:string"/>
-      <xs:attribute name="averageOf" type="xs:string"/>
-      <xs:attribute name="source" type="xs:string"/>
-    </xs:complexType>
-  </xs:element>
-
-  <xs:element name="variables" type="xs:string">
-    <xs:annotation>
-      <xs:documentation>If only specific variables are needed, they can be defined in this tag. If this tag is not present, all variables are post processed.</xs:documentation>
-    </xs:annotation>
-  </xs:element>
-
-  <xs:element name="timeAverage">
-    <xs:annotation>
-      <xs:documentation>Used in the creation of time average files, this tag's usage is very similar to the time series tag. A source and interval are defined for creating these files.</xs:documentation>
-    </xs:annotation>
-    <xs:complexType>
-      <xs:choice>
-        <xs:element ref="xi:include"/>
-        <xs:element minOccurs="0" maxOccurs="unbounded" ref="analysis"/>
-        <xs:element minOccurs="0" ref="null"/>
-      </xs:choice>
-      <xs:attribute name="calcInterval" type="xs:string"/>
-      <xs:attribute name="from" type="xs:string"/>
-      <xs:attribute name="interval" use="required" type="xs:string"/>
-      <xs:attribute name="source" use="required" type="xs:string"/>
-    </xs:complexType>
-  </xs:element>
-
   <xs:element name="source">
     <xs:annotation>
       <xs:documentation>Contains information about the location of the source files.</xs:documentation>
@@ -1000,67 +752,6 @@
       <xs:attribute name="path" type="xs:string"/>
     </xs:complexType>
   </xs:element>
-
-  <xs:element name="analysis">
-    <xs:annotation>
-      <xs:documentation>Defines the location of analysis scripts to be run after the post processed data has been created.</xs:documentation>
-    </xs:annotation>
-    <xs:complexType mixed="true">
-      <xs:attribute name="cumulative" type="xs:string"/>
-      <xs:attribute name="mode" type="xs:string"/>
-      <xs:attribute name="momGrid" type="xs:string"/>
-      <xs:attribute name="script" type="xs:string"/>
-      <xs:attribute name="specify1year" type="xs:integer"/>
-      <xs:attribute name="startYear" type="xs:string"/>
-      <xs:attribute name="endYear" type="xs:string"/>
-      <xs:attribute name="switch" type="xs:string"/>
-      <xs:attribute name="outdir" type="xs:string"/>
-      <xs:attribute ref="xml:base"/>
-    </xs:complexType>
-  </xs:element>
-
-  <xs:simpleType name="ChunkLength">
-    <xs:annotation>
-      <xs:documentation>Restricts the possible values for the chunk length (or how much data, in some unit of time, should be present in each output file).</xs:documentation>
-    </xs:annotation>
-    <xs:restriction base="xs:string">
-      <xs:pattern value="[0-9]+yr"/>
-    </xs:restriction>
-  </xs:simpleType>
-
-  <xs:simpleType name="PostProcessInterpMethod">
-    <xs:annotation>
-      <xs:documentation>Restricts the possible values for the interpolation method.</xs:documentation>
-    </xs:annotation>
-    <xs:restriction base="xs:string">
-      <xs:enumeration value="conserve_order1"/>
-      <xs:enumeration value="conserve_order2"/>
-    </xs:restriction>
-  </xs:simpleType>
-
-  <xs:simpleType name="ensembles">
-    <xs:annotation>
-      <xs:documentation>Restricts the possible values realization to a single ensemble member or format N:N.</xs:documentation>
-    </xs:annotation>
-    <xs:restriction base="xs:string">
-      <xs:pattern value="[0-9]+"/>
-      <xs:pattern value="[0-9]+:[0-9]+"/>
-    </xs:restriction>
-  </xs:simpleType>
-
-  <xs:simpleType name="PostProcessZInterp">
-    <xs:annotation>
-      <xs:documentation>Restricts the possible values of the post processing z-interpolation values.</xs:documentation>
-    </xs:annotation>
-    <xs:restriction base="xs:string">
-      <xs:enumeration value="ncep"/>
-      <xs:enumeration value="am3"/>
-      <xs:enumeration value="hs20"/>
-      <xs:enumeration value="era40"/>
-      <xs:enumeration value="narcaap"/>
-      <xs:enumeration value="zgrid"/>
-    </xs:restriction>
-  </xs:simpleType>
 
   <xs:simpleType name="RtsVersion">
     <xs:annotation>

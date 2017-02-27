@@ -104,8 +104,7 @@ my $xmlValidateAndLoad = sub($$)
 # ------ return the loaded document 
 {
   my ($x, $v) = @_; 
-
-  if (validate($x, $v)) {
+  if (validate({document => $x, verbosity => $v})) {
       return $xmlLoad->($x, $v);
   }
   else {
@@ -262,104 +261,72 @@ sub home
 
 sub curator($$$)
 {
-  my ($x, $expName, $s, $v ) = @_;
-  my $xmlParser = XML::LibXML->new();
-  my $xmlOrigDoc = $xmlParser->parse_file($x);
+  my ($x, $expName, $v ) = @_;
+  my $xmlOrigDoc = $xmlLoad->($x, $v);
   my $root = $xmlOrigDoc->getDocumentElement;
   my $experimentNode = $root->findnodes("experiment[\@label='$expName' or \@name='$expName']")->get_node(1);
-  my $descriptionNode = $experimentNode->findnodes("description")->get_node(1);
   my $publicMetadataNode = $experimentNode->findnodes("publicMetadata")->get_node(1);
-  my @curatorTags = qw{model project experimentID experimentName};
-  my @missingCuratorTags;
-  print "A well formed XML will have the following attributes and tags set in the desired experiment\n";
-  print "Please consult documentation on the wiki for more information\n";
-  print "NOTE: 'realization' is the only required tag for ingestion into the curator database,\n";
-  print "      other tags will be populated with the defaults found in the curator documentation.\n";
-  print "Documentation: http://wiki.gfdl.noaa.gov/images/d/dc/CommunityMetadataTags.pdf\n";
-  print "**************************************************************************************************\n";
-  print "Curator tags for $expName:\n";
 
-  if ( $publicMetadataNode ){
-      for my $tag ( @curatorTags ){
-	  try{
-	      if ($publicMetadataNode->findnodes($tag)){
-		  print $tag . ": " . $publicMetadataNode->findnodes($tag) . "\n";
-	      } 
-	      else {
-		  push @missingCuratorTags, $tag;
-	      }
-	  }  
-	  catch {
-	      push @missingCuratorTags, $tag;
-	  };
-      }
-  }
-  elsif ( not $publicMetadataNode ){
-      push @missingCuratorTags, @curatorTags;
+  my $document = XML::LibXML->load_xml(string => $publicMetadataNode->toString());
+  my $documentURI = "publicMetadata";
+  $document->setURI($documentURI);
+
+  my $return = validate({ document => $document,
+			  verbose => 1,
+			  curator => 1});
+
+  if ( not $return ){
+      FREMsg::out($v, FREMsg::FATAL, "CMIP Curator tags are not valid; see CMIP metadata tag documentation at http://cobweb.gfdl.noaa.gov/~pcmdi/CMIP6_Curator/xml_documentation");
+      exit FREDefaults::STATUS_FRE_GENERIC_PROBLEM;
+      return '';
   }
 
-  my $realizationNode = $experimentNode->findnodes("realization")->get_node(1);
-  my @realizationVals = qw{ r i p };
-  my $realizationString = '';
-  if ( $realizationNode ){
-    foreach ( @realizationVals ){
-      my $value = $realizationNode->getAttribute($_);
-      if ( $value ){
-        $realizationString = $realizationString . $_ . $value;
-      } else {
-        push @missingCuratorTags, 'realization';
-        last;
-      }
-    }
-  } else {
-    push @missingCuratorTags, 'realization';
-  }
-  if ( ! grep ( /realization/, @missingCuratorTags)){
-    print "realization: $realizationString\n";
-  }
-  if ( @missingCuratorTags ){
-      print "------------------\n\n";
-      foreach ( @missingCuratorTags ){
-	  print "MISSING TAG: $_ \n";
-      }
-  }
   return;
 }
 
-sub validate($$)
-# ------ arguments: $xmlfile $verbose
-# ------ return 1 if the $xmlfile has been successfully validated
+sub validate
 {
-  my ($x, $v) = @_;
-  my $document = $xmlLoad->($x, $v);
-  if ($document)
+  my $args = shift;
+  my ( $document, $validateWhat, $schemaName );
+  if ( $args->{curator} ) {
+      $validateWhat = 'publicMetadata';
+      $schemaName = 'curator.xsd';
+      $document = $args->{document};
+  }
+  else {
+      $validateWhat = $args->{document};
+      $schemaName = 'fre.xsd';
+      $document = $xmlLoad->($args->{document}, $args->{verbose});
+  }
+
+  if ( $document )
   {
-    my $schemaLocation = FRE::home() . '/etc/schema/fre.xsd';
+    my $schemaLocation = FRE::home() . '/etc/schema/' . $schemaName;
     if (-f $schemaLocation and -r $schemaLocation)
     {
       my $schema = XML::LibXML::Schema->new(location => $schemaLocation);
       eval {$schema->validate($document)};
       if ($@ eq '')
       {
-	FREMsg::out($v, FREMsg::NOTE, "The XML file '$x' has been successfully validated"); 
+	FREMsg::out($args->{verbose}, FREMsg::NOTE, "The XML file '$validateWhat' has been successfully validated"); 
 	return 1;
       }
       else
       {
-    _print_validation_errors($@, $x);
-     FREMsg::out($v, FREMsg::FATAL, "The XML file '$x' is not valid");
+	_print_validation_errors($@, $validateWhat);
+	FREMsg::out($args->{verbose}, FREMsg::FATAL, "The XML file '$validateWhat' is not valid");
 	return undef;
       }
     }
     else
     {
-      FREMsg::out($v, FREMsg::FATAL, "The XML schema file '$schemaLocation' doesn't exist or not readable");
+      FREMsg::out($args->{verbose}, FREMsg::FATAL, "The XML schema file '$schemaLocation' doesn't exist or not readable");
       return undef;
     }
   }
   else
   {
-    FREMsg::out($v, FREMsg::FATAL, "The XML file '$x' can't be parsed");
+    FREMsg::out($args->{verbose}, FREMsg::FATAL, "The XML file '$validateWhat' can't be parsed");
     return undef;
   }
 }
