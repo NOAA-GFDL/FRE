@@ -276,7 +276,7 @@ sub curator($$$)
 			  curator => 1});
 
   if ( not $return ){
-      FREMsg::out($v, FREMsg::FATAL, "CMIP Curator tags are not valid.");
+      FREMsg::out($v, FREMsg::FATAL, "CMIP Curator tags are not valid; see CMIP metadata tag documentation at http://cobweb.gfdl.noaa.gov/~pcmdi/CMIP6_Curator/xml_documentation");
       exit FREDefaults::STATUS_FRE_GENERIC_PROBLEM;
       return '';
   }
