@@ -999,7 +999,7 @@
       # if the land wrote out non-distributed compressed restart files.
       if ( $type == 'restart' ) then
         # Look for non-distributed restart files
-        set singleResFiles = ( `ls -1 | egrep "($patternGrepRestart)\$" | sort -u` )
+        set singleResFiles = ( `ls -1 | egrep "($patternGrepRestart)"'$' | sort -u` )
         if ( $#singleResFiles > 0 ) then
            @ counter = 1
            set -r singleCombineTimeBeg = `date "+%s"`
@@ -1021,6 +1021,33 @@
            unset counter
         endif
         unset singleResFile
+      # Also, non-distributed compressed history files should
+      # be run through combine-ncc due to decompress-ncc mysteriously
+      # failing on some fields that are all zeros.
+      else if ( $type == 'history' ) then
+        # Look for non-distributed history files
+        set singleHistFiles = ( `ls -1 | egrep "($patternGrepHistory)"'$' | sort -u` )
+        if ( $#singleHistFiles > 0 ) then
+           @ counter = 1
+           set -r singleCombineTimeBeg = `date "+%s"`
+           foreach file ( $singleHistFiles )
+              slmnccompressed $file
+              if ( $status == 0 ) then
+                # Run only the compressed history files through combine-ncc
+                set tmpFile = `mktemp -u $file.XXXXX`
+                ( slmnccombine $file $tmpFile && mv --force $tmpFile $file || ( touch $file.$tagFail; rm --force $tmpfile ) ) &
+              endif
+              if ( $counter < $combinesPerJob ) then
+                @ counter++
+              else
+                @ counter = 1
+                wait
+              endif
+           end
+           wait
+           unset counter
+        endif
+        unset singleHistFile
       endif
 
       set filesNotOK = ( `ls -1 | egrep "$patternGrepFail"` )
