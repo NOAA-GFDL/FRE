@@ -691,6 +691,7 @@ EOF
    $cshscripttmpl =~ s/set ptmpDir/set ptmpDir = $ptmpDir/;
    $cshscripttmpl =~ s/set platform/set platform = $opt_P/;
    $cshscripttmpl =~ s/set target/set target = $opt_T/;
+   $cshscripttmpl =~ s/set segment_months/'set segment_months = ' . segmentLengthInMonths()/e;
 
    if ( $opt_r ) {  #if a regression test, no further postprocessing
       $cshscripttmpl =~ s/(-soft -l fre_info=)/$1ppYears\@$maxyrs+/;
@@ -1382,14 +1383,7 @@ EOF
       #get simulation end date from production xml -> simEND
       my $simTime = FREUtil::getxpathval('runtime/production/@simTime'); #not currently used
       my $simUnits = FREUtil::getxpathval('runtime/production/@units');  #not currently used
-      if($opt_S) {
-         $segTime = $opt_S; $segUnits = "months"
-      } else {
-         $segTime = FREUtil::getxpathval('runtime/production/segment/@simTime'); #global
-         $segUnits = FREUtil::getxpathval('runtime/production/segment/@units');  #global
-         if ( "$segUnits" eq "month" ) { $segUnits="months"; }
-         if ( "$segUnits" eq "year" ) { $segUnits="years"; }
-      }
+      ($segTime, $segUnits) = getSegmentLength(); # global
 
       my $simEND = FREUtil::modifydate($run0,"+ $simTime $simUnits - 1 sec");
 
@@ -7047,6 +7041,7 @@ set ptmpDir
 set histDir
 set platform
 set target
+set segment_months
 set prevjobstate
 set statefile
 
@@ -7097,6 +7092,28 @@ EOF
 return $cshscripttmpl;
 }
 
+sub segmentLengthInMonths {
+    my ($segTime, $segUnits) = getSegmentLength();
+    return $segTime if $segUnits eq 'months';
+    return $segTime * 12 if $segUnits eq 'years';
+    print STDERR "WARNING: Unable to convert segment unit $segUnits into months; setting segment_months = 1";
+    return 1;
+}
+
+sub getSegmentLength {
+    my ($segTime, $segUnits);
+    if ($opt_S) {
+        $segTime = $opt_S;
+        $segUnits = "months";
+    }
+    else {
+        $segTime = FREUtil::getxpathval('runtime/production/segment/@simTime');
+        $segUnits = FREUtil::getxpathval('runtime/production/segment/@units');
+        if ( "$segUnits" eq "month" ) { $segUnits="months"; }
+        if ( "$segUnits" eq "year" ) { $segUnits="years"; }
+    }
+    return ($segTime, $segUnits);
+}
 
 
 
