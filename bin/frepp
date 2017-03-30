@@ -1,6 +1,5 @@
 #!/usr/bin/perl
 # -*- cperl -*-
-# $Id: frepp,v 18.0.2.52.2.1.2.89.2.74 2014/12/17 15:42:41 arl Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: History/diagnostics post-processing
 # ------------------------------------------------------------------------------
@@ -742,6 +741,7 @@ EOF
    $cshscripttmpl =~ s/set ptmpDir/set ptmpDir = $ptmpDir/;
    $cshscripttmpl =~ s/set platform/set platform = $opt_P/;
    $cshscripttmpl =~ s/set target/set target = $opt_T/;
+   $cshscripttmpl =~ s/set segment_months/'set segment_months = ' . segmentLengthInMonths()/e;
    $cshscripttmpl =~ s/set experID/set experID = $exper_id/;
    $cshscripttmpl =~ s/set realizID/set realizID = $realiz_id/;
    $cshscripttmpl =~ s/set runID/set runID = $run_id/;
@@ -1500,14 +1500,7 @@ EOF
       #get simulation end date from production xml -> simEND
       my $simTime = FREUtil::getxpathval('runtime/production/@simTime'); #not currently used
       my $simUnits = FREUtil::getxpathval('runtime/production/@units');  #not currently used
-      if($opt_S) {
-         $segTime = $opt_S; $segUnits = "months"
-      } else {
-         $segTime = FREUtil::getxpathval('runtime/production/segment/@simTime'); #global
-         $segUnits = FREUtil::getxpathval('runtime/production/segment/@units');  #global
-         if ( "$segUnits" eq "month" ) { $segUnits="months"; }
-         if ( "$segUnits" eq "year" ) { $segUnits="years"; }
-      }
+      ($segTime, $segUnits) = getSegmentLength(); # global
 
       my $simEND = FREUtil::modifydate($run0,"+ $simTime $simUnits - 1 sec");
 
@@ -2773,7 +2766,7 @@ sub call_frepp {
       $csh .= errorstr("$relfrepp had a problem creating final analysis script $expt"."_$nextyearf");
       if ( $opt{plus} ) {
          $csh .= "\n" . form_frepp_call_for_plus_option() . "\n";
-         $csh .= errorstr("$relfrepp had a problem creating next script $expt"."_$nextyearf");
+      $csh .= errorstr("$relfrepp had a problem creating next script $expt"."_$nextyearf");
       }
       $csh .= mailerrors($outscript);
    }
@@ -7379,6 +7372,7 @@ set ptmpDir
 set histDir
 set platform
 set target
+set segment_months
 set prevjobstate
 set statefile
 set experID
@@ -7432,6 +7426,29 @@ EOF
    $cshscripttmpl =~ s/-pe ic.postp 1/-pe ic.postp $basenpes/;
 
 return $cshscripttmpl;
+}
+
+sub segmentLengthInMonths {
+    my ($segTime, $segUnits) = getSegmentLength();
+    return $segTime if $segUnits eq 'months';
+    return $segTime * 12 if $segUnits eq 'years';
+    print STDERR "WARNING: Unable to convert segment unit $segUnits into months; setting segment_months = 1";
+    return 1;
+}
+
+sub getSegmentLength {
+    my ($segTime, $segUnits);
+    if ($opt_S) {
+	$segTime = $opt_S;
+	$segUnits = "months";
+    }
+    else {
+	$segTime = FREUtil::getxpathval('runtime/production/segment/@simTime');
+	$segUnits = FREUtil::getxpathval('runtime/production/segment/@units');
+	if ( "$segUnits" eq "month" ) { $segUnits="months"; }
+	if ( "$segUnits" eq "year" ) { $segUnits="years"; }
+    }
+    return ($segTime, $segUnits);
 }
 
 sub parse_triple_id {
