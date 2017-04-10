@@ -376,16 +376,14 @@ use FREXML();
             close $scoScriptHandle;
             chmod 0755, $scoScriptName;
             system $scoScriptName;
-            if (!$?)
-            {
-               FREXML::save(fremake::checkoutVerifyName($z), $r);
-               return (1, FREDefaults::STATUS_OK);
-            }
-            else
+            if ($?)
             {
                $fre->out(FREMsg::FATAL, "The checkout script '$scoScriptName' failed! ($?)");
                return (0, FREDefaults::STATUS_FRE_SOURCE_PROBLEM);
             }
+	    processCompileCleanExecDir($z, 1);
+	    FREXML::save(fremake::checkoutVerifyName($z), $r);
+	    return (1, FREDefaults::STATUS_OK);
          }
          else
          {
@@ -524,21 +522,22 @@ use FREXML();
       }
    }
 
-   sub processCompileCleanExecDir($)
-   # ------ arguments: $exp
+   sub processCompileCleanExecDir
+   # ------ arguments: $exp $performDistClean
    {
-      my $z = shift;
-      my ($execDir, $fre) = ($z->execDir(), $z->fre());
+      my ($z, $performDistClean) = @_;
+      my ($execDir, $fre, $cmpScriptName) = ($z->execDir(), $z->fre(), fremake::compileScriptName($z));
+      my $cleanCmd = $performDistClean ? "distclean; rm -f $cmpScriptName" : "clean");
       if (-f "$execDir/Makefile" && -r "$execDir/Makefile")
       {
-         qx(cd $execDir; make clean);
+         qx(cd $execDir; make $cleanCmd);
          if (!$?)
          {
-            $fre->out(FREMsg::WARNING, "The executable directory '$execDir' has been cleaned by the 'make clean'");
+            $fre->out(FREMsg::WARNING, "The executable directory '$execDir' has been cleaned by the 'make $cleanCmd'");
          }
          else
          {
-            $fre->out(FREMsg::WARNING, "Unable to clean the executable directory '$execDir' by the 'make clean' ($?)");
+            $fre->out(FREMsg::WARNING, "Unable to clean the executable directory '$execDir' by the 'make $cleanCmd' ($?)");
          }
       }
       else
@@ -550,6 +549,7 @@ use FREXML();
             $fre->out(FREMsg::WARNING, "The executable directory '$execDir' has been cleaned") if $n > 0;
          }
       }
+
    }
 
    sub processCompileClean($%)
