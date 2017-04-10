@@ -1,10 +1,41 @@
 #!/bin/bash
 
+# Evaluate TAP output to determine if a test failed or passed.
+#
+# This function assumes the tapFile has a name of <test>.<extension>
+# where <test> is the name of the test suite, and will be used in 
+# the messages printed to the screen.
+#
+# evalTAP "tapFile"
+evalTAP () {
+   local tapFile=$1
+
+   local testName=${tapFilei%.*}
+
+   # Default return value
+   local myReturn=0
+
+   tap_fail=$( grep 'not ok' $tapFile )
+   if [ 'X' = "X$tap_fail" ]; then
+      echo "${testName} tests passed" 1>&2
+      myReturn=0
+   else
+      echo "${testName} tests failed:" 1>&2
+      echo "$tap_fail" 1>&2
+      myReturn=1
+   fi
+
+   echo $myReturn
+}
+
 case $FRE_SYSTEM_SITE in
 	gfdl )
 		PATH=$PATH:/home/sdu/opt/bats/bin
 		;;
-	ncrc2 )
+	ncrc3 )
+		PATH=$PATH:/ncrc/home2/Seth.Underwood/opt/bats/0.4.0/bin
+		;;
+	ncrc4 )
 		PATH=$PATH:/ncrc/home2/Seth.Underwood/opt/bats/0.4.0/bin
 		;;
 esac
@@ -13,16 +44,25 @@ cd xml
 
 command="bats -t ../frelist.bats"
 echo $command
-$command
+$command | tee frelist.tap 2>&1
+frelist_exit=$( evalTAP frelist.tap )
+
 
 echo ""
 command="bats -t ../fremake.bats"
 echo $command
-$command
+$command | tee fremake.tap 2>&1
+fremake_exit=$( evalTAP fremake.tap )
+
 
 echo ""
 command="bats -t ../frerun.bats"
 echo $command
-$command
+$command | tee frerun.tap 2>&1
+frerun_exit=$( evalTAP frerun.tap )
 
 cd ..
+
+myExit=$(expr $frelist_exit + $fremake_exit + $frerun_exit)
+
+exit $myExit
