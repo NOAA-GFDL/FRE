@@ -4,7 +4,7 @@
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: Runscript Template - NCRC Version
 # ------------------------------------------------------------------------------
-# Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2000-2013, 2015, 2017
+# Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2000-2013, 2015-2017
 # Designed and written by V. Balaji, Amy Langenhorst, Aleksey Yakovlev and
 # Seth Underwood
 #
@@ -164,29 +164,40 @@ banner $FRE_JOBID
 #------------------------ global constants and aliases -------------------------
 ################################################################################
 
-# ---------------- preload the fre module
+# ---------------- Make sure the modulefile directory is in MODULESPATH
 
 if ( -d $freCommandsModuleFilesDir && -r $freCommandsModuleFilesDir ) then
-   set freCommandsModuleFile = $freCommandsModuleFilesDir/fre/$freCommandsVersion
-   if ( -f $freCommandsModuleFile && -r $freCommandsModuleFile ) then
-      if ( $echoOn ) unset echo
-      module use $freCommandsModuleFilesDir
-      module unload fre
-      module load fre/$freCommandsVersion
-      if ( $echoOn ) set echo
-   else
-      if ( $echoOn ) unset echo
-      echo "*ERROR*: The 'fre' modulefile '$freCommandsModuleFile' doesn't exist or not readable"
-      if ( $echoOn ) set echo
-      exit 1
-   endif
-   unset freCommandsModuleFile
+   module use $freCommandsModuleFilesDir
 else
    if ( $echoOn ) unset echo
    echo "*ERROR*: The 'fre' modulefiles directory '$freCommandsModuleFilesDir' doesn't exist or not readable"
    if ( $echoOn ) set echo
    exit 1
 endif
+
+# ---------------- commands, copied from XML (setup/platform/csh)
+
+if ( $echoOn ) unset echo
+#FRE setup-platform-csh
+module list
+if ( $echoOn ) set echo
+
+# ---------------- postload the fre module to be sure it's still there
+
+set freCommandsModuleFile = $freCommandsModuleFilesDir/fre/$freCommandsVersion
+if ( -f $freCommandsModuleFile && -r $freCommandsModuleFile ) then
+   if ( $echoOn ) unset echo
+   module unload fre
+   module use $freCommandsModuleFilesDir
+   module load fre/$freCommandsVersion
+   if ( $echoOn ) set echo
+else
+   if ( $echoOn ) unset echo
+   echo "*ERROR*: The 'fre' modulefile '$freCommandsModuleFile' doesn't exist or not readable"
+   if ( $echoOn ) set echo
+   exit 1
+endif
+unset freCommandsModuleFile
 
 # ---------------- machine architecture
 
@@ -314,38 +325,6 @@ endif
 #--------------------------------- environment ---------------------------------
 ################################################################################
 
-# ---------------- commands, copied from XML (setup/platform/csh)
-
-if ( $echoOn ) unset echo
-#FRE setup-platform-csh
-module list
-if ( $echoOn ) set echo
-
-# ---------------- postload the fre module to be sure it's still there
-
-if ( -d $freCommandsModuleFilesDir && -r $freCommandsModuleFilesDir ) then
-   set freCommandsModuleFile = $freCommandsModuleFilesDir/fre-commands/$freCommandsVersion
-   if ( -f $freCommandsModuleFile && -r $freCommandsModuleFile ) then
-      if ( $echoOn ) unset echo
-      module use $freCommandsModuleFilesDir
-      module unload fre
-      module load fre/$freCommandsVersion
-      if ( $echoOn ) set echo
-   else
-      if ( $echoOn ) unset echo
-      echo "*ERROR*: The 'fre' modulefile '$freCommandsModuleFile' doesn't exist or not readable"
-      if ( $echoOn ) set echo
-      exit 1
-   endif
-   unset freCommandsModuleFile
-else
-   if ( $echoOn ) unset echo
-   echo "*ERROR*: The 'fre' modulefiles directory '$freCommandsModuleFilesDir' doesn't exist or not readable"
-   if ( $echoOn ) set echo
-   exit 1
-endif
-
-
 # ---------------- determine the HSM module info, exit if no HSM available
 
 set hsmInfo = ( `findModuleInfo 'hsm'` )
@@ -374,7 +353,7 @@ else
 endif
 
 alias hsmget `which hsmget` ${hsm_verbose} --time --workroot=$hsmDir --ptmproot=$ptmpDir --archroot=//
-alias hsmput `which hsmput` ${hsm_verbose}--time --workroot=$tmpOutputDir --ptmproot=$ptmpDir --archroot=//
+alias hsmput `which hsmput` ${hsm_verbose} --time --workroot=$tmpOutputDir --ptmproot=$ptmpDir --archroot=//
 
 # ---------------- some global configuration
 
@@ -592,7 +571,7 @@ if ( -e $workDir ) then
       if ( -r $workDir ) then
          if ( -w $workDir ) then
             ls -1 --directory --file-type $workDir/* | grep --fixed-strings --invert-match $tmpOutputDir | xargs rm --force --recursive
-            prepareDir $workDir/INPUT 'clean'   || exit 1
+            prepareDir $workDir/INPUT 'clean'     || exit 1
             prepareDir $workDir/RESTART 'clean'   || exit 1
          else
             if ( $echoOn ) unset echo
@@ -613,9 +592,9 @@ if ( -e $workDir ) then
       exit 1
    endif
 else
-   prepareDir $workDir      || exit 1
+   prepareDir $workDir         || exit 1
    prepareDir $workDir/INPUT   || exit 1
-   prepareDir $workDir/RESTART   || exit 1
+   prepareDir $workDir/RESTART || exit 1
 endif
 
 # ---------------- input data loading
@@ -851,7 +830,6 @@ endif
 ################################################################################
 
 while ( $irun <= $segmentsPerJob && $currentSeg <= $segmentsPerSimulation )
-
    banner $currentSeg/$segmentsPerSimulation
 
    # ---------------- test checkpointing conditions and exit if it has been requested
@@ -1098,7 +1076,7 @@ while ( $irun <= $segmentsPerJob && $currentSeg <= $segmentsPerSimulation )
       prepareDir $asciiWorkDir 'clean' || exit 1
 
       if ( ! $?MPI_FAIL ) then
-        ls -1 | egrep "$patternGrepAscii" | xargs -I'{}' mv --force '{}' $asciiWorkDir/$begindate.'{}'
+         ls -1 | egrep "$patternGrepAscii" | xargs -I'{}' mv --force '{}' $asciiWorkDir/$begindate.'{}'
 
          if ( $?flagOutputXferOn ) then
             if ( $?flagRunTypeRegression || $?flagOutputTypeUnique ) then
@@ -1110,23 +1088,22 @@ while ( $irun <= $segmentsPerJob && $currentSeg <= $segmentsPerSimulation )
             set asciiOutputDirRemote = ""
          endif
 
-         set actionSaveOn   = 1
-         set actionXferOn   = $?flagOutputXferOn
-         set paramArchiveOn   = $?flagOutputArchiveOn
-         @   paramPtmpOn      = ! $?flagOutputArchiveOn
-         set paramCheckSumOn   = $?flagCheckSumOn
-         set paramCompressOn   = $?flagOutputCompressAsciiOn
+         set actionSaveOn    =   1
+         set actionXferOn    =   $?flagOutputXferOn
+         set paramArchiveOn  =   $?flagOutputArchiveOn
+         @   paramPtmpOn     = ! $?flagOutputArchiveOn
+         set paramCheckSumOn =   $?flagCheckSumOn
+         set paramCompressOn =   $?flagOutputCompressAsciiOn
       else
          ls -1 | egrep "$patternGrepAscii" | xargs -I'{}' ln --force '{}' $asciiWorkDir/$begindate.'{}'
 
          set asciiOutputDirRemote = ""
-
-         set actionSaveOn   = 1
-         set actionXferOn   = 0
-         set paramArchiveOn   = 1
-         set paramPtmpOn      = 0
-         set paramCheckSumOn   = 0
-         set paramCompressOn   = 0
+         set actionSaveOn         = 1
+         set actionXferOn         = 0
+         set paramArchiveOn       = 1
+         set paramPtmpOn          = 0
+         set paramCheckSumOn      = 0
+         set paramCompressOn      = 0
       endif
 
       set asciiJobName = $FRE_JOBID.output.stager.$begindate.A
@@ -1174,7 +1151,7 @@ while ( $irun <= $segmentsPerJob && $currentSeg <= $segmentsPerSimulation )
       if ( $?flagOutputStagingTypeOnline ) then
          if ( $?MPICH_RANK_REORDER_METHOD ) then
             set mpiRankReorderMethod = $MPICH_RANK_REORDER_METHOD
-             unsetenv MPICH_RANK_REORDER_METHOD
+            unsetenv MPICH_RANK_REORDER_METHOD
          endif
 
          outputStager $asciiArgFile
@@ -1240,13 +1217,13 @@ while ( $irun <= $segmentsPerJob && $currentSeg <= $segmentsPerSimulation )
             else
                @ outputStagerErrors += 1
                if ( $echoOn ) unset echo
-               set msg =       "*WARNING*: Can't submit the output stager job to process the '$asciiArchDir' (saving)\n"
+               set msg =       "*WARNING*: Can't submit the output stager job to process the '$asciiArchDir' (transfer)\n"
                set msg = "${msg}*WARNING*: ascii files have not been saved, you may need to transfer them manually.\n\n"
                set msg = "${msg}*WARNING*: The ascii ArgFile has been saved at $asciiArgFile.  You may be able\n"
                set msg = "${msg}*WARNING*: use the following command:\n\n"
                set msg = "${msg}*WARNING*: $outputStager $asciiArgFile\n"
                if ( $?batch ) then
-                  printf "$msg" | mailx -s "Can't submit the output stager job to process the '$asciiArchDir' (saving)" $USER@noaa.gov
+                  printf "$msg" | mailx -s "Can't submit the output stager job to process the '$asciiArchDir' (transfer)" $USER@noaa.gov
                endif
                printf "$msg"
                if ( $echoOn ) set echo
@@ -1380,15 +1357,14 @@ while ( $irun <= $segmentsPerJob && $currentSeg <= $segmentsPerSimulation )
          endif
       else
          set restartOutputDirRemote = ""
-
-         set actionCombineOn   = 0
-         set actionCheckOn   = 0
-         set actionSaveOn   = 1
-         set actionXferOn   = 0
-         set paramArchiveOn   = 1
-         set paramPtmpOn      = 0
-         set paramCheckSumOn   = 0
-         set paramCompressOn    = 0
+         set actionCombineOn        = 0
+         set actionCheckOn          = 0
+         set actionSaveOn           = 1
+         set actionXferOn           = 0
+         set paramArchiveOn         = 1
+         set paramPtmpOn            = 0
+         set paramCheckSumOn        = 0
+         set paramCompressOn        = 0
       endif
 
       set restartJobName = $FRE_JOBID.output.stager.$enddate.R
@@ -1455,7 +1431,7 @@ while ( $irun <= $segmentsPerJob && $currentSeg <= $segmentsPerSimulation )
             set msg = "${msg}*WARNING*: use the following command:\n\n"
             set msg = "${msg}*WARNING*: $outputStager $restartArgFile\n"
             if ( $?batch ) then
-              printf "$msg" | mailx -s "Can't save the restart directory '$restartArchDir'\n" $USER@noaa.gov
+               printf "$msg" | mailx -s "Can't save the restart directory '$restartArchDir'\n" $USER@noaa.gov
             endif
             printf "$msg"
             if ( $echoOn ) set echo
@@ -1612,10 +1588,10 @@ while ( $irun <= $segmentsPerJob && $currentSeg <= $segmentsPerSimulation )
             set historyOutputDirRemote = ""
          endif
 
-         set actionCombineOn   = $?flagOutputCombineHistoryOn
+         set actionCombineOn = $?flagOutputCombineHistoryOn
          set actionCheckOn   = $?flagOutputCheckOn
-         set actionSaveOn   = 1
-         set actionXferOn   = $?flagOutputXferOn
+         set actionSaveOn    = 1
+         set actionXferOn    = $?flagOutputXferOn
 
          set combineList = ( $combineList $historyArchDir:t.tar )
 
@@ -1657,28 +1633,27 @@ while ( $irun <= $segmentsPerJob && $currentSeg <= $segmentsPerSimulation )
             set ppStarterOptions = ( )
          endif
 
-         set actionRetryOn   = 1
-         set paramArchiveOn  = $?flagOutputArchiveOn
+         set actionRetryOn   =   1
+         set paramArchiveOn  =   $?flagOutputArchiveOn
          @   paramPtmpOn     = ! $?flagOutputArchiveOn
-         set paramCheckSumOn = $?flagCheckSumOn
-         set paramCompressOn = $?flagOutputCompressHistoryOn
+         set paramCheckSumOn =   $?flagCheckSumOn
+         set paramCompressOn =   $?flagOutputCompressHistoryOn
       else
          ls -1 | egrep "^[0-9][0-9][0-9][0-9][0-9][0-9].+$patternGrepHistory" | xargs -I'{}' mv --force '{}' $historyWorkDir/$begindate.'{}'
          ls -1 | egrep "$patternGrepHistory" | xargs -I'{}' ln --force '{}' $historyWorkDir/$begindate.'{}'
 
          set historyOutputDirRemote = ""
-
-         set actionCombineOn  = 0
-         set actionCheckOn    = 0
-         set actionSaveOn     = 1
-         set actionXferOn     = 0
-         set actionPPStartOn  = 0
-         set actionRetryOn    = 0
-         set ppStarterOptions = ( )
-         set paramArchiveOn   = 1
-         set paramPtmpOn      = 0
-         set paramCheckSumOn  = 0
-         set paramCompressOn  = 0
+         set actionCombineOn        = 0
+         set actionCheckOn          = 0
+         set actionSaveOn           = 1
+         set actionXferOn           = 0
+         set actionPPStartOn        = 0
+         set actionRetryOn          = 0
+         set ppStarterOptions       = ( )
+         set paramArchiveOn         = 1
+         set paramPtmpOn            = 0
+         set paramCheckSumOn        = 0
+         set paramCompressOn        = 0
       endif
 
       set historyJobName = $FRE_JOBID.output.stager.$begindate.H
@@ -1806,7 +1781,7 @@ while ( $irun <= $segmentsPerJob && $currentSeg <= $segmentsPerSimulation )
                set msg = "${msg}*WARNING*: use the following command:\n\n"
                set msg = "${msg}*WARNING*: $outputStager $historyArgFile\n"
                if ( $?batch ) then
-                 printf "$msg" | mailx -s "Can't submit the output stager job to process the '$historyArchDir' (transfer)" $USER@noaa.gov
+                  printf "$msg" | mailx -s "Can't submit the output stager job to process the '$historyArchDir' (transfer)" $USER@noaa.gov
                endif
                printf "$msg"
                if ( $echoOn ) set echo
@@ -1876,6 +1851,7 @@ while ( $irun <= $segmentsPerJob && $currentSeg <= $segmentsPerSimulation )
       echo "*ERROR*: Any output that may have been generated is in the '$outputDir'"
       echo "*ERROR*: The '$workDir' is being kept for possible debugging"
       if ( $echoOn ) set echo
+
       exit 1
    endif
 
@@ -1885,6 +1861,7 @@ while ( $irun <= $segmentsPerJob && $currentSeg <= $segmentsPerSimulation )
       if ( $echoOn ) unset echo
       echo "*ERROR*: no restart files exist or save failed (segment $currentSeg)"
       if ( $echoOn ) set echo
+
       exit 1
    endif
 

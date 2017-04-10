@@ -1,6 +1,3 @@
-source $MODULESHOME/init/csh
-
-module use -a /ncrc/home2/fms/local/modulefiles
 module unload PrgEnv-pgi PrgEnv-intel PrgEnv-gnu PrgEnv-cray
 module unload netcdf cray-netcdf cray-hdf5 fre
 module load PrgEnv-gnu/5.2.82

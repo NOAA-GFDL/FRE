@@ -3,10 +3,9 @@
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: Output Stager - NCRC Version
 # ------------------------------------------------------------------------------
-# Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2000-2013, 2015-2016
+# Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2000-2013, 2015-2017
 # Designed and written by V. Balaji, Amy Langenhorst, Aleksey Yakovlev
-# Carlo Rosati, and Seth Underwood
-#
+# Carlo Rosati and Seth Underwood
 
 set -r echoOn = $?echo
 set -r runtimeBeg = `date "+%s"`
@@ -428,7 +427,7 @@ endif
 @ actionPPStartToPerform  = ( $stagingType == 'Online' || $actionPPStartForce )
 @ actionPPStartToDo       = ( $actionPPStartToConsider * $actionPPStartToPerform )
 
-@ actionRetryToDo         = ( $actionRetryOn * ! $actionXferForce )
+@ actionRetryToDo         = ( $actionRetryOn * $actionXferForce )
 
 @ freCommandsToLoad       = ( $actionCheckToDo || $actionSaveToDo || $actionRetryToDo || $actionCombineToDo || $actionXferToConsider || $actionPPStartToConsider )
 @ hsmToLoad               = ( $actionSaveToDo )
@@ -1156,12 +1155,12 @@ if ( $actionCheckToDo ) then
             if ( -d "$ptmpDir$archDirMain" ) then
                if ( -r "$ptmpDir$archDirMain" ) then
                   set filesToCompare = `ls "$ptmpDir$archDirMain"`
-                 if ( $#filesToCompare > 0 ) then
-                    set filesToCompareAreReadable = 1
-                    foreach fileToCompare ( $filesToCompare )
-                       if ( ! -r "$ptmpDir$archDirMain/$fileToCompare" ) then
-                          set filesToCompareAreReadable = 0
-                          break
+                  if ( $#filesToCompare > 0 ) then
+                     set filesToCompareAreReadable = 1
+                     foreach fileToCompare ( $filesToCompare )
+                        if ( ! -r "$ptmpDir$archDirMain/$fileToCompare" ) then
+                           set filesToCompareAreReadable = 0
+                           break
                         endif
                      end
                      if ( $filesToCompareAreReadable ) then
@@ -1418,6 +1417,7 @@ if ( $actionXferToConsider ) then
       if ( $hostType == 'login' || $hostType == 'rdtn' ) then
          if ( -f $archDir.$archExt && -r $archDir.$archExt ) then
             xferTool $xferSrcPrefix$archDir.$archExt $xferDstPrefix$outputDirRemote:h/
+
             if ( $status == 0 ) then
                if ( $echoOn ) unset echo
                echo "<NOTE> : The $type file '$archDir.$archExt' has been transferred to GFDL successfully"
@@ -1476,8 +1476,10 @@ if ( $actionPPStartToConsider ) then
    if ( $actionPPStartToPerform ) then
       if ( $hostType == 'login' || $hostType == 'rdtn' ) then
          # ---------------- copy XML files to GFDL
+
          if ( $#xmlFiles == $#xmlFilesRemote ) then
             @ inx = 1
+
             while ( $inx <= $#xmlFiles )
                set xmlFile = $xmlFiles[$inx]
                set xmlFileRemote = $xmlFilesRemote[$inx]

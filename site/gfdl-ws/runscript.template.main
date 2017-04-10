@@ -4,7 +4,7 @@
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: Runscript Template - GFDL Workstations Version
 # ------------------------------------------------------------------------------
-# Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2000-2013, 2015, 2016
+# Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2000-2013, 2015-2017
 # Designed and written by V. Balaji, Amy Langenhorst, Aleksey Yakovlev and
 # Seth Underwood
 #
@@ -13,650 +13,604 @@
 #FRE version-info
 #===============================================================================
 
-  set -r echoOn = $?echo
-  set -r runtimeBeg = `date "+%s"`
+set -r echoOn = $?echo
+set -r runtimeBeg = `date "+%s"`
 
-  if ( $echoOn ) unset echo
-  echo '<NOTE> : ====== FRE RUNSCRIPT ======'
-  echo "<NOTE> : Starting at $HOST on `date`"
-  if ( $echoOn ) set echo
+if ( $echoOn ) unset echo
+echo '<NOTE> : ====== FRE RUNSCRIPT ======'
+echo "<NOTE> : Starting at $HOST on `date`"
+if ( $echoOn ) set echo
 
-  unalias *
+unalias *
 
-  # ---------------- initialize environment modules
+# ---------------- initialize environment modules
 
-  if ( $echoOn ) unset echo
-  #FRE const(modulesHomeDir)
-  source $modulesHomeDir/init/tcsh
-  setenv COLUMNS 148
-  if ( $echoOn ) set echo
+if ( $echoOn ) unset echo
+#FRE const(modulesHomeDir)
+source $modulesHomeDir/init/tcsh
+setenv COLUMNS 148
+if ( $echoOn ) set echo
 
-  # ---------------- define constants
+# ---------------- define constants
 
-  set -r FRE_JOBID = $0:t.o`date +%s`
+set -r FRE_JOBID = $0:t.o`date +%s`
 
-  # ---------------- print starting banner
+# ---------------- print starting banner
 
-  banner $FRE_JOBID
+banner $FRE_JOBID
 
 ################################################################################
 #---------------- global constants and variables, set by frerun ----------------
 ################################################################################
 
-  #FRE const(freCommandsModuleFilesDir)
-  #FRE const(freCommandsVersion)
+#FRE const(freCommandsModuleFilesDir)
+#FRE const(freCommandsVersion)
 
-  #FRE const(platform)
-  #FRE const(target)
-  #FRE const(name)
-  #FRE const(rtsxml)
-  #FRE const(stdoutDir)
-  #FRE const(stateDir)
-  #FRE const(workDir)
-  #FRE const(ptmpDir)
-  #FRE const(archiveDir)
-  #FRE const(scriptName)
-  #FRE const(executable)
-  #FRE const(segmentsPerSimulation)
-  #FRE const(segmentsPerJob)
-  #FRE const(jobsPerSimulation)
-  #FRE const(monthslist)
-  #FRE const(dayslist)
-  #FRE const(hourslist)
-  #FRE const(timeStampOptions)
-  #FRE const(baseDate)
+#FRE const(platform)
+#FRE const(target)
+#FRE const(name)
+#FRE const(rtsxml)
+#FRE const(stdoutDir)
+#FRE const(stateDir)
+#FRE const(workDir)
+#FRE const(ptmpDir)
+#FRE const(archiveDir)
+#FRE const(scriptName)
+#FRE const(executable)
+#FRE const(segmentsPerSimulation)
+#FRE const(segmentsPerJob)
+#FRE const(jobsPerSimulation)
+#FRE const(monthslist)
+#FRE const(dayslist)
+#FRE const(hourslist)
+#FRE const(timeStampOptions)
+#FRE const(baseDate)
 
-  #FRE flag(flagRunType)
-  #FRE flag(flagCheckSum)
-  #FRE flag(flagWorkDirClean)
-  #FRE flag(flagOutputType)
-  #FRE flag(flagOutputFormat)
-  #FRE flag(flagOutputCombineHistory)
-  #FRE flag(flagOutputCompressAscii)
-  #FRE flag(flagOutputCompressRestart)
-  #FRE flag(flagOutputCompressHistory)
-  #FRE flag(flagOutputArchive)
-  #FRE flag(flagOutputCheck)
-  #FRE flag(flagVerbosity)
+#FRE flag(flagRunType)
+#FRE flag(flagCheckSum)
+#FRE flag(flagWorkDirClean)
+#FRE flag(flagOutputType)
+#FRE flag(flagOutputFormat)
+#FRE flag(flagOutputCombineHistory)
+#FRE flag(flagOutputCompressAscii)
+#FRE flag(flagOutputCompressRestart)
+#FRE flag(flagOutputCompressHistory)
+#FRE flag(flagOutputArchive)
+#FRE flag(flagOutputCheck)
+#FRE flag(flagVerbosity)
 
-  #FRE var(outputDir)
-  #FRE var(gridSpec)
-  #FRE var(initCond)
+#FRE var(outputDir)
+#FRE var(gridSpec)
+#FRE var(initCond)
 
-  #FRE run-command-size
-  #FRE alias(runCommand)
+#FRE run-command-size
+#FRE alias(runCommand)
 
-  #FRE const(mppnccombineOptsRestart)
-  #FRE const(mppnccombineOptsHistory)
+#FRE const(mppnccombineOptsRestart)
+#FRE const(mppnccombineOptsHistory)
 
-  #FRE const(FreCommandsSrcDir)
-  #FRE const(FreCommandsBldDir)
+#FRE const(FreCommandsSrcDir)
+#FRE const(FreCommandsBldDir)
 
 ################################################################################
 #------------------------ global constants and aliases -------------------------
 ################################################################################
 
-  # ---------------- preload the fre-commands module
+# ---------------- Make sure the modulefile directory is in MODULESPATH
 
-  if ( -d $freCommandsModuleFilesDir && -r $freCommandsModuleFilesDir ) then
-    set freCommandsModuleFile = $freCommandsModuleFilesDir/fre-commands/$freCommandsVersion
-    if ( -f $freCommandsModuleFile && -r $freCommandsModuleFile ) then
-      if ( $echoOn ) unset echo
-      module use $freCommandsModuleFilesDir
-      module unload fre-commands
-      module load fre-commands/$freCommandsVersion
-      if ( $echoOn ) set echo
-    else
-      if ( $echoOn ) unset echo
-      echo "*ERROR*: The 'fre-commands' modulefile '$freCommandsModuleFile' doesn't exist or not readable"
-      if ( $echoOn ) set echo
-      exit 1
-    endif
-    unset freCommandsModuleFile
-  else
-    if ( $echoOn ) unset echo
-    echo "*ERROR*: The 'fre-commands' modulefiles directory '$freCommandsModuleFilesDir' doesn't exist or not readable"
-    if ( $echoOn ) set echo
-    exit 1
-  endif
+if ( -d $freCommandsModuleFilesDir && -r $freCommandsModuleFilesDir ) then
+   module use $freCommandsModuleFilesDir
+else
+   if ( $echoOn ) unset echo
+   echo "*ERROR*: The 'fre' modulefiles directory '$freCommandsModuleFilesDir' doesn't exist or not readable"
+   if ( $echoOn ) set echo
+   exit 1
+endif
 
-  # ---------------- machine architecture
+# ---------------- commands, copied from XML (setup/platform/csh)
 
-  set -r architecture32 = 'i686'
-  set -r architecture64 = 'x86_64'
+if ( $echoOn ) unset echo
+#FRE setup-platform-csh
+module list
+if ( $echoOn ) set echo
 
-  # ---------------- for compatibility only
+# ---------------- postload the fre module to be sure it's still there
 
-  set -r work = $workDir
+set freCommandsModuleFile = $freCommandsModuleFilesDir/fre/$freCommandsVersion
+if ( -f $freCommandsModuleFile && -r $freCommandsModuleFile ) then
+   if ( $echoOn ) unset echo
+   module unload fre
+   module use $freCommandsModuleFilesDir
+   module load fre/$freCommandsVersion
+   if ( $echoOn ) set echo
+else
+   if ( $echoOn ) unset echo
+   echo "*ERROR*: The 'fre' modulefile '$freCommandsModuleFile' doesn't exist or not readable"
+   if ( $echoOn ) set echo
+   exit 1
+endif
+unset freCommandsModuleFile
 
-  # ---------------- top directory for all the HSM-copied files
+# ---------------- machine architecture
 
-  set -r hsmDir = $workDir/hsm
+set -r architecture = 'x86_64'
 
-  # ---------------- top directory for all the temporary output files
+# ---------------- exit if not running on right machine architecture
 
-  set -r tmpOutputDir = $workDir/output.stager
+set machine = `uname -m`
 
-  # ---------------- file to save shell plus environment variables
+if ( $machine != $architecture ) then
+   if ( $echoOn ) unset echo
+   echo "*ERROR*: The script '$scriptName' is intended for the machine architecture '$architecture'"
+   if ( $echoOn ) set echo
+   exit 1
+endif
 
-  set -r envFile = /tmp/shell.variables.$FRE_JOBID
-  set -r envFileDelay = 2
+unset machine
 
-  # ---------------- selection patterns for grep
+# ---------------- for compatibility only
 
-  set -r patternGrepAscii = '\<out\>|\<results\>|\<log\>|\<timestats\>|\<stats\>|\<velocity_truncations\>'
-  set -r patternGrepRestart = '\<res\>|\<nc\>|\.input.\tgz$|\.ww3$'
-  set -r patternGrepRestartNextDrop = '\<res\>'
-  set -r patternGrepRestartNextMove = '\<res\>|\<nc\>|\.ww3$'
-  set -r patternGrepHistory = '\<nc\>|\.ww3$'
-  set -r patternGrepRegion = '^rregion'
+set -r work = $workDir
 
-  # ---------------- archive extension
+# ---------------- top directory for all the HSM-copied files
 
-  set -r archExt = 'tar'
+set -r hsmDir = $workDir/hsm
 
-  # ---------------- FRE runscript site-independent helper scripts
+# ---------------- top directory for all the temporary output files
 
-  alias expandVariables `which expand_variables` --verbose
-  alias findModuleInfo `which find_module_info` --verbose
-  alias prepareDir `which prepare_dir.csh`
-  alias timeStamp `which time_stamp.csh` $timeStampOptions
-  alias workDirCleaner `which batch_rmdir.csh`
+set -r tmpOutputDir = $workDir/output.stager
 
-  # ---------------- FRE runscript site-dependent helper scripts
+# ---------------- file to save shell plus environment variables
 
-  alias outputStager `which output.stager`
-  @ outputStagerErrors = 0
+set -r envFile = /tmp/shell.variables.$FRE_JOBID
+set -r envFileDelay = 2
+
+# ---------------- selection patterns for grep
+
+set -r patternGrepAscii = '\<out\>|\<results\>|\<log\>|\<timestats\>|\<stats\>|\<velocity_truncations\>'
+set -r patternGrepRestart = '\<res\>|\<nc\>|\.input.\tgz$|\.ww3$'
+set -r patternGrepRestartNextDrop = '\<res\>'
+set -r patternGrepRestartNextMove = '\<res\>|\<nc\>|\.ww3$'
+set -r patternGrepHistory = '\<nc\>|\.ww3$'
+set -r patternGrepRegion = '^rregion'
+
+# ---------------- archive extension
+
+set -r archExt = 'tar'
+
+# ---------------- FRE runscript site-independent helper scripts
+
+alias expandVariables `which expand_variables` --verbose
+alias findModuleInfo `which find_module_info` --verbose
+alias prepareDir `which prepare_dir.csh`
+alias timeStamp `which time_stamp.csh` $timeStampOptions
+alias workDirCleaner `which batch_rmdir.csh`
+
+# ---------------- FRE runscript site-dependent helper scripts
+
+alias outputStager `which output.stager`
+@ outputStagerErrors = 0
 
 ################################################################################
 #--------------------------------- environment ---------------------------------
 ################################################################################
 
-  # ---------------- commands, copied from XML (setup/platform/csh)
 
-  if ( $echoOn ) unset echo
-  #FRE setup-platform-csh
-  module list
-  if ( $echoOn ) set echo
+# ---------------- determine the HSM module info, exit if no HSM available
 
-  # ---------------- postload the fre-commands module to be sure it's still there
+set hsmInfo = ( `findModuleInfo 'hsm'` )
 
-  if ( -d $freCommandsModuleFilesDir && -r $freCommandsModuleFilesDir ) then
-    set freCommandsModuleFile = $freCommandsModuleFilesDir/fre-commands/$freCommandsVersion
-    if ( -f $freCommandsModuleFile && -r $freCommandsModuleFile ) then
-      if ( $echoOn ) unset echo
-      module use $freCommandsModuleFilesDir
-      module unload fre-commands
-      module load fre-commands/$freCommandsVersion
-      if ( $echoOn ) set echo
-    else
-      if ( $echoOn ) unset echo
-      echo "*ERROR*: The 'fre-commands' modulefile '$freCommandsModuleFile' doesn't exist or not readable"
-      if ( $echoOn ) set echo
-      exit 1
-    endif
-    unset freCommandsModuleFile
-  else
-    if ( $echoOn ) unset echo
-    echo "*ERROR*: The 'fre-commands' modulefiles directory '$freCommandsModuleFilesDir' doesn't exist or not readable"
-    if ( $echoOn ) set echo
-    exit 1
-  endif
+if ( $status == 0 ) then
+   set -r hsmModuleFilesDir = $hsmInfo[1]
+   set -r hsmVersion = $hsmInfo[3]
+   if ( $echoOn ) unset echo
+   echo "<NOTE> : Using the 'hsm' modulefiles directory '$hsmModuleFilesDir' and version '$hsmVersion'..."
+   if ( $echoOn ) set echo
+else
+   if ( $echoOn ) unset echo
+   echo "*ERROR*: The script '$scriptName' must load an 'hsm' module"
+   if ( $echoOn ) set echo
+   exit 1
+endif
 
-  # ---------------- determine the fre-combiners/fre-nctools module info, exit if none of them is loaded
+unset hsmInfo
 
-  set freNCToolsInfo = ( `findModuleInfo 'fre-combiners' || findModuleInfo 'fre-nctools'` )
+# ---------------- setup the HSM
 
-  if ( $status == 0 ) then
-    set -r freNCToolsModuleFilesDir = $freNCToolsInfo[1]
-    set -r freNCToolsModuleName = $freNCToolsInfo[2]
-    set -r freNCToolsVersion = $freNCToolsInfo[3]
-    if ( $echoOn ) unset echo
-    echo "<NOTE> : Using the '$freNCToolsModuleName' modulefiles directory '$freNCToolsModuleFilesDir' and version '$freNCToolsVersion'..."
-    if ( $echoOn ) set echo
-  else
-    if ( $echoOn ) unset echo
-    echo "*ERROR*: The script '$scriptName' must load at least one of 'fre-combiners' or 'fre-nctools' modules"
-    if ( $echoOn ) set echo
-    exit 1
-  endif
+if ( $?flagVerbosityOn ) then
+   set hsm_verbose = "--verbose"
+else
+   set hsm_verbose = "--quiet"
+endif
 
-  unset freNCToolsInfo
+alias hsmget `which hsmget` ${hsm_verbose} --time --workroot=$hsmDir --ptmproot=$ptmpDir --archroot=//
 
-  # ---------------- determine the HSM module info, exit if no HSM available
 
-  set hsmInfo = ( `findModuleInfo 'hsm'` )
+# ---------------- some global configuration
 
-  if ( $status == 0 ) then
-    set -r hsmModuleFilesDir = $hsmInfo[1]
-    set -r hsmVersion = $hsmInfo[3]
-    if ( $echoOn ) unset echo
-    echo "<NOTE> : Using the 'hsm' modulefiles directory '$hsmModuleFilesDir' and version '$hsmVersion'..."
-    if ( $echoOn ) set echo
-  else
-    if ( $echoOn ) unset echo
-    echo "*ERROR*: The script '$scriptName' must load an 'hsm' module"
-    if ( $echoOn ) set echo
-    exit 1
-  endif
+limit stacksize unlimited
+limit coredumpsize unlimited
+limit
 
-  unset hsmInfo
+# ---------------- exit if number of days/months/hours is not equal to number of segments per job
 
-  # ---------------- setup the HSM
+if ( $#dayslist != $segmentsPerJob || $#monthslist != $segmentsPerJob || $#hourslist != $segmentsPerJob ) then
+   if ( $echoOn ) unset echo
+   echo "*ERROR*: dayslist, monthslist and hourslist lengths must be equal to a number of segments per job"
+   if ( $echoOn ) set echo
+   exit 1
+endif
 
-  alias hsmget `which hsmget` --time --workroot=$hsmDir --ptmproot=$ptmpDir --archroot=//
+# ---------------- setup the FRE temporary directory, exit if it's not defined
 
-  if ( $?flagVerbosityOn ) then
-    alias hsmget `alias hsmget` --verbose
-  else
-    alias hsmget `alias hsmget` --quiet
-  endif
+if ( $?FRE_SYSTEM_TMP ) then
+   if ( $echoOn ) unset echo
+   echo "<NOTE> : Using the '$FRE_SYSTEM_TMP' temporary directory"
+   if ( $echoOn ) set echo
+   prepareDir $FRE_SYSTEM_TMP || exit 1
+else
+   if ( $echoOn ) unset echo
+   echo "*ERROR*: The FRE temporary directory is not defined"
+   if ( $echoOn ) set echo
+   exit 1
+endif
 
-  # ---------------- some global configuration
+# ---------------- setup NiNaC
 
-  limit stacksize unlimited
-  limit coredumpsize unlimited
-  limit
-
-  # ---------------- exit if not running on right machine architecture
-
-  set machine = `uname -m`
-
-  if ( $machine != $architecture32 && $machine != $architecture64 ) then
-    if ( $echoOn ) unset echo
-    echo "*ERROR*: The script '$scriptName' is intended for the machine architecture '$architecture'"
-    if ( $echoOn ) set echo
-    exit 1
-  endif
-
-  unset machine
-
-  # ---------------- exit if number of days/months/hours is not equal to number of segments per job
-
-  if ( $#dayslist != $segmentsPerJob || $#monthslist != $segmentsPerJob || $#hourslist != $segmentsPerJob ) then
-    if ( $echoOn ) unset echo
-    echo "*ERROR*: dayslist, monthslist and hourslist lengths must be equal to a number of segments per job"
-    if ( $echoOn ) set echo
-    exit 1
-  endif
-
-  # ---------------- setup the FRE temporary directory, exit if it's not defined
-
-  if ( $?FRE_SYSTEM_TMP ) then
-    if ( $echoOn ) unset echo
-    echo "<NOTE> : Using the '$FRE_SYSTEM_TMP' temporary directory"
-    if ( $echoOn ) set echo
-    prepareDir $FRE_SYSTEM_TMP || exit 1
-  else
-    if ( $echoOn ) unset echo
-    echo "*ERROR*: The FRE temporary directory is not defined"
-    if ( $echoOn ) set echo
-    exit 1
-  endif
-
-  # ---------------- setup NiNaC
-
-  #FRE ninac-platform-csh
+#FRE ninac-platform-csh
 
 ################################################################################
 #----------------------------- global variables --------------------------------
 ################################################################################
 
-  set continueFlag = 1
+set continueFlag = 1
 
-  @ ireload = 1
-  @ irun = 1
+@ ireload = 1
+@ irun = 1
 
 ################################################################################
 #--------------------------- before the main loop ------------------------------
 ################################################################################
 
-  # ---------------- commands, copied from XML (experiment/runtime/csh)
+# ---------------- commands, copied from XML (experiment/runtime/csh)
 
-  #FRE experiment-runtime-csh
+#FRE experiment-runtime-csh
 
-  # ---------------- initialize reloading (production runs only)
+# ---------------- initialize reloading (production runs only)
 
-  if ( $?flagRunTypeProduction ) then
+if ( $?flagRunTypeProduction ) then
+   prepareDir $stateDir || exit 1
 
-    prepareDir $stateDir || exit 1
+   set reload_file = $stateDir/reload_commands
 
-    set reload_file = $stateDir/reload_commands
-
-    if ( -f $reload_file ) then
+   if ( -f $reload_file ) then
       if ( -r $reload_file ) then
-        source $reload_file
+         source $reload_file
       else
-        if ( $echoOn ) unset echo
-        echo "*ERROR*: The reload file '$reload_file' is not readable"
-        if ( $echoOn ) set echo
-        exit 1
+         if ( $echoOn ) unset echo
+         echo "*ERROR*: The reload file '$reload_file' is not readable"
+         if ( $echoOn ) set echo
+         exit 1
       endif
-    endif
+   endif
 
-    set queue_file = $stateDir/queue_commands
+   set queue_file = $stateDir/queue_commands
 
-    if ( -f $queue_file ) then
+   if ( -f $queue_file ) then
       if ( -r $queue_file ) then
-        source $queue_file
+         source $queue_file
       else
-        if ( $echoOn ) unset echo
-        echo "*ERROR*: The queue file '$queue_file' is not readable"
-        if ( $echoOn ) set echo
-        exit 1
+         if ( $echoOn ) unset echo
+         echo "*ERROR*: The queue file '$queue_file' is not readable"
+         if ( $echoOn ) set echo
+         exit 1
       endif
-    else
+   else
       touch $queue_file
       if ( $status == 0 ) then
-        if ( $echoOn ) unset echo
-        echo "<NOTE> : Writing queue information to the queue file '$queue_file' at `date +%s`"
-        if ( $echoOn ) set echo
-        echo "set continueFlag = $continueFlag" >> $queue_file
-        chmod 644 $queue_file
+         if ( $echoOn ) unset echo
+         echo "<NOTE> : Writing queue information to the queue file '$queue_file' at `date +%s`"
+         if ( $echoOn ) set echo
+         echo "set continueFlag = $continueFlag" >> $queue_file
+         chmod 644 $queue_file
       else
-        if ( $echoOn ) unset echo
-        echo "*ERROR*: The queue file '$queue_file' can't be saved"
-        if ( $echoOn ) set echo
-        exit 1
-      endif
-    endif
+         if ( $echoOn ) unset echo
+         echo "*ERROR*: The queue file '$queue_file' can't be saved"
+         if ( $echoOn ) set echo
+         exit 1
+       endif
+   endif
 
-    if ( ! $continueFlag ) then
+   if ( ! $continueFlag ) then
       if ( $echoOn ) unset echo
       echo "<NOTE> : Stopping execution"
       if ( $echoOn ) set echo
       exit 0
-    endif
+   endif
+endif
 
-  endif
-
-  if ( $?fyear ) then
-    #remove leading zeros, fyear as integer
-    set fyearint = `echo $fyear | sed 's/^0*//'`
-    if ( ${fyearint} > 0 ) then
+if ( $?fyear ) then
+   #remove leading zeros, fyear as integer
+   set fyearint = `echo $fyear | sed 's/^0*//'`
+   if ( ${fyearint} > 0 ) then
       @ fyearm1 = ${fyearint} - 1
       set fyearm1 = `printf "%04d" $fyearm1`
-    else
+   else
       set fyearm1 = '0000'
-    endif
-    @ fyearp1 = ${fyearint} + 1
-    set fyearp1 = `printf "%04d" $fyearp1`
-    @ fyearp2 = ${fyearint} + 2
-    set fyearp2 = `printf "%04d" $fyearp2`
-  endif
+   endif
+   @ fyearp1 = ${fyearint} + 1
+   set fyearp1 = `printf "%04d" $fyearp1`
+   @ fyearp2 = ${fyearint} + 2
+   set fyearp2 = `printf "%04d" $fyearp2`
+endif
 
-  # ---------------- absolute segment number
+# ---------------- absolute segment number
 
-  @ currentSeg = ( $ireload - 1 ) * $segmentsPerJob + $irun
+@ currentSeg = ( $ireload - 1 ) * $segmentsPerJob + $irun
 
-  # ---------------- set up working directory structure
+# ---------------- set up working directory structure
 
-  if ( -e $workDir ) then
-    if ( -d $workDir ) then
+if ( -e $workDir ) then
+   if ( -d $workDir ) then
       if ( -r $workDir ) then
-        if ( -w $workDir ) then
-          ls -1 --directory --file-type $workDir/* | grep --fixed-strings --invert-match $tmpOutputDir | xargs rm --force --recursive
-          prepareDir $workDir/INPUT 'clean'     || exit 1
-          prepareDir $workDir/RESTART 'clean'   || exit 1
-        else
-          if ( $echoOn ) unset echo
-          echo "*ERROR*: The directory '$workDir' exists, but is not writable"
-          if ( $echoOn ) set echo
-          exit 1
-        endif
+         if ( -w $workDir ) then
+            ls -1 --directory --file-type $workDir/* | grep --fixed-strings --invert-match $tmpOutputDir | xargs rm --force --recursive
+            prepareDir $workDir/INPUT 'clean'     || exit 1
+            prepareDir $workDir/RESTART 'clean'   || exit 1
+         else
+            if ( $echoOn ) unset echo
+            echo "*ERROR*: The directory '$workDir' exists, but is not writable"
+            if ( $echoOn ) set echo
+            exit 1
+         endif
       else
-        if ( $echoOn ) unset echo
-        echo "*ERROR*: The directory '$workDir' exists, but is not readable"
-        if ( $echoOn ) set echo
-        exit 1
+         if ( $echoOn ) unset echo
+         echo "*ERROR*: The directory '$workDir' exists, but is not readable"
+         if ( $echoOn ) set echo
+         exit 1
       endif
-    else
+   else
       if ( $echoOn ) unset echo
       echo "*ERROR*: The pathname '$workDir' exists, but is not a directory"
       if ( $echoOn ) set echo
       exit 1
-    endif
-  else
-    prepareDir $workDir         || exit 1
-    prepareDir $workDir/INPUT   || exit 1
-    prepareDir $workDir/RESTART || exit 1
-  endif
+   endif
+else
+   prepareDir $workDir         || exit 1
+   prepareDir $workDir/INPUT   || exit 1
+   prepareDir $workDir/RESTART || exit 1
+endif
 
-  # ---------------- input data loading
+# ---------------- input data loading
 
-  cd $workDir
+cd $workDir
 
-  set dataFilesNotOK = ( )
+set dataFilesNotOK = ( )
 
-  #FRE dataFiles
+#FRE dataFiles
 
-  if ( $#dataFilesNotOK > 0 ) then
-    if ( $echoOn ) unset echo
-    foreach dataFile ( $dataFilesNotOK )
+if ( $#dataFilesNotOK > 0 ) then
+   if ( $echoOn ) unset echo
+   foreach dataFile ( $dataFilesNotOK )
       echo "*ERROR*: A problem with the data file: $dataFile"
-    end
-    echo "*ERROR*: Failed to copy data files"
-    if ( $echoOn ) set echo
-    exit 1
-  endif
+   end
+   echo "*ERROR*: Failed to copy data files"
+   if ( $echoOn ) set echo
+   exit 1
+endif
 
-  @ gridSpecStatus = 0
+@ gridSpecStatus = 0
 
-  if ( ( $gridSpec:e == 'cpio' || $gridSpec:e == 'tar' ) && $gridSpec:r:e == 'nc' ) then
-    hsmget $gridSpec:r:r:s+/++/\* && \
-    find $hsmDir$gridSpec:r:r -maxdepth 1 -type f | xargs ln -f -t $workDir/INPUT
-    @ gridSpecStatus = $status
-  else if ( ( $gridSpec:e == 'cpio' || $gridSpec:e == 'tar' ) && $gridSpec:r:e != 'nc' ) then
-    hsmget $gridSpec:r:s+/++/\* && \
-    find $hsmDir$gridSpec:r -maxdepth 1 -type f | xargs ln -f -t $workDir/INPUT
-    @ gridSpecStatus = $status
-  else if ( $gridSpec:e == 'nc' ) then
-    hsmget $gridSpec:s+/++ && \
-    ln -f $hsmDir/$gridSpec:s+/++ $workDir/INPUT/grid_spec.nc
-    @ gridSpecStatus = $status
-  else if ( $gridSpec != "" && -d "$gridSpec" ) then
-    hsmget $gridSpec:s+/++/\* && \
-    find $hsmDir$gridSpec -maxdepth 1 -type f | xargs ln -f -t $workDir/INPUT
-    @ gridSpecStatus = $status
-  else if ( $gridSpec != "" && -f "$gridSpec" ) then
-    hsmget $gridSpec:s+/++ && \
-    ln -f $hsmDir/$gridSpec:s+/++ $workDir/INPUT/grid_spec.nc
-    @ gridSpecStatus = $status
-  endif
+if ( ( $gridSpec:e == 'cpio' || $gridSpec:e == 'tar' ) && $gridSpec:r:e == 'nc' ) then
+   hsmget $gridSpec:r:r:s+/++/\* && \
+   find $hsmDir$gridSpec:r:r -maxdepth 1 -type f | xargs ln -f -t $workDir/INPUT
+   @ gridSpecStatus = $status
+else if ( ( $gridSpec:e == 'cpio' || $gridSpec:e == 'tar' ) && $gridSpec:r:e != 'nc' ) then
+   hsmget $gridSpec:r:s+/++/\* && \
+   find $hsmDir$gridSpec:r -maxdepth 1 -type f | xargs ln -f -t $workDir/INPUT
+   @ gridSpecStatus = $status
+else if ( $gridSpec:e == 'nc' ) then
+   hsmget $gridSpec:s+/++ && \
+   ln -f $hsmDir/$gridSpec:s+/++ $workDir/INPUT/grid_spec.nc
+   @ gridSpecStatus = $status
+else if ( $gridSpec != "" && -d "$gridSpec" ) then
+   hsmget $gridSpec:s+/++/\* && \
+   find $hsmDir$gridSpec -maxdepth 1 -type f | xargs ln -f -t $workDir/INPUT
+   @ gridSpecStatus = $status
+else if ( $gridSpec != "" && -f "$gridSpec" ) then
+   hsmget $gridSpec:s+/++ && \
+   ln -f $hsmDir/$gridSpec:s+/++ $workDir/INPUT/grid_spec.nc
+   @ gridSpecStatus = $status
+endif
 
-  if ( $gridSpecStatus ) then
-    if ( $echoOn ) unset echo
-    echo "*ERROR*: Failed to copy grid specification"
-    if ( $echoOn ) set echo
-    exit 1
-  endif
+if ( $gridSpecStatus ) then
+   if ( $echoOn ) unset echo
+   echo "*ERROR*: Failed to copy grid specification"
+   if ( $echoOn ) set echo
+   exit 1
+endif
 
-  unset gridSpecStatus
+unset gridSpecStatus
 
-  @ initCondStatus = 0
+@ initCondStatus = 0
 
-  if ( ( $initCond:e == 'cpio' || $initCond:e == 'tar' ) && $initCond:r:e == 'nc' ) then
-    hsmget $initCond:r:r:s+/++/\* && \
-    find $hsmDir$initCond:r:r -maxdepth 1 -type f | xargs ln -f -t $workDir/INPUT
-    @ initCondStatus = $status
-  else if ( ( $initCond:e == 'cpio' || $initCond:e == 'tar' ) && $initCond:r:e != 'nc' ) then
-    hsmget $initCond:r:s+/++/\* && \
-    find $hsmDir$initCond:r -maxdepth 1 -type f | xargs ln -f -t $workDir/INPUT
-    @ initCondStatus = $status
-  else if ( $initCond:e == 'nc' ) then
-    hsmget $initCond:s+/++ && \
-    ln -f $hsmDir/$initCond:s+/++ $workDir/INPUT/.
-    @ initCondStatus = $status
-  else if ( $initCond != "" && -d "$initCond" ) then
-    hsmget $initCond:s+/++/\* && \
-    find $hsmDir$initCond -maxdepth 1 -type f | xargs ln -f -t $workDir/INPUT
-    @ initCondStatus = $status
-  else if ( $initCond != "" && -f "$initCond" ) then
-    hsmget $initCond:s+/++ && \
-    ln -f $hsmDir/$initCond:s+/++ $workDir/INPUT/.
-    @ initCondStatus = $status
-  endif
+if ( ( $initCond:e == 'cpio' || $initCond:e == 'tar' ) && $initCond:r:e == 'nc' ) then
+   hsmget $initCond:r:r:s+/++/\* && \
+   find $hsmDir$initCond:r:r -maxdepth 1 -type f | xargs ln -f -t $workDir/INPUT
+   @ initCondStatus = $status
+else if ( ( $initCond:e == 'cpio' || $initCond:e == 'tar' ) && $initCond:r:e != 'nc' ) then
+   hsmget $initCond:r:s+/++/\* && \
+   find $hsmDir$initCond:r -maxdepth 1 -type f | xargs ln -f -t $workDir/INPUT
+   @ initCondStatus = $status
+else if ( $initCond:e == 'nc' ) then
+   hsmget $initCond:s+/++ && \
+   ln -f $hsmDir/$initCond:s+/++ $workDir/INPUT/.
+   @ initCondStatus = $status
+else if ( $initCond != "" && -d "$initCond" ) then
+   hsmget $initCond:s+/++/\* && \
+   find $hsmDir$initCond -maxdepth 1 -type f | xargs ln -f -t $workDir/INPUT
+   @ initCondStatus = $status
+else if ( $initCond != "" && -f "$initCond" ) then
+   hsmget $initCond:s+/++ && \
+   ln -f $hsmDir/$initCond:s+/++ $workDir/INPUT/.
+   @ initCondStatus = $status
+endif
 
-  if ( $initCondStatus ) then
-    if ( $echoOn ) unset echo
-    echo "*ERROR*: Failed to copy initial conditions"
-    if ( $echoOn ) set echo
-    exit 1
-  endif
+if ( $initCondStatus ) then
+   if ( $echoOn ) unset echo
+   echo "*ERROR*: Failed to copy initial conditions"
+   if ( $echoOn ) set echo
+   exit 1
+endif
 
-  unset initCondStatus
+unset initCondStatus
 
-  # ---------------- the executable loading
+# ---------------- the executable loading
 
-  hsmget $executable:s+/++
+hsmget $executable:s+/++
 
-  # ---------------- commands, copied from XML (experiment/input/csh[not(@type="always") and not(@type="postInit")])
+# ---------------- commands, copied from XML (experiment/input/csh[not(@type="always") and not(@type="postInit")])
 
-  #FRE experiment-input-csh-init
+#FRE experiment-input-csh-init
 
-  cd $workDir
+cd $workDir
 
-  # ---------------- list files in the INPUT directory
+# ---------------- list files in the INPUT directory
 
-  if ( $echoOn ) unset echo
-  ls -l INPUT/*
-  if ( $echoOn ) set echo
+if ( $echoOn ) unset echo
+ls -l INPUT/*
+if ( $echoOn ) set echo
 
-  # ---------------- executable and tables loading
+# ---------------- executable and tables loading
 
-  ln -f $ptmpDir$executable . || cp -pf $ptmpDir$executable .
+ln -f $ptmpDir$executable . || cp -pf $ptmpDir$executable .
 
-  if ( $status == 0 ) then
-    if ( $echoOn ) unset echo
-    echo "<NOTE> : Using the executable '$ptmpDir$executable'"
-    if ( $echoOn ) set echo
-  else
-    if ( $echoOn ) unset echo
-    echo "*ERROR*: Failed to copy the executable"
-    if ( $echoOn ) set echo
-    exit 1
-  endif
+if ( $status == 0 ) then
+   if ( $echoOn ) unset echo
+   echo "<NOTE> : Using the executable '$ptmpDir$executable'"
+   if ( $echoOn ) set echo
+else
+   if ( $echoOn ) unset echo
+   echo "*ERROR*: Failed to copy the executable"
+   if ( $echoOn ) set echo
+   exit 1
+endif
 
-  #FRE table(diag_table)
-  #FRE table(field_table)
+#FRE table(diag_table)
+#FRE table(field_table)
 
-  touch data_table
+touch data_table
 
-  #FRE table(data_table)
-  #FRE table(ocean_tracer_tree)
-  #FRE table(ocean_tracer_tree_init)
+#FRE table(data_table)
+#FRE table(ocean_tracer_tree)
+#FRE table(ocean_tracer_tree_init)
 
-  #FRE namelists
+#FRE namelists
 
-  # ---------------- expand namelists
+# ---------------- expand namelists
 
-  set months = $monthslist[1]
-  set days = $dayslist[1]
-  set hours = $hourslist[1]
+set months = $monthslist[1]
+set days = $dayslist[1]
+set hours = $hourslist[1]
 
-  set | sort > $envFile
-  sleep $envFileDelay
-  set -r | sort >> $envFile
-  sleep $envFileDelay
-  env --unset=TERMCAP | sort >> $envFile
+set | sort > $envFile
+sleep $envFileDelay
+set -r | sort >> $envFile
+sleep $envFileDelay
+env --unset=TERMCAP | sort >> $envFile
 
-  expandVariables $envFile < input.nml.unexpanded > input.nml || exit 1
+expandVariables $envFile < input.nml.unexpanded > input.nml || exit 1
 
-  rm -f $envFile
+rm -f $envFile
 
-  # ---------------- normal exit if in the input data staging mode
+# ---------------- normal exit if in the input data staging mode
 
-  if ( $?FRE_STAGE ) then
-    if ( $FRE_STAGE == 'DEBUG' ) then
+if ( $?FRE_STAGE ) then
+   if ( $FRE_STAGE == 'DEBUG' ) then
       if ( $echoOn ) unset echo
       echo "<NOTE> : The working directory '$workDir' is ready for debugging"
       echo "<NOTE> : Natural end-of-debug-staging for '$scriptName'"
       if ( $echoOn ) set echo
       exit 0
-    else
+   else
       workDirCleaner $workDir
       if ( $echoOn ) unset echo
       echo "<NOTE> : Natural end-of-input-staging for '$scriptName'"
       if ( $echoOn ) set echo
       exit 0
-    endif
-  endif
+   endif
+endif
 
 ################################################################################
 #------------------------------- the main loop ---------------------------------
 ################################################################################
 
-  while ( $irun <= $segmentsPerJob && $currentSeg <= $segmentsPerSimulation )
+while ( $irun <= $segmentsPerJob && $currentSeg <= $segmentsPerSimulation )
 
-    banner $currentSeg/$segmentsPerSimulation
+   banner $currentSeg/$segmentsPerSimulation
 
-    # ---------------- reload the queue file and exit if it has been requested
+   # ---------------- reload the queue file and exit if it has been requested
 
-    if ( $?flagRunTypeProduction ) then
-
+   if ( $?flagRunTypeProduction ) then
       if ( -f $queue_file ) then
-        if ( -r $queue_file ) then
-          source $queue_file
-        else
-          if ( $echoOn ) unset echo
-          echo "*ERROR*: The queue file '$queue_file' is not readable"
-          if ( $echoOn ) set echo
-          exit 1
-        endif
+         if ( -r $queue_file ) then
+            source $queue_file
+         else
+            if ( $echoOn ) unset echo
+            echo "*ERROR*: The queue file '$queue_file' is not readable"
+            if ( $echoOn ) set echo
+            exit 1
+         endif
       endif
 
       if ( ! $continueFlag ) then
-        if ( $echoOn ) unset echo
-        echo "<NOTE> : Stopping execution"
-        if ( $echoOn ) set echo
-        exit 0
+         if ( $echoOn ) unset echo
+         echo "<NOTE> : Stopping execution"
+         if ( $echoOn ) set echo
+         exit 0
       endif
+   endif
 
-    endif
+   # ---------------- commands, copied from XML (experiment/input/csh[@type="always" or @type="postInit"])
 
-    # ---------------- commands, copied from XML (experiment/input/csh[@type="always" or @type="postInit"])
+   #FRE experiment-input-csh-always-or-postinit
 
-    #FRE experiment-input-csh-always-or-postinit
+   cd $workDir
 
-    cd $workDir
+   # ---------------- expand namelists
 
-    # ---------------- expand namelists
+   set months = $monthslist[$irun]
+   set days = $dayslist[$irun]
+   set hours = $hourslist[$irun]
 
-    set months = $monthslist[$irun]
-    set days = $dayslist[$irun]
-    set hours = $hourslist[$irun]
+   set | sort > $envFile
+   sleep $envFileDelay
+   set -r | sort >> $envFile
+   sleep $envFileDelay
+   env --unset=TERMCAP | sort >> $envFile
 
-    set | sort > $envFile
-    sleep $envFileDelay
-    set -r | sort >> $envFile
-    sleep $envFileDelay
-    env --unset=TERMCAP | sort >> $envFile
+   expandVariables $envFile < input.nml.unexpanded > input.nml || exit 1
 
-    expandVariables $envFile < input.nml.unexpanded > input.nml || exit 1
+   rm -f $envFile
 
-    rm -f $envFile
+   # ---------------- prepare MPI call, execute it, analyze results
 
-    # ---------------- prepare MPI call, execute it, analyze results
-
-    if ( $target =~ '*openmp*' ) then
+   if ( $target =~ '*openmp*' ) then
       if ( ! $?OMP_NUM_THREADS ) setenv OMP_NUM_THREADS 1
-    else
+   else
       unsetenv OMP_NUM_THREADS
-    endif
+   endif
 
-    echo "Time before runCommand"
-    date
+   echo "Time before runCommand"
+   date
 
-    runCommand |& tee fms.out
+   runCommand |& tee fms.out
 
-    if ( $status == 0 ) then
-
+   if ( $status == 0 ) then
       if ( $echoOn ) unset echo
       echo "<NOTE> : The MPI launcher (mpirun) exited normally"
       if ( $echoOn ) set echo
-
-    else if ( $status == 1 ) then
-
+   else if ( $status == 1 ) then
       set msg =       "*ERROR*: Automatic message from the job '$FRE_JOBID'\n"
       set msg = "${msg}*ERROR*: -----------------------------------------------------------------------\n"
       set msg = "${msg}*ERROR*: The MPI launcher (mpirun) exited with error status\n"
@@ -670,9 +624,7 @@
       set msg = "${msg}*ERROR*: \n"
 
       set MPI_FAIL
-
-    else
-
+   else
       set msg =       "*ERROR*: Automatic message from the job '$FRE_JOBID'\n"
       set msg = "${msg}*ERROR*: -----------------------------------------------------------------------\n"
       set msg = "${msg}*ERROR*: The MPI launcher (mpirun) exited abnormally\n"
@@ -685,59 +637,53 @@
       set msg = "${msg}*ERROR*: \n"
 
       set MPI_FAIL
+   endif
 
-    endif
-
-    if ( $?MPI_FAIL ) then
-
+   if ( $?MPI_FAIL ) then
       set coreFiles = ( `ls core*` )
 
       if ( $#coreFiles > 0 ) then
+         if ( ! $?MPI_COREDUMP_DEBUGGER ) setenv MPI_COREDUMP_DEBUGGER 'idb'
 
-        if ( ! $?MPI_COREDUMP_DEBUGGER ) setenv MPI_COREDUMP_DEBUGGER 'idb'
+         set coreFileFirst = $coreFiles[1]
+         echo "Dump of the core file '$coreFileFirst'" > $coreFileFirst.out
+         $MPI_COREDUMP_DEBUGGER $executable:t $coreFileFirst >> $coreFileFirst.out
+         cat $coreFileFirst.out >> fms.out
+         cat $coreFileFirst.out
+         unset coreFileFirst
 
-        set coreFileFirst = $coreFiles[1]
-        echo "Dump of the core file '$coreFileFirst'" > $coreFileFirst.out
-        $MPI_COREDUMP_DEBUGGER $executable:t $coreFileFirst >> $coreFileFirst.out
-        cat $coreFileFirst.out >> fms.out
-        cat $coreFileFirst.out
-        unset coreFileFirst
+         set msg = "${msg}*ERROR*: Your job has produced $#coreFiles core files (run $ireload, loop $irun)\n"
+         set msg = "${msg}*ERROR*: Please go to the working directory '$workDir' and issue the following command for each core file there:\n"
+         set msg = "${msg}*ERROR*: \n"
 
-        set msg = "${msg}*ERROR*: Your job has produced $#coreFiles core files (run $ireload, loop $irun)\n"
-        set msg = "${msg}*ERROR*: Please go to the working directory '$workDir' and issue the following command for each core file there:\n"
-        set msg = "${msg}*ERROR*: \n"
+         @ count = 0
+         @ countMax = 20
 
-        @ count = 0
-        @ countMax = 20
+         foreach coreFile ( $coreFiles )
+            set msg = "${msg}*ERROR*: \t$MPI_COREDUMP_DEBUGGER $executable:t $coreFile >> $coreFile.out\n"
+            if ( $count < $countMax ) then
+               @ count++
+            else
+               break
+            endif
+         end
 
-        foreach coreFile ( $coreFiles )
-          set msg = "${msg}*ERROR*: \t$MPI_COREDUMP_DEBUGGER $executable:t $coreFile >> $coreFile.out\n"
-          if ( $count < $countMax ) then
-            @ count++
-          else
-            break
-          endif
-        end
+         set msg = "${msg}*ERROR*: \n"
+         set msg = "${msg}*ERROR*: FRE has executed the command above for one core file and echoed the result to the job stdout.\n"
 
-        set msg = "${msg}*ERROR*: \n"
-        set msg = "${msg}*ERROR*: FRE has executed the command above for one core file and echoed the result to the job stdout.\n"
+         if ( $count == $countMax ) then
+            set msg = "${msg}*ERROR*: In order to save space only the first $countMax core files are presented in this list.\n"
+            set msg = "${msg}*ERROR*: \n"
+         endif
 
-        if ( $count == $countMax ) then
-          set msg = "${msg}*ERROR*: In order to save space only the first $countMax core files are presented in this list.\n"
-          set msg = "${msg}*ERROR*: \n"
-        endif
-
-        unset countMax
-        unset count
-
+         unset countMax
+         unset count
       else
-
-        set cdsize = `limit coredumpsize`
-        set msg = "${msg}*ERROR*: No core files produced (run $ireload, loop $irun)\n"
-        set msg = "${msg}*ERROR*: You are using the $cdsize\n"
-        set msg = "${msg}*ERROR*: \n"
-        unset cdsize
-
+         set cdsize = `limit coredumpsize`
+         set msg = "${msg}*ERROR*: No core files produced (run $ireload, loop $irun)\n"
+         set msg = "${msg}*ERROR*: You are using the $cdsize\n"
+         set msg = "${msg}*ERROR*: \n"
+         unset cdsize
       endif
 
       set msg = "${msg}*ERROR*: -----------------------------------------------------------------------\n"
@@ -752,106 +698,100 @@
       unset msg
 
       set outputDir = ${outputDir}_crash
+   endif
 
-    endif
+   echo "Time after runCommand"
+   date
 
-    echo "Time after runCommand"
-    date
+   # ---------------- generate date for file names
 
-    # ---------------- generate date for file names
+   set begindate = `timeStamp -b`
+   if ( $begindate == 'no_time_stamp' ) set begindate = tmp`date '+%j%H%M%S'`
+   set enddate = `timeStamp -e`
+   if ( $enddate == 'no_time_stamp' ) set enddate = tmp`date '+%j%H%M%S'`
+   set fyear = `echo $enddate | timeStamp -y`
 
-    set begindate = `timeStamp -b`
-    if ( $begindate == 'no_time_stamp' ) set begindate = tmp`date '+%j%H%M%S'`
-    set enddate = `timeStamp -e`
-    if ( $enddate == 'no_time_stamp' ) set enddate = tmp`date '+%j%H%M%S'`
-    set fyear = `echo $enddate | timeStamp -y`
+   # ---------------- commands, copied from XML (experiment/postProcess/csh)
 
-    # ---------------- commands, copied from XML (experiment/postProcess/csh)
+   #FRE experiment-postprocess-csh
 
-    #FRE experiment-postprocess-csh
+   cd $workDir
 
-    cd $workDir
+   # ---------------- remove time_stamp.out file
 
-    # ---------------- remove time_stamp.out file
+   if ( -f time_stamp.out ) rm -f time_stamp.out
 
-    if ( -f time_stamp.out ) rm -f time_stamp.out
+   # ---------------- save ascii files
 
-    # ---------------- save ascii files
+   set asciiFiles = ( `ls -1 | egrep "$patternGrepAscii"` )
 
-    set asciiFiles = ( `ls -1 | egrep "$patternGrepAscii"` )
-
-    if ( $#asciiFiles > 0 ) then
-
-      set asciiSuffix = ascii/$begindate.ascii_out
+   if ( $#asciiFiles > 0 ) then
+      set asciiSuffix  = ascii/$begindate.ascii_out
       set asciiArchDir = $outputDir/$asciiSuffix
       set asciiWorkDir = $tmpOutputDir$asciiArchDir
 
       prepareDir $asciiWorkDir 'clean' || exit 1
 
       if ( ! $?MPI_FAIL ) then
+         ls -1 | egrep "$patternGrepAscii" | xargs -I'{}' mv --force '{}' $asciiWorkDir/$begindate.'{}'
 
-        ls -1 | egrep "$patternGrepAscii" | xargs -I'{}' mv --force '{}' $asciiWorkDir/$begindate.'{}'
-
-        set actionSaveOn        = 1
-        set paramArchiveOn      = $?flagOutputArchiveOn
-        @   paramPtmpOn         = ! $?flagOutputArchiveOn
-        set paramCheckSumOn     = $?flagCheckSumOn
-        set paramCompressOn     = $?flagOutputCompressAsciiOn
-
+         set actionSaveOn    =   1
+         set paramArchiveOn  =   $?flagOutputArchiveOn
+         @   paramPtmpOn     = ! $?flagOutputArchiveOn
+         set paramCheckSumOn =   $?flagCheckSumOn
+         set paramCompressOn =   $?flagOutputCompressAsciiOn
       else
+         ls -1 | egrep "$patternGrepAscii" | xargs -I'{}' ln --force '{}' $asciiWorkDir/$begindate.'{}'
 
-        ls -1 | egrep "$patternGrepAscii" | xargs -I'{}' ln --force '{}' $asciiWorkDir/$begindate.'{}'
-
-        set actionSaveOn        = 1
-        set paramArchiveOn      = 1
-        set paramPtmpOn         = 0
-        set paramCheckSumOn     = 0
-        set paramCompressOn     = 0
-
+         set actionSaveOn    = 1
+         set paramArchiveOn  = 1
+         set paramPtmpOn     = 0
+         set paramCheckSumOn = 0
+         set paramCompressOn = 0
       endif
 
       set asciiArgFile = $stateDir/$FRE_JOBID.output.stager.$begindate.A.args
 
-      echo "set expName                         =   $name"                       > $asciiArgFile
-      echo "set type                            =   ascii"                      >> $asciiArgFile
-      echo "set actionCombineOn                 =   0"                          >> $asciiArgFile
-      echo "set actionCheckOn                   =   0"                          >> $asciiArgFile
-      echo "set actionSaveOn                    =   $actionSaveOn"              >> $asciiArgFile
-      echo "set paramArchiveOn                  =   $paramArchiveOn"            >> $asciiArgFile
-      echo "set paramPtmpOn                     =   $paramPtmpOn"               >> $asciiArgFile
-      echo "set paramCheckSumOn                 =   $paramCheckSumOn"           >> $asciiArgFile
-      echo "set paramCompressOn                 =   $paramCompressOn"           >> $asciiArgFile
-      echo "set paramVerbosityOn                =   $?flagVerbosityOn"          >> $asciiArgFile
-      echo "set workDir                         =   $tmpOutputDir"              >> $asciiArgFile
-      echo "set ptmpDir                         =   $ptmpDir"                   >> $asciiArgFile
-      echo "set archDir                         =   $asciiArchDir"              >> $asciiArgFile
+      echo "set expName          = $name"             > $asciiArgFile
+      echo "set type             = ascii"            >> $asciiArgFile
+      echo "set actionCombineOn  = 0"                >> $asciiArgFile
+      echo "set actionCheckOn    = 0"                >> $asciiArgFile
+      echo "set actionSaveOn     = $actionSaveOn"    >> $asciiArgFile
+      echo "set paramArchiveOn   = $paramArchiveOn"  >> $asciiArgFile
+      echo "set paramPtmpOn      = $paramPtmpOn"     >> $asciiArgFile
+      echo "set paramCheckSumOn  = $paramCheckSumOn" >> $asciiArgFile
+      echo "set paramCompressOn  = $paramCompressOn" >> $asciiArgFile
+      echo "set paramVerbosityOn = $?flagVerbosityOn"  >> $asciiArgFile
+      echo "set workDir          = $tmpOutputDir"    >> $asciiArgFile
+      echo "set ptmpDir          = $ptmpDir"         >> $asciiArgFile
+      echo "set archDir          = $asciiArchDir"    >> $asciiArgFile
 
       if ( $?MPICH_RANK_REORDER_METHOD ) then
-        set mpiRankReorderMethod = $MPICH_RANK_REORDER_METHOD
-        unsetenv MPICH_RANK_REORDER_METHOD
+         set mpiRankReorderMethod = $MPICH_RANK_REORDER_METHOD
+         unsetenv MPICH_RANK_REORDER_METHOD
       endif
 
       outputStager $asciiArgFile
 
       if ( $status == 0 ) then
-        if ( $echoOn ) unset echo
-        echo "<NOTE> : The ascii directory '$asciiArchDir' has been processed successfully"
-        if ( $echoOn ) set echo
+         if ( $echoOn ) unset echo
+         echo "<NOTE> : The ascii directory '$asciiArchDir' has been processed successfully"
+         if ( $echoOn ) set echo
       else
-        @ outputStagerErrors += 1
-        if ( $echoOn ) unset echo
-        set msg = "*WARNING*: Can't submit the output stager job to process the '$asciiArchDir'\n"
-        set msg = "${msg}*WARNING*: ascii files have not been saved, you may need to transfer them manually.\n\n"
-        set msg = "${msg}*WARNING*: The ascii ArgFile has been saved at $asciiArgFile.  You may be able\n"
-        set msg = "${msg}*WARNING*: use the following command:\n\n"
-        set msg = "${msg}*WARNING*: $outputStager $asciiArgFile\n"
-        printf "$msg"
-        if ( $echoOn ) set echo
+         @ outputStagerErrors += 1
+         if ( $echoOn ) unset echo
+         set msg = "*WARNING*: Can't submit the output stager job to process the '$asciiArchDir'\n"
+         set msg = "${msg}*WARNING*: ascii files have not been saved, you may need to transfer them manually.\n\n"
+         set msg = "${msg}*WARNING*: The ascii ArgFile has been saved at $asciiArgFile.  You may be able\n"
+         set msg = "${msg}*WARNING*: use the following command:\n\n"
+         set msg = "${msg}*WARNING*: $outputStager $asciiArgFile\n"
+         printf "$msg"
+         if ( $echoOn ) set echo
       endif
 
       if ( $?mpiRankReorderMethod ) then
-        setenv MPICH_RANK_REORDER_METHOD $mpiRankReorderMethod
-        unset $mpiRankReorderMethod
+         setenv MPICH_RANK_REORDER_METHOD $mpiRankReorderMethod
+         unset $mpiRankReorderMethod
       endif
 
       unset asciiArgFile
@@ -865,19 +805,17 @@
       unset asciiWorkDir
       unset asciiArchDir
       unset asciiSuffix
+   endif
 
-    endif
+   unset asciiFiles
 
-    unset asciiFiles
+   # ---------------- save restart files, namelist, tables etc. and move them from RESTART to INPUT
 
-    # ---------------- save restart files, namelist, tables etc. and move them from RESTART to INPUT
+   pushd $workDir/RESTART
 
-    pushd $workDir/RESTART
+   set restartFiles = ( `ls -1 | egrep "$patternGrepRestart"` )
 
-    set restartFiles = ( `ls -1 | egrep "$patternGrepRestart"` )
-
-    if ( $#restartFiles > 0 ) then
-
+   if ( $#restartFiles > 0 ) then
       set restartSuffix = restart/$enddate
       set restartArchDir = $outputDir/$restartSuffix
       set restartWorkDir = $tmpOutputDir$restartArchDir
@@ -892,77 +830,71 @@
       cp --force --preserve=mode,ownership,timestamps $scriptName               $restartWorkDir
 
       if ( ! $?MPI_FAIL ) then
+         if ( $currentSeg < $segmentsPerSimulation && $irun < $segmentsPerJob ) then
+            find $workDir/INPUT   -maxdepth 1 -type f | egrep "$patternGrepRestartNextDrop" | xargs --no-run-if-empty rm --force
+            find $workDir/RESTART -maxdepth 1 -type f | egrep "$patternGrepRestartNextMove" | xargs --no-run-if-empty mv --force --target-directory ../INPUT
+         endif
 
-        if ( $currentSeg < $segmentsPerSimulation && $irun < $segmentsPerJob ) then
-
-          find $workDir/INPUT   -maxdepth 1 -type f | egrep "$patternGrepRestartNextDrop" | xargs --no-run-if-empty rm --force
-          find $workDir/RESTART -maxdepth 1 -type f | egrep "$patternGrepRestartNextMove" | xargs --no-run-if-empty mv --force --target-directory ../INPUT
-
-        endif
-
-        set actionCombineOn     = $?flagRunTypeRegression
-        set actionCheckOn       = $?flagOutputCheckOn
-        set actionSaveOn        = 1
-        set paramArchiveOn      = $?flagOutputArchiveOn
-        set paramPtmpOn         = 1
-        set paramCheckSumOn     = $?flagCheckSumOn
-        set paramCompressOn     = $?flagOutputCompressRestartOn
-
+         set actionCombineOn     = $?flagRunTypeRegression
+         set actionCheckOn       = $?flagOutputCheckOn
+         set actionSaveOn        = 1
+         set paramArchiveOn      = $?flagOutputArchiveOn
+         set paramPtmpOn         = 1
+         set paramCheckSumOn     = $?flagCheckSumOn
+         set paramCompressOn     = $?flagOutputCompressRestartOn
       else
-
-        set actionCombineOn     = 0
-        set actionCheckOn       = 0
-        set actionSaveOn        = 1
-        set paramArchiveOn      = 1
-        set paramPtmpOn         = 0
-        set paramCheckSumOn     = 0
-        set paramCompressOn     = 0
-
+         set actionCombineOn     = 0
+         set actionCheckOn       = 0
+         set actionSaveOn        = 1
+         set paramArchiveOn      = 1
+         set paramPtmpOn         = 0
+         set paramCheckSumOn     = 0
+         set paramCompressOn     = 0
       endif
 
       set restartArgFile = $stateDir/$FRE_JOBID.output.stager.$enddate.R.args
 
-      echo "set expName                         =   $name"                       > $restartArgFile
-      echo "set type                            =   restart"                    >> $restartArgFile
-      echo "set actionCombineOn                 =   $actionCombineOn"           >> $restartArgFile
-      echo "set actionCheckOn                   =   $actionCheckOn"             >> $restartArgFile
-      echo "set actionSaveOn                    =   $actionSaveOn"              >> $restartArgFile
-      echo "set paramArchiveOn                  =   $paramArchiveOn"            >> $restartArgFile
-      echo "set paramPtmpOn                     =   $paramPtmpOn"               >> $restartArgFile
-      echo "set paramCheckSumOn                 =   $paramCheckSumOn"           >> $restartArgFile
-      echo "set paramCompressOn                 =   $paramCompressOn"           >> $restartArgFile
-      echo "set paramVerbosityOn                =   $?flagVerbosityOn"          >> $restartArgFile
-      echo "set workDir                         =   $tmpOutputDir"              >> $restartArgFile
-      echo "set ptmpDir                         =   $ptmpDir"                   >> $restartArgFile
-      echo "set archDir                         =   $restartArchDir"            >> $restartArgFile
-      echo "set mppnccombineOptString           =  '$mppnccombineOptsRestart'"  >> $restartArgFile
+      echo "set expName               =   $name"                      > $restartArgFile
+      echo "set type                  =   restart"                   >> $restartArgFile
+      echo "set actionCombineOn       =   $actionCombineOn"          >> $restartArgFile
+      echo "set actionCheckOn         =   $actionCheckOn"            >> $restartArgFile
+      echo "set actionSaveOn          =   $actionSaveOn"             >> $restartArgFile
+      echo "set paramArchiveOn        =   $paramArchiveOn"           >> $restartArgFile
+      echo "set paramPtmpOn           =   $paramPtmpOn"              >> $restartArgFile
+      echo "set paramCheckSumOn       =   $paramCheckSumOn"          >> $restartArgFile
+      echo "set paramCompressOn       =   $paramCompressOn"          >> $restartArgFile
+      echo "set paramVerbosityOn      =   $?flagVerbosityOn"         >> $restartArgFile
+      echo "set workDir               =   $tmpOutputDir"             >> $restartArgFile
+      echo "set ptmpDir               =   $ptmpDir"                  >> $restartArgFile
+      echo "set archDir               =   $restartArchDir"           >> $restartArgFile
+      echo "set mppnccombineOptString =  '$mppnccombineOptsRestart'" >> $restartArgFile
 
       if ( $?MPICH_RANK_REORDER_METHOD ) then
-        set mpiRankReorderMethod = $MPICH_RANK_REORDER_METHOD
-        unsetenv MPICH_RANK_REORDER_METHOD
+         set mpiRankReorderMethod = $MPICH_RANK_REORDER_METHOD
+         unsetenv MPICH_RANK_REORDER_METHOD
       endif
 
       outputStager $restartArgFile
 
       if ( $status == 0 ) then
-        if ( $echoOn ) unset echo
-        echo "<NOTE> : The restart directory '$restartArchDir' has been processed successfully"
-        if ( $echoOn ) set echo
+         if ( $echoOn ) unset echo
+         echo "<NOTE> : The restart directory '$restartArchDir' has been processed successfully"
+         if ( $echoOn ) set echo
       else
-        @ outputStagerErrors += 1
-        if ( $echoOn ) unset echo
-        set msg = "*WARNING*: Can't submit the output stager job to process the '$restartArchDir'\n"
-        set msg = "${msg}*WARNING*: restart files have not been saved, you may need to transfer them manually.\n\n"
-        set msg = "${msg}*WARNING*: The restart ArgFile has been saved at $restartArgFile.  You may be able\n"
-        set msg = "${msg}*WARNING*: use the following command:\n\n"
-        set msg = "${msg}*WARNING*: $outputStager $restartArgFile\n"
-        printf "$msg"
-        if ( $echoOn ) set echo
+         @ outputStagerErrors += 1
+         if ( $echoOn ) unset echo
+         set msg =       "*WARNING*: Can't submit the output stager job to process the '$restartArchDir'\n"
+         set msg = "${msg}*WARNING*: restart files have not been saved, you may need to transfer them manually.\n\n"
+         set msg = "${msg}*WARNING*: The restart ArgFile has been saved at $restartArgFile.  You may be able\n"
+         set msg = "${msg}*WARNING*: use the following command:\n\n"
+         set msg = "${msg}*WARNING*: $outputStager $restartArgFile\n"
+         printf "$msg"
+         if ( $echoOn ) set echo
       endif
 
       if ( $?mpiRankReorderMethod ) then
-        setenv MPICH_RANK_REORDER_METHOD $mpiRankReorderMethod
-        unset $mpiRankReorderMethod
+         setenv MPICH_RANK_REORDER_METHOD $mpiRankReorderMethod
+         unset $mpiRankReorderMethod
       endif
 
       unset restartArgFile
@@ -977,37 +909,33 @@
 
       unset restartWorkDir
       unset restartSuffix
+   endif
 
-    endif
+   popd
 
-    popd
+   # ---------------- rename region history files
 
-    # ---------------- rename region history files
+   set regionHistoryFiles = ( `ls -1 | egrep "$patternGrepRegion"` )
 
-    set regionHistoryFiles = ( `ls -1 | egrep "$patternGrepRegion"` )
-
-    if ( $#regionHistoryFiles > 0 ) then
-
+   if ( $#regionHistoryFiles > 0 ) then
       if ( ! $?MPI_FAIL ) then
-        foreach file ( $regionHistoryFiles )
-          mv -f $file `echo $file | sed -r "s/$patternGrepRegion//"`
-        end
+         foreach file ( $regionHistoryFiles )
+            mv -f $file `echo $file | sed -r "s/$patternGrepRegion//"`
+         end
       endif
+   endif
 
-    endif
+   unset regionHistoryFiles
 
-    unset regionHistoryFiles
+   # ---------------- combine and save history files
 
-    # ---------------- combine and save history files
+   set historyFiles = ( `ls -1 | egrep "$patternGrepHistory"` )
 
-    set historyFiles = ( `ls -1 | egrep "$patternGrepHistory"` )
-
-    if ( $#historyFiles > 0 ) then
-
+   if ( $#historyFiles > 0 ) then
       if ( $?flagOutputCombineHistoryOn ) then
-        set historySuffix = history/$begindate.nc
+         set historySuffix = history/$begindate.nc
       else
-        set historySuffix = history/$begindate.raw.nc
+         set historySuffix = history/$begindate.raw.nc
       endif
 
       set historyArchDir = $outputDir/$historySuffix
@@ -1016,75 +944,72 @@
       prepareDir $historyWorkDir 'clean' || exit 1
 
       if ( ! $?MPI_FAIL ) then
-        ls -1 | egrep "^[0-9][0-9][0-9][0-9][0-9][0-9].+$patternGrepHistory" | xargs -I'{}' mv --force '{}' $historyWorkDir/'{}'
-        ls -1 | egrep "$patternGrepHistory" | xargs -I'{}' mv --force '{}' $historyWorkDir/$begindate.'{}'
+         ls -1 | egrep "^[0-9][0-9][0-9][0-9][0-9][0-9].+$patternGrepHistory" | xargs -I'{}' mv --force '{}' $historyWorkDir/'{}'
+         ls -1 | egrep "$patternGrepHistory" | xargs -I'{}' mv --force '{}' $historyWorkDir/$begindate.'{}'
 
-        set actionCombineOn     = $?flagOutputCombineHistoryOn
-        set actionCheckOn       = $?flagOutputCheckOn
-        set actionSaveOn        = 1
-        set paramArchiveOn      = $?flagOutputArchiveOn
-        @   paramPtmpOn         = ! $?flagOutputArchiveOn
-        set paramCheckSumOn     = $?flagCheckSumOn
-        set paramCompressOn     = $?flagOutputCompressHistoryOn
-
+         set actionCombineOn     = $?flagOutputCombineHistoryOn
+         set actionCheckOn       = $?flagOutputCheckOn
+         set actionSaveOn        = 1
+         set paramArchiveOn      = $?flagOutputArchiveOn
+         @   paramPtmpOn         = ! $?flagOutputArchiveOn
+         set paramCheckSumOn     = $?flagCheckSumOn
+         set paramCompressOn     = $?flagOutputCompressHistoryOn
       else
+         ls -1 | egrep "^[0-9][0-9][0-9][0-9][0-9][0-9].+$patternGrepHistory" | xargs -I'{}' mv --force '{}' $historyWorkDir/'{}'
+         ls -1 | egrep "$patternGrepHistory" | xargs -I'{}' ln --force '{}' $historyWorkDir/$begindate.'{}'
 
-        ls -1 | egrep "^[0-9][0-9][0-9][0-9][0-9][0-9].+$patternGrepHistory" | xargs -I'{}' mv --force '{}' $historyWorkDir/'{}'
-        ls -1 | egrep "$patternGrepHistory" | xargs -I'{}' ln --force '{}' $historyWorkDir/$begindate.'{}'
-
-        set actionCombineOn     = 0
-        set actionCheckOn       = 0
-        set actionSaveOn        = 1
-        set paramArchiveOn      = 1
-        set paramPtmpOn         = 0
-        set paramCheckSumOn     = 0
-        set paramCompressOn     = 0
-
+         set actionCombineOn     = 0
+         set actionCheckOn       = 0
+         set actionSaveOn        = 1
+         set paramArchiveOn      = 1
+         set paramPtmpOn         = 0
+         set paramCheckSumOn     = 0
+         set paramCompressOn     = 0
       endif
 
       set historyArgFile = $stateDir/$FRE_JOBID.output.stager.$begindate.H.args
 
-      echo "set expName                         =   $name"                       > $historyArgFile
-      echo "set type                            =   history"                    >> $historyArgFile
-      echo "set actionCombineOn                 =   $actionCombineOn"           >> $historyArgFile
-      echo "set actionCheckOn                   =   $actionCheckOn"             >> $historyArgFile
-      echo "set actionSaveOn                    =   $actionSaveOn"              >> $historyArgFile
-      echo "set paramArchiveOn                  =   $paramArchiveOn"            >> $historyArgFile
-      echo "set paramPtmpOn                     =   $paramPtmpOn"               >> $historyArgFile
-      echo "set paramCheckSumOn                 =   $paramCheckSumOn"           >> $historyArgFile
-      echo "set paramCompressOn                 =   $paramCompressOn"           >> $historyArgFile
-      echo "set paramVerbosityOn                =   $?flagVerbosityOn"          >> $historyArgFile
-      echo "set workDir                         =   $tmpOutputDir"              >> $historyArgFile
-      echo "set ptmpDir                         =   $ptmpDir"                   >> $historyArgFile
-      echo "set archDir                         =   $historyArchDir"            >> $historyArgFile
-      echo "set mppnccombineOptString           =  '$mppnccombineOptsHistory'"  >> $historyArgFile
+      echo "set expName               =  $name"                      > $historyArgFile
+      echo "set type                  =  history"                   >> $historyArgFile
+      echo "set actionCombineOn       =  $actionCombineOn"          >> $historyArgFile
+      echo "set actionCheckOn         =  $actionCheckOn"            >> $historyArgFile
+      echo "set actionSaveOn          =  $actionSaveOn"             >> $historyArgFile
+      echo "set paramArchiveOn        =  $paramArchiveOn"           >> $historyArgFile
+      echo "set paramPtmpOn           =  $paramPtmpOn"              >> $historyArgFile
+      echo "set paramCheckSumOn       =  $paramCheckSumOn"          >> $historyArgFile
+      echo "set paramCompressOn       =  $paramCompressOn"          >> $historyArgFile
+      echo "set paramVerbosityOn      =  $?flagVerbosityOn"         >> $historyArgFile
+      echo "set workDir               =  $tmpOutputDir"             >> $historyArgFile
+      echo "set ptmpDir               =  $ptmpDir"                  >> $historyArgFile
+      echo "set archDir               =  $historyArchDir"           >> $historyArgFile
+      echo "set mppnccombineOptString = '$mppnccombineOptsHistory'" >> $historyArgFile
 
       if ( $?MPICH_RANK_REORDER_METHOD ) then
-        set mpiRankReorderMethod = $MPICH_RANK_REORDER_METHOD
-        unsetenv MPICH_RANK_REORDER_METHOD
+         set mpiRankReorderMethod = $MPICH_RANK_REORDER_METHOD
+         unsetenv MPICH_RANK_REORDER_METHOD
       endif
 
       outputStager $historyArgFile
 
       if ( $status == 0 ) then
-        if ( $echoOn ) unset echo
-        echo "<NOTE> : The history directory '$historyArchDir' has been processed successfully"
-        if ( $echoOn ) set echo
+         if ( $echoOn ) unset echo
+         echo "<NOTE> : The history directory '$historyArchDir' has been processed successfully"
+         if ( $echoOn ) set echo
       else
-        @ outputStagerErrors += 1
-        if ( $echoOn ) unset echo
-        set msg = "*WARNING*: Can't submit the output stager job to process the '$historyArchDir'\n"
-        set msg = "${msg}*WARNING*: history files have not been saved, you may need to transfer them manually.\n\n"
-        set msg = "${msg}*WARNING*: The history ArgFile has been saved at $historyArgFile.  You may be able\n"
-        set msg = "${msg}*WARNING*: use the following command:\n\n"
-        set msg = "${msg}*WARNING*: $outputStager $historyArgFile\n"
-        printf "$msg"
-        if ( $echoOn ) set echo
+         @ outputStagerErrors += 1
+         if ( $echoOn ) unset echo
+         set msg =       "*WARNING*: Can't submit the output stager job to process the '$historyArchDir'\n"
+         set msg = "${msg}*WARNING*: history files have not been saved, you may need to transfer them manually.\n\n"
+         set msg = "${msg}*WARNING*: The history ArgFile has been saved at $historyArgFile.  You may be able\n"
+         set msg = "${msg}*WARNING*: use the following command:\n\n"
+         set msg = "${msg}*WARNING*: $outputStager $historyArgFile\n"
+         printf "$msg"
+         if ( $echoOn ) set echo
       endif
 
       if ( $?mpiRankReorderMethod ) then
-        setenv MPICH_RANK_REORDER_METHOD $mpiRankReorderMethod
-        unset $mpiRankReorderMethod
+         setenv MPICH_RANK_REORDER_METHOD $mpiRankReorderMethod
+         unset $mpiRankReorderMethod
       endif
 
       unset historyArgFile
@@ -1100,15 +1025,13 @@
       unset historyWorkDir
       unset historyArchDir
       unset historySuffix
+   endif
 
-    endif
+   unset historyFiles
 
-    unset historyFiles
+   # ---------------- terminate script if MPI failed
 
-    # ---------------- terminate script if MPI failed
-
-    if ( $?MPI_FAIL ) then
-
+   if ( $?MPI_FAIL ) then
       if ( $echoOn ) unset echo
       echo "*ERROR*: The MPI failed (run $ireload, loop $irun)"
       echo "*ERROR*: Any output that may have been generated is in the '$outputDir'"
@@ -1116,168 +1039,152 @@
       if ( $echoOn ) set echo
 
       exit 1
+   endif
 
-    endif
+   # ---------------- terminate script if there are no restart files
 
-    # ---------------- terminate script if there are no restart files
-
-    if ( $#restartFiles == 0 ) then
-
+   if ( $#restartFiles == 0 ) then
       if ( $echoOn ) unset echo
       echo "*ERROR*: no restart files exist (run $ireload, loop $irun)"
       if ( $echoOn ) set echo
 
       exit 1
+   endif
 
-    endif
+   # ---------------- write new reload information (production runs only)
 
-    # ---------------- write new reload information (production runs only)
-
-    if ( $?flagRunTypeProduction ) then
-
+   if ( $?flagRunTypeProduction ) then
       if ( $irun < $segmentsPerJob ) then
-        @ irunNext = $irun + 1
+         @ irunNext = $irun + 1
       else
-        @ ireload++
-        @ irunNext = 1
+         @ ireload++
+         @ irunNext = 1
       endif
 
       if ( -f $reload_file ) mv -f $reload_file ${reload_file}_prev
       touch $reload_file
 
       if ( $status == 0 ) then
-        if ( $echoOn ) unset echo
-        echo "<NOTE> : Writing reload information to the reload file '$reload_file' at `date +%s`"
-        if ( $echoOn ) set echo
-        echo "@ ireload       =   $ireload"                     >> $reload_file
-        echo "@ irun          =   $irunNext"                    >> $reload_file
-        echo "set initCond    =   $restartArchDir.$archExt"     >> $reload_file
-        echo "set fyear       =   $fyear"                       >> $reload_file
-        chmod 644 $reload_file
+         if ( $echoOn ) unset echo
+         echo "<NOTE> : Writing reload information to the reload file '$reload_file' at `date +%s`"
+         if ( $echoOn ) set echo
+         echo "@ ireload    = $ireload"                 >> $reload_file
+         echo "@ irun       = $irunNext"                >> $reload_file
+         echo "set initCond = $restartArchDir.$archExt" >> $reload_file
+         echo "set fyear    = $fyear"                   >> $reload_file
+         chmod 644 $reload_file
       else
-        if ( $echoOn ) unset echo
-        echo "*ERROR*: The reload file '$reload_file' can't be saved"
-        if ( $echoOn ) set echo
-        exit 1
+         if ( $echoOn ) unset echo
+         echo "*ERROR*: The reload file '$reload_file' can't be saved"
+         if ( $echoOn ) set echo
+         exit 1
       endif
 
       unset irunNext
+   endif
 
-    endif
+   # ---------------- unset remaining restart variables
 
-    # ---------------- unset remaining restart variables
+   unset restartArchDir
+   unset restartFiles
 
-    unset restartArchDir
-    unset restartFiles
+   # ---------------- increment loop counters
 
-    # ---------------- increment loop counters
+   @ currentSeg++
+   @ irun++
 
-    @ currentSeg++
-    @ irun++
-
-  end
+end
 
 ################################################################################
 #--------------------------- after the main loop -------------------------------
 ################################################################################
 
-  banner ending
+banner ending
 
-  # ---------------- reload and resubmit if needed (production runs only)
+# ---------------- reload and resubmit if needed (production runs only)
 
-  if ( $?flagRunTypeProduction ) then
-
-    if ( $ireload <= $jobsPerSimulation && $currentSeg <= $segmentsPerSimulation ) then
-
+if ( $?flagRunTypeProduction ) then
+   if ( $ireload <= $jobsPerSimulation && $currentSeg <= $segmentsPerSimulation ) then
       if ( -f $queue_file ) then
-        if ( -r $queue_file ) then
-          source $queue_file
-        else
-          if ( $echoOn ) unset echo
-          echo "*ERROR*: The queue file '$queue_file' is not readable"
-          if ( $echoOn ) set echo
-          exit 1
-        endif
+         if ( -r $queue_file ) then
+            source $queue_file
+         else
+            if ( $echoOn ) unset echo
+            echo "*ERROR*: The queue file '$queue_file' is not readable"
+            if ( $echoOn ) set echo
+            exit 1
+         endif
       endif
 
       if ( ! $continueFlag ) then
-        if ( $echoOn ) unset echo
-        echo "<NOTE> : Stopping execution"
-        if ( $echoOn ) set echo
-        exit 0
+         if ( $echoOn ) unset echo
+         echo "<NOTE> : Stopping execution"
+         if ( $echoOn ) set echo
+         exit 0
       endif
 
       if ( -f $scriptName ) then
-        batch -f $scriptName
+         batch -f $scriptName
       else
-        if ( $echoOn ) unset echo
-        echo "WARNING: The script '$scriptName' does not exist (run $ireload, loop $irun) - it can't be resubmitted"
-        if ( $echoOn ) set echo
+         if ( $echoOn ) unset echo
+         echo "WARNING: The script '$scriptName' does not exist (run $ireload, loop $irun) - it can't be resubmitted"
+         if ( $echoOn ) set echo
       endif
+   endif
+endif
 
-    endif
+# ---------------- working directory cleaning
 
-  endif
+if ( $?flagWorkDirCleanOn && $outputStagerErrors == 0 ) then
+   workDirCleaner $workDir
 
-  # ---------------- working directory cleaning
-
-  if ( $?flagWorkDirCleanOn && $outputStagerErrors == 0 ) then
-
-    workDirCleaner $workDir
-
-    if ( $status == 0 ) then
+   if ( $status == 0 ) then
       if ( $echoOn ) unset echo
       echo "<NOTE> : The working directory has been cleaned successfully"
       if ( $echoOn ) set echo
-    else
+   else
       if ( $echoOn ) unset echo
       echo "WARNING: Can't clean the working directory"
       if ( $echoOn ) set echo
-    endif
+   endif
+else if ( $?flagWorkDirCleanOn && $outputStagerErrors != 0 ) then
+   if ( $echoOn ) unset echo
+   echo "WARNING: Output stager errors ($outputStagerErrors) were encountered.  Unable to clean $workDir."
+   if ( $echoOn ) set echo
+endif
 
-  else if ( $?flagWorkDirCleanOn && $outputStagerErrors != 0 ) then
+# ---------------- Run NiNaC
 
-    if ( $echoOn ) unset echo
-    echo "WARNING: Output stager errors ($outputStagerErrors) were encountered.  Unable to clean $workDir."
-    if ( $echoOn ) set echo
-
-  endif
-
-  # ---------------- Run NiNaC
-
-  if ( $?NiNaC_LVL ) then
-    if ( $NiNaC_LVL > 0 ) then
-
+if ( $?NiNaC_LVL ) then
+   if ( $NiNaC_LVL > 0 ) then
       set NiNaC_RunRx_Script = `which "$NiNaC_RunRx"`
       set NiNaC_RunRx_SubOpts = "-v NiNaC_SRCDIR='$FreCommandsSrcDir' -v NiNaC_BLDDIR='$FreCommandsBldDir' -v NiNaC_RUNDIR='$workDir' -N '$FRE_JOBID'"
       set NiNaC_RunRx_JobId = `submit -O "$NiNaC_RunRx_SubOpts" "$NiNaC_RunRx_Script"`
-
       if ( $status == 0 ) then
-        if ( $echoOn ) unset echo
-        echo "NiNaC Note: The NiNaC_RunRx job '$NiNaC_RunRx_JobId' has been submitted successfully"
-        if ( $echoOn ) set echo
+         if ( $echoOn ) unset echo
+         echo "NiNaC Note: The NiNaC_RunRx job '$NiNaC_RunRx_JobId' has been submitted successfully"
+         if ( $echoOn ) set echo
       else
-        if ( $echoOn ) unset echo
-        echo "NiNaC Note: While NiNaC loaded attempt to submit the NiNaC_RunRx job failed with exit status $status : FRE continuing as normal."
-        if ( $echoOn ) set echo
+         if ( $echoOn ) unset echo
+         echo "NiNaC Note: While NiNaC loaded attempt to submit the NiNaC_RunRx job failed with exit status $status : FRE continuing as normal."
+         if ( $echoOn ) set echo
       endif
 
       unset NiNaC_RunRx_Script
       unset NiNaC_RunRx_SubOpts
       unset NiNaC_RunRx_JobId
+   endif
+endif
 
-    endif
-  endif
+# ---------------- normal end of script
 
-  # ---------------- normal end of script
+set -r runtimeEnd = `date "+%s"`
+set -r runtime = `echo "$runtimeEnd - $runtimeBeg" | bc -l`
 
-  set -r runtimeEnd = `date "+%s"`
-  set -r runtime = `echo "$runtimeEnd - $runtimeBeg" | bc -l`
+if ( $echoOn ) unset echo
+echo "<NOTE> : Finishing on `date`"
+echo "<NOTE> : Runtime = '$runtime' (seconds)"
+echo "<NOTE> : Natural end-of-script for '$scriptName'"
+if ( $echoOn ) set echo
 
-  if ( $echoOn ) unset echo
-  echo "<NOTE> : Finishing on `date`"
-  echo "<NOTE> : Runtime = '$runtime' (seconds)"
-  echo "<NOTE> : Natural end-of-script for '$scriptName'"
-  if ( $echoOn ) set echo
-
-  exit 0
+exit 0
