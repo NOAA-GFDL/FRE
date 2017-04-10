@@ -267,21 +267,27 @@ sub curator($$$)
   my $experimentNode = $root->findnodes("experiment[\@label='$expName' or \@name='$expName']")->get_node(1);
   my $publicMetadataNode = $experimentNode->findnodes("publicMetadata")->get_node(1);
 
-  my $document = XML::LibXML->load_xml(string => $publicMetadataNode->toString());
-  my $documentURI = "publicMetadata";
-  $document->setURI($documentURI);
+  if ($publicMetadataNode) {
+    my $document = XML::LibXML->load_xml(string => $publicMetadataNode->toString());
+    my $documentURI = "publicMetadata";
+    $document->setURI($documentURI);
 
-  my $return = validate({ document => $document,
-			  verbose => 1,
-			  curator => 1});
+    my $return = validate({ document => $document,
+			    verbose => 1,
+			    curator => 1});
 
-  if ( not $return ){
-      FREMsg::out($v, FREMsg::FATAL, "CMIP Curator tags are not valid; see CMIP metadata tag documentation at http://cobweb.gfdl.noaa.gov/~pcmdi/CMIP6_Curator/xml_documentation");
-      exit FREDefaults::STATUS_FRE_GENERIC_PROBLEM;
-      return '';
+    if ( $return ) {
+        return;
+    }
+    else {
+        FREMsg::out($v, FREMsg::FATAL, "CMIP Curator tags are not valid; see CMIP metadata tag documentation at http://cobweb.gfdl.noaa.gov/~pcmdi/CMIP6_Curator/xml_documentation");
+        exit FREDefaults::STATUS_FRE_GENERIC_PROBLEM;
+    }
   }
-
-  return;
+  else {
+       FREMsg::out($v, FREMsg::FATAL, "No CMIP Curator tags found; see CMIP metadata tag documentation at http://cobweb.gfdl.noaa.gov/~pcmdi/CMIP6_Curator/xml_documentation");
+       exit FREDefaults::STATUS_FRE_GENERIC_PROBLEM;
+  }
 }
 
 sub validate
