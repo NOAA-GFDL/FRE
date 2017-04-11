@@ -169,7 +169,28 @@ CM2.1U_Control-1990_E1.M_3B_snowmelt_static_ocn6x5"
 }
 
 @test "Get stdout directory for --platform=${FRE_SYSTEM_SITE}.intel" {
-    output_good="/lustre/f1/$USER/.*/CM2.1U_Control-1990_E1.M_3A/${FRE_SYSTEM_SITE}.intel-prod/stdout"
+    case ${FRE_SYSTEM_SITE} in
+	ncrc3 )
+	    stdoutRoot="/lustre/f1"
+	    ;;
+	ncrc4 )
+	    stdoutRoot="/lustre/f1"
+	    ;;
+	gfdl-ws )
+	    stdoutRoot="/home"
+	    ;;
+	gfdl )
+	    stdoutRoot="/home"
+	    ;;
+	theia )
+	    stdoutRoot="/scratch4/GFDL/gfdlscr"
+	    ;;
+	* )
+	    skip "Unknown site '${FRE_SYSTEM_SITE}'."
+	    ;;
+    esac
+
+    output_good="${stdoutRoot}/$USER/.*/CM2.1U_Control-1990_E1.M_3A/${FRE_SYSTEM_SITE}.intel-prod/stdout"
 
     run frelist -p ${FRE_SYSTEM_SITE}.intel -d stdout -x CM2.1U.xml CM2.1U_Control-1990_E1.M_3A
     echo "Expected: \"$output_good\""
@@ -180,8 +201,8 @@ CM2.1U_Control-1990_E1.M_3B_snowmelt_static_ocn6x5"
 }
 
 @test "Get analysis and archive directories for --platform=gfdl.${FRE_SYSTEM_SITE}-intel" {
-    output_good="archive: /archive/\$USER/.*/CM2.1U_Control-1990_E1.M_3A/gfdl.${FRE_SYSTEM_SITE}-intel-prod
-analysis: /archive/\$USER/.*/CM2.1U_Control-1990_E1.M_3A/gfdl.${FRE_SYSTEM_SITE}-intel-prod/analysis"
+    output_good="archive: /archive/$USER/.*/CM2.1U_Control-1990_E1.M_3A/gfdl.${FRE_SYSTEM_SITE}-intel-prod
+analysis: /archive/$USER/.*/CM2.1U_Control-1990_E1.M_3A/gfdl.${FRE_SYSTEM_SITE}-intel-prod/analysis"
 
     run frelist -p gfdl.${FRE_SYSTEM_SITE}-intel -d analysis,archive -x CM2.1U.xml CM2.1U_Control-1990_E1.M_3A
     echo "Expected: \"$output_good\""
@@ -201,7 +222,28 @@ analysis: /archive/\$USER/.*/CM2.1U_Control-1990_E1.M_3A/gfdl.${FRE_SYSTEM_SITE}
 }
 
 @test "Get the executable --platform=${FRE_SYSTEM_SITE}.intel" {
-    output_good="/lustre/f1/unswept/.*/.*/CM2.1U_Control-1990_E1.M_3A/${FRE_SYSTEM_SITE}.intel-prod/exec/fms_CM2.1U_Control-1990_E1.M_3A.x CM2.1U_Control-1990_E1.M_3A"
+    case ${FRE_SYSTEM_SITE} in
+	ncrc3 )
+	    execRoot="/lustre/f1"
+	    ;;
+	ncrc4 )
+	    execRoot="/lustre/f1"
+	    ;;
+	gfdl-ws )
+	    execRoot="/home"
+	    ;;
+	gfdl )
+	    execRoot="/home"
+	    ;;
+	theia )
+	    execRoot="/scratch4/GFDL/gfdlscr"
+	    ;;
+	* )
+	    skip "Unknown site '${FRE_SYSTEM_SITE}'."
+	    ;;
+    esac
+
+    output_good="$execRoot/$USER/.*/CM2.1U_Control-1990_E1.M_3A/${FRE_SYSTEM_SITE}.intel-prod/exec/fms_CM2.1U_Control-1990_E1.M_3A.x CM2.1U_Control-1990_E1.M_3A"
 
     run frelist -p ${FRE_SYSTEM_SITE}.intel -E -x CM2.1U.xml CM2.1U_Control-1990_E1.M_3A
     echo "Expected: \"$output_good\""
@@ -212,7 +254,28 @@ analysis: /archive/\$USER/.*/CM2.1U_Control-1990_E1.M_3A/gfdl.${FRE_SYSTEM_SITE}
 }
 
 @test "Get the executable from inherited experiment --platform=${FRE_SYSTEM_SITE}.intel" {
-    output_good="/lustre/f1/unswept/.*/.*/CM2.1U_Control-1990_E1.M_3A/${FRE_SYSTEM_SITE}.intel-prod/exec/fms_CM2.1U_Control-1990_E1.M_3A.x CM2.1U_Control-1990_E1.M_3A"
+    case ${FRE_SYSTEM_SITE} in
+	ncrc3 )
+	    execRoot="/lustre/f1/unswept"
+	    ;;
+	ncrc4 )
+	    execRoot="/lustre/f1/unswept"
+	    ;;
+	gfdl-ws )
+	    execRoot="/home"
+	    ;;
+	gfdl )
+	    execRoot="/home"
+	    ;;
+	theia )
+	    execRoot="/scratch4/GFDL/gfdlscr"
+	    ;;
+	* )
+	    skip "Unknown site '${FRE_SYSTEM_SITE}'."
+	    ;;
+    esac
+
+    output_good="$execRoot/$USER/.*/CM2.1U_Control-1990_E1.M_3A/${FRE_SYSTEM_SITE}.intel-prod/exec/fms_CM2.1U_Control-1990_E1.M_3A.x CM2.1U_Control-1990_E1.M_3A"
 
     run frelist -p ${FRE_SYSTEM_SITE}.intel -E -x CM2.1U.xml CM2.1U_Control-1990_E1.M_3B_snowmelt
     echo "Expected: \"$output_good\""
@@ -224,16 +287,39 @@ analysis: /archive/\$USER/.*/CM2.1U_Control-1990_E1.M_3A/gfdl.${FRE_SYSTEM_SITE}
 
 @test "Get the executable with a remote user" {
     # Pick a remote site
-    case $( hostname ) in
-	an??? )
-	    REMOTE_SITE=${FRE_SYSTEM_SITE}.intel
-	    output_good="/lustre/f1/unswept/REM_USER/.*/CM2.1U_Control-1990_E1.M_3A/${REMOTE_SITE}-prod/exec/fms_CM2.1U_Control-1990_E1.M_3A.x CM2.1U_Control-1990_E1.M_3A"
+    case $FRE_SYSTEM_SITE in
+	ncrc3 )
+	    REMOTE_SITE=gfdl-ws.intel
+	    ;;
+	ncrc4 )
+	    REMOTE_SITE=theia.intel
+	    ;;
+	gfdl-ws )
+	    REMOTE_SITE=ncrc4.intel
+	    ;;
+	theia )
+	    REMOTE_SITE=gfdl.theia-intel
 	    ;;
 	* )
-	    REMOTE_SITE=gfdl.${FRE_SYSTEM_SITE}-intel
-	    output_good="/home/REM_USER/.*/CM2.1U_Control-1990_E1.M_3A/${REMOTE_SITE}-prod/exec/fms_CM2.1U_Control-1990_E1.M_3A.x CM2.1U_Control-1990_E1.M_3A"
+	    skip "Unknown site '${FRE_SYSTEM_SITE}'."
 	    ;;
     esac
+    case $REMOTE_SITE in
+	ncrc4.intel )
+	    execRoot="/lustre/f1/unswept"
+	    ;;
+	gfdl-ws.intel )
+	    execRoot="/home"
+	    ;;
+	theia.intel )
+	    execRoot="/scratch4/GFDL/gfdlscr"
+	    ;;
+	gfdl.theia-intel )
+	    execRoot="/home"
+	    ;;
+    esac
+
+    output_good="${execRoot}/REM_USER/.*/CM2.1U_Control-1990_E1.M_3A/${REMOTE_SITE}-prod/exec/fms_CM2.1U_Control-1990_E1.M_3A.x CM2.1U_Control-1990_E1.M_3A"
 
     run frelist -R REM_USER -p ${REMOTE_SITE} -E -x CM2.1U.xml CM2.1U_Control-1990_E1.M_3A
     echo "Expected \"$output_good\""
@@ -244,9 +330,30 @@ analysis: /archive/\$USER/.*/CM2.1U_Control-1990_E1.M_3A/gfdl.${FRE_SYSTEM_SITE}
 }
 
 @test "Get the executable for all experiments with --target=openmp,repro" {
-    output_good="CM2.1U_Control-1990_E1.M_3A /lustre/f1/unswept/$USER/.*/CM2.1U_Control-1990_E1.M_3A/${FRE_SYSTEM_SITE}.intel-repro-openmp/exec/fms_CM2.1U_Control-1990_E1.M_3A.x CM2.1U_Control-1990_E1.M_3A
-CM2.1U_Control-1990_E1.M_3B_snowmelt /lustre/f1/unswept/$USER/.*/CM2.1U_Control-1990_E1.M_3A/${FRE_SYSTEM_SITE}.intel-repro-openmp/exec/fms_CM2.1U_Control-1990_E1.M_3A.x CM2.1U_Control-1990_E1.M_3A
-CM2.1U_Control-1990_E1.M_3B_snowmelt_static_ocn6x5 /lustre/f1/unswept/$USER/.*/CM2.1U_Control-1990_E1.M_3B_snowmelt_static_ocn6x5/${FRE_SYSTEM_SITE}.intel-repro-openmp/exec/fms_CM2.1U_Control-1990_E1.M_3B_snowmelt_static_ocn6x5.x CM2.1U_Control-1990_E1.M_3B_snowmelt_static_ocn6x5"
+    case ${FRE_SYSTEM_SITE} in
+	ncrc3 )
+	    execRoot="/lustre/f1/unswept"
+	    ;;
+	ncrc4 )
+	    execRoot="/lustre/f1/unswept"
+	    ;;
+	gfdl-ws )
+	    execRoot="/home"
+	    ;;
+	gfdl )
+	    execRoot="/home"
+	    ;;
+	theia )
+	    execRoot="/scratch4/GFDL/gfdlscr"
+	    ;;
+	* )
+	    skip "Unknown site '${FRE_SYSTEM_SITE}'."
+	    ;;
+    esac
+
+    output_good="CM2.1U_Control-1990_E1.M_3A $execRoot/$USER/.*/CM2.1U_Control-1990_E1.M_3A/${FRE_SYSTEM_SITE}.intel-repro-openmp/exec/fms_CM2.1U_Control-1990_E1.M_3A.x CM2.1U_Control-1990_E1.M_3A
+CM2.1U_Control-1990_E1.M_3B_snowmelt $execRoot/$USER/.*/CM2.1U_Control-1990_E1.M_3A/${FRE_SYSTEM_SITE}.intel-repro-openmp/exec/fms_CM2.1U_Control-1990_E1.M_3A.x CM2.1U_Control-1990_E1.M_3A
+CM2.1U_Control-1990_E1.M_3B_snowmelt_static_ocn6x5 $execRoot/$USER/.*/CM2.1U_Control-1990_E1.M_3B_snowmelt_static_ocn6x5/${FRE_SYSTEM_SITE}.intel-repro-openmp/exec/fms_CM2.1U_Control-1990_E1.M_3B_snowmelt_static_ocn6x5.x CM2.1U_Control-1990_E1.M_3B_snowmelt_static_ocn6x5"
 
     run frelist -p ${FRE_SYSTEM_SITE}.intel -t openmp,repro -E -R ${USER} -x CM2.1U.xml
     echo "Expected: \"$output_good\""
