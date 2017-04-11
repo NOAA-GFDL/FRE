@@ -201,8 +201,20 @@ CM2.1U_Control-1990_E1.M_3B_snowmelt_static_ocn6x5"
 }
 
 @test "Get analysis and archive directories for --platform=gfdl.${FRE_SYSTEM_SITE}-intel" {
-    output_good="archive: /archive/$USER/.*/CM2.1U_Control-1990_E1.M_3A/gfdl.${FRE_SYSTEM_SITE}-intel-prod
-analysis: /archive/$USER/.*/CM2.1U_Control-1990_E1.M_3A/gfdl.${FRE_SYSTEM_SITE}-intel-prod/analysis"
+    case ${FRE_SYSTEM_SITE} in
+	gfdl-ws )
+	    userStr=$USER
+	    ;;
+	gfdl )
+	    userStr=$USER
+	    ;;
+	* )
+	    userStr=\$USER
+	    ;;
+    esac
+
+    output_good="archive: /archive/$userStr/.*/CM2.1U_Control-1990_E1.M_3A/gfdl.${FRE_SYSTEM_SITE}-intel-prod
+analysis: /archive/$userStr/.*/CM2.1U_Control-1990_E1.M_3A/gfdl.${FRE_SYSTEM_SITE}-intel-prod/analysis"
 
     run frelist -p gfdl.${FRE_SYSTEM_SITE}-intel -d analysis,archive -x CM2.1U.xml CM2.1U_Control-1990_E1.M_3A
     echo "Expected: \"$output_good\""
