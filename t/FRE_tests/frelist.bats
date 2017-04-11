@@ -204,19 +204,22 @@ CM2.1U_Control-1990_E1.M_3B_snowmelt_static_ocn6x5"
     case ${FRE_SYSTEM_SITE} in
 	gfdl-ws )
 	    userStr=$USER
+	    platform=gfdl.${FRE_SYSTEM_SITE}-intel
 	    ;;
 	gfdl )
 	    userStr=$USER
+	    platform=gfdl.intel
 	    ;;
 	* )
 	    userStr=\$USER
+	    platform=gfdl.${FRE_SYSTEM_SITE}-intel
 	    ;;
     esac
 
-    output_good="archive: /archive/$userStr/.*/CM2.1U_Control-1990_E1.M_3A/gfdl.${FRE_SYSTEM_SITE}-intel-prod
-analysis: /archive/$userStr/.*/CM2.1U_Control-1990_E1.M_3A/gfdl.${FRE_SYSTEM_SITE}-intel-prod/analysis"
+    output_good="archive: /archive/$userStr/.*/CM2.1U_Control-1990_E1.M_3A/${platform}-prod
+analysis: /archive/$userStr/.*/CM2.1U_Control-1990_E1.M_3A/${platform}-prod/analysis"
 
-    run frelist -p gfdl.${FRE_SYSTEM_SITE}-intel -d analysis,archive -x CM2.1U.xml CM2.1U_Control-1990_E1.M_3A
+    run frelist -p ${platform} -d analysis,archive -x CM2.1U.xml CM2.1U_Control-1990_E1.M_3A
     echo "Expected: \"$output_good\""
     echo "Got:      \"$output\""
     echo "Exit status: $status"
