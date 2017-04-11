@@ -6,6 +6,10 @@
 
 load test_helpers
 
+setup() {
+    unique_string="date$(date +%s)pid$$"
+}
+
 @test "frelist is in PATH" {
     run which frelist
     echo "Got: \"$output\""
@@ -65,6 +69,7 @@ CM2.1U_Control-1990_E1.M_3B_snowmelt_static_ocn6x5 INHERITS FROM CM2.1U_Control-
 }
 
 @test "Validate Curator tags" {
+    skip "No curator tags in the CM2.1U.xml file"
     # Need more tests with bad XMLs to catch invalid XMLs
     run frelist -c -x CM2.1U.xml CM2.1U_Control-1990_E1.M_3A
     echo "Got: \"$output\""
@@ -108,6 +113,21 @@ CM2.1U_Control-1990_E1.M_3B_snowmelt_static_ocn6x5"
     echo "Got:      \"$output\""
     echo "Exit status: $status"
     [ "$status" -eq 0 ]
+    [[ "$output_good" =~ "$output" ]]
+}
+
+@test "Capture bad project setting" {
+    output_good="*FATAL*: Your project name 'gfdl_YOURGROUPLETTER' appears to be invalid, please correct your XML's platform section."
+
+    # Skip if not on ncrc3 or ncrc4
+    if [ "${FRE_SYSTEM_SITE}" != "ncrc3" && "${FRE_SYSTEM_SITE}" != "ncrc4" ]; then
+        skip "Test only valid on ncrc3 and ncrc4 sites"
+    fi
+    run frelist -p ${FRE_SYSTEM_SITE}.yourgroupletter -x CM2.1U.xml
+    echo "Expected: \"$output_good\""
+    echo "Got:      \"$output\""
+    echo "Exit status: $status"
+    [ "$status" -eq 30 ]
     [[ "$output_good" =~ "$output" ]]
 }
 
@@ -235,7 +255,7 @@ CM2.1U_Control-1990_E1.M_3B_snowmelt_static_ocn6x5 /lustre/f1/unswept/$USER/.*/C
 
 @test "Extract platform csh section --platform=gfdl.${FRE_SYSTEM_SITE}-intel" {
     output_good="
-# Platform environment defaults from /lustre/f1/unswept/Carlo.Rosati/opt/modules/fre-commands/makeflags/site/gfdl/env.defaults
+# Platform environment defaults from ${FRE_COMMANDS_HOME}/site/gfdl/env.defaults
 source \$MODULESHOME/init/csh
 module use -a /home/fms/local/modulefiles
 module purge
@@ -245,12 +265,14 @@ module load git
 
 # Platform environment overrides from XML"
 
-    run frelist -p gfdl.${FRE_SYSTEM_SITE}-intel -S -x CM2.1U.xml
+    sed -e "s/\(^ *<property *name=\"FRE_VERSION\" *value=\"\).*\(\"\)/\1${FRE_COMMANDS_VERSION}\2/" CM2.1U.xml > ${unique_string}-temp.xml
+    run frelist -p gfdl.${FRE_SYSTEM_SITE}-intel -S -x ${unique_string}-temp.xml
     echo "Expected: \"$output_good\""
     echo "Got:      \"$output\""
     echo "Exit status: $status"
     [ "$status" -eq 0 ]
     string_matches_pattern "$output" "$output_good"
+    rm -f ${unique_string}-temp.xml
 }
 
 @test "Accept regression option" {
