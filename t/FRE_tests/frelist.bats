@@ -236,10 +236,10 @@ analysis: /archive/$userStr/.*/CM2.1U_Control-1990_E1.M_3A/gfdl.${FRE_SYSTEM_SIT
 @test "Get the executable --platform=${FRE_SYSTEM_SITE}.intel" {
     case ${FRE_SYSTEM_SITE} in
 	ncrc3 )
-	    execRoot="/lustre/f1"
+	    execRoot="/lustre/f1/unswept"
 	    ;;
 	ncrc4 )
-	    execRoot="/lustre/f1"
+	    execRoot="/lustre/f1/unswept"
 	    ;;
 	gfdl-ws )
 	    execRoot="/home"
