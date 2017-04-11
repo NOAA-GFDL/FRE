@@ -340,7 +340,7 @@ ${lines[$((num_lines-1))]}"
     last_line_good="TO SUBMIT => ${submit_cmd} ${root_stem}/${USER}/FRE_tests-${unique_string}-temp/$release/CM2.1U_Control-1990_E1.M_3B_snowmelt/${good_platform}-prod/scripts/run/CM2.1U_Control-1990_E1.M_3B_snowmelt"
 
     mkdir -p "$(frelist $freopts -d state)/run"
-    run frerun $freopts -o
+    run frerun $freopts -o --no-dual
     remove_ninac_from_output_and_lines
 
     # Get the last line from the output
