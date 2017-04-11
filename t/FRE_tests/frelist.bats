@@ -380,6 +380,13 @@ CM2.1U_Control-1990_E1.M_3B_snowmelt_static_ocn6x5 $execRoot/$USER/.*/CM2.1U_Con
 
 @test "Get the namelist for an inherited experiment" {
     # The namelist is long, for now just checking the exit status
+    # This test requires the platform to be able to run, which gfdl cannot.  Skip on gfdl
+    case ${FRE_SYSTEM_SITE} in
+	gfdl )
+	    skip "(Don't test fremake on Analysis)"
+	    ;;
+    esac
+
     run frelist -p ${FRE_SYSTEM_SITE}.intel -N -x CM2.1U.xml CM2.1U_Control-1990_E1.M_3B_snowmelt
     echo "Got: \"$output\""
     echo "Exit status: $status"
@@ -416,6 +423,13 @@ module load git
 }
 
 @test "Print namelist for regression basic, inherited experiment" {
+    # This test requires the platform to be able to run, which gfdl cannot.  Skip on gfdl
+    case ${FRE_SYSTEM_SITE} in
+	gfdl )
+	    skip "(Don't test fremake on Analysis)"
+	    ;;
+    esac
+
     run frelist -r basic -N -x CM2.1U.xml CM2.1U_Control-1990_E1.M_3B_snowmelt -p ${FRE_SYSTEM_SITE}.intel
     echo "Got: \"$output\""
     echo "Exit status: $status"
@@ -435,6 +449,13 @@ scaling       1        1x0m8d_30x1a_30x1o
 scaling       2        1x0m8d_30x1a_42x1o              
 scaling       3        1x0m8d_30x2a_120x1o             
 -----------------------------------------------------------------------------------------------------"
+
+    # This test requires the platform to be able to run, which gfdl cannot.  Skip on gfdl
+    case ${FRE_SYSTEM_SITE} in
+	gfdl )
+	    skip "(Don't test fremake on Analysis)"
+	    ;;
+    esac
 
     run frelist -x CM2.1U.xml -p ${FRE_SYSTEM_SITE}.intel -t openmp -r suite --postfix CM2.1U_Control-1990_E1.M_3A
     echo "Expected: \"$output_good\""
