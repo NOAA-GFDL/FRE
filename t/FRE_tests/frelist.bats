@@ -120,7 +120,7 @@ CM2.1U_Control-1990_E1.M_3B_snowmelt_static_ocn6x5"
     output_good="*FATAL*: Your project name 'gfdl_YOURGROUPLETTER' appears to be invalid, please correct your XML's platform section."
 
     # Skip if not on ncrc3 or ncrc4
-    if [ "${FRE_SYSTEM_SITE}" != "ncrc3" && "${FRE_SYSTEM_SITE}" != "ncrc4" ]; then
+    if [ "${FRE_SYSTEM_SITE}" != "ncrc3" -a "${FRE_SYSTEM_SITE}" != "ncrc4" ]; then
         skip "Test only valid on ncrc3 and ncrc4 sites"
     fi
     run frelist -p ${FRE_SYSTEM_SITE}.yourgroupletter -x CM2.1U.xml
