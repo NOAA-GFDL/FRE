@@ -68,6 +68,17 @@ CM2.1U_Control-1990_E1.M_3B_snowmelt_static_ocn6x5 INHERITS FROM CM2.1U_Control-
     [ "$status" -eq 0 ]
 }
 
+@test "Validate Curator tags when Curator tags don't exist" {
+    output_good="*FATAL*: No CMIP Curator tags found; see CMIP metadata tag documentation at http://cobweb.gfdl.noaa.gov/~pcmdi/CMIP6_Curator/xml_documentation"
+
+    run frelist -c -x CM2.1U.xml CM2.1U_Control-1990_E1.M_3A
+    echo "Expected: \"$output_good\""
+    echo "Got: \"$output\""
+    echo "Exit status: $status"
+    [ "$status" -eq 30 ]
+    [ "$output" = "$output_good" ]
+}
+
 @test "Validate Curator tags" {
     skip "No curator tags in the CM2.1U.xml file"
     # Need more tests with bad XMLs to catch invalid XMLs
