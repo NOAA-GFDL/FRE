@@ -80,12 +80,14 @@ CM2.1U_Control-1990_E1.M_3B_snowmelt_static_ocn6x5 INHERITS FROM CM2.1U_Control-
 }
 
 @test "Validate Curator tags" {
-    skip "No curator tags in the CM2.1U.xml file"
     # Need more tests with bad XMLs to catch invalid XMLs
-    run frelist -c -x CM2.1U.xml CM2.1U_Control-1990_E1.M_3A
+    output_good="<NOTE> : The XML file 'publicMetadata' has been successfully validated"
+    run frelist -c -x CM2.1U.xml CM2.1U_Control-1990_E1.M_3B_snowmelt_static_ocn6x5
+    echo "Expected: \"$output_good\""
     echo "Got: \"$output\""
     echo "Exit status: $status"
     [ "$status" -eq 0 ]
+    [ "$output" = "$output_good" ]
 }
 
 @test "List experiments no platform listed" {
