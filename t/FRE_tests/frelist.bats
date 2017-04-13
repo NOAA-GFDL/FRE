@@ -309,7 +309,7 @@ analysis: /archive/$userStr/.*/CM2.1U_Control-1990_E1.M_3A/${platform}-prod/anal
 	ncrc4 )
 	    REMOTE_SITE=theia.intel
 	    ;;
-	gfdl-ws )
+	gfdl | gfdl-ws )
 	    REMOTE_SITE=ncrc4.intel
 	    ;;
 	theia )
@@ -383,7 +383,7 @@ CM2.1U_Control-1990_E1.M_3B_snowmelt_static_ocn6x5 $execRoot/$USER/.*/CM2.1U_Con
     # This test requires the platform to be able to run, which gfdl cannot.  Skip on gfdl
     case ${FRE_SYSTEM_SITE} in
 	gfdl )
-	    skip "(Don't test fremake on Analysis)"
+	    skip "Don't test frelist on Analysis"
 	    ;;
     esac
 
@@ -426,7 +426,7 @@ module load git
     # This test requires the platform to be able to run, which gfdl cannot.  Skip on gfdl
     case ${FRE_SYSTEM_SITE} in
 	gfdl )
-	    skip "(Don't test fremake on Analysis)"
+	    skip "Don't test frelist on Analysis"
 	    ;;
     esac
 
@@ -453,7 +453,7 @@ scaling       3        1x0m8d_30x2a_120x1o
     # This test requires the platform to be able to run, which gfdl cannot.  Skip on gfdl
     case ${FRE_SYSTEM_SITE} in
 	gfdl )
-	    skip "(Don't test fremake on Analysis)"
+	    skip "Don't test frelist on Analysis"
 	    ;;
     esac
 
