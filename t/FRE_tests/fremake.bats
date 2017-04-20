@@ -33,7 +33,7 @@ setup() {
 }
 
 @test "No experiment listed on fremake command line and no rts.xml file" {
-    case $( hostname ) in
+    case "$FRE_SYSTEM_SITE" in
         an??? )
             skip "Don't test fremake on Analysis"
             ;;
@@ -71,27 +71,36 @@ setup() {
 }
 
 @test "Create compile script when experiment listed on fremake command line, and rts.xml exists" {
-    case $( hostname ) in
-        gaea?* )
+    case "$FRE_SYSTEM_SITE" in
+        ncrc? )
             platform="ncrc"
             root_stem="/lustre/f1"
             submit_cmd="sleep 1; msub"
             ;;
-        tfe?? )
+        theia )
             platform="theia"
             root_stem="/scratch4/GFDL/gfdlscr"
             submit_cmd="qsub"
+            ;;
+        gfdl-ws )
+            platform="gfdl-ws"
+            root_stem="/local2/tmp"
+            submit_cmd=""
             ;;
         * )
             skip "No test for current platform"
             ;;
     esac
 
-    last_line_good="TO SUBMIT => ${submit_cmd} ${root_stem}/${USER}/FRE_tests-${unique_string}-temp/.*/CM2.1U_Control-1990_E1.M_3A/${good_platform}-prod/exec/compile_CM2.1U_Control-1990_E1.M_3A.csh"
+    last_line_good="${root_stem}/${USER}/FRE_tests-${unique_string}-temp/.*/CM2.1U_Control-1990_E1.M_3A/${good_platform}-prod/exec/compile_CM2.1U_Control-1990_E1.M_3A.csh"
 
-    echo go
+    if [ -n "${submit_cmd}" ]; then
+        last_line_good="TO SUBMIT => ${submit_cmd} ${last_line_good}"
+    else
+        last_line_good="The compile script '${last_line_good}' is ready"
+    fi
+
     unique_stdout_xml CM2.1U.xml >rts.xml
-    echo ungo
     run fremake -p $good_platform CM2.1U_Control-1990_E1.M_3A
 
     # Get the last line from the output
@@ -129,24 +138,35 @@ setup() {
 }
 
 @test "Create compile script when XML listed on fremake command line and XML file exists" {
-    case $( hostname ) in
-        gaea?* )
+    case "$FRE_SYSTEM_SITE" in
+        ncrc? )
             platform="ncrc"
             root_stem="/lustre/f1"
             submit_cmd="sleep 1; msub"
             ;;
-        tfe?? )
+        theia )
             platform="theia"
             root_stem="/scratch4/GFDL/gfdlscr"
             submit_cmd="qsub"
+            ;;
+        gfdl-ws )
+            platform="gfdl-ws"
+            root_stem="/local2/tmp"
+            submit_cmd=""
             ;;
         * )
             skip "No test for current platform"
             ;;
     esac
 
-    last_line_good="TO SUBMIT => ${submit_cmd} ${root_stem}/${USER}/FRE_tests-${unique_string}-temp/.*/CM2.1U_Control-1990_E1.M_3A/${good_platform}-prod/exec/compile_CM2.1U_Control-1990_E1.M_3A.csh"
+    last_line_good="${root_stem}/${USER}/FRE_tests-${unique_string}-temp/.*/CM2.1U_Control-1990_E1.M_3A/${good_platform}-prod/exec/compile_CM2.1U_Control-1990_E1.M_3A.csh"
     # NOTE: used $USER above
+
+    if [ -n "${submit_cmd}" ]; then
+        last_line_good="TO SUBMIT => ${submit_cmd} ${last_line_good}"
+    else
+        last_line_good="The compile script '${last_line_good}' is ready"
+    fi
 
     unique_stdout_xml CM2.1U.xml >"${unique_string}-temp.xml"
     run fremake -x "${unique_string}-temp.xml" -p $good_platform CM2.1U_Control-1990_E1.M_3A
@@ -166,18 +186,6 @@ setup() {
 }
 
 @test "Specify nonexistent platform" {
-    case $( hostname ) in
-        gaea?* )
-            platform="ncrc2"
-            ;;
-        tfe?? )
-            platform="theia"
-            ;;
-        * )
-            skip "No test for current platform"
-            ;;
-    esac
-
     output_good="*FATAL*: The --platform option value 'nonexistent_platform.intel' is not valid"
 
     run fremake -x CM2.1U.xml -p nonexistent_platform.intel CM2.1U_Control-1990_E1.M_3A
@@ -189,23 +197,34 @@ setup() {
 }
 
 @test "Create compile script when --platform=${FRE_SYSTEM_SITE}.intel" {
-    case $( hostname ) in
-        gaea?* )
+    case "$FRE_SYSTEM_SITE" in
+        ncrc? )
             platform="ncrc"
             root_stem="/lustre/f1"
             submit_cmd="sleep 1; msub"
             ;;
-        tfe?? )
+        theia )
             platform="theia"
             root_stem="/scratch4/GFDL/gfdlscr"
             submit_cmd="qsub"
+            ;;
+        gfdl-ws )
+            platform="gfdl-ws"
+            root_stem="/local2/tmp"
+            submit_cmd=""
             ;;
         * )
             skip "No test for current platform"
             ;;
     esac
 
-    last_line_good="TO SUBMIT => ${submit_cmd} ${root_stem}/${USER}/FRE_tests-${unique_string}-temp/.*/CM2.1U_Control-1990_E1.M_3A/${FRE_SYSTEM_SITE}.intel-prod/exec/compile_CM2.1U_Control-1990_E1.M_3A.csh"
+    last_line_good="${root_stem}/${USER}/FRE_tests-${unique_string}-temp/.*/CM2.1U_Control-1990_E1.M_3A/${FRE_SYSTEM_SITE}.intel-prod/exec/compile_CM2.1U_Control-1990_E1.M_3A.csh"
+
+    if [ -n "${submit_cmd}" ]; then
+        last_line_good="TO SUBMIT => ${submit_cmd} ${last_line_good}"
+    else
+        last_line_good="The compile script '${last_line_good}' is ready"
+    fi
 
     unique_stdout_xml CM2.1U.xml >"${unique_string}-temp.xml"
     run fremake -x "${unique_string}-temp.xml" -p ${good_platform} CM2.1U_Control-1990_E1.M_3A
@@ -225,23 +244,34 @@ setup() {
 }
 
 @test "Create compile script when --target=prod" {
-    case $( hostname ) in
-        gaea?* )
+    case "$FRE_SYSTEM_SITE" in
+        ncrc? )
             platform="ncrc"
             root_stem="/lustre/f1"
             submit_cmd="sleep 1; msub"
             ;;
-        tfe?? )
+        theia )
             platform="theia"
             root_stem="/scratch4/GFDL/gfdlscr"
             submit_cmd="qsub"
+            ;;
+        gfdl-ws )
+            platform="gfdl-ws"
+            root_stem="/local2/tmp"
+            submit_cmd=""
             ;;
         * )
             skip "No test for current platform"
             ;;
     esac
 
-    last_line_good="TO SUBMIT => ${submit_cmd} ${root_stem}/${USER}/FRE_tests-${unique_string}-temp/.*/CM2.1U_Control-1990_E1.M_3A/${FRE_SYSTEM_SITE}.intel-prod/exec/compile_CM2.1U_Control-1990_E1.M_3A.csh"
+    last_line_good="${root_stem}/${USER}/FRE_tests-${unique_string}-temp/.*/CM2.1U_Control-1990_E1.M_3A/${FRE_SYSTEM_SITE}.intel-prod/exec/compile_CM2.1U_Control-1990_E1.M_3A.csh"
+
+    if [ -n "${submit_cmd}" ]; then
+        last_line_good="TO SUBMIT => ${submit_cmd} ${last_line_good}"
+    else
+        last_line_good="The compile script '${last_line_good}' is ready"
+    fi
 
     unique_stdout_xml CM2.1U.xml >"${unique_string}-temp.xml"
     run fremake -x "${unique_string}-temp.xml" -p ${good_platform} -t prod CM2.1U_Control-1990_E1.M_3A
@@ -261,25 +291,38 @@ setup() {
 }
 
 @test "Source and executable directories exist but --force-checkout and --force-compile not specified" {
-    case $( hostname ) in
-        gaea?* )
+    case "$FRE_SYSTEM_SITE" in
+        ncrc? )
             platform="ncrc"
             root_stem="/lustre/f1"
             submit_cmd="sleep 1; msub"
             ;;
-        tfe?? )
+        theia )
             platform="theia"
             root_stem="/scratch4/GFDL/gfdlscr"
             submit_cmd="qsub"
+            ;;
+        gfdl-ws )
+            platform="gfdl-ws"
+            root_stem="/local2/tmp"
+            submit_cmd=""
             ;;
         * )
             skip "No test for current platform"
             ;;
     esac
 
+    last_line_good="${root_stem}/${USER}/FRE_tests-${unique_string}-temp/.*/CM2.1U_Control-1990_E1.M_3A/${FRE_SYSTEM_SITE}.intel-prod/exec/compile_CM2.1U_Control-1990_E1.M_3A.csh"
+
+    if [ -n "${submit_cmd}" ]; then
+        last_line_good="TO SUBMIT => ${submit_cmd} ${last_line_good}"
+    else
+        last_line_good="The compile script '${last_line_good}' is ready"
+    fi
+
     output_good="WARNING: The checkout script '${root_stem}/${USER}/FRE_tests-${unique_string}-temp/.*/CM2.1U_Control-1990_E1.M_3A/src/checkout.csh' already exists and matches checkout instructions in the XML file, so checkout is skipped
 WARNING: The compile script '${root_stem}/${USER}/FRE_tests-${unique_string}-temp/.*/CM2.1U_Control-1990_E1.M_3A/${FRE_SYSTEM_SITE}.intel-prod/exec/compile_CM2.1U_Control-1990_E1.M_3A.csh' already exists and matches compile instructions in the XML file
-TO SUBMIT => ${submit_cmd} ${root_stem}/${USER}/FRE_tests-${unique_string}-temp/.*/CM2.1U_Control-1990_E1.M_3A/${FRE_SYSTEM_SITE}.intel-prod/exec/compile_CM2.1U_Control-1990_E1.M_3A.csh"
+${last_line_good}"
 
     unique_stdout_xml CM2.1U.xml >"${unique_string}-temp.xml"
     fremake -x "${unique_string}-temp.xml" -p ${good_platform} -t prod CM2.1U_Control-1990_E1.M_3A
@@ -296,23 +339,34 @@ TO SUBMIT => ${submit_cmd} ${root_stem}/${USER}/FRE_tests-${unique_string}-temp/
 }
 
 @test "Create compile script when source directory exists and --force-checkout specified" {
-    case $( hostname ) in
-        gaea?* )
+    case "$FRE_SYSTEM_SITE" in
+        ncrc? )
             platform="ncrc"
             root_stem="/lustre/f1"
             submit_cmd="sleep 1; msub"
             ;;
-        tfe?? )
+        theia )
             platform="theia"
             root_stem="/scratch4/GFDL/gfdlscr"
             submit_cmd="qsub"
+            ;;
+        gfdl-ws )
+            platform="gfdl-ws"
+            root_stem="/local2/tmp"
+            submit_cmd=""
             ;;
         * )
             skip "No test for current platform"
             ;;
     esac
 
-    last_line_good="TO SUBMIT => ${submit_cmd} ${root_stem}/${USER}/FRE_tests-${unique_string}-temp/.*/CM2.1U_Control-1990_E1.M_3A/${FRE_SYSTEM_SITE}.intel-prod/exec/compile_CM2.1U_Control-1990_E1.M_3A.csh"
+    last_line_good="${root_stem}/${USER}/FRE_tests-${unique_string}-temp/.*/CM2.1U_Control-1990_E1.M_3A/${FRE_SYSTEM_SITE}.intel-prod/exec/compile_CM2.1U_Control-1990_E1.M_3A.csh"
+
+    if [ -n "${submit_cmd}" ]; then
+        last_line_good="TO SUBMIT => ${submit_cmd} ${last_line_good}"
+    else
+        last_line_good="The compile script '${last_line_good}' is ready"
+    fi
 
     unique_stdout_xml CM2.1U.xml >"${unique_string}-temp.xml"
     fremake -x "${unique_string}-temp.xml" -p ${good_platform} -t prod CM2.1U_Control-1990_E1.M_3A
@@ -333,23 +387,34 @@ TO SUBMIT => ${submit_cmd} ${root_stem}/${USER}/FRE_tests-${unique_string}-temp/
 }
 
 @test "Create compile script when executable directory exists and --force-compile specified" {
-    case $( hostname ) in
-        gaea?* )
+    case "$FRE_SYSTEM_SITE" in
+        ncrc? )
             platform="ncrc"
             root_stem="/lustre/f1"
             submit_cmd="sleep 1; msub"
             ;;
-        tfe?? )
+        theia )
             platform="theia"
             root_stem="/scratch4/GFDL/gfdlscr"
             submit_cmd="qsub"
+            ;;
+        gfdl-ws )
+            platform="gfdl-ws"
+            root_stem="/local2/tmp"
+            submit_cmd=""
             ;;
         * )
             skip "No test for current platform"
             ;;
     esac
 
-    last_line_good="TO SUBMIT => ${submit_cmd} ${root_stem}/${USER}/FRE_tests-${unique_string}-temp/.*/CM2.1U_Control-1990_E1.M_3A/${FRE_SYSTEM_SITE}.intel-prod/exec/compile_CM2.1U_Control-1990_E1.M_3A.csh"
+    last_line_good="${root_stem}/${USER}/FRE_tests-${unique_string}-temp/.*/CM2.1U_Control-1990_E1.M_3A/${FRE_SYSTEM_SITE}.intel-prod/exec/compile_CM2.1U_Control-1990_E1.M_3A.csh"
+
+    if [ -n "${submit_cmd}" ]; then
+        last_line_good="TO SUBMIT => ${submit_cmd} ${last_line_good}"
+    else
+        last_line_good="The compile script '${last_line_good}' is ready"
+    fi
 
     unique_stdout_xml CM2.1U.xml >"${unique_string}-temp.xml"
     fremake -x "${unique_string}-temp.xml" -p ${good_platform} -t prod CM2.1U_Control-1990_E1.M_3A
