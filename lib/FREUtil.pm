@@ -894,6 +894,39 @@ sub optionValuesListParse($$@)
   }
 }
 
+sub decodeChildStatus($$)
+# ------ arguments: $? $!
+# ------ returns decoded child process native error status as a string
+# ------ The child process native status is a word. The low order byte's
+# ------ lowest 7 bits hold the signal number if the child was terminated
+# ------ by a signal. The high order byte holds the exit status if the
+# ------ child exited. See ``perldoc -f system'' for more information.
+{
+  my ($child_error, $os_error) = @_;
+
+  my $error_string;
+
+  # Test if Perl couldn't process the system call
+  if ($child_error == -1)
+  {
+    $error_string = "failed to execute: $os_error";
+  }
+
+  # Test the low order 7 bits for signal number
+  elsif ($child_error & 0b01111111)
+  {
+    $error_string = "terminated for signal " . ($child_error & 0b01111111);
+  }
+
+  # Otherwise shift the exit status down a byte and return it
+  else
+  {
+    $error_string = "exited with status " . ($child_error >> 8);
+  }
+
+  return $error_string;
+}
+
 # //////////////////////////////////////////////////////////////////////////////
 # //////////////////////////////////////////////////////////// Initialization //
 # //////////////////////////////////////////////////////////////////////////////

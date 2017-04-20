@@ -71,10 +71,14 @@ use constant SITE_TAIL_SEPARATOR => '-';
 
 use constant DEFAULT_PLATFORM_ERROR_MSG => <<EOF;
 Default platforms are no longer supported.
-Define platforms in experiment XML and use with -p|--platform site.name (e.g. -p ncrc2.intel)
-or -p|--platform name (current site will be used), e.g. -p intel.
-At GFDL, use -p gfdl.<remote_site>-<compiler> (e.g. gfdl.ncrc2-intel)
-or -p <remote_site>-<compiler> (e.g. ncrc2-intel)
+Define platforms in experiment XML and use with -p|--platform site.compiler (e.g. -p ncrc3.intel15).
+At GFDL, use -p gfdl.<remote_site>-<compiler> (e.g. gfdl.ncrc3-intel15).
+See documentation at http://wiki.gfdl.noaa.gov/index.php/FRE_User_Documentation#Platforms_and_Sites.
+EOF
+
+use constant PLATFORM_SITE_ERROR_MSG => <<EOF;
+Full site specification is now required in the -p|--platform option (e.g. -p ncrc3.intel15).
+At GFDL, use -p gfdl.<remote_site>-<compiler> (e.g. gfdl.ncrc3-intel15).
 See documentation at http://wiki.gfdl.noaa.gov/index.php/FRE_User_Documentation#Platforms_and_Sites.
 EOF
 
@@ -110,7 +114,10 @@ my $platformParse = sub($)
 # ------ arguments: $platform
 {
   my ($p, $t, $z) = (shift, $sitePattern->(), FREPlatforms::PLATFORM_TAIL_LETTER); 
-  $p = FREDefaults::Site() . '.' . $p if index($p, '.') < 0;
+  if ($p !~ /\./) {
+    FREMsg::out(FREMsg::FATAL, 0, FREPlatforms::PLATFORM_SITE_ERROR_MSG);
+    exit FREDefaults::STATUS_COMMAND_PLATFORM_PROBLEM;
+  }
   return ($p =~ m/^($t)\.($z(?:$z|-)*)$/o) ? ($1, $2, $3, $4) : ();
 };
 
@@ -169,8 +176,9 @@ sub siteIsLocal($)
 # ------ arguments: $site
 # ------ return 1 if the $site and the current site have common "site" directory 
 {
-  my $s = shift;
-  if ($s eq $FREPlatformsSite || $s eq $FREPlatformsSiteRoot)
+  my $site = shift;
+  my $site_root = ($siteParse->($site))[1];
+  if ($site eq $FREPlatformsSite || $site eq $FREPlatformsSiteRoot || $site_root eq $FREPlatformsSiteRoot)
   {
     return 1;
   }
@@ -197,6 +205,29 @@ sub siteHasLocalStorage($)
   {
     return 0;
   }
+}
+
+sub getPlatformSpecificNiNaCLoadCommands()
+# ------ arguments: none
+# ------ return string of csh commands to load NiNaC
+{
+  # If NiNaC module not loaded, return a comment saying NiNaC wasn't loaded at script creation
+  unless (exists($ENV{'NiNaC_LVL'}) and $ENV{'NiNaC_LVL'} > 0)
+  {
+    return "  # NiNaC not loaded when script created";
+  }
+
+  # Otherwise, return the commands to load NiNaC
+  return "  if ( ! \$?NiNaC_LVL ) set NiNaC_LVL = 1\n\n"
+       . "  # ---- Load NiNaC if NiNaC_LVL is set and greater than zero\n\n"
+       . "  if ( \$?NiNaC_LVL ) then\n"
+       . "    if ( \$NiNaC_LVL > 0 ) then\n\n"
+       . "      # Append directory where NiNaC environment module resides to the module search path\n"
+       . "      module use -a $ENV{'NiNaC_PATH'}\n\n"
+       . "      # Load NiNaC environment module\n"
+       . "      module load NiNaC\n\n"
+       . "    endif\n"
+       . "  endif";
 }
 
 # //////////////////////////////////////////////////////////////////////////////

@@ -1,0 +1,176 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:xi="http://www.w3.org/2003/XInclude">
+  <xs:import namespace="http://www.w3.org/2003/XInclude" schemaLocation="xi.xsd"/> 
+  <xs:import namespace="http://www.w3.org/XML/1998/namespace" schemaLocation="xml.xsd"/>
+  <xs:element name="postProcess">
+    <xs:annotation>
+      <xs:documentation>This tag holds all of the post processing settings. Inside of this tag, the components, time ranges, and variable subsets are declared for post processing.</xs:documentation>
+    </xs:annotation>
+    <xs:complexType>
+      <xs:choice minOccurs="0" maxOccurs="unbounded">
+        <xs:element ref="csh">
+          <xs:annotation>
+            <xs:documentation>The csh tag can be used to issue shell commands that will be run before post processing occurs.</xs:documentation>
+          </xs:annotation>
+        </xs:element>
+        <xs:element ref="refineDiag"/>
+        <xs:element name="component">
+          <xs:annotation>
+            <xs:documentation>The component defines the type of output component (which will be the output directory name that contains the post processed files), the z-interpolation method, the start year (in the event that you wish to account for spin up time), the source component (which should link back to a component defined in the experiment tag, an interpolation method, and finally a cubed-sphere to lat/lon grid conversion factor.</xs:documentation>
+          </xs:annotation>
+          <xs:complexType>
+            <xs:choice minOccurs="0" maxOccurs="unbounded">
+              <xs:element ref="timeSeries"/>
+              <xs:element ref="timeAverage"/>
+              <xs:element ref="dataFile">
+                <xs:annotation>
+                  <xs:documentation>This dataFile tag is used to define the xyInterp regrid file location to use for this component.  The type for this file must be 'xyInterpRegridFile'.</xs:documentation>
+                </xs:annotation>
+              </xs:element>
+            </xs:choice>
+            <xs:attribute name="sourceGrid" type="srcGrd"/>
+            <xs:attribute name="xyInterp" type="xyInterpMethod"/>
+            <xs:attribute name="zInterp" type="zInterpMethod"/>
+            <xs:attribute name="interpMethod" type="xs:string"/>
+	    <xs:attribute name="cmip" type="fmsBoolean"/>
+            <xs:attribute name="source" type="xs:string"/>
+            <xs:attribute name="start" type="xs:string"/>
+            <xs:attribute name="type" type="xs:string"/>
+          </xs:complexType>
+        </xs:element>
+      </xs:choice>
+      <xs:attribute name="combine" type="xs:string"/>
+      <xs:attribute name="npes" type="xs:integer"/>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:simpleType name="srcGrd">
+    <xs:annotation>
+      <xs:documentation>Restricts the possible inputs for the input into SourceGrid to a few allocated options.</xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="atmos-latlon"/>
+      <xs:enumeration value="atmos-cubedsphere"/>
+      <xs:enumeration value="ocean-latlon"/>
+      <xs:enumeration value="ocean-tripolar"/>
+      <xs:enumeration value="land-latlon"/>
+      <xs:enumeration value="land-cubedsphere"/>
+      <xs:enumeration value="none"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="zInterpMethod">
+    <xs:annotation>
+      <xs:documentation>Restricts the options for Z interpolation in the XML.</xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="ncep"/>
+      <xs:enumeration value="am3"/>
+      <xs:enumeration value="hs20"/>
+      <xs:enumeration value="era40"/>
+      <xs:enumeration value="narcaap"/>
+      <xs:enumeration value="ar5daily"/>
+      <xs:enumeration value="ncep_subset"/>
+      <xs:enumeration value="none"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="xyInterpMethod">
+    <xs:annotation>
+      <xs:documentation>Restricts the options for XY interpolation in the XML.</xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:string">
+      <xs:pattern value="[0-9]+,[0-9]+"/>
+      <xs:pattern value="none"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:element name="refineDiag">
+    <xs:annotation>
+      <xs:documentation>The refineDiag tag points to a script that will be run on the post processed data.</xs:documentation>
+    </xs:annotation>
+    <xs:complexType>
+      <xs:attribute name="script" use="required" type="xs:string"/>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="timeSeries">
+    <xs:annotation>
+      <xs:documentation>Used in the creation of time series files, it defines the frequency, source of the time series files, and the chunk length. </xs:documentation>
+    </xs:annotation>
+    <xs:complexType>
+      <xs:choice minOccurs="0" maxOccurs="unbounded">
+        <xs:element ref="variables"/>
+        <xs:element maxOccurs="unbounded" ref="analysis"/>
+        <xs:element ref="xi:include"/>
+        <xs:element ref="null"/>
+      </xs:choice>
+      <xs:attribute name="chunkLength" use="required" type="xs:string"/>
+      <xs:attribute name="freq" use="required" type="xs:string"/>
+      <xs:attribute name="from" type="xs:string"/>
+      <xs:attribute name="averageOf" type="xs:string"/>
+      <xs:attribute name="source" type="xs:string"/>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="variables" type="xs:string">
+    <xs:annotation>
+      <xs:documentation>If only specific variables are needed, they can be defined in this tag. If this tag is not present, all variables are post processed.</xs:documentation>
+    </xs:annotation>
+  </xs:element>
+
+  <xs:element name="timeAverage">
+    <xs:annotation>
+      <xs:documentation>Used in the creation of time average files, this tag's usage is very similar to the time series tag. A source and interval are defined for creating these files.</xs:documentation>
+    </xs:annotation>
+    <xs:complexType>
+      <xs:choice maxOccurs="unbounded">
+        <xs:element minOccurs="0" maxOccurs="unbounded" ref="analysis"/>
+        <xs:element minOccurs="0" ref="xi:include"/>
+        <xs:element minOccurs="0" ref="null"/>
+      </xs:choice>
+      <xs:attribute name="calcInterval" type="xs:string"/>
+      <xs:attribute name="from" type="xs:string"/>
+      <xs:attribute name="interval" use="required" type="xs:string"/>
+      <xs:attribute name="source" use="required" type="xs:string"/>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="analysis">
+    <xs:annotation>
+      <xs:documentation>Defines the location of analysis scripts to be run after the post processed data has been created.</xs:documentation>
+    </xs:annotation>
+    <xs:complexType mixed="true">
+      <xs:attribute name="cumulative" type="xs:string"/>
+      <xs:attribute name="mode" type="xs:string"/>
+      <xs:attribute name="momGrid" type="xs:string"/>
+      <xs:attribute name="script" type="xs:string"/>
+      <xs:attribute name="specify1year" type="xs:integer"/>
+      <xs:attribute name="startYear" type="xs:string"/>
+      <xs:attribute name="endYear" type="xs:string"/>
+      <xs:attribute name="switch" type="xs:string"/>
+      <xs:attribute name="outdir" type="xs:string"/>
+      <xs:attribute ref="xml:base"/>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:simpleType name="ChunkLength">
+    <xs:annotation>
+      <xs:documentation>Restricts the possible values for the chunk length (or how much data, in some unit of time, should be present in each output file).</xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:string">
+      <xs:pattern value="[0-9]+yr"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="PostProcessInterpMethod">
+    <xs:annotation>
+      <xs:documentation>Restricts the possible values for the interpolation method.</xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="conserve_order1"/>
+      <xs:enumeration value="conserve_order2"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+</xs:schema>

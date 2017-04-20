@@ -279,6 +279,39 @@ sub namelistTypelessPut($$$$)
 }
 
 # //////////////////////////////////////////////////////////////////////////////
+# ///////////////////// Exported Functions - Additional utilities             //
+# //////////////////////////////////////////////////////////////////////////////
+
+# Combines base and override namelist content for a single namelist,
+#   overwriting and combining as expected.
+# Note: This doesn't work properly, as it doesn't respect normal namelist features
+#   like multiple definitions per line, embedded newlines, and others.
+#   See t/03.override_namelist.t
+sub mergeNamelistContent($$)
+# ------ arguments: $base_namelist_content $override_namelist_content
+{
+    my ($base_namelist_content, $override_namelist_content) = @_;
+
+    # store the base namelist as a FRENamelist
+    my $nmls = FRENamelists->new();
+    $nmls->namelistPut('nml', $base_namelist_content);
+
+    # "parse" override namelist into key/value pairs
+    # Note: this doesn't respect many namelist features (embedded newlines etc)
+    my %override_namelist;
+    for (grep !/^\s*!/, split "\n", $override_namelist_content) {
+        $override_namelist{$1} = $2 if /\s*(\S+)\s*=\s*(\S.*)$/;
+    }
+
+    # combine namelists
+    $nmls->namelistTypelessPut('nml', $_, $override_namelist{$_})
+        for reverse sort keys %override_namelist;
+
+    # return as string
+    return $nmls->{'nml'};
+}
+
+# //////////////////////////////////////////////////////////////////////////////
 # //////////////////////////////////////////////////////////// Initialization //
 # //////////////////////////////////////////////////////////////////////////////
 

@@ -14,12 +14,14 @@ use strict;
 use File::Basename();
 use File::Copy();
 use File::Path();
+use File::Spec();
 use Getopt::Long(':config', 'no_ignore_case', 'no_auto_abbrev');
 
 use FRE();
 use FREDefaults();
 use FREExperiment();
 use FREMsg();
+use FREPlatforms();
 use FRETargets();
 use FRETemplate();
 use FREUtil();
@@ -268,7 +270,7 @@ use FREXML();
          (
          FREMsg::WARNING,
          "Since you've specified --force-checkout (-f), the existing source directory has been renamed using timestamp '$timeStr'",
-         "A new source directory will be created and populated by sources from the CVS...",
+         "A new source directory will be created and populated by sources from the SCM repository...",
          "You can remove the old source directory later by typing:",
          "rm -rf $saveDir"
          );
@@ -374,16 +376,14 @@ use FREXML();
             close $scoScriptHandle;
             chmod 0755, $scoScriptName;
             system $scoScriptName;
-            if (!$?)
-            {
-               FREXML::save(fremake::checkoutVerifyName($z), $r);
-               return (1, FREDefaults::STATUS_OK);
-            }
-            else
+            if ($?)
             {
                $fre->out(FREMsg::FATAL, "The checkout script '$scoScriptName' failed! ($?)");
                return (0, FREDefaults::STATUS_FRE_SOURCE_PROBLEM);
             }
+	    processCompileCleanExecDir($z, 1);
+	    FREXML::save(fremake::checkoutVerifyName($z), $r);
+	    return (1, FREDefaults::STATUS_OK);
          }
          else
          {
@@ -419,7 +419,7 @@ use FREXML();
             FREMsg::WARNING,
             "The existing checkout script '$scoScriptName' doesn't match checkout instructions in the XML file!",
             "If you need a fresh checkout, please rerun the fremake with the --force-checkout (-f) option.",
-            "Please consider checking your changed sources in the CVS before that!",
+            "Please consider checking your changed sources in the SCM repository before!!",
             "Try the --help option for more information."
             );
             return (1, FREDefaults::STATUS_FRE_SOURCE_NO_MATCH);
@@ -522,21 +522,22 @@ use FREXML();
       }
    }
 
-   sub processCompileCleanExecDir($)
-   # ------ arguments: $exp
+   sub processCompileCleanExecDir
+   # ------ arguments: $exp $performDistClean
    {
-      my $z = shift;
-      my ($execDir, $fre) = ($z->execDir(), $z->fre());
+      my ($z, $performDistClean) = @_;
+      my ($execDir, $fre, $cmpScriptName) = ($z->execDir(), $z->fre(), fremake::compileScriptName($z));
+      my $cleanCmd = $performDistClean ? "distclean; rm -f $cmpScriptName" : "clean";
       if (-f "$execDir/Makefile" && -r "$execDir/Makefile")
       {
-         qx(cd $execDir; make clean);
+         qx(cd $execDir; make $cleanCmd);
          if (!$?)
          {
-            $fre->out(FREMsg::WARNING, "The executable directory '$execDir' has been cleaned by the 'make clean'");
+            $fre->out(FREMsg::WARNING, "The executable directory '$execDir' has been cleaned by the 'make $cleanCmd'");
          }
          else
          {
-            $fre->out(FREMsg::WARNING, "Unable to clean the executable directory '$execDir' by the 'make clean' ($?)");
+            $fre->out(FREMsg::WARNING, "Unable to clean the executable directory '$execDir' by the 'make $cleanCmd' ($?)");
          }
       }
       else
@@ -548,6 +549,7 @@ use FREXML();
             $fre->out(FREMsg::WARNING, "The executable directory '$execDir' has been cleaned") if $n > 0;
          }
       }
+
    }
 
    sub processCompileClean($%)
@@ -745,6 +747,13 @@ use FREXML();
 
       $envScript .= "source $modulesHomeDir/init/tcsh\n";
       $envScript .= "$baseCsh\n";
+
+      $envScript .= "# Environment Settings Added by NiNaC Module\n";
+      $envScript .= "# ------------------------------------------------------------------------------\n";
+      $envScript .= FREPlatforms::getPlatformSpecificNiNaCLoadCommands() . "\n";
+      $envScript .= "# ------------------------------------------------------------------------------\n";
+      $envScript .= "# END: Settings Added by NiNaC\n\n";
+
       $envScript .= "module list\n";
 
       $envScript .= "setenv PATH $freCommandsHomeDir/bin:\$PATH\n\n";
@@ -849,6 +858,7 @@ use FREXML();
                $cmpScript .= "sed -e 's/${tab}/\\t/' >$name/Makefile-cpp <<EOF\n";
                $cmpScript .= "CPPDEFS = ";
                $cmpScript .= "$ref->{cppDefs}" if $ref->{cppDefs};
+	       $cmpScript .= " -D_FILE_VERSION=\"\\\`git-version-string \\\$<\\\`\"";
                $cmpScript .= "\n";
                $cmpScript .= "ifeq (\\\$(NETCDF),3)\n";
                $cmpScript .= "  ifneq (\\\$(findstring -Duse_netCDF,\\\$(CPPDEFS)),)\n";
@@ -881,6 +891,17 @@ use FREXML();
       $cmpScript .= "# ---------------- call make on the main Makefile\n\n";
       $cmpScript .= "make $makeOverrides fms_$expName.x\n\n";
       $cmpScript .= "if ( \$status == 0 ) then\n";
+      $cmpScript .= "  if ( \$?NiNaC_LVL ) then\n";
+      $cmpScript .= "    if ( \$NiNaC_LVL > 0 ) then\n";
+      $cmpScript .= "      # Run NiNaC\n";
+      $cmpScript .= "      \$NiNaC_BldRx \$src_dir \$bld_dir\n";
+      $cmpScript .= "      if ( \$status != 0 ) then\n";
+      $cmpScript .= "        if ( \$echoOn ) unset echo\n";
+      $cmpScript .= "        echo \"NiNaC Note: While NiNaC loaded attempt at NiNaC_BldRx failed with exit status \$status : FRE continuing as normal.\"\n";
+      $cmpScript .= "        if ( \$echoOn ) set echo\n";
+      $cmpScript .= "      endif\n";
+      $cmpScript .= "    endif\n";
+      $cmpScript .= "  endif\n\n";
       $cmpScript .= "  if ( \$echoOn ) unset echo\n";
       $cmpScript .= "  echo \"<NOTE> : make succeeded for $expName.\"\n";
       $cmpScript .= "  if ( \$echoOn ) set echo\n";
@@ -904,6 +925,41 @@ use FREXML();
    {
       my ($z, $r, %o) = @_;
       my ($fre, $cmpScriptName, $cmpVerifyName) = ($z->fre(), fremake::compileScriptName($z), fremake::compileVerifyName($z));
+
+      # ------------ Run NiNaC before executing or submitting the compile if NiNaC module is loaded
+
+      if ( exists( $ENV{'NiNaC_LVL'} ) and $ENV{'NiNaC_LVL'} > 0 )
+      {
+         # Get the source dir signature
+         system( $ENV{'NiNaC_SrcRx'}, $z->srcDir() );
+
+         # Alert the user on NiNaC_SrcRx failure
+         if ( $? != 0 ) {
+            print "NiNaC Note: While NiNaC loaded attempt at NiNaC_SrcRx "
+                . FREUtil::decodeChildStatus($?, $!)
+                . " : FRE continuing as normal.\n";
+         }
+
+         # Ensure that the xml path is an absolute path
+         my $xmlpath = File::Spec->rel2abs( $o{'xmlfile'} );
+
+         # Split the xml path into file name and directory path
+         my $xmlfile = File::Basename::basename( $xmlpath );
+         my $xmldir = File::Basename::dirname( $xmlpath );
+
+         # Get the xml dir signature
+         system( $ENV{'NiNaC_XmlRx'}, $xmlfile, $xmldir );
+
+         # Alert the user on NiNaC_XmlRx failure
+         if ( $? != 0 ) {
+            print "NiNaC Note: While NiNaC loaded attempt at NiNaC_XmlRx "
+                . FREUtil::decodeChildStatus($?, $!)
+                . " : FRE continuing as normal.\n";
+         }
+      }
+
+      # ----------- Execute or submit
+
       if ($o{execute})
       {
          my $cmpScriptNameOut = $cmpScriptName . '.o' . FREUtil::jobID();
