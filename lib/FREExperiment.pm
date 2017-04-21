@@ -158,6 +158,7 @@ $experimentCreate = sub($$$)
 	  $r->{MDBIswitch} = $fre->experimentNode($e)->findvalue('publicMetadata/@DBswitch');
 	  if ( $fre->experimentNode($e)->findvalue('publicMetadata/project') =~ /^"?cmip\d"?$/i ){
 	      # Run publicMetadata validation if it is a CMIP experiment
+	      $r->{cmip} = 1;
 	      FRE::curator($fre->{xmlfileAbsPath}, $e , 1)
 		    if $fre->{caller} =~ /(frepp|frerun)/;
 	  }
