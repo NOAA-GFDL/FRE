@@ -1,4 +1,7 @@
 # add load test_helpers to the top of your bats files to load these functions
+
+default_platform="${FRE_SYSTEM_SITE}.intel"
+
 unique_stdout_xml() {
     awk </dev/null '/platform/{s=0}/"'"${FRE_SYSTEM_SITE}"'.intel"/{s=1}{if (s) {if ($0 ~ /<directory/){ret=system("sed s/UNIQUE_STRING/FRE_tests-'"${unique_string}"'-temp/ '"${platform}"'.dirs"); if(ret){exit ret}} else {print}} else {print}}' "$@"
 }
