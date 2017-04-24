@@ -395,7 +395,7 @@ CM2.1U_Control-1990_E1.M_3B_snowmelt_static_ocn6x5 $execRoot/$USER/.*/CM2.1U_Con
     [ "$status" -eq 0 ]
 }
 
-@test "Get the number of nodes that would be requested for an experiment" {
+@test "Get the number of nodes that would be requested for an experiment production run" {
     case "$FRE_SYSTEM_SITE" in
         ncrc? )
             num_nodes=7
@@ -412,13 +412,14 @@ CM2.1U_Control-1990_E1.M_3B_snowmelt INHERITS FROM CM2.1U_Control-1990_E1.M_3A"
 
     run frelist -p ${default_platform} -t prod,openmp -x CM2.1U.xml CM2.1U_Control-1990_E1.M_3B_snowmelt --nodes
 
+    echo "Expected: \"$output_good\""
     echo "Got: \"$output\""
     echo "Exit status: $status"
     [ "$output" = "$output_good" ]
     [ "$status" -eq 0 ]
 }
 
-@test "Get the number of nodes that would be requested for regression runs" {
+@test "Get the number of nodes that would be requested for an experiment's regression runs" {
     case "$FRE_SYSTEM_SITE" in
         ncrc? )
             num_nodes=2
@@ -436,6 +437,92 @@ CM2.1U_Control-1990_E1.M_3B_snowmelt INHERITS FROM CM2.1U_Control-1990_E1.M_3A"
 
     run frelist -p ${default_platform} -t prod,openmp -x CM2.1U.xml CM2.1U_Control-1990_E1.M_3B_snowmelt -r basic,restarts --nodes
 
+    echo "Expected: \"$output_good\""
+    echo "Got: \"$output\""
+    echo "Exit status: $status"
+    [ "$output" = "$output_good" ]
+    [ "$status" -eq 0 ]
+}
+
+@test "Get the number of nodes that would be requested for all production runs" {
+    case "$FRE_SYSTEM_SITE" in
+        ncrc? )
+            num_nodes=7
+            ;;
+        theia )
+            num_nodes=3
+            ;;
+        * )
+            skip "--nodes not supported on site '${FRE_SYSTEM_SITE}'"
+    esac
+
+    output_good="CM2.1U_Control-1990_E1.M_3A is not configured for production run
+CM2.1U_Control-1990_E1.M_3A
+CM2.1U_Control-1990_E1.M_3B_snowmelt production would request $num_nodes nodes.
+CM2.1U_Control-1990_E1.M_3B_snowmelt INHERITS FROM CM2.1U_Control-1990_E1.M_3A
+CM2.1U_Control-1990_E1.M_3B_snowmelt_static_ocn6x5 production would request $num_nodes nodes.
+CM2.1U_Control-1990_E1.M_3B_snowmelt_static_ocn6x5 INHERITS FROM CM2.1U_Control-1990_E1.M_3B_snowmelt"
+
+    run frelist -p ${default_platform} -t prod,openmp -x CM2.1U.xml --nodes
+
+    echo "Expected: \"$output_good\""
+    echo "Got: \"$output\""
+    echo "Exit status: $status"
+    [ "$output" = "$output_good" ]
+    [ "$status" -eq 0 ]
+}
+
+@test "Get the number of nodes that would be requested for regression suite" {
+    case "$FRE_SYSTEM_SITE" in
+        ncrc? )
+            output_good="CM2.1U_Control-1990_E1.M_3A regression/basic would request 2 nodes.
+CM2.1U_Control-1990_E1.M_3A regression/restarts would request 2 nodes.
+CM2.1U_Control-1990_E1.M_3A regression/scaling #1 would request 2 nodes.
+CM2.1U_Control-1990_E1.M_3A regression/scaling #2 would request 2 nodes.
+CM2.1U_Control-1990_E1.M_3A regression/scaling #3 would request 3 nodes.
+CM2.1U_Control-1990_E1.M_3A regression/scaling #4 would request 6 nodes.
+CM2.1U_Control-1990_E1.M_3A
+CM2.1U_Control-1990_E1.M_3B_snowmelt regression/basic would request 2 nodes.
+CM2.1U_Control-1990_E1.M_3B_snowmelt regression/restarts would request 2 nodes.
+CM2.1U_Control-1990_E1.M_3B_snowmelt regression/scaling #1 would request 2 nodes.
+CM2.1U_Control-1990_E1.M_3B_snowmelt regression/scaling #2 would request 2 nodes.
+CM2.1U_Control-1990_E1.M_3B_snowmelt regression/scaling #3 would request 3 nodes.
+CM2.1U_Control-1990_E1.M_3B_snowmelt regression/scaling #4 would request 6 nodes.
+CM2.1U_Control-1990_E1.M_3B_snowmelt INHERITS FROM CM2.1U_Control-1990_E1.M_3A
+CM2.1U_Control-1990_E1.M_3B_snowmelt_static_ocn6x5 regression/basic would request 2 nodes.
+CM2.1U_Control-1990_E1.M_3B_snowmelt_static_ocn6x5 regression/restarts would request 2 nodes.
+CM2.1U_Control-1990_E1.M_3B_snowmelt_static_ocn6x5 regression/scaling #1 would request 2 nodes.
+CM2.1U_Control-1990_E1.M_3B_snowmelt_static_ocn6x5 regression/scaling #2 would request 3 nodes.
+CM2.1U_Control-1990_E1.M_3B_snowmelt_static_ocn6x5 INHERITS FROM CM2.1U_Control-1990_E1.M_3B_snowmelt"
+            ;;
+        theia )
+            output_good="CM2.1U_Control-1990_E1.M_3A regression/basic would request 1 nodes.
+CM2.1U_Control-1990_E1.M_3A regression/restarts would request 1 nodes.
+CM2.1U_Control-1990_E1.M_3A regression/scaling #1 would request 1 nodes.
+CM2.1U_Control-1990_E1.M_3A regression/scaling #2 would request 1 nodes.
+CM2.1U_Control-1990_E1.M_3A regression/scaling #3 would request 1 nodes.
+CM2.1U_Control-1990_E1.M_3A regression/scaling #4 would request 2 nodes.
+CM2.1U_Control-1990_E1.M_3A
+CM2.1U_Control-1990_E1.M_3B_snowmelt regression/basic would request 3 nodes.
+CM2.1U_Control-1990_E1.M_3B_snowmelt regression/restarts would request 3 nodes.
+CM2.1U_Control-1990_E1.M_3B_snowmelt regression/scaling #1 would request 3 nodes.
+CM2.1U_Control-1990_E1.M_3B_snowmelt regression/scaling #2 would request 3 nodes.
+CM2.1U_Control-1990_E1.M_3B_snowmelt regression/scaling #3 would request 3 nodes.
+CM2.1U_Control-1990_E1.M_3B_snowmelt regression/scaling #4 would request 3 nodes.
+CM2.1U_Control-1990_E1.M_3B_snowmelt INHERITS FROM CM2.1U_Control-1990_E1.M_3A
+CM2.1U_Control-1990_E1.M_3B_snowmelt_static_ocn6x5 regression/basic would request 3 nodes.
+CM2.1U_Control-1990_E1.M_3B_snowmelt_static_ocn6x5 regression/restarts would request 3 nodes.
+CM2.1U_Control-1990_E1.M_3B_snowmelt_static_ocn6x5 regression/scaling #1 would request 3 nodes.
+CM2.1U_Control-1990_E1.M_3B_snowmelt_static_ocn6x5 regression/scaling #2 would request 3 nodes.
+CM2.1U_Control-1990_E1.M_3B_snowmelt_static_ocn6x5 INHERITS FROM CM2.1U_Control-1990_E1.M_3B_snowmelt"
+            ;;
+        * )
+            skip "--nodes not supported on site '${FRE_SYSTEM_SITE}'"
+    esac
+
+    run frelist -p ${default_platform} -t prod,openmp -x CM2.1U.xml -r suite --nodes
+
+    echo "Expected: \"$output_good\""
     echo "Got: \"$output\""
     echo "Exit status: $status"
     [ "$output" = "$output_good" ]
