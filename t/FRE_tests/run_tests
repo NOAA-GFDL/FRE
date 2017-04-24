@@ -3,7 +3,7 @@
 # Evaluate TAP output to determine if a test failed or passed.
 #
 # This function assumes the tapFile has a name of <test>.<extension>
-# where <test> is the name of the test suite, and will be used in 
+# where <test> is the name of the test suite, and will be used in
 # the messages printed to the screen.
 #
 # evalTAP "tapFile"
@@ -28,52 +28,189 @@ evalTAP () {
    echo $myReturn
 }
 
-case $FRE_SYSTEM_SITE in
-	gfdl )
-		PATH=$PATH:/home/sdu/opt/bats/bin
-		;;
-	gfdl-ws )
-		PATH=$PATH:/home/sdu/opt/bats/bin
-		;;
-        theia )
-                PATH=${PATH}:/home/Seth.Underwood/opt/bats/0.4.0/bin
-                ;;
-	ncrc3 )
-		PATH=$PATH:/ncrc/home2/Seth.Underwood/opt/bats/0.4.0/bin
-		;;
-	ncrc4 )
-		PATH=$PATH:/ncrc/home2/Seth.Underwood/opt/bats/0.4.0/bin
-		;;
+# Run the FRE tests
+do_tests () {
+  case $FRE_SYSTEM_SITE in
+	  gfdl )
+	    PATH=$PATH:/home/sdu/opt/bats/bin
+		  ;;
+	  gfdl-ws )
+		  PATH=$PATH:/home/sdu/opt/bats/bin
+		  ;;
+    theia )
+      PATH=${PATH}:/home/Seth.Underwood/opt/bats/0.4.0/bin
+      ;;
+    ncrc3 )
+		  PATH=$PATH:/ncrc/home2/Seth.Underwood/opt/bats/0.4.0/bin
+      ;;
+    ncrc4 )
+      PATH=$PATH:/ncrc/home2/Seth.Underwood/opt/bats/0.4.0/bin
+      ;;
+  esac
+
+  export PATH
+
+  pushd xml
+
+  local command="bats -t ../frelist.bats"
+  echo $command
+  $command | tee frelist.tap 2>&1
+  frelist_exit=$(evalTAP frelist.tap)
+  rm -f frelist.tap
+
+  echo ""
+
+  command="bats -t ../fremake.bats"
+  echo $command
+  $command | tee fremake.tap 2>&1
+  local fremake_exit=$(evalTAP fremake.tap)
+  rm -f fremake.tap
+
+  echo ""
+
+  command="bats -t ../frerun.bats"
+  echo $command
+  $command | tee frerun.tap 2>&1
+  local frerun_exit=$(evalTAP frerun.tap)
+  rm -f frerun.tap
+
+  popd
+
+  local myExit=$(expr $frelist_exit + $fremake_exit + $frerun_exit)
+
+  return $myExit
+}
+
+# Revert repoitory working directory to a previous commit hash
+# inputs: git_work_dir oldCommitHash
+# Return is 0 if successful, 1 if not.
+revert_repo() {
+  local git_work_dir=$1
+  local old_hash=$2
+
+  # Default return status
+  local myReturn=0
+
+  pushd ${git_work_dir}
+
+  # Perform the checkout to the old hash
+  git checkout ${old_hash}
+  if [[ $? -ne 0 ]]
+  then
+    echo "Failed to revert to previous commit"
+    echo "Please contact the FRE Development team"
+    echo "Failing"
+    myReturn=1
+  else
+    echo "Revert successful"
+    echo "Deploy failed"
+    echo "Failing"
+    myReturn 0
+  fi
+  popd
+  return $myReturn
+}
+
+# Deploy fre-commands to fre-commands/test
+do_deploy () {
+  local freCommands_dir=$1
+  local myReturn=0
+
+  if [ ! -e $freCommands_dir ]
+  then
+    mkdir -p $freCommands_dir
+    if [[ $? -ne 0 ]]
+    then
+      # Could not create director, exit
+      echo "Unable to create FRE Commands deploy directory"
+      echo "Failing"
+      myReturn=1
+    else
+      pushd ${freCommands_dir}
+      git clone -b ${CI_COMMIT_SHA} ${CI_REPOSITORY_URL} .
+      if [[ $? -ne 0 ]]
+      then
+        # Could not clone repository
+        echo "Unable to clone repository \"${CI_REPOSITORY_URL}\" into \"${freCommands_dir}\""
+        echo "Failing"
+        myReturn=1
+      fi
+    fi
+  elif [[ ! -r ${freCommands_dir} || ! -w ${freCommands_dir} ]]
+  then
+    # The directory has the wrong permissions.  Unable to deploy
+    echo "The deploy directory \"${freCommands_dir}\" has the wrong permissions:"
+    ls -ld ${freCommands_dir}
+    echo "Failing"
+    myReturn=1
+  else
+    pushd ${freCommands_dir}
+    # Capture the current commit hash
+    local oldCommitHash=$(git rev-parse --verify HEAD)
+    if [[ $? -ne 0 ]]
+    then
+      echo "Unable to get old commit hash"
+      echo "Failing"
+      myReturn=1
+    else
+      git fetch origin
+      if [[ $? -ne 0 ]]
+      then
+        echo "Error whil attempting to fetch from origin in \"${freCommands_dir}\"."
+        echo "Failing"
+        myReturn=1
+      else
+        # Checkout the CI_COMMIT_SHA
+        git checkout ${CI_COMMIT_SHA}
+        # If checkout fails, revert
+        if [[ $? -ne 0 ]]
+        then
+          echo "Failed checkout of \"${CI_COMMIT_SHA}\" in \"${freCommands_dir}\"."
+          echo "Reverting . . ."
+          revert_repo ${freCommands_dir} ${oldCommitHash}
+          myReturn=1
+        elif [ ! "$(git rev-parse --verify HEAD)" = "${CI_COMMIT_SHA}" ]
+        then
+          # Verify the current hash matches the expected hash, revert if it
+          # doesn't
+          echo "New commit hash \"$(git rev-parse --verify HEAD)\" does not match expected hash \"${CI_COMMIT_SHA}\"."
+          echo "Reverting . . ."
+          revert_repo ${freCommands_dir} ${oldCommitHash}
+          myReturn=1
+        fi
+      fi
+    fi
+  fi
+  popd
+  return $myReturn
+}
+
+# Default exit value (0 == pass)
+myExit=0
+
+# Settings to run tests if not run in GITLAB_CI
+if [ -z ${BITLAB_CI+x} ]
+then
+  # Not running with gitlab CI
+  CI_JOB_STAGE=test
+  export CI_PROJECT_DIR="$(dirname $(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd))"
+fi
+
+# Determine which stage we are in:
+case ${CI_JOB_STAGE} in
+  test )
+    run_tests
+    myExit=$?
+    ;;
+  deploy )
+    do_deploy ${FRE_COMMANDS_DIR}
+    myExit=$?
+    ;;
+  * )
+    echo "Unknown CI stage type \"${CI_JOB_STAGE}\"."
+    echo "Failing"
+    myExit=1
+    ;;
 esac
-
-export PATH
-
-cd xml
-
-command="bats -t ../frelist.bats"
-echo $command
-$command | tee frelist.tap 2>&1
-frelist_exit=$( evalTAP frelist.tap )
-rm -f frelist.tap
-
-
-echo ""
-command="bats -t ../fremake.bats"
-echo $command
-$command | tee fremake.tap 2>&1
-fremake_exit=$( evalTAP fremake.tap )
-rm -f fremake.tap
-
-
-echo ""
-command="bats -t ../frerun.bats"
-echo $command
-$command | tee frerun.tap 2>&1
-frerun_exit=$( evalTAP frerun.tap )
-rm -f frerun.tap
-
-cd ..
-
-myExit=$(expr $frelist_exit + $fremake_exit + $frerun_exit)
 
 exit $myExit
