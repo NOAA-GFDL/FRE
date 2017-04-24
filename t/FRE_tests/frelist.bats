@@ -395,6 +395,43 @@ CM2.1U_Control-1990_E1.M_3B_snowmelt_static_ocn6x5 $execRoot/$USER/.*/CM2.1U_Con
     [ "$status" -eq 0 ]
 }
 
+@test "Get the number of nodes that would be requested for an experiment" {
+    case "$FRE_SYSTEM_SITE" in
+        ncrc? )
+            output_good="CM2.1U_Control-1990_E1.M_3B_snowmelt production would request 7 nodes.
+CM2.1U_Control-1990_E1.M_3B_snowmelt INHERITS FROM CM2.1U_Control-1990_E1.M_3A"
+            ;;
+        * )
+            skip "--nodes not supported on site '${FRE_SYSTEM_SITE}'"
+    esac
+
+    run frelist -p ${default_platform} -t prod,openmp -x CM2.1U.xml CM2.1U_Control-1990_E1.M_3B_snowmelt --nodes
+
+    echo "Got: \"$output\""
+    echo "Exit status: $status"
+    [ "$output" = "$output_good" ]
+    [ "$status" -eq 0 ]
+}
+
+@test "Get the number of nodes that would be requested for regression runs" {
+    case "$FRE_SYSTEM_SITE" in
+        ncrc? )
+            output_good="CM2.1U_Control-1990_E1.M_3B_snowmelt regression/basic would request 2 nodes.
+CM2.1U_Control-1990_E1.M_3B_snowmelt regression/restarts would request 2 nodes.
+CM2.1U_Control-1990_E1.M_3B_snowmelt INHERITS FROM CM2.1U_Control-1990_E1.M_3A"
+            ;;
+        * )
+            skip "--nodes not supported on site '${FRE_SYSTEM_SITE}'"
+    esac
+
+    run frelist -p ${default_platform} -t prod,openmp -x CM2.1U.xml CM2.1U_Control-1990_E1.M_3B_snowmelt -r basic,restarts --nodes
+
+    echo "Got: \"$output\""
+    echo "Exit status: $status"
+    [ "$output" = "$output_good" ]
+    [ "$status" -eq 0 ]
+}
+
 @test "Extract platform csh section --platform=gfdl.${FRE_SYSTEM_SITE}-intel" {
     output_good="
 # Platform environment defaults from ${FRE_COMMANDS_HOME}/site/gfdl/env.defaults
