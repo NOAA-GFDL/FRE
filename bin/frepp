@@ -439,6 +439,7 @@ $version_head .= "-x $abs_xml_path ";
    #   print "Running ln -s $abs_xml_path $archivedir/$shortxml\n" if $opt_v;
    #   system("ln -s $abs_xml_path $archivedir/$shortxml");
    #}
+   my $mdbi = lc($exp->{MDBIswitch}) =~ /(on|true|yes)/i;
 
    my $tmphistdir = "";
    if ( "$workdir" eq "" ) {
@@ -470,7 +471,7 @@ $version_head .= "-x $abs_xml_path ";
    # ingest the experiment into curator -- Maybe..
    # Build our command line options for fredb
    my ($exper_id, $realiz_id, $run_id);
-   if ( lc($exp->{MDBIswitch}) =~ /(on|true|yes)/ ) {
+   if ( $mdbi ) {
        print "\nChecking Curator for the experiment to capture the tripleID\nThis may take a moment if experiment is being ingested for the first time.\n\n";
        my $fredb = qx{which fredb};
        chomp($fredb);
@@ -664,7 +665,7 @@ EOF
       $outscript .= "_$opt_r";
       $maxruntime = "01:00:00";
       $pbs_job_name .= "_$opt_r";
-   } elsif ( $opt_D or $exp->{MDBIswitch}) {
+   } elsif ( $opt_D or $mdbi ) {
       $outscript .= "_refineDiag";
       $pbs_job_name .= "_refineDiag";
    }
@@ -814,11 +815,11 @@ EOF
    }
 
    #if refineDiag run, insert refineDiag csh here
-   if ( $opt_D or $exp->{MDBIswitch}) {
-      $cshscripttmpl .= refineDiag($exp,$tmphistdir,$stdoutdir,$ptmpDir,$basedate,$refinedir,$gridspec);
+   if ( $opt_D or $mdbi ) {
+      $cshscripttmpl .= refineDiag($tmphistdir,$stdoutdir,$ptmpDir,$basedate,$refinedir,$gridspec,$mdbi);
    }
 
-   if ( $opt_f or ( $opt_D or $exp->{MDBIswitch} )) {
+   if ( $opt_f or ( $opt_D or $mdbi )) {
       #separate mppnccombine from rest of script due to splitting components
       unless ( $opt_H ) {
          $cshscripttmpl .= "\n/usr/bin/perl $absfrepp -x $abs_xml_path -t $hDate -s -v ";
@@ -7133,13 +7134,7 @@ EOF
 #run user scripts
 #package the new data into new history file
 sub refineDiag {
-   my $exp = $_[0];
-   my $tmphistdir = $_[1];
-   my $stdoutdir = $_[2];
-   my $ptmpDir = $_[3];
-   my $basedate = $_[4];
-   my $refinedir = $_[5];
-   my $gridspec = $_[6];
+   my ($tmphistdir, $stdoutdir, $ptmpDir, $basedate, $refinedir, $gridspec, $mdbi) = @_;
 
    my $newhistorydir = "$opt_d"."_refineDiag";
    my $csh  = <<EOF;
@@ -7168,7 +7163,7 @@ foreach historyfile ( `ls \$historyyear????.nc.cpio \$historyyear????.nc.tar`)
    cd \$work/\$hsmdate
 EOF
 
-   if ( $exp->{MDBIswitch} =~ /(yes|on|true)/i ){
+   if ( $mdbi ) {
        $csh .= <<EOF;
    #run the scalar diagnostics
    source /home/fms/local/opt/fre-refinediag/verona/detvitals/detVitals.csh
