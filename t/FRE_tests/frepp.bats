@@ -127,7 +127,7 @@ ERROR: No history data found for year 0101 in /work/$USER/$unique_string/.*/CM2.
             ;;
         * )
             output_good="NOTE: adding '-c split'; frepp will do each component in a separate batch job
-*FATAL*: You are not allowed to run the 'frepp' tool with the '${default_platform}' platform on this site"
+\*FATAL\*: You are not allowed to run the 'frepp' tool with the '${default_platform}' platform on this site"
     esac
 
     platform=gfdl \
@@ -155,10 +155,12 @@ TO SUBMIT: msub -d /home/$USER/   /work/$USER/$unique_string/.*/CM2.1U_Control-1
 TO SUBMIT: msub -d /home/$USER/   /work/$USER/$unique_string/.*/CM2.1U_Control-1990_E1.M_3B_snowmelt/${default_platform}-prod/scripts/postProcess/CM2.1U_Control-1990_E1.M_3B_snowmelt_land_01050101
 
 TO SUBMIT: msub -d /home/$USER/   /work/$USER/$unique_string/.*/CM2.1U_Control-1990_E1.M_3B_snowmelt/${default_platform}-prod/scripts/postProcess/CM2.1U_Control-1990_E1.M_3B_snowmelt_ice_01050101"
+            exit_status=0
             ;;
         * )
             output_good="NOTE: adding '-c split'; frepp will do each component in a separate batch job
-*FATAL*: You are not allowed to run the 'frepp' tool with the '${default_platform}' platform on this site"
+\*FATAL\*: You are not allowed to run the 'frepp' tool with the '${default_platform}' platform on this site"
+            exit_status=1
     esac
 
     platform=gfdl \
@@ -171,7 +173,7 @@ TO SUBMIT: msub -d /home/$USER/   /work/$USER/$unique_string/.*/CM2.1U_Control-1
     echo "Expected: \"$output_good\""
     echo "Got: \"$output\""
     echo "Exit status: $status"
-    [ "$status" -eq 0 ]
+    [ "$status" -eq "$exit_status" ]
     string_matches_pattern "$output" "$output_good"
     rm "$unique_xml_name"
 }
@@ -188,10 +190,12 @@ TO SUBMIT: msub -d /home/$USER/   /work/$USER/$unique_string/.*/CM2.1U_Control-1
 TO SUBMIT: msub -d /home/$USER/   /work/$USER/$unique_string/.*/CM2.1U_Control-1990_E1.M_3B_snowmelt/${default_platform}-prod-openmp/scripts/postProcess/CM2.1U_Control-1990_E1.M_3B_snowmelt_land_01050101
 
 TO SUBMIT: msub -d /home/$USER/   /work/$USER/$unique_string/.*/CM2.1U_Control-1990_E1.M_3B_snowmelt/${default_platform}-prod-openmp/scripts/postProcess/CM2.1U_Control-1990_E1.M_3B_snowmelt_ice_01050101"
+            exit_status=0
             ;;
         * )
             output_good="NOTE: adding '-c split'; frepp will do each component in a separate batch job
-*FATAL*: You are not allowed to run the 'frepp' tool with the '${default_platform}' platform on this site"
+\*FATAL\*: You are not allowed to run the 'frepp' tool with the '${default_platform}' platform on this site"
+            exit_status=1
     esac
 
     platform=gfdl \
@@ -205,7 +209,7 @@ TO SUBMIT: msub -d /home/$USER/   /work/$USER/$unique_string/.*/CM2.1U_Control-1
     echo "Expected: \"$output_good\""
     echo "Got: \"$output\""
     echo "Exit status: $status"
-    [ "$status" -eq 0 ]
+    [ "$status" -eq "$exit_status" ]
     string_matches_pattern "$output" "$output_good"
     rm "$unique_xml_name"
 }
