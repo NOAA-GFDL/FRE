@@ -43,12 +43,14 @@ set actionSaveOn = 0
 set actionXferOn = 0
 set actionPPStartOn = 0
 set actionRetryOn = 0
+set actionFillGridOn = 0
 
 set actionCombineOk = 0
 set actionCheckOk = 0
 set actionSaveOk = 0
 set actionXferOk = 0
 set actionPPStartOk = 0
+set actionFillGridOk = 0
 
 set actionXferForce = 0
 set actionPPStartForce = 0
@@ -302,6 +304,19 @@ else
    goto END
 endif
 
+if ( $actionFillGridOn == 0 || $actionFillGridOn == 1 ) then
+   set -r actionFillGridOn = $actionFillGridOn
+   if ( $echoOn ) unset echo
+   echo "<NOTE> : actionFillGridOn = '$actionFillGridOn'"
+   if ( $echoOn ) set echo
+else
+   if ( $echoOn ) unset echo
+   echo "*ERROR*: The argument 'actionFillGridOn' value must be '0' or '1'"
+   if ( $echoOn ) set echo
+   set exitStatus = 2
+   goto END
+endif
+
 if ( $paramArchiveOn == 0 || $paramArchiveOn == 1 ) then
    set -r paramArchiveOn = $paramArchiveOn
    if ( $echoOn ) unset echo
@@ -418,6 +433,7 @@ endif
 @ actionCombineToDo       = ( $actionCombineOn * ! $actionCombineOk )
 @ actionCheckToDo         = ( $actionCheckOn * ! $actionCheckOk )
 @ actionSaveToDo          = ( $actionSaveOn * ( $paramArchiveOn || $paramPtmpOn ) * ! $actionSaveOk )
+@ actionFillGridToDo      = ( $actionFillGridOn * ! $actionFillGridOk )
 
 @ actionXferToConsider    = ( $actionXferOn * ! $actionXferOk )
 @ actionXferToPerform     = ( $stagingType == 'Online' || $actionXferForce )
@@ -701,6 +717,23 @@ else
    echo "WARNING: mppnccombineOptString not found, defaulting to '$mppnccombineOptsDefault'"
    if ( $echoOn ) set echo
    set -r mppnccombineOptString = "$mppnccombineOptsDefault"
+endif
+
+if ( "$gridSpec" != "" ) then
+   set -r gridSpec = "$gridSpec"
+   if ( $echoOn ) unset echo
+   echo "<NOTE> : gridSpec = '$gridSpec'"
+   if ( $echoOn ) set echo
+else if ( $actionFillGridToDo ) then
+   if ( $echoOn ) unset echo
+   echo "*ERROR*: gridSpec tarfile required to fill masked grid info"
+   if ( $echoOn ) set echo
+   set exitStatus = 2
+   goto END
+else
+   if ( $echoOn ) unset echo
+   echo "<Note> : Not using the 'gridSpec' argument"
+   if ( $echoOn ) set echo
 endif
 
 ################################################################################
@@ -1121,6 +1154,78 @@ if ( $actionCombineToDo ) then
    set actionCombineOk = 1
 
    echo "set actionCombineOk = 1" >> $argFile
+endif
+
+################################################################################
+#------------ swap in unmasked grid info into masked ocean_static --------------
+################################################################################
+if ( $actionFillGridToDo ) then
+   set srcDir = $workDir$archDir
+
+   if ( -d "$srcDir" && -r "$srcDir" && -w "$srcDir" ) then
+      pushd $srcDir
+
+      # locate masked ocean_static target
+      set masked_ocean_static = ( `ls -1 | egrep "\.ocean_static\.nc"` )
+      if ( $#masked_ocean_static == 0 ) then
+         if ( $echoOn ) unset echo
+         echo "*ERROR*: Couldn't find ocean_static.nc for unmasked lat/lon swap"
+         if ( $echoOn ) set echo
+         set exitStatus = 2
+         goto END
+      else if ( $#masked_ocean_static > 1 ) then
+         if ( $echoOn ) unset echo
+         echo "*ERROR*: Found multiple *.ocean_static.nc targets for unmasked lat/lon swap, but expected just one"
+         if ( $echoOn ) set echo
+         set exitStatus = 2
+         goto END
+      endif
+
+      # use ocean_static_no_mask_table as reference if it exists
+      set ref_ocean_static = ( `ls -1 | egrep "\.ocean_static_no_mask_table\.nc"` )
+      if ( $#ref_ocean_static > 1 ) then
+         if ( $echoOn ) unset echo
+         echo "*ERROR*: Found more than one ocean_static_no_mask_table.nc, but expected just one"
+         if ( $echoOn ) set echo
+         set exitStatus = 2
+         goto END
+      endif
+
+      # use ocean_static.nc in gridSpec tarfile otherwise
+      if ( $#ref_ocean_static == 0 ) then
+         tar -xf $gridSpec ./ocean_static.nc
+         if ( $status ) then
+            if ( $echoOn ) unset echo
+            echo "*ERROR*: Couldn't extract ocean_static.nc from $gridSpec for unmasked lat/lon swap"
+            if ( $echoOn ) set echo
+            set exitStatus = 2
+            goto END
+         endif
+      endif
+
+      # do the swap
+      ncks -A $ref_ocean_static $masked_ocean_static
+      if ( $status == 0 ) then
+         if ( $echoOn ) unset echo
+         echo "<NOTE> : Reference ocean static $ref_ocean_static has been appended to $masked_ocean_static"
+         if ( $echoOn ) set echo
+      else
+         if ( $echoOn ) unset echo
+            echo "*ERROR*: Couldn't append $ref_ocean_static into $masked_ocean_static"
+         if ( $echoOn ) set echo
+      endif
+      popd
+
+      set actionFillGridOk = 1
+      echo "set actionFillGridOk = 1" >> $argFile
+
+   else
+      if ( $echoOn ) unset echo
+      echo "*ERROR*: The directory '$srcDir' doesn't exist or not readable/writable"
+      if ( $echoOn ) set echo
+      set exitStatus = 2
+      goto END
+   endif
 endif
 
 ################################################################################
@@ -1639,12 +1744,13 @@ endif
 ################################################################################
 
 @ actionCombineDone = ( $actionCombineOn * $actionCombineOk || ! $actionCombineOn )
+@ actionFillGridDone = ( $actionFillGridOn * $actionFillGridOk || ! $actionFillGridOn)
 @ actionCheckDone   = ( $actionCheckOn   * $actionCheckOk   || ! $actionCheckOn   )
 @ actionSaveDone    = ( $actionSaveOn    * $actionSaveOk    || ! $actionSaveOn    )
 @ actionXferDone    = ( $actionXferOn    * $actionXferOk    || ! $actionXferOn    )
 @ actionPPStartDone = ( $actionPPStartOn * $actionPPStartOk || ! $actionPPStartOn )
 
-if ( $actionCombineDone && $actionCheckDone && $actionSaveDone && $actionXferDone && $actionPPStartDone ) rm -f $argFile
+if ( $actionCombineDone && $actionFillGridDone && $actionCheckDone && $actionSaveDone && $actionXferDone && $actionPPStartDone ) rm -f $argFile
 
 unset action*Done
 
