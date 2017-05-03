@@ -1558,6 +1558,7 @@ use FREUtil();
         	FRETemplate::setVariable($fre, \$rtScript, 'scriptName', $scriptName);
 		FRETemplate::setVariable($fre, \$rtScript, 'stdoutTmpDir', $stdoutTmpDir);
         	FRETemplate::setSchedulerNames($fre, \$rtScript, File::Basename::basename($scriptName), $stdoutTmpDir);
+        FRETemplate::setFlag($fre, \$rtScript, 'flagOutputFillGrid', (are_history_files_masked($fre, $runInfo) ? 'On' : 'Off'));
         	($rc, $status) = frerun::outputScriptExecuteOrSubmit(\$rtScript, $z, $scriptName, $stdoutName, %o);
 		if ($rc)
 		{
@@ -1649,6 +1650,7 @@ use FREUtil();
               FRETemplate::setVariable($fre, \$runScript, 'scriptName', $scriptName);
 	      FRETemplate::setVariable($fre, \$runScript, 'stdoutTmpDir', $stdoutTmpDir);
               FRETemplate::setSchedulerNames($fre, \$runScript, File::Basename::basename($scriptName), $stdoutTmpDir);
+          FRETemplate::setFlag($fre, \$runScript, 'flagOutputFillGrid', (are_history_files_masked($fre, $prdInfo) ? 'On' : 'Off'));
               ($rc, $status) = frerun::outputScriptExecuteOrSubmit(\$runScript, $z, $scriptName, $stdoutName, %o);
 	      if ($rc)
 	      {
@@ -1697,6 +1699,25 @@ use FREUtil();
     my $z = shift;
     my ($expName, $fre) = ($z->name(), $z->fre());
     $fre->out(FREMsg::FATAL, "Skipping the experiment '$expName'...");
+  }
+
+  # are_history_files_masked -- tests whether history files contain masked grid info
+  # Currently, only tests whether an ocean mask is used.
+  sub are_history_files_masked($$)
+  # ------ arguments: $fre, $runInfo
+  {
+    my ($fre, $info) = @_;
+    my @components = split ';', $fre->property('FRE.mpi.component.names');
+    my $ocean_index;
+    for my $i (0 .. $#components) {
+        $ocean_index = $i if $components[$i] eq 'ocn';
+    }
+    if ($info->{mpiInfo}->{maskTableList}->[$ocean_index]) {
+        return 1;
+    }
+    else {
+        return 0;
+    }
   }
 
 }
