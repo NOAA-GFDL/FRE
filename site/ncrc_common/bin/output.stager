@@ -1161,6 +1161,8 @@ endif
 ################################################################################
 if ( $actionFillGridToDo ) then
    set srcDir = $workDir$archDir
+   $error_intro = "An ocean mask file was specified, so the output.stager was configured to swap in unmasked grid info into the ocean_static.nc history file."
+   $error_ending = "Alternatively, to temporarily disable this feature, change argFile actionFillGridOn = 0, or in the runscript, delete the variable flagOutputFillGridOn."
 
    if ( -d "$srcDir" && -r "$srcDir" && -w "$srcDir" ) then
       pushd $srcDir
@@ -1169,13 +1171,13 @@ if ( $actionFillGridToDo ) then
       set masked_ocean_static = ( `ls -1 | egrep "\.ocean_static\.nc"` )
       if ( $#masked_ocean_static == 0 ) then
          if ( $echoOn ) unset echo
-         echo "*ERROR*: Couldn't find ocean_static.nc for unmasked lat/lon swap"
+         echo "*ERROR*: $error_intro However, ocean_static.nc doesn't exist. Please add ocean_static to your diag table. $error_ending"
          if ( $echoOn ) set echo
          set exitStatus = 2
          goto END
       else if ( $#masked_ocean_static > 1 ) then
          if ( $echoOn ) unset echo
-         echo "*ERROR*: Found multiple *.ocean_static.nc targets for unmasked lat/lon swap, but expected just one"
+         echo "*ERROR*: $error_intro Unfortunately, there were multiple *.ocean_static.nc targets for unmasked lat/lon swap, but there should be just one. This shouldn't happen, so please open a help desk ticket. $error_ending"
          if ( $echoOn ) set echo
          set exitStatus = 2
          goto END
@@ -1185,7 +1187,7 @@ if ( $actionFillGridToDo ) then
       set ref_ocean_static = ( `ls -1 | egrep "\.ocean_static_no_mask_table\.nc"` )
       if ( $#ref_ocean_static > 1 ) then
          if ( $echoOn ) unset echo
-         echo "*ERROR*: Found more than one ocean_static_no_mask_table.nc, but expected just one"
+         echo "*ERROR*: $error_intro Unfortunately, there's more than one ocean_static_no_mask_table.nc in $srcDir, but there should be just one. This shouldn't happen, so please open a help desk ticket. $error_ending"
          if ( $echoOn ) set echo
          set exitStatus = 2
          goto END
@@ -1196,7 +1198,7 @@ if ( $actionFillGridToDo ) then
          tar -xf $gridSpec ./ocean_static.nc
          if ( $status ) then
             if ( $echoOn ) unset echo
-            echo "*ERROR*: Couldn't extract ocean_static.nc from $gridSpec for unmasked lat/lon swap"
+            echo "*ERROR*: $error_intro Unfortunately, we couldn't extract ocean_static.nc from $gridSpec. Please add ocean_static.nc containing unmasked grid info fields to $gridSpec. $error_ending"
             if ( $echoOn ) set echo
             set exitStatus = 2
             goto END
@@ -1211,7 +1213,7 @@ if ( $actionFillGridToDo ) then
          if ( $echoOn ) set echo
       else
          if ( $echoOn ) unset echo
-            echo "*ERROR*: Couldn't append $ref_ocean_static into $masked_ocean_static"
+            echo "*ERROR*: $error_intro Unfortunately, we couldn't append $ref_ocean_static into $masked_ocean_static. This shouldn't happen, so please open a help desk ticket. $error_ending"
          if ( $echoOn ) set echo
       endif
       popd
