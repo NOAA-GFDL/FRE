@@ -50,30 +50,19 @@ export PATH
 
 cd xml
 
-command="bats -t ../frelist.bats"
-echo $command
-$command | tee frelist.tap 2>&1
-frelist_exit=$( evalTAP frelist.tap )
-rm -f frelist.tap
+myExit=0
 
-
-echo ""
-command="bats -t ../fremake.bats"
-echo $command
-$command | tee fremake.tap 2>&1
-fremake_exit=$( evalTAP fremake.tap )
-rm -f fremake.tap
-
-
-echo ""
-command="bats -t ../frerun.bats"
-echo $command
-$command | tee frerun.tap 2>&1
-frerun_exit=$( evalTAP frerun.tap )
-rm -f frerun.tap
+for frecmd in fre{list,make,run,pp}; do
+	#FIXME: Workaround broken perl paths on ncrc{3,4},theia
+	[ "$frecmd" = frepp ] && case "$FRE_SYSTEM_SITE" in gfdl*);;  *) continue; esac
+	command="bats -t ../${frecmd}.bats"
+	echo $command
+	$command | tee ${frecmd}.tap 2>&1
+	myExit=$(expr $myExit + $( evalTAP ${frecmd}.tap ))
+	rm -f ${frecmd}.tap
+	echo
+done
 
 cd ..
-
-myExit=$(expr $frelist_exit + $fremake_exit + $frerun_exit)
 
 exit $myExit

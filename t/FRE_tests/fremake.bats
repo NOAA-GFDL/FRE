@@ -3,7 +3,6 @@
 # The output_good strings are configured with the exact number of spaces needed
 # for the tests to pass.  DO NOT adjust unless needed, this includes removing
 # whitespace.
-good_platform="${FRE_SYSTEM_SITE}.intel"
 
 load test_helpers
 
@@ -62,7 +61,7 @@ setup() {
     esac
 
     rm -f rts.xml
-    run fremake -p $good_platform CM2.1U_Control-1990_E1.M_3A
+    run fremake -p ${default_platform} CM2.1U_Control-1990_E1.M_3A
     echo "Expected: \"$output_good\""
     echo "Got:      \"$output\""
     echo "Exit status: $status"
@@ -92,7 +91,7 @@ setup() {
             ;;
     esac
 
-    last_line_good="${root_stem}/${USER}/FRE_tests-${unique_string}-temp/.*/CM2.1U_Control-1990_E1.M_3A/${good_platform}-prod/exec/compile_CM2.1U_Control-1990_E1.M_3A.csh"
+    last_line_good="${root_stem}/${USER}/FRE_tests-${unique_string}-temp/.*/CM2.1U_Control-1990_E1.M_3A/${default_platform}-prod/exec/compile_CM2.1U_Control-1990_E1.M_3A.csh"
 
     if [ -n "${submit_cmd}" ]; then
         last_line_good="TO SUBMIT => ${submit_cmd} ${last_line_good}"
@@ -101,7 +100,7 @@ setup() {
     fi
 
     unique_stdout_xml CM2.1U.xml >rts.xml
-    run fremake -p $good_platform CM2.1U_Control-1990_E1.M_3A
+    run fremake -p ${default_platform} CM2.1U_Control-1990_E1.M_3A
 
     # Get the last line from the output
     num_lines=${#lines[@]}
@@ -129,7 +128,7 @@ setup() {
     esac
 
     [ ! -f nonexistent_file.xml ] # Assert file doesn't exist
-    run fremake -x nonexistent_file.xml -p $good_platform CM2.1U_Control-1990_E1.M_3A
+    run fremake -x nonexistent_file.xml -p ${default_platform} CM2.1U_Control-1990_E1.M_3A
     echo "Expected: \"$output_good\""
     echo "Got:      \"$output\""
     echo "Exit status: $status"
@@ -159,7 +158,7 @@ setup() {
             ;;
     esac
 
-    last_line_good="${root_stem}/${USER}/FRE_tests-${unique_string}-temp/.*/CM2.1U_Control-1990_E1.M_3A/${good_platform}-prod/exec/compile_CM2.1U_Control-1990_E1.M_3A.csh"
+    last_line_good="${root_stem}/${USER}/FRE_tests-${unique_string}-temp/.*/CM2.1U_Control-1990_E1.M_3A/${default_platform}-prod/exec/compile_CM2.1U_Control-1990_E1.M_3A.csh"
     # NOTE: used $USER above
 
     if [ -n "${submit_cmd}" ]; then
@@ -169,7 +168,7 @@ setup() {
     fi
 
     unique_stdout_xml CM2.1U.xml >"${unique_string}-temp.xml"
-    run fremake -x "${unique_string}-temp.xml" -p $good_platform CM2.1U_Control-1990_E1.M_3A
+    run fremake -x "${unique_string}-temp.xml" -p ${default_platform} CM2.1U_Control-1990_E1.M_3A
 
     # Get the last line from the output
     num_lines=${#lines[@]}
@@ -196,7 +195,7 @@ setup() {
     [ "$output" = "$output_good" ]
 }
 
-@test "Create compile script when --platform=${FRE_SYSTEM_SITE}.intel" {
+@test "Create compile script when --platform=${default_platform}" {
     case "$FRE_SYSTEM_SITE" in
         ncrc? )
             platform="ncrc"
@@ -227,7 +226,7 @@ setup() {
     fi
 
     unique_stdout_xml CM2.1U.xml >"${unique_string}-temp.xml"
-    run fremake -x "${unique_string}-temp.xml" -p ${good_platform} CM2.1U_Control-1990_E1.M_3A
+    run fremake -x "${unique_string}-temp.xml" -p ${default_platform} CM2.1U_Control-1990_E1.M_3A
 
     # Get the last line from the output
     num_lines=${#lines[@]}
@@ -274,7 +273,7 @@ setup() {
     fi
 
     unique_stdout_xml CM2.1U.xml >"${unique_string}-temp.xml"
-    run fremake -x "${unique_string}-temp.xml" -p ${good_platform} -t prod CM2.1U_Control-1990_E1.M_3A
+    run fremake -x "${unique_string}-temp.xml" -p ${default_platform} -t prod CM2.1U_Control-1990_E1.M_3A
 
     # Get the last line from the output
     num_lines=${#lines[@]}
@@ -325,8 +324,8 @@ WARNING: The compile script '${root_stem}/${USER}/FRE_tests-${unique_string}-tem
 ${last_line_good}"
 
     unique_stdout_xml CM2.1U.xml >"${unique_string}-temp.xml"
-    fremake -x "${unique_string}-temp.xml" -p ${good_platform} -t prod CM2.1U_Control-1990_E1.M_3A
-    run fremake -x "${unique_string}-temp.xml" -p ${good_platform} -t prod CM2.1U_Control-1990_E1.M_3A
+    fremake -x "${unique_string}-temp.xml" -p ${default_platform} -t prod CM2.1U_Control-1990_E1.M_3A
+    run fremake -x "${unique_string}-temp.xml" -p ${default_platform} -t prod CM2.1U_Control-1990_E1.M_3A
     remove_ninac_from_output_and_lines
 
     echo "Expected: \"$output_good\""
@@ -369,8 +368,8 @@ ${last_line_good}"
     fi
 
     unique_stdout_xml CM2.1U.xml >"${unique_string}-temp.xml"
-    fremake -x "${unique_string}-temp.xml" -p ${good_platform} -t prod CM2.1U_Control-1990_E1.M_3A
-    run fremake -x "${unique_string}-temp.xml" -p ${good_platform} -t prod CM2.1U_Control-1990_E1.M_3A -f
+    fremake -x "${unique_string}-temp.xml" -p ${default_platform} -t prod CM2.1U_Control-1990_E1.M_3A
+    run fremake -x "${unique_string}-temp.xml" -p ${default_platform} -t prod CM2.1U_Control-1990_E1.M_3A -f
 
     # Get the last line from the output
     num_lines=${#lines[@]}
@@ -417,8 +416,8 @@ ${last_line_good}"
     fi
 
     unique_stdout_xml CM2.1U.xml >"${unique_string}-temp.xml"
-    fremake -x "${unique_string}-temp.xml" -p ${good_platform} -t prod CM2.1U_Control-1990_E1.M_3A
-    run fremake -x "${unique_string}-temp.xml" -p ${good_platform} -t prod CM2.1U_Control-1990_E1.M_3A -F
+    fremake -x "${unique_string}-temp.xml" -p ${default_platform} -t prod CM2.1U_Control-1990_E1.M_3A
+    run fremake -x "${unique_string}-temp.xml" -p ${default_platform} -t prod CM2.1U_Control-1990_E1.M_3A -F
 
     # Get the last line from the output
     num_lines=${#lines[@]}
