@@ -424,6 +424,7 @@ $version_head .= "-x $abs_xml_path ";
    my $ptmpDir = $exp->ptmpDir();
    my $tempCache = (split /\//,$workdir)[0] . "/tempCache";
    my $statedir = $exp->stateDir()."/postProcess";
+   my $cmip_flag = $exp->{cmip} ? $exp->{cmip} : 0;
    my $outscriptdir = "$scriptsdir/postProcess";
    if ( "$opt_u" ne '' ) {$outscriptdir .= "/$opt_u";}
    if ( $opt_O ) {$outscriptdir = "$opt_O";}
@@ -1760,7 +1761,7 @@ EOF
                if ($subchunk) {
                   $cshscript .= TSfromts( $tsNode, $sim0, $subchunk );
                } else {
-                  $cshscript .= directTS( $tsNode, $sim0, $startofrun );
+                  $cshscript .= directTS( $tsNode, $sim0, $startofrun, $cmip_flag );
                }
             }
             $cshscript .= analysis({ node => $tsNode,
@@ -1815,7 +1816,7 @@ EOF
             if ($subchunk) {
                $cshscript .= TSfromts( $tsNode, $sim0, $subchunk );
             } else {
-               $cshscript .= directTS( $tsNode, $sim0, $startofrun );
+               $cshscript .= directTS( $tsNode, $sim0, $startofrun, $cmip_flag );
             }
          }
          $cshscript .= analysis({ node => $tsNode,
@@ -1869,7 +1870,7 @@ EOF
             if ($subchunk) {
                $cshscript .= TSfromts( $tsNode, $sim0, $subchunk );
             } else {
-               $cshscript .= directTS( $tsNode, $sim0, $startofrun );
+               $cshscript .= directTS( $tsNode, $sim0, $startofrun, $cmip_flag );
             }
          }
          $cshscript .= analysis({ node => $tsNode,
@@ -5152,6 +5153,7 @@ sub directTS{
    #tsNode = $_[0] ;
    my $sim0 = $_[1];
    my $startofrun = $_[2];
+   my $cmip_flag = $_[3];
    my $ppcNode = $_[0]->parentNode;
    my $avgatt = $_[0]->findvalue('@averageOf');
    my $freq = $_[0]->findvalue('@freq');
@@ -5491,6 +5493,13 @@ foreach file ( *.nc )
      set length = `echo \$tmpstring[\$len] | cut -c2-`
      test \$length = $numtimelevels
      $check_levels
+EOF
+   if ( $cmip_flag ){
+   $csh .= <<EOF;
+     /home/fms/python/GFDLDreqPy/gfdl/inject_miptable.csh \$file
+EOF
+    }
+   $csh .= <<EOF;
      $compress
      $time_mv $mvfile \$file \$outdir/$component.$start-$tENDf.\$label
      if ( \$status ) then
