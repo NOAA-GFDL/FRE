@@ -20,7 +20,7 @@ remove_output_matching() {
 remove_lines_matching() {
     for k in "${!lines[@]}"
     do
-        if [ $( string_matches_pattern "${lines[$k]}" "$1" ) ]
+        if string_matches_pattern "${lines[$k]}" "$1"
         then
             unset lines[$k]
         fi
