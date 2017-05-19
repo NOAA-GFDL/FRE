@@ -839,45 +839,9 @@ use FREXML();
             # Add compile csh section
             $cmpScript .= "$ref->{compileCsh}\n" if $ref->{compileCsh};
             $cmpScript .= "cd \$bld_dir\n";
-            # Add cpp section, if requested
-            if ( $ref->{doF90Cpp} ) {
-               my $cppIncDirsList = '';
-               if ( $includeDirsList ) {
-                  foreach my $path ( split(/\s+/,$includeDirsList) ) {
-                     if ($path =~ /^-I\//)
-                     {
-                        $path =~ s/$srcDir/\$src_dir/;
-                     }
-                     else
-                     {
-                        $path =~ s/-I/-I\$src_dir\//;
-                     }
-                     $cppIncDirsList .= "$path ";
-                  }
-               }
-               $cmpScript .= "sed -e 's/${tab}/\\t/' >$name/Makefile-cpp <<EOF\n";
-               $cmpScript .= "CPPDEFS = ";
-               $cmpScript .= "$ref->{cppDefs}" if $ref->{cppDefs};
-	       $cmpScript .= " -D_FILE_VERSION=\"\\\`git-version-string \\\$<\\\`\"";
-               $cmpScript .= "\n";
-               $cmpScript .= "ifeq (\\\$(NETCDF),3)\n";
-               $cmpScript .= "  ifneq (\\\$(findstring -Duse_netCDF,\\\$(CPPDEFS)),)\n";
-               $cmpScript .= "    CPPDEFS += -Duse_LARGEFILE\n";
-               $cmpScript .= "  endif\n";
-               $cmpScript .= "endif\n\n";
-               $cmpScript .= "vpath %.F90 \\\$(shell find $paths_str -type d)\n\n";
-               $cmpScript .= "$name/%.f90: %.F90\n";
-               $cmpScript .= "${tab}cpp \\\$(CPPDEFS) -nostdinc -P -C -v ";
-               $cmpScript .= "$cppIncDirsList " if $cppIncDirsList;
-               $cmpScript .= "-o \\\$@ \\\$<\n\n";
-               $cmpScript .= "EOF\n\n";
-               $cmpScript .= "foreach foo ( `grep '\\.[fF]90\$' $name/$pathNames` )\n";
-               $cmpScript .= "   make $makeOverrides -f $name/Makefile-cpp $name/\$foo:t:r.f90\n";
-               $cmpScript .= "   sed -i -e \"\\@\${foo}@ c\\\${bld_dir}/$name/\$foo:t:r.f90\" \$bld_dir/$name/$pathNames\n";
-               $cmpScript .= "end\n\n";
-            }
             $cmpScript .= "pushd $name\n";
             $cmpScript .= "mkmf -m Makefile -a \$src_dir -b \$bld_dir -p lib$name.a -t \$mkmf_template";
+            $cmpScript .= " --use-cpp" if ($ref->{doF90Cpp});
             $cmpScript .= " -g" if ($checkoutInfo->{$name}->{vcBrand} eq 'git'); # Add the git-version hash if using git
             $cmpScript .= " -c \"$ref->{cppDefs}\"" if $ref->{cppDefs};
             $cmpScript .= " -o \"$otherFlags\"" if $otherFlags;
