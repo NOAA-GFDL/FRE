@@ -439,6 +439,7 @@ $version_head .= "-x $abs_xml_path ";
    #   print "Running ln -s $abs_xml_path $archivedir/$shortxml\n" if $opt_v;
    #   system("ln -s $abs_xml_path $archivedir/$shortxml");
    #}
+   my $mdbi = lc($exp->{MDBIswitch}) =~ /(on|true|yes)/i;
 
    my $tmphistdir = "";
    if ( "$workdir" eq "" ) {
@@ -469,8 +470,8 @@ $version_head .= "-x $abs_xml_path ";
 
    # ingest the experiment into curator -- Maybe..
    # Build our command line options for fredb
-   my ($exper_id, $realiz_id, $run_id) = 0;
-   if ( lc($exp->{MDBIswitch}) =~ /(on|true|yes)/ ) {
+   my ($exper_id, $realiz_id, $run_id);
+   if ( $mdbi ) {
        print "\nChecking Curator for the experiment to capture the tripleID\nThis may take a moment if experiment is being ingested for the first time.\n\n";
        my $fredb = qx{which fredb};
        chomp($fredb);
@@ -486,7 +487,6 @@ $version_head .= "-x $abs_xml_path ";
        $fre->setCurrentRealizID($realiz_id);
        $fre->setCurrentRunID($run_id);
    }
-
    my $refinedir = "$opt_d"."_refineDiag";
    $ptmpDir .= $archivedir;
    if ( "$opt_u" ne '' ) { $ptmpDir .= "/$opt_u"; }
@@ -665,7 +665,7 @@ EOF
       $outscript .= "_$opt_r";
       $maxruntime = "01:00:00";
       $pbs_job_name .= "_$opt_r";
-   } elsif ( $opt_D ) {
+   } elsif ( $opt_D or $mdbi ) {
       $outscript .= "_refineDiag";
       $pbs_job_name .= "_refineDiag";
    }
@@ -815,11 +815,11 @@ EOF
    }
 
    #if refineDiag run, insert refineDiag csh here
-   if ( $opt_D ) {
-      $cshscripttmpl .= refineDiag($tmphistdir,$stdoutdir,$ptmpDir,$basedate,$refinedir,$gridspec);
+   if ( $opt_D or $mdbi ) {
+      $cshscripttmpl .= refineDiag($tmphistdir,$stdoutdir,$ptmpDir,$basedate,$refinedir,$gridspec,$mdbi);
    }
 
-   if ( $opt_f or $opt_D ) {
+   if ( $opt_f or ( $opt_D or $mdbi )) {
       #separate mppnccombine from rest of script due to splitting components
       unless ( $opt_H ) {
          $cshscripttmpl .= "\n/usr/bin/perl $absfrepp -x $abs_xml_path -t $hDate -s -v ";
@@ -7132,12 +7132,7 @@ EOF
 #run user scripts
 #package the new data into new history file
 sub refineDiag {
-   my $tmphistdir = $_[0];
-   my $stdoutdir = $_[1];
-   my $ptmpDir = $_[2];
-   my $basedate = $_[3];
-   my $refinedir = $_[4];
-   my $gridspec = $_[5];
+   my ($tmphistdir, $stdoutdir, $ptmpDir, $basedate, $refinedir, $gridspec, $mdbi) = @_;
 
    my $newhistorydir = "$opt_d"."_refineDiag";
    my $csh  = <<EOF;
@@ -7164,14 +7159,29 @@ foreach historyfile ( `ls \$historyyear????.nc.cpio \$historyyear????.nc.tar`)
       $checktransfer
    endif
    cd \$work/\$hsmdate
-
-   #source user refineDiag scripts
 EOF
+
+   if ( $mdbi ) {
+       $csh .= <<EOF;
+   #run the scalar diagnostics
+   source /home/fms/local/opt/fre-refinediag/verona/detvitals/detVitals.csh
+   set refineStatus = \$status
+   if ( \$refineStatus < 0 ) then
+      echo "NOTE: RefineDiag requested no scalar processing after scalarDiagnostics have completed"
+      set refineRequestsExit = 1
+   else if ( \$refineStatus ) then
+      echo "ERROR: scalar diagnostics had an error status \$refineStatus"
+      set refineError = 1
+   endif
+
+EOF
+   }
 
    my @refineScripts = split ',',$opt_D;
    foreach my $s ( @refineScripts ) {
       if ( ! -e "$s" ) { die "ERROR: Your refineDiag script does not exist: $s\n"; }
       $csh .= <<EOF;
+   #source user refineDiag script: $s
    source $s
    set refineStatus = \$status
    if ( \$refineStatus < 0 ) then
