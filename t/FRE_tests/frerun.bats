@@ -3,12 +3,19 @@
 # The output_good strings are configured with the exact number of spaces needed
 # for the tests to pass.  DO NOT adjust unless needed, this includes removing
 # whitespace.
-good_platform="${FRE_SYSTEM_SITE}.intel"
 
 load test_helpers
 
 setup() {
     unique_string="date$(date +%s)pid$$"
+}
+
+add_submit_cmd_to_last_line_good() {
+    if [ -n "${submit_cmd}" ]; then
+        last_line_good="TO SUBMIT => ${submit_cmd} ${last_line_good}"
+    else
+        last_line_good="The runscript '${last_line_good}' is ready"
+    fi
 }
 
 @test "frerun is in PATH" {
@@ -62,7 +69,7 @@ setup() {
     esac
 
     rm -f rts.xml
-    run frerun -p $good_platform CM2.1U_Control-1990_E1.M_3A
+    run frerun -p ${default_platform} CM2.1U_Control-1990_E1.M_3A
     echo "Expected: \"$output_good\""
     echo "Got:      \"$output\""
     echo "Exit status: $status"
@@ -70,28 +77,32 @@ setup() {
     [ "$output" = "$output_good" ]
 }
 
-
 @test "Create run script when experiment listed on frerun command line, and rts.xml exists" {
-    case $( hostname ) in
-        gaea?* )
+    case "$FRE_SYSTEM_SITE" in
+        ncrc? )
             platform="ncrc"
             root_stem="/lustre/f1"
             submit_cmd="sleep 1; msub"
             ;;
-        tfe?? )
-            platform="theia"
+        theia ) platform="theia"
             root_stem="/scratch4/GFDL/gfdlscr"
             submit_cmd="qsub"
+            ;;
+        gfdl-ws )
+            platform="gfdl-ws"
+            root_stem="/local2/tmp"
+            submit_cmd=""
             ;;
         * )
             skip "No test for current platform"
             ;;
     esac
 
-    last_line_good="TO SUBMIT => ${submit_cmd} ${root_stem}/${USER}/FRE_tests-${unique_string}-temp/.*/CM2.1U_Control-1990_E1.M_3B_snowmelt/${good_platform}-prod/scripts/run/CM2.1U_Control-1990_E1.M_3B_snowmelt"
+    last_line_good="${root_stem}/${USER}/FRE_tests-${unique_string}-temp/.*/CM2.1U_Control-1990_E1.M_3B_snowmelt/${default_platform}-prod/scripts/run/CM2.1U_Control-1990_E1.M_3B_snowmelt"
+    add_submit_cmd_to_last_line_good
 
     unique_stdout_xml CM2.1U.xml >rts.xml
-    run frerun -p $good_platform CM2.1U_Control-1990_E1.M_3B_snowmelt
+    run frerun -p ${default_platform} CM2.1U_Control-1990_E1.M_3B_snowmelt
     remove_ninac_from_output_and_lines
 
     # Get the last line from the output
@@ -120,7 +131,7 @@ setup() {
     esac
 
     [ ! -f nonexistent_file.xml ] # Assert file doesn't exist
-    run frerun -x nonexistent_file.xml -p $good_platform CM2.1U_Control-1990_E1.M_3A
+    run frerun -x nonexistent_file.xml -p ${default_platform} CM2.1U_Control-1990_E1.M_3A
     echo "Expected: \"$output_good\""
     echo "Got:      \"$output\""
     echo "Exit status: $status"
@@ -129,26 +140,32 @@ setup() {
 }
 
 @test "Create run script when XML listed on frerun command line and XML file exists" {
-    case $( hostname ) in
-        gaea?* )
+    case "$FRE_SYSTEM_SITE" in
+        ncrc? )
             platform="ncrc"
             root_stem="/lustre/f1"
             submit_cmd="sleep 1; msub"
             ;;
-        tfe?? )
+        theia )
             platform="theia"
             root_stem="/scratch4/GFDL/gfdlscr"
             submit_cmd="qsub"
+            ;;
+        gfdl-ws )
+            platform="gfdl-ws"
+            root_stem="/local2/tmp"
+            submit_cmd=""
             ;;
         * )
             skip "No test for current platform"
             ;;
     esac
 
-    last_line_good="TO SUBMIT => ${submit_cmd} ${root_stem}/${USER}/FRE_tests-${unique_string}-temp/.*/CM2.1U_Control-1990_E1.M_3B_snowmelt/${good_platform}-prod/scripts/run/CM2.1U_Control-1990_E1.M_3B_snowmelt"
+    last_line_good="${root_stem}/${USER}/FRE_tests-${unique_string}-temp/.*/CM2.1U_Control-1990_E1.M_3B_snowmelt/${default_platform}-prod/scripts/run/CM2.1U_Control-1990_E1.M_3B_snowmelt"
+    add_submit_cmd_to_last_line_good
 
     unique_stdout_xml CM2.1U.xml >"${unique_string}-temp.xml"
-    run frerun -x "${unique_string}-temp.xml" -p $good_platform CM2.1U_Control-1990_E1.M_3B_snowmelt
+    run frerun -x "${unique_string}-temp.xml" -p ${default_platform} CM2.1U_Control-1990_E1.M_3B_snowmelt
     remove_ninac_from_output_and_lines
 
     # Get the last line from the output
@@ -166,18 +183,6 @@ setup() {
 }
 
 @test "Specify nonexistent platform" {
-    case $( hostname ) in
-        gaea?* )
-            platform="ncrc"
-            ;;
-        tfe?? )
-            platform="theia"
-            ;;
-        * )
-            skip "No test for current platform"
-            ;;
-    esac
-
     # NOTE: I am using the $USER environment variable so we don't have to glob and escape the * in *FATAL*
     output_good="*FATAL*: The --platform option value 'nonexistent_platform.intel' is not valid"
 
@@ -189,27 +194,33 @@ setup() {
     [ "$output" = "$output_good" ]
 }
 
-@test "Create run script when --platform=${good_platform}" {
-    case $( hostname ) in
-        gaea?* )
+@test "Create run script when --platform=${default_platform}" {
+    case "$FRE_SYSTEM_SITE" in
+        ncrc? )
             platform="ncrc"
             root_stem="/lustre/f1"
             submit_cmd="sleep 1; msub"
             ;;
-        tfe?? )
+        theia )
             platform="theia"
             root_stem="/scratch4/GFDL/gfdlscr"
             submit_cmd="qsub"
+            ;;
+        gfdl-ws )
+            platform="gfdl-ws"
+            root_stem="/local2/tmp"
+            submit_cmd=""
             ;;
         * )
             skip "No test for current platform"
             ;;
     esac
 
-    last_line_good="TO SUBMIT => ${submit_cmd} ${root_stem}/${USER}/FRE_tests-${unique_string}-temp/.*/CM2.1U_Control-1990_E1.M_3B_snowmelt/${good_platform}-prod/scripts/run/CM2.1U_Control-1990_E1.M_3B_snowmelt"
+    last_line_good="${root_stem}/${USER}/FRE_tests-${unique_string}-temp/.*/CM2.1U_Control-1990_E1.M_3B_snowmelt/${default_platform}-prod/scripts/run/CM2.1U_Control-1990_E1.M_3B_snowmelt"
+    add_submit_cmd_to_last_line_good
 
     unique_stdout_xml CM2.1U.xml >"${unique_string}-temp.xml"
-    run frerun -x "${unique_string}-temp.xml" -p ${good_platform} CM2.1U_Control-1990_E1.M_3B_snowmelt
+    run frerun -x "${unique_string}-temp.xml" -p ${default_platform} CM2.1U_Control-1990_E1.M_3B_snowmelt
     remove_ninac_from_output_and_lines
 
     # Get the last line from the output
@@ -227,26 +238,32 @@ setup() {
 }
 
 @test "Create run script when --target=prod" {
-    case $( hostname ) in
-        gaea?* )
+    case "$FRE_SYSTEM_SITE" in
+        ncrc? )
             platform="ncrc"
             root_stem="/lustre/f1"
             submit_cmd="sleep 1; msub"
             ;;
-        tfe?? )
+        theia )
             platform="theia"
             root_stem="/scratch4/GFDL/gfdlscr"
             submit_cmd="qsub"
+            ;;
+        gfdl-ws )
+            platform="gfdl-ws"
+            root_stem="/local2/tmp"
+            submit_cmd=""
             ;;
         * )
             skip "No test for current platform"
             ;;
     esac
 
-    last_line_good="TO SUBMIT => ${submit_cmd} ${root_stem}/${USER}/FRE_tests-${unique_string}-temp/.*/CM2.1U_Control-1990_E1.M_3B_snowmelt/${good_platform}-prod/scripts/run/CM2.1U_Control-1990_E1.M_3B_snowmelt"
+    last_line_good="${root_stem}/${USER}/FRE_tests-${unique_string}-temp/.*/CM2.1U_Control-1990_E1.M_3B_snowmelt/${default_platform}-prod/scripts/run/CM2.1U_Control-1990_E1.M_3B_snowmelt"
+    add_submit_cmd_to_last_line_good
 
     unique_stdout_xml CM2.1U.xml >"${unique_string}-temp.xml"
-    run frerun -x "${unique_string}-temp.xml" -p ${good_platform} -t prod CM2.1U_Control-1990_E1.M_3B_snowmelt
+    run frerun -x "${unique_string}-temp.xml" -p ${default_platform} -t prod CM2.1U_Control-1990_E1.M_3B_snowmelt
     remove_ninac_from_output_and_lines
 
     # Get the last line from the output
@@ -264,16 +281,21 @@ setup() {
 }
 
 @test "State directory exists but --extend, --overwrite, or --unique not specified" {
-    case $( hostname ) in
-        gaea?* )
+    case "$FRE_SYSTEM_SITE" in
+        ncrc? )
             platform="ncrc"
             root_stem="/lustre/f1"
             submit_cmd="sleep 1; msub"
             ;;
-        tfe?? )
+        theia )
             platform="theia"
             root_stem="/scratch4/GFDL/gfdlscr"
             submit_cmd="qsub"
+            ;;
+        gfdl-ws )
+            platform="gfdl-ws"
+            root_stem="/local2/tmp"
+            submit_cmd=""
             ;;
         * )
             skip "No test for current platform"
@@ -282,10 +304,10 @@ setup() {
 
     xml="${unique_string}-temp.xml"
     unique_stdout_xml CM2.1U.xml >$xml
-    freopts="-p ${good_platform} -t prod -x $xml CM2.1U_Control-1990_E1.M_3B_snowmelt"
+    freopts="-p ${default_platform} -t prod -x $xml CM2.1U_Control-1990_E1.M_3B_snowmelt"
     release=$(frelist $freopts -d root | rev | cut -d / -f 1 | rev)
 
-    last_3_lines_good="*FATAL*: The state directory '${root_stem}/${USER}/FRE_tests-${unique_string}-temp/$release/CM2.1U_Control-1990_E1.M_3B_snowmelt/${good_platform}-prod/state/run' exists, so you must specify --extend, --overwrite or --unique
+    last_3_lines_good="*FATAL*: The state directory '${root_stem}/${USER}/FRE_tests-${unique_string}-temp/$release/CM2.1U_Control-1990_E1.M_3B_snowmelt/${default_platform}-prod/state/run' exists, so you must specify --extend, --overwrite or --unique
 *FATAL*: Unable to setup output directories for the experiment 'CM2.1U_Control-1990_E1.M_3B_snowmelt'
 *FATAL*: Unable to create a runscript for the experiment 'CM2.1U_Control-1990_E1.M_3B_snowmelt'"
 
@@ -316,16 +338,21 @@ ${lines[$((num_lines-1))]}"
 }
 
 @test "Create run script when state directory exists and --overwrite is specified" {
-    case $( hostname ) in
-        gaea?* )
+    case "$FRE_SYSTEM_SITE" in
+        ncrc? )
             platform="ncrc"
             root_stem="/lustre/f1"
             submit_cmd="sleep 1; msub"
             ;;
-        tfe?? )
+        theia )
             platform="theia"
             root_stem="/scratch4/GFDL/gfdlscr"
             submit_cmd="qsub"
+            ;;
+        gfdl-ws )
+            platform="gfdl-ws"
+            root_stem="/local2/tmp"
+            submit_cmd=""
             ;;
         * )
             skip "No test for current platform"
@@ -334,10 +361,11 @@ ${lines[$((num_lines-1))]}"
 
     xml="${unique_string}-temp.xml"
     unique_stdout_xml CM2.1U.xml >$xml
-    freopts="-p ${good_platform} -t prod -x $xml CM2.1U_Control-1990_E1.M_3B_snowmelt"
+    freopts="-p ${default_platform} -t prod -x $xml CM2.1U_Control-1990_E1.M_3B_snowmelt"
     release=$(frelist $freopts -d root | rev | cut -d / -f 1 | rev)
 
-    last_line_good="TO SUBMIT => ${submit_cmd} ${root_stem}/${USER}/FRE_tests-${unique_string}-temp/$release/CM2.1U_Control-1990_E1.M_3B_snowmelt/${good_platform}-prod/scripts/run/CM2.1U_Control-1990_E1.M_3B_snowmelt"
+    last_line_good="${root_stem}/${USER}/FRE_tests-${unique_string}-temp/$release/CM2.1U_Control-1990_E1.M_3B_snowmelt/${default_platform}-prod/scripts/run/CM2.1U_Control-1990_E1.M_3B_snowmelt"
+    add_submit_cmd_to_last_line_good
 
     mkdir -p "$(frelist $freopts -d state)/run"
     run frerun $freopts -o --no-dual
@@ -358,16 +386,21 @@ ${lines[$((num_lines-1))]}"
 }
 
 @test "Create run script when state directory exists and --unique is specified" {
-    case $( hostname ) in
-        gaea?* )
+    case "$FRE_SYSTEM_SITE" in
+        ncrc? )
             platform="ncrc"
             root_stem="/lustre/f1"
             submit_cmd="sleep 1; msub"
             ;;
-        tfe?? )
+        theia )
             platform="theia"
             root_stem="/scratch4/GFDL/gfdlscr"
             submit_cmd="qsub"
+            ;;
+        gfdl-ws )
+            platform="gfdl-ws"
+            root_stem="/local2/tmp"
+            submit_cmd=""
             ;;
         * )
             skip "No test for current platform"
@@ -376,10 +409,11 @@ ${lines[$((num_lines-1))]}"
 
     xml="${unique_string}-temp.xml"
     unique_stdout_xml CM2.1U.xml >$xml
-    freopts="-p ${good_platform} -t prod -x $xml CM2.1U_Control-1990_E1.M_3B_snowmelt"
+    freopts="-p ${default_platform} -t prod -x $xml CM2.1U_Control-1990_E1.M_3B_snowmelt"
     release=$(frelist $freopts -d root | rev | cut -d / -f 1 | rev)
 
-    last_line_good="TO SUBMIT => ${submit_cmd} ${root_stem}/${USER}/FRE_tests-${unique_string}-temp/$release/CM2.1U_Control-1990_E1.M_3B_snowmelt/${good_platform}-prod/scripts/run/CM2.1U_Control-1990_E1.M_3B_snowmelt__1"
+    last_line_good="${root_stem}/${USER}/FRE_tests-${unique_string}-temp/$release/CM2.1U_Control-1990_E1.M_3B_snowmelt/${default_platform}-prod/scripts/run/CM2.1U_Control-1990_E1.M_3B_snowmelt__1"
+    add_submit_cmd_to_last_line_good
 
     mkdir -p "$(frelist $freopts -d state)/run"
     run frerun $freopts -u
@@ -400,16 +434,21 @@ ${lines[$((num_lines-1))]}"
 }
 
 @test "Create run script when state directory exists and --extend is specified" {
-    case $( hostname ) in
-        gaea?* )
+    case "$FRE_SYSTEM_SITE" in
+        ncrc? )
             platform="ncrc"
             root_stem="/lustre/f1"
             submit_cmd="sleep 1; msub"
             ;;
-        tfe?? )
+        theia )
             platform="theia"
             root_stem="/scratch4/GFDL/gfdlscr"
             submit_cmd="qsub"
+            ;;
+        gfdl-ws )
+            platform="gfdl-ws"
+            root_stem="/local2/tmp"
+            submit_cmd=""
             ;;
         * )
             skip "No test for current platform"
@@ -418,10 +457,11 @@ ${lines[$((num_lines-1))]}"
 
     xml="${unique_string}-temp.xml"
     unique_stdout_xml CM2.1U.xml >$xml
-    freopts="-p ${good_platform} -t prod -x $xml CM2.1U_Control-1990_E1.M_3B_snowmelt"
+    freopts="-p ${default_platform} -t prod -x $xml CM2.1U_Control-1990_E1.M_3B_snowmelt"
     release=$(frelist $freopts -d root | rev | cut -d / -f 1 | rev)
 
-    last_line_good="TO SUBMIT => ${submit_cmd} ${root_stem}/${USER}/FRE_tests-${unique_string}-temp/$release/CM2.1U_Control-1990_E1.M_3B_snowmelt/${good_platform}-prod/scripts/run/CM2.1U_Control-1990_E1.M_3B_snowmelt"
+    last_line_good="${root_stem}/${USER}/FRE_tests-${unique_string}-temp/$release/CM2.1U_Control-1990_E1.M_3B_snowmelt/${default_platform}-prod/scripts/run/CM2.1U_Control-1990_E1.M_3B_snowmelt"
+    add_submit_cmd_to_last_line_good
 
     mkdir -p "$(frelist $freopts -d state)/run"
     run frerun $freopts -e

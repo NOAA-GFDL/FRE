@@ -775,14 +775,14 @@ endif
 
 if ( $freCommandsToLoad ) then
    if ( -d $freCommandsModuleFilesDir && -r $freCommandsModuleFilesDir ) then
-      set freCommandsModuleFile = $freCommandsModuleFilesDir/fre-commands/$freCommandsVersion
+      set freCommandsModuleFile = $freCommandsModuleFilesDir/fre/$freCommandsVersion
       if ( -f $freCommandsModuleFile && -r $freCommandsModuleFile ) then
          module use $freCommandsModuleFilesDir
-         module unload fre-commands
-         module load fre-commands/$freCommandsVersion
+         module unload fre
+         module load fre/$freCommandsVersion
       else
          if ( $echoOn ) unset echo
-         echo "*ERROR*: The 'fre-commands' modulefile '$freCommandsModuleFile' doesn't exist or not readable"
+         echo "*ERROR*: The 'fre' modulefile '$freCommandsModuleFile' doesn't exist or not readable"
          if ( $echoOn ) set echo
          set exitStatus = 2
          goto END
@@ -790,7 +790,7 @@ if ( $freCommandsToLoad ) then
       unset freCommandsModuleFile
    else
       if ( $echoOn ) unset echo
-      echo "*ERROR*: The 'fre-commands' modulefiles directory '$freCommandsModuleFilesDir' doesn't exist or not readable"
+      echo "*ERROR*: The 'fre' modulefiles directory '$freCommandsModuleFilesDir' doesn't exist or not readable"
       if ( $echoOn ) set echo
       set exitStatus = 2
       goto END
@@ -1084,7 +1084,8 @@ if ( $actionCombineToDo ) then
       unset filesNotOK
 
       if ( $type == 'history' ) then
-         set filesToDecompress = ( `ls -1 | egrep "($patternGrepHistory)" | sort -u` )
+         # don't decompress static_veg_out files
+         set filesToDecompress = ( `ls -1 | grep -v "\.static_veg_out\." | egrep "($patternGrepHistory)" | sort -u` )
       else then
          set filesToDecompress = ( )
       endif
