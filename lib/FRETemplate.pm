@@ -827,7 +827,7 @@ sub setInputDatasets($$$)
 
   if ($dataSets)
   {
-    $fre->out(FREMsg::WARNING, "The usage of 'get_fms_data' datasets is deprecated - please list your input files explicitly in the XML file");
+    $fre->out(FREMsg::WARNING, "The usage of 'get_fms_data' datasets is no longer supported - please list your input files explicitly in the XML file");
     ${$r} =~ s/$placeholderFMSDataSets/get_fms_data$dataSets/;
   }
   else
