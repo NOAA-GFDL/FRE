@@ -1297,7 +1297,7 @@ EOF
                   } else {
                      print "This year ($hDate) has already been completed for $component.\n";
                      # if --plus option is used, store next year's frepp command to call at the end
-                     push @frepp_plus_calls, form_frepp_call_for_plus_option() if $opt{plus};
+                     push @frepp_plus_calls, form_frepp_call_for_plus_option($component) if $opt{plus};
                      next;
                   }
                } elsif ("$state" eq "FATAL") {
@@ -2017,7 +2017,7 @@ EOF
       } else {
          print STDERR "NOTE: No calculations necessary for year $hDate for $component.\n\n";
          # if --plus option is used, store next year's frepp command to call at the end
-         push @frepp_plus_calls, form_frepp_call_for_plus_option() if $opt{plus};
+         push @frepp_plus_calls, form_frepp_call_for_plus_option($component) if $opt{plus};
          next;
       }
 
@@ -2765,7 +2765,7 @@ sub call_frepp {
       $csh .= "$expt\n";
       $csh .= errorstr("$relfrepp had a problem creating final analysis script $expt"."_$nextyearf");
       if ( $opt{plus} ) {
-         $csh .= "\n" . form_frepp_call_for_plus_option() . "\n";
+         $csh .= "\n" . form_frepp_call_for_plus_option($component) . "\n";
       $csh .= errorstr("$relfrepp had a problem creating next script $expt"."_$nextyearf");
       }
       $csh .= mailerrors($outscript);
@@ -2776,7 +2776,7 @@ sub call_frepp {
 
 # Generate the frepp command for next year's frepp call when using the --plus option
 sub form_frepp_call_for_plus_option {
-    return unless $opt{plus};
+    my $comp = shift;
     my $nextyear = FREUtil::modifydate($tEND,"+ 1 sec");
     my $nextyearf = FREUtil::graindate($nextyear,"day");
     my $togo = $opt{plus} - 1;
@@ -2787,7 +2787,7 @@ sub form_frepp_call_for_plus_option {
     if ( $opt_d ) { $cmd .= "-d $opt_d "; }
     if ( $opt_D ) { $cmd .= "-D '$opt_D' "; }
     if ( $opt_u ) { $cmd .= "-u $opt_u "; }
-    if ( $opt_c ) { $cmd .= "-c $opt_c "; }
+    if ( $opt_c ) { $cmd .= "-c $comp "; }
     if ( $opt_m ) { $cmd .= "-m '$opt_m' "; }
     if ( $opt_M ) { $cmd .= "-M "; }
     if ( $opt_H ) { $cmd .= "-H "; }
