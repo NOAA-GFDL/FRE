@@ -62,6 +62,12 @@
 # Designed and written by V. Balaji, Amy Langenhorst and Aleksey Yakovlev
 #
 
+=head1 NAME
+
+FRE-FREDefaults
+
+=cut
+
 package FREDefaults;
 
 use strict;
@@ -122,11 +128,25 @@ use constant DEFERRED_NAMES	=> 'name';
 # //////////////////////////////////////////////////////// Exported Functions //
 # //////////////////////////////////////////////////////////////////////////////
 
+=head1 EXPORTED FUNCTIONS
+
+=head2 FREDefaults::Site()
+
+FRE_SYSTEM_SITE
+
+=cut
+
 sub Site()
 # ------ arguments: none
 {
   return FREDefaults::SITE_CURRENT;
 }
+
+=head2 FREDefaults::Sites()
+
+FRE_SYSTEM_SITES
+
+=cut
 
 sub Sites()
 # ------ arguments: none
@@ -134,11 +154,23 @@ sub Sites()
   return FREDefaults::SITES_ALL;
 }
 
+=head2 FREDefaults::XMLFile()
+
+XMLFILE_DEFAULT: rts.xml
+
+=cut
+
 sub XMLFile()
 # ------ arguments: none
 {
   return FREDefaults::XMLFILE_DEFAULT;
 }
+
+=head2 FREDefaults::Target()
+
+TARGET_DEFAULT: 'prod'
+
+=cut
 
 sub Target()
 # ------ arguments: none
@@ -146,17 +178,35 @@ sub Target()
   return FREDefaults::TARGET_DEFAULT;
 }
 
+=head2 FREDefaults::ExperimentDirs()
+
+EXPERIMENT_DIRS: 'root,src,exec,scripts,stdout,stdoutTmp,state,work,ptmp,stmp,archive,postProcess,analysis,include'
+
+=cut
+
 sub ExperimentDirs()
 # ------ arguments: none
 {
   return split(',', FREDefaults::EXPERIMENT_DIRS);
 }
 
+=head2 FREDefaults::ReservedPropertyNames()
+
+GLOBAL NAMES: 'site,siteDir,suite,platform,target,name,root,stem'+ ExperimentDirs()
+
+=cut
+
 sub ReservedPropertyNames()
 # ------ arguments: none
 {
   return (split(',', FREDefaults::GLOBAL_NAMES), map($_ . 'Dir', FREDefaults::ExperimentDirs()));
 }
+
+=head2 FREDefaults::DeferredPropertyNames()
+
+DEFERRED_NAMES: 'name'
+
+=cut
 
 sub DeferredPropertyNames()
 # ------ arguments: none

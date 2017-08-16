@@ -54,6 +54,12 @@
 # ------ Tail		= Letter { Letter | "-" }
 # ------------------------------------------------------------------------------
 
+=head1 NAME
+
+FRE-FREPlatforms
+
+=cut
+
 package FREPlatforms;
 
 use strict; 
@@ -86,6 +92,16 @@ EOF
 # ///////////////////////////////////////////////////////////////// Utilities //
 # //////////////////////////////////////////////////////////////////////////////
 
+=head1 INTERNAL SUBROUTINES
+
+=head2 checkPlatform()
+
+Verifies a given platform is acceptable, i.e. not null and not containing "default"
+Exits with a descriptive error message and a unique error code if not ok, does nothing if ok
+
+=cut
+
+
 # Verifies a given platform is acceptable, i.e. not null and not containing "default"
 # Exits with a descriptive error message and a unique error code if not ok, does nothing if ok
 sub checkPlatform {
@@ -96,6 +112,11 @@ sub checkPlatform {
     }
 }
 
+=head2 $FREPlatforms->$sitePattern()
+
+
+=cut
+
 my $sitePattern = sub()
 # ------ arguments: none
 {
@@ -103,12 +124,20 @@ my $sitePattern = sub()
   return qr/(($e+)(?:$x$e+)?)\d*/o;
 };
 
+=head2 $FREPlatforms->$siteParse($site)
+
+=cut
+
 my $siteParse = sub($)
 # ------ arguments: $site
 {
   my ($s, $t) = (shift || FREDefaults::Site(), $sitePattern->());
   return ($s =~ m/^($t)$/o) ? ($1, $2, $3) : ();
 };
+
+=head2 $FREPlatforms->$platformParse($platform)
+
+=cut
 
 my $platformParse = sub($)
 # ------ arguments: $platform
@@ -120,6 +149,10 @@ my $platformParse = sub($)
   }
   return ($p =~ m/^($t)\.($z(?:$z|-)*)$/o) ? ($1, $2, $3, $4) : ();
 };
+
+=head2 $FREPlatforms->$siteDir($siteRoot)
+
+=cut
 
 my $siteDir = sub($)
 # ------ arguments: $siteRoot
@@ -136,6 +169,11 @@ my ($FREPlatformsSite, $FREPlatformsSiteRoot, $FREPlatformsSiteHead) = $sitePars
 # //////////////////////////////////////////////////////////////////////////////
 # //////////////////////////////////////////////////////// Exported Functions //
 # //////////////////////////////////////////////////////////////////////////////
+=head1 EXPORTED FUNCTIONS
+
+=head2 $FREPlatforms->parse($platform) 
+
+=cut
 
 sub parse($)
 # ------ arguments: $platform
@@ -144,6 +182,10 @@ sub parse($)
   return (defined($site)) ? ($site, $tail) : ();
 }
 
+=head2 $FREPlatforms->parseAll($platform)
+
+=cut
+
 sub parseAll($)
 # ------ arguments: $platform
 {
@@ -151,12 +193,20 @@ sub parseAll($)
   return (defined($site)) ? ($site, $siteRoot, $siteHead, $tail) : ();
 }
 
+=head2 $FREPlatforms->siteDir($site)
+
+=cut
+
 sub siteDir($)
 # ------ arguments: $site
 {
   my ($site, $siteRoot, $siteHead) = $siteParse->(shift);
   return (defined($site)) ? $siteDir->($site) : '';
 }
+
+=head2 $FREPlatforms->siteReplace($platform, $newSite)
+
+=cut
 
 sub siteReplace($$)
 # ------ arguments: $platform $newSite
@@ -171,6 +221,12 @@ sub siteReplace($$)
     return '';
   }
 }
+
+=head2 $FREPlatforms->siteIsLocal($site)
+
+Return 1 if the $site and the current site have common "site" directory.
+
+=cut
 
 sub siteIsLocal($)
 # ------ arguments: $site
@@ -187,6 +243,13 @@ sub siteIsLocal($)
     return 0;
   }
 }
+
+=head2 $FREPlatforms->siteHasLocalStorage($site)
+
+Return 1 if the $site and the current site have a common file system.
+
+=cut
+
 
 sub siteHasLocalStorage($)
 # ------ arguments: $site
@@ -206,6 +269,12 @@ sub siteHasLocalStorage($)
     return 0;
   }
 }
+
+=head2 $FREPlatforms->getPlatformSpecificNiNaCLoadCommands()
+
+Return a string of csh commands to load NiNaC.
+
+=cut
 
 sub getPlatformSpecificNiNaCLoadCommands()
 # ------ arguments: none

@@ -67,6 +67,12 @@
 # Designed and written by V. Balaji, Amy Langenhorst and Aleksey Yakovlev
 #
 
+=head1 NAME
+
+FRE-FREProperties
+
+=cut
+
 package FREProperties;
 
 use strict;
@@ -100,6 +106,17 @@ use constant PROPERTIES_FILENAME => 'fre.properties';
 # ///////////////////////////////////////////////////////////////// Utilities //
 # //////////////////////////////////////////////////////////////////////////////
 
+=head1 INTERNAL SUBROUTINES
+
+=head2 $environmentVariablesExpand->($object, $string)
+
+Expand environment variables in the given $string.
+
+object:
+string:
+
+=cut
+
 my $environmentVariablesExpand = sub($$)
 # ------ arguments: $object $string
 # ------ expand environment variables in the given $string
@@ -121,6 +138,15 @@ my $environmentVariablesExpand = sub($$)
   }
   return $s;
 };
+
+=head2 $placeholdersExpand->($object, $string)
+
+Expand placeholders in the given $string.
+
+object:
+string:
+
+=cut
 
 my $placeholdersExpand = sub($$)
 # ------ arguments: $object $string
@@ -146,6 +172,15 @@ my $placeholdersExpand = sub($$)
   }
   return $s;
 };
+
+=head2 $placeholdersExpandAndCheck->($object, $string)
+
+Return status, expanded (as far as possible) $string and a list of non-found property names.
+
+object:
+string:
+
+=cut
 
 my $placeholdersExpandAndCheck = sub($$)
 # ------ arguments: $object $string
@@ -179,6 +214,16 @@ my $placeholdersExpandAndCheck = sub($$)
   }
 };
 
+=head2 $placeholdersOut->($object, $node, $verbose, @names)
+
+object:
+node:
+verbose:
+names:
+
+=cut
+
+
 my $placeholdersOut = sub($$$@)
 # ------ arguments: $object $node $verbose @names
 {
@@ -194,7 +239,21 @@ my $placeholdersOut = sub($$$@)
 # //////////////////////////////////////////////////////////// Tree Traversal //
 # //////////////////////////////////////////////////////////////////////////////
 
+=head2 $treeProcess
+
+Forward declaration
+
+=cut
+
 my $treeProcess; # <------ forward declaration
+
+=head2 $treeProcessAllChildren->($object, $node, $verbose)
+
+object:
+node:
+verbose:
+
+=cut
 
 my $treeProcessAllChildren = sub($$$)
 # ------ arguments: $object $node $verbose
@@ -207,6 +266,14 @@ my $treeProcessAllChildren = sub($$$)
   }
   return $r;
 };
+
+=head2 $treeProcessAttribute->($object, $attrNode, $verbose)
+
+object:
+attrNode:
+verbose:
+
+=cut
 
 my $treeProcessAttribute = sub($$$)
 # ------ arguments: $object $attrNode $verbose
@@ -225,6 +292,14 @@ my $treeProcessAttribute = sub($$$)
   }
 };
 
+=head2 $treeProcessAllAttributes->($object, $node, $verbose)
+
+object:
+node:
+verbose:
+
+=cut
+
 my $treeProcessAllAttributes = sub($$$)
 # ------ arguments: $object $node $verbose
 {
@@ -236,6 +311,14 @@ my $treeProcessAllAttributes = sub($$$)
   }
   return $r;
 };
+
+=head2 $treeProcessText->($object, $textNode, $verbose)
+
+object:
+textNode:
+verbose:
+
+=cut
 
 my $treeProcessText = sub($$$)
 # ------ arguments: $object $textNode $verbose
@@ -254,6 +337,14 @@ my $treeProcessText = sub($$$)
   }
 };
 
+=head2 $treeProcessAllTexts->($object, $node, $verbose)
+
+object:
+node:
+verbose:
+
+=cut
+
 my $treeProcessAllTexts = sub($$$)
 # ------ arguments: $object $node $verbose
 {
@@ -265,6 +356,16 @@ my $treeProcessAllTexts = sub($$$)
   }
   return $r;
 };
+
+=head2 $treeProcessProperty->($object, $node, $verbose)
+
+Special Processing for the <property> node.
+
+object:
+node:
+verbose:
+
+=cut
 
 my $treeProcessProperty = sub($$$)
 # ------ arguments: $object $node $verbose
@@ -343,6 +444,17 @@ my $treeProcessProperty = sub($$$)
     return undef;
   }
 };
+
+=head2 $treeProcessPlatform->($object, $node, $verbose)
+
+Special processing for the <platform> node.
+
+object:
+node:
+verbose:
+
+=cut
+
 
 my $treeProcessPlatform = sub($$$)
 # ------ arguments: $object $node $verbose
@@ -481,6 +593,16 @@ my $treeProcessPlatform = sub($$$)
   }
 };
 
+=head2 $treeProcessDataSource->($object, $node, $verbose)
+
+Special processing for the <dataSource> node.
+
+object:
+node:
+verbose:
+
+=cut
+
 my $treeProcessDataSource = sub($$$)
 # ------ arguments: $object $node $verbose
 # ------ special processing for the <dataSource> node
@@ -592,6 +714,16 @@ my $treeProcessDataSource = sub($$$)
   }
 };
 
+=head2 $treeProcessCompile->($object, $node, $verbose)
+
+Special processing for the <compile> node.
+
+object:
+node:
+verbose:
+
+=cut
+
 my $treeProcessCompile = sub($$$)
 # ------ arguments: $object $node $verbose
 # ------ special processing for the <compile> node
@@ -626,6 +758,14 @@ my $treeProcessCompile = sub($$$)
   }
 };
 
+=head2 $treeProcessSetup->($object, $node, $verbose)
+
+object:
+node:
+verbose:
+
+=cut
+
 my $treeProcessSetup = sub($$$)
 # ------ arguments: $object $node $verbose
 {
@@ -649,6 +789,15 @@ my $treeProcessSetup = sub($$$)
   }
 };
 
+=head2 $treeProcessDefault->($object, $node, $verbose)
+
+object:
+node:
+verbose:
+
+=cut
+
+
 my $treeProcessDefault = sub($$$)
 # ------ arguments: $object $node $verbose
 {
@@ -662,6 +811,17 @@ my $treeProcessDefault = sub($$$)
     $treeProcessAllChildren->($r, $n, $v)
   );
 };
+
+=head2 $treeProcess->($object, $node, $verose)
+
+Traverse the tree with properties expansion and special processing for some nodes.
+
+object:
+node:
+verbose:
+
+=cut
+
 
 $treeProcess = sub($$$)
 # ------ arguments: $object $node $verbose
@@ -699,6 +859,19 @@ $treeProcess = sub($$$)
 # ////////////////////////////////////////// Class initialization/termination //
 # //////////////////////////////////////////////////////////////////////////////
 
+=head1 OBJECT METHODS
+
+=head2 $FREProperties->new($className, $rootNode, $siteDir, %options)
+
+Create object and populate it. 
+
+className:
+rootNode:
+siteDir:
+options: User supplied options that contains the FRE standard options.
+
+=cut
+
 sub new($$$%)
 # ------ arguments: $className $rootNode $siteDir %options
 # ------ called as class method
@@ -730,6 +903,12 @@ sub new($$$%)
   }
 }
 
+=head2 $FREProperties->DESTROY()
+
+Terminate the FRE object.
+
+=cut
+
 sub DESTROY
 # ------ arguments: $object
 # ------ called automatically
@@ -741,6 +920,15 @@ sub DESTROY
 # //////////////////////////////////////////////////////////////////////////////
 # //////////////////////////////////////////////////////////// Object methods //
 # //////////////////////////////////////////////////////////////////////////////
+
+=head2 $FREProperties->property($object, $propertyName)
+
+Return the property value.
+
+object:
+propertyName:
+
+=cut
 
 sub property($$)
 # ------ arguments: $object $propertyName

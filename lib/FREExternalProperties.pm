@@ -26,6 +26,12 @@
 # Designed and written by V. Balaji, Amy Langenhorst and Aleksey Yakovlev
 #
 
+=head1 NAME
+
+FRE-FREExternalProperties
+
+=cut
+
 package FREExternalProperties;
 
 use strict;
@@ -41,6 +47,15 @@ my $FREExternalPropertiesNamePattern = qr/[a-zA-Z]\w*(?:(?:\.|:)\w+)*/o;
 # //////////////////////////////////////////////////////////////////////////////
 # ///////////////////////////////////////////////////////////////// Utilities //
 # //////////////////////////////////////////////////////////////////////////////
+
+=head2 $placeholdersExpand->($object, $string)
+
+Expand all the known placeholders in the given $string
+
+object:
+string:
+
+=cut
 
 my $placeholdersExpand = sub($$)
 # ------ arguments: $object $string
@@ -58,6 +73,16 @@ my $placeholdersExpand = sub($$)
   }
   return $s;
 };
+
+=head2 $propertiesExtract->($object, $fileName, $verbose) 
+
+Extract properties from the $fileName and save them in the $object. Implement conditional parsing based on the hostname
+
+object:
+fileName:
+verbose: Verbosity setting requested by the user on the command line
+
+=cut
 
 my $propertiesExtract = sub($$$)
 # ------ arguments: $object $fileName $verbose
@@ -180,6 +205,14 @@ my $propertiesExtract = sub($$$)
 # //////////////////////////////////////////////////////////// Class methods //
 # //////////////////////////////////////////////////////////////////////////////
 
+=head1 CLASS METHODS
+
+=head2 FREExternalProperties::propertyNameCheck($string)
+
+Return 1 if the given $string matches the property name pattern
+
+=cut
+
 sub propertyNameCheck($)
 # ------ arguments: $string
 # ------ return 1 if the given $string matches the property name pattern 
@@ -187,6 +220,12 @@ sub propertyNameCheck($)
   my $s = shift;
   return ($s =~ m/^$FREExternalPropertiesNamePattern$/) ? 1 : 0;
 }
+
+=head2 FREExternalProperties::propertyNamesExtract($string)
+
+Return a list of substrings of the $string, matching references to the property name pattern 
+
+=cut
 
 sub propertyNamesExtract($)
 # ------ arguments: $string
@@ -199,6 +238,17 @@ sub propertyNamesExtract($)
 # //////////////////////////////////////////////////////////////////////////////
 # ////////////////////////////////////////// Class initialization/termination //
 # //////////////////////////////////////////////////////////////////////////////
+=head1 OBJECT METHODS
+
+=head2 $freexternalproperties->new($className, $fileName, $verbose)
+
+Create an object and populate it from the $fileName 
+
+className:
+fileName:
+verbose: Verbosity setting requested by the user on the command line.
+
+=cut
 
 sub new($$$)
 # ------ arguments: $className $fileName $verbose
@@ -210,6 +260,12 @@ sub new($$$)
   bless $r, $c;
   return $propertiesExtract->($r, $f, $v);
 }
+
+=head2 $freexternalproperties->DESTROY()
+
+Terminate the object
+
+=cut
 
 sub DESTROY
 # ------ arguments: $object
@@ -223,6 +279,15 @@ sub DESTROY
 # //////////////////////////////////////////////////////////// Object methods //
 # //////////////////////////////////////////////////////////////////////////////
 
+=head2 $freexternalproperties->propertyExists($object, $propertyName)
+
+Return 1 if the property exists 
+
+object:
+propertyName:
+
+=cut
+
 sub propertyExists($$)
 # ------ arguments: $object $propertyName
 # ------ called as object method
@@ -231,6 +296,16 @@ sub propertyExists($$)
   my ($r, $k) = @_;
   return exists($r->{$k});
 }
+
+=head2 $freexternalproperties-> propertyInsert($object, $propertyName, $propertyValue)
+
+Insert the property into the $object
+
+object:
+propertyName:
+propertyValue:
+
+=cut
 
 sub propertyInsert($$$) 
 # ------ arguments: $object $propertyName $propertyValue
@@ -242,6 +317,15 @@ sub propertyInsert($$$)
   $r->{$k} = $p;
 }
 
+=head2 $freexternalproperties->property($object, $propertyName)
+
+Return the property value 
+
+object:
+propertyName:
+
+=cut
+
 sub property($$)
 # ------ arguments: $object $propertyName
 # ------ called as object method
@@ -250,6 +334,15 @@ sub property($$)
   my ($r, $k) = @_;
   return $r->{$k};
 }
+
+=head2 $freexternalproperties->propertiesList($object, $verbose)
+
+List all the properties
+
+object:
+verbose: Verbosity setting requested by the user on the command line.
+
+=cut
 
 sub propertiesList($$)
 # ------ arguments: $object $verbose

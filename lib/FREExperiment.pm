@@ -7,6 +7,12 @@
 # Seth Underwood
 #
 
+=head1 NAME
+
+FRE-FREExperiment
+
+=cut
+
 package FREExperiment;
 
 use strict;
@@ -36,12 +42,30 @@ my %FREExperimentMap = ();
 # ///////////////////////////////////////////////////////////////// Utilities //
 # //////////////////////////////////////////////////////////////////////////////
 
+=head1 INTERNAL SUBROUTINES
+
+=head2 $experimentFind->($expName)
+
+Verifies experiment exists.
+
+expName: Experiment name.
+
+=cut
+
 my $experimentFind = sub($)
 # ------ arguments: $expName
 {
   my $e = shift;
   return (exists($FREExperimentMap{$e})) ? $FREExperimentMap{$e} : '';
 };
+
+=head2 $experimentDirsCreate->($object)
+
+Creates experiment directories.
+
+object:
+
+=cut
 
 my $experimentDirsCreate = sub($)
 # ------ arguments: $object
@@ -53,6 +77,15 @@ my $experimentDirsCreate = sub($)
     $r->{$dirName} = $r->property($dirName);
   }
 };
+
+=head2 $experimentDirsVerify->($object, $expName)
+
+Checks presence of the experiment name in the directory and placement of the directory on the filesystem.
+
+object:
+expName: Experiment name.
+
+=cut
 
 my $experimentDirsVerify = sub($$)
 # ------ arguments: $object $expName
@@ -135,6 +168,16 @@ my $experimentDirsVerify = sub($$)
   return $result;
 };
 
+=head2 $experimentCreate->($className, $fre, $expName)
+
+Create the experiment chain up to the root.
+
+className:  
+fre: The FRE class object.
+expName: Experiment name.
+
+=cut
+
 my $experimentCreate;
 $experimentCreate = sub($$$)
 # ------ arguments: $className $fre $expName
@@ -215,6 +258,14 @@ $experimentCreate = sub($$$)
   }
 };
 
+=head2 $strMergeWS->($string)
+
+Merge all the workspaces to a single space.
+
+string: Workspace string.
+
+=cut
+
 my $strMergeWS = sub($)
 # ------ arguments: $string
 # ------ merge all the workspaces to a single space
@@ -225,6 +276,14 @@ my $strMergeWS = sub($)
   return $s;
 };
 
+=head2 $strRemoveWS->($string)
+
+Remove all the workspaces.
+
+string: Workspace string. 
+
+=cut
+
 my $strRemoveWS = sub($)
 # ------ arguments: $string
 # ------ remove all the workspaces
@@ -233,6 +292,16 @@ my $strRemoveWS = sub($)
   $s =~ s/\s+//gso;
   return $s;
 };
+
+=head2 $rankSet->($refToComponentHash, $refToComponent, $depth)
+
+Recursively set and return the component rank. Return -1 if loop is found.
+
+refToComponentHash:
+refToComponent:
+depth:
+
+=cut
 
 my $rankSet;
 $rankSet = sub($$$)
@@ -276,6 +345,10 @@ $rankSet = sub($$$)
   }
 };
 
+=head2 $regressionLabels->($object)
+
+=cut
+
 my $regressionLabels = sub($)
 # ------ arguments: $object
 {
@@ -285,6 +358,10 @@ my $regressionLabels = sub($)
   return grep($_ ne "", @labels);
 };
 
+=head2 $regressionRunNode->($object, $label)
+
+=cut
+
 my $regressionRunNode = sub($$)
 # ------ arguments: $object $label
 {
@@ -293,6 +370,10 @@ my $regressionRunNode = sub($$)
   return (scalar(@regNodes) == 1) ? $regNodes[0] : undef;
 };
 
+=head2 $productionRunNode->($object)
+
+=cut
+
 my $productionRunNode = sub($)
 # ------ arguments: $object
 {
@@ -300,6 +381,10 @@ my $productionRunNode = sub($)
   my @prdNodes = $r->extractNodes('runtime', 'production');
   return (scalar(@prdNodes) == 1) ? $prdNodes[0] : undef;
 };
+
+=head2 $extractOverrideParams->($exp, $namelistsHandle, $runNode)
+
+=cut
 
 my $extractOverrideParams = sub($$$)
 # ------ arguments: $exp $mamelistsHandle $runNode
@@ -377,6 +462,10 @@ my $extractOverrideParams = sub($$$)
 
 };
 
+=head2 $overrideRegressionNamelists->($exp, $namelistsHandle, $runNode)
+
+=cut
+
 my $overrideRegressionNamelists = sub($$$)
 # ------ arguments: $exp $namelistsHandle $runNode
 {
@@ -419,6 +508,10 @@ my $overrideRegressionNamelists = sub($$$)
 
 };
 
+=head2 $overrideProductionNamelists->($object, $namelistsHandle)
+
+=cut
+
 my $overrideProductionNamelists = sub($$)
 # ------ arguments: $object $namelistsHandle
 {
@@ -458,6 +551,10 @@ my $overrideProductionNamelists = sub($$)
 
 };
 
+=head2 $MPISizeCompatible->($fre, $namelistsHandle)
+
+=cut
+
 my $MPISizeCompatible = sub($$)
 # ------ arguments: $fre $namelistsHandle
 {
@@ -489,6 +586,15 @@ my $MPISizeCompatible = sub($$)
   }
   return $compatible;
 };
+
+=head2 $MPISizeParametersCompatible->($exp, $resources, $namelistsHandle, $ensembleSize)
+
+exp:
+resources:
+namelistsHandle:
+ensembleSize:
+
+=cut
 
 my $MPISizeParametersCompatible = sub($$$$$)
 # ------ arguments: $exp $resources $namelistsHandle $ensembleSize
@@ -609,6 +715,14 @@ my $MPISizeParametersCompatible = sub($$$$$)
 
 };
 
+=head2 $MPISizeComponentEnabled->($exp, $namelistsHandle, $componentName)
+
+exp:
+namelistsHandle:
+componentName:
+
+=cut
+
 my $MPISizeComponentEnabled = sub($$$)
 # ------ arguments: $exp $namelistsHandle $componentName
 {
@@ -636,6 +750,14 @@ my $MPISizeComponentEnabled = sub($$$)
   return $result;
 };
 
+=head2 _long_component_names()
+
+Returns a hash whose keys are the 3-letter standard component names
+and value is the legacy/long name. The only use for the long names is
+do_atmos = 1 style coupler namelist entries.
+
+=cut
+
 # Returns a hash whose keys are the 3-letter standard component names
 # and value is the legacy/long name. The only use for the long names is
 # do_atmos = 1 style coupler namelist entries
@@ -647,6 +769,15 @@ sub _long_component_names {
     $hash{$short[$_]} = $long[$_] for 0 .. $#short;
     return %hash;
 }
+
+=head2 $MPISizeParametersGeneric->($exp, $resources, $namelistsHandle, $ensembleSize)
+
+exp:
+resources:
+namelistsHandle:
+ensembleSize:
+
+=cut
 
 my $MPISizeParametersGeneric = sub($$$$)
 # ------ arguments: $exp $resources $namelistsHandle $ensembleSize
@@ -781,6 +912,14 @@ my $MPISizeParametersGeneric = sub($$$$)
   }
 };
 
+=head2 $MPISizeParameters->($exp, $resources, $namelistsHandle)
+
+exp:
+resources:
+namelistsHandle:
+
+=cut
+
 my $MPISizeParameters = sub($$$)
 # ------ arguments: $exp $resources $namelistsHandle
 {
@@ -817,6 +956,20 @@ my $MPISizeParameters = sub($$$)
 
 };
 
+=head2 $regressionPostfix->($exp, $label, $runNo, $hoursFlag, $segmentsNmb, $monthsNmb, $daysNmb, $hoursNmb, $mpiInfo)
+
+exp:
+label:
+runNo:
+hoursFlag:
+segmentsNmb:
+monthsNmb:
+daysNmb:
+hoursNmb:
+mpiInfo:
+
+=cut
+
 my $regressionPostfix = sub($$$$$$$$$)
 # ------ arguments: $exp $label $runNo $hoursFlag $segmentsNmb $monthsNmb $daysNmb $hoursNmb $mpiInfo
 {
@@ -843,6 +996,19 @@ my $regressionPostfix = sub($$$$$$$$$)
 # ////////////////////////////////////////// Class initialization/termination //
 # //////////////////////////////////////////////////////////////////////////////
 
+=head1 OBJECT METHODS
+
+=head2 $FREAnalysis->new($className, $fre, $expName)
+
+FRE object initializer.
+
+className:
+fre: The FRE class object.
+expName: Experiment name. 
+
+
+=cut
+
 sub new($$$)
 # ------ arguments: $className $fre $expName
 # ------ called as class method
@@ -851,6 +1017,12 @@ sub new($$$)
   my ($c, $fre, $e) = @_;
   return $experimentCreate->($c, $fre, $e);
 }
+
+=head2 DESTROY()
+
+Terminate the FRE object.
+
+=cut
 
 sub DESTROY
 # ------ arguments: $object
@@ -862,6 +1034,14 @@ sub DESTROY
 # //////////////////////////////////////////////////////////// Object methods //
 # //////////////////////////////////////////////////////////////////////////////
 
+=head2 $FREAnalysis->fre($object)
+
+Return FRE object.
+
+object:
+
+=cut
+
 sub fre($)
 # ------ arguments: $object
 # ------ called as object method
@@ -869,6 +1049,14 @@ sub fre($)
   my $r = shift;
   return $r->{fre};
 }
+
+=head2 $FREAnalysis->name($object)
+
+Return object name.
+
+object:
+
+=cut
 
 sub name($)
 # ------ arguments: $object
@@ -878,6 +1066,14 @@ sub name($)
   return $r->{name};
 }
 
+=head2 $FREAnalysis->node($object)
+
+Return object node.
+
+object:
+
+=cut
+
 sub node($)
 # ------ arguments: $object
 # ------ called as object method
@@ -885,6 +1081,14 @@ sub node($)
   my $r = shift;
   return $r->{node};
 }
+
+=head2 $FREAnalysis->parent($object)
+
+Return object parent.
+
+object:
+
+=cut
 
 sub parent($)
 # ------ arguments: $object
@@ -894,6 +1098,15 @@ sub parent($)
   return $r->{parent};
 }
 
+=head2 $FREAnalysis->dir($object, $dirType)
+
+Return object directory.
+
+object:
+dirType:
+
+=cut
+
 sub dir($$)
 # ------ arguments: $object $dirType
 # ------ called as object method
@@ -901,6 +1114,12 @@ sub dir($$)
   my ($r, $t) = @_;
   return $r->{$t . 'Dir'};
 }
+
+=head2 $FREAnalysis->rootDir($object)
+
+object:
+
+=cut
 
 sub rootDir($)
 # ------ arguments: $object
@@ -910,6 +1129,12 @@ sub rootDir($)
   return $r->dir('root');
 }
 
+=head2 $FREAnalysis->srcDir($object)
+
+object:
+
+=cut
+
 sub srcDir($)
 # ------ arguments: $object
 # ------ called as object method
@@ -917,6 +1142,12 @@ sub srcDir($)
   my $r = shift;
   return $r->dir('src');
 }
+
+=head2 $FREAnalysis->execDir($object)
+
+object:
+
+=cut
 
 sub execDir($)
 # ------ arguments: $object
@@ -926,6 +1157,12 @@ sub execDir($)
   return $r->dir('exec');
 }
 
+=head2 $FREAnalysis->scriptsDir($object)
+
+object:
+
+=cut
+
 sub scriptsDir($)
 # ------ arguments: $object
 # ------ called as object method
@@ -933,6 +1170,12 @@ sub scriptsDir($)
   my $r = shift;
   return $r->dir('scripts');
 }
+
+=head2 $FREAnalysis->stdoutDir($object)
+
+object:
+
+=cut
 
 sub stdoutDir($)
 # ------ arguments: $object
@@ -942,6 +1185,12 @@ sub stdoutDir($)
   return $r->dir('stdout');
 }
 
+=head2 $FREAnalysis->stdoutTmpdir($object)
+
+object:
+
+=cut
+
 sub stdoutTmpDir($)
 # ------ arguments: $object
 # ------ called as object method
@@ -950,6 +1199,12 @@ sub stdoutTmpDir($)
   return $r->dir('stdoutTmp');
 }
 
+=head2 $FREAnalysis->stateDir($object)
+
+object:
+
+=cut
+
 sub stateDir($)
 # ------ arguments: $object
 # ------ called as object method
@@ -957,6 +1212,12 @@ sub stateDir($)
   my $r = shift;
   return $r->dir('state');
 }
+
+=head2 $FREAnalysis->workDir($object)
+
+object:
+
+=cut
 
 sub workDir($)
 # ------ arguments: $object
@@ -1006,6 +1267,15 @@ sub includeDir($)
   return $r->dir('include');
 }
 
+=head2 $FREAnalysis->placeholdersExpand($object, $string)
+
+Expand all the experiment level placeholders in the given $string. 
+
+object:
+string:
+
+=cut
+
 sub placeholdersExpand($$)
 # ------ arguments: $object $string
 # ------ called as object method
@@ -1020,6 +1290,15 @@ sub placeholdersExpand($$)
   return $s;
 }
 
+=head2 $FREAnalysis->property($object, $propertyName)
+
+Return the value of the property $propertyName, expanded on the experiment level.
+
+object:
+propertyName:
+
+=cut
+
 sub property($$)
 # ------ arguments: $object $propertyName
 # ------ called as object method
@@ -1028,6 +1307,12 @@ sub property($$)
   my ($r, $k) = @_;
   return $r->placeholdersExpand($r->fre()->property($k));
 };
+
+=head2 $FREAnalysis->nodeValue($object, $node, $xPath)
+
+Return $xPath value relative to the given $node.
+
+=cut
 
 sub nodeValue($$$)
 # ------ arguments: $object $node $xPath
@@ -1038,6 +1323,15 @@ sub nodeValue($$$)
   return $r->placeholdersExpand($r->fre()->nodeValue($n, $x));
 }
 
+=head2 $FREAnalysis->experimentValue($object, $xPath)
+
+Return $xPath value relative to the experiment node.
+
+object:
+xPath:XML path string.
+
+=cut
+
 sub experimentValue($$)
 # ------ arguments: $object $xPath
 # ------ called as object method
@@ -1046,6 +1340,14 @@ sub experimentValue($$)
   my ($r, $x) = @_;
   return $r->nodeValue($r->node(), $x);
 }
+
+=head2 $FREAnalysis->description($object)
+
+Returns the experiment description.
+
+object:
+
+=cut
 
 sub description($)
 # ------ arguments: $object
@@ -1056,6 +1358,14 @@ sub description($)
   return $r->experimentValue('description');
 }
 
+=head2 $FREAnalysis->executable($object)
+
+Return standard executable name for the given experiment.
+
+object:
+
+=cut
+
 sub executable($)
 # ------ arguments: $object
 # ------ called as object method
@@ -1065,6 +1375,15 @@ sub executable($)
   my ($execDir, $name) = ($r->execDir(), $r->name());
   return "$execDir/fms_$name.x";
 }
+
+=head2 $FREAnalysis->executableCanBeBuilt($object)
+
+Return 1 if the executable for the given experiment can be built.
+
+object:
+
+=cut
+
 
 sub executableCanBeBuilt($)
 # ------ arguments: $object
@@ -1091,6 +1410,18 @@ sub executableCanBeBuilt($)
 # //////////////////////////////////////////////////////////////////////////////
 # ////////////////////////////////////////// Data Extraction With Inheritance //
 # //////////////////////////////////////////////////////////////////////////////
+=head1 DATA EXTRACTION
+
+=head2 $FREAnalysis->extractNodes($object, $xPathRoot, $xPathChildren)
+
+Return a nodes list corresponding to the $xPathRoot/$xPathChildren, following inherits
+if xPathRoot returns a list of nodes, only the first node will be taken into account.
+
+object:
+xPathRoot: XML path string.
+xPatchChildren:
+
+=cut
 
 sub extractNodes($$$)
 # ------ arguments: $object $xPathRoot $xPathChildren
@@ -1109,6 +1440,15 @@ sub extractNodes($$$)
   return @results;
 }
 
+=head2 $FREAnalysis->extractValue($object, $xPath) 
+
+Return a value corresponding to the $xPath, following inherits.
+
+object:
+xPath: XML path string.
+
+=cut
+
 sub extractValue($$)
 # ------ arguments: $object $xPath
 # ------ called as object method
@@ -1123,6 +1463,16 @@ sub extractValue($$)
   }
   return $value;
 }
+
+=head2 $FREAnalysis->extractComponentValue($object, $xPath, $componentName)
+
+Return a value corresponding to the $xPath under the <component> node, following inherits.
+
+object:
+xPath: XML path string.
+componentName:
+
+=cut
 
 sub extractComponentValue($$$)
 # ------ arguments: $object $xPath $componentName
@@ -1139,6 +1489,16 @@ sub extractComponentValue($$$)
   return $value;
 }
 
+=head2 $FREAnalysis->extractSourceValue($object, $xPath, $componentName)
+
+Return a value corresponding to the $xPath under the <component/source> node, following inherits.
+
+object:
+xPath: XML path string.
+componentName:
+
+=cut
+
 sub extractSourceValue($$$)
 # ------ arguments: $object $xPath $componentName
 # ------ called as object method
@@ -1154,6 +1514,16 @@ sub extractSourceValue($$$)
   return $value;
 }
 
+=head2 $FREAnalysis->extractCompileValue($object, $xPath, $componentName)
+
+Return a value corresponding to the $xPath under the <component/compile> node, following inherits.
+
+object:
+xPath: XML path string.
+componentName:
+
+=cut
+
 sub extractCompileValue($$$)
 # ------ arguments: $object $xPath $componentName
 # ------ called as object method
@@ -1168,6 +1538,16 @@ sub extractCompileValue($$$)
   }
   return $value;
 }
+
+=head2 $FREAnalysis->extractDoF90Cpp($object, $xPath, $componentName) 
+
+Return a value corresponding to the $xPath under the <component/compile> node, following inherits.
+
+object:
+xPath:
+componentName:
+
+=cut
 
 sub extractDoF90Cpp($$)
 # ------ arguments: $object $xPath $componentName
@@ -1190,6 +1570,14 @@ sub extractDoF90Cpp($$)
   }
   return $value;
 }
+
+=head2 $FREAnalysis->extractExecutable($object)
+
+Return predefined executable name (if found) and experiment object, following inherits. 
+
+object:
+
+=cut
 
 sub extractExecutable($)
 # ------ arguments: $object
@@ -1224,6 +1612,15 @@ sub extractExecutable($)
 
 }
 
+=head2 $FREAnalysis->extractMkmfTemplate($object, $componentName)
+
+Extracts a mkmf template, following inherits. 
+
+object:
+componentName:
+
+=cut
+
 sub extractMkmfTemplate($$)
 # ------ arguments: $object $componentName
 # ------ called as object method
@@ -1244,6 +1641,14 @@ sub extractMkmfTemplate($$)
   return @results[0];
 
 }
+
+=head2 $FREAnalysis->extractDatasets($object)
+
+Extracts file pathnames together with their target names, following inherits.
+
+objects:
+
+=cut
 
 sub extractDatasets($)
 # ------ arguments: $object
@@ -1306,6 +1711,14 @@ sub extractDatasets($)
   return @results;
 
 }
+
+=head2 $FREAnalysis->extractNamelists($object)
+
+Following inherits, but doesn't overwrite existing hash entries. Returns namelists handle.
+
+object:
+
+=cut
 
 sub extractNamelists($)
 # ------ arguments: $object
@@ -1465,6 +1878,15 @@ sub extractNamelists($)
 
 }
 
+=head2 $FREAnalysis->extractTable($object, $label)
+
+Returns data, corresponding to the $label table, following inherits.
+
+object:
+label:
+
+=cut
+
 sub extractTable($$)
 # ------ arguments: $object $label
 # ------ called as object method
@@ -1536,6 +1958,16 @@ sub extractTable($$)
 
 }
 
+=head2 $FREAnalysis->extractShellCommands($object, $xPath, %adjustment)
+
+Returns shell commands, corresponding to the $xPath, following inherits. Adjusts commands, depending on node types.
+
+object:
+xPath: XML path string.
+%adjustment:
+
+=cut
+
 sub extractShellCommands($$%)
 # ------ arguments: $object $xPath %adjustment
 # ------ called as object method
@@ -1563,6 +1995,15 @@ sub extractShellCommands($$%)
 
 }
 
+=head2 $FREAnalysis->extractVariableFile($object, $label)
+
+Returns filename for the $label variable, following inherits.
+
+object:
+label:
+
+=cut
+
 sub extractVariableFile($$)
 # ------ arguments: $object $label
 # ------ called as object method
@@ -1584,6 +2025,14 @@ sub extractVariableFile($$)
 
 }
 
+=head2 $FREAnalysis->extractReferenceFiles($object)
+
+Return list of reference files, following inherits.
+
+object:
+
+=cut
+
 sub extractReferenceFiles($)
 # ------ arguments: $object
 # ------ called as object method
@@ -1604,6 +2053,14 @@ sub extractReferenceFiles($)
 
 }
 
+=head2 $FREAnalysis->extractReferenceExperiments($object)
+
+Return list of reference experiment names, following inherits.
+
+object:
+
+=cut
+
 sub extractReferenceExperiments($)
 # ------ arguments: $object
 # ------ called as object method
@@ -1615,6 +2072,14 @@ sub extractReferenceExperiments($)
   return @results;
 }
 
+=head2 $FREAnalysis->extractPPRefineDiagScripts($object)
+
+Return list of postprocessing refine diagnostics scriptnames, following inherits.
+
+object:
+
+=cut
+
 sub extractPPRefineDiagScripts($)
 # ------ arguments: $object
 # ------ called as object method
@@ -1625,6 +2090,14 @@ sub extractPPRefineDiagScripts($)
   foreach my $node (@nodes) {push @results, split /\s+/, $r->nodeValue($node, '.');}
   return @results;
 }
+
+=head2 $FREAnalysis->extractCheckoutInfo($object)
+
+Return a reference to checkout info, following inherits.
+
+object:
+
+=cut
 
 sub extractCheckoutInfo($)
 # ------ arguments: $object
@@ -1758,6 +2231,14 @@ sub extractCheckoutInfo($)
   }
 
 }
+
+=head2 $FREAnalysis->extractCompileInfo($object)
+
+Return a reference to compile info.
+
+object:
+
+=cut
 
 sub extractCompileInfo($)
 # ------ arguments: $object
@@ -1919,6 +2400,13 @@ sub extractCompileInfo($)
 
 }
 
+=head2 $FREAnalysis->extractRegressionLabels($object, $regressionOption)
+
+object:
+regressionOption:
+
+=cut
+
 sub extractRegressionLabels($$)
 # ------ arguments: $object $regressionOption
 {
@@ -1971,6 +2459,12 @@ sub extractRegressionLabels($$)
     return ();
   }
 }
+
+=head2 $FREAnalysis->extractRegressionRunInfo($object, $label, hyperthreading)
+
+Return a reference to the regression run info.
+
+=cut
 
 sub extractRegressionRunInfo($$$)
 # ------ arguments: $object $label hyperthreading
@@ -2064,6 +2558,14 @@ sub extractRegressionRunInfo($$$)
     return 0;
   }
 }
+
+=head2 $FREAnalysis->extractProductionRunInfo($object hyperthreading)
+
+Return a reference to the production run info.
+
+object:
+
+=cut
 
 sub extractProductionRunInfo($$)
 # ------ arguments: $object hyperthreading
@@ -2170,6 +2672,20 @@ sub extractProductionRunInfo($$)
   }
 }
 
+=head2 $FREAnalysis->addResourceRequestsToMpiInfo($fre, $resources, $mpiInfo)
+
+Convenience function used in extractProductionRunInfo and extractRegressionRunInfo
+MPISizeParameters() generates $mpiInfo from resource requests,
+but a few additional related parameters must be added as well.
+Given the complexity of MPISizeParameters(), those additional related parameters
+are added using this function.
+
+fre: The FRE class object.
+resources:
+mpiInfo:
+
+=cut
+
 # Convenience function used in extractProductionRunInfo and extractRegressionRunInfo
 # MPISizeParameters() generates $mpiInfo from resource requests,
 # but a few additional related parameters must be added as well.
@@ -2187,6 +2703,14 @@ sub addResourceRequestsToMpiInfo {
     $info->{ranksPerEnsList} = [ map { $resources->{$_}->{ranks} }      @components ];
     $info->{ht} = $resources->{ht};
 }
+
+=head2 $FREAnalysis->getResourceRequests($exp hyperthreading namelists)--for production
+
+=head2 $FREAnalysis->getResourceRequests($exp hyperthreading namelists $run_node)--for regression
+
+Returns hashref containing resource specs or undef on failure.
+
+=cut
 
 # Get resource info from <runtime>/.../<resources> tag
 # and decides whether hyperthreading will be used if --ht option is present

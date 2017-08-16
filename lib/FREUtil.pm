@@ -8,6 +8,12 @@
 # Seth Underwood
 #
 
+=head1 NAME
+
+FRE-FREUtil
+
+=cut
+
 package FREUtil;
 
 use strict;
@@ -30,6 +36,14 @@ use constant MAPPING_SEPARATOR => ';';
 # //////////////////////////////////////////////////////// Exported Functions //
 # //////////////////////////////////////////////////////////////////////////////
 
+=head1 EXPORTED FUNCTIONS
+
+=head2 $FREUtil->checkExptExists()
+
+Checks to make sure experiment exists in xml.
+
+=cut
+
 #make sure experiment exists in xml
 sub checkExptExists {
    my $e = $_[0];
@@ -50,6 +64,12 @@ sub checkExptExists {
 
    return 1;
 }
+
+=head2 $FREUtil->getxpathval()
+
+Gets a value from xml, recurse using @inherit and optional second argument $expt.
+
+=cut
 
 #gets a value from xml, recurse using @inherit and optional second argument $expt
 sub getxpathval {
@@ -74,6 +94,15 @@ sub getxpathval {
       return $value;
    }
 }
+
+=head2 $FREUtil->writescript()
+
+Write c-shell runscript, chmod, and optionally submit.
+batchCmd= "qsub -pe $defaultQueue $npes -o $stdoutPath -r y -P $project -l h_cpu=$maxRunTime".
+writescript($cshscript,$outscript,$batchCmd,$defaultQueue,$npes,$stdoutPath,$project,$maxRunTime);
+
+=cut
+
 
 #write c-shell runscript, chmod, and optionally submit
 #batchCmd = "qsub -pe $defaultQueue $npes -o $stdoutPath -r y -P $project -l h_cpu=$maxRunTime"
@@ -121,6 +150,14 @@ sub writescript {
       print "\nTO SUBMIT: $batchCmd $outscript\n";
    }
 }
+
+=head2 $FREUtil->parseDate()
+
+Convert a date string ollowing either yyyy or yyyymmddinto to a Date::Manip date ('yyyymmddhh:mm:ss'). 
+If length($opt_t) < 7, we assume a year has been passed in, 8 and beyond assume yyyymmdd.
+
+=cut
+
 
 # convert a date string following either yyyy or yyyymmddinto to a
 # Date::Manip date ('yyyymmddhh:mm:ss')
@@ -171,6 +208,13 @@ sub parseDate {
   return $return_date;
 }
 
+=head2 parseFortranDate()
+
+Convert a fortran date string ( "1,1,1,0,0,0" ) to a Date::Manip date.
+
+=cut
+
+
 #convert a fortran date string ( "1,1,1,0,0,0" ) to a Date::Manip date
 sub parseFortranDate {
    my $date = $_[0];
@@ -187,11 +231,23 @@ sub parseFortranDate {
    return sprintf("%04d%02d%02d%02d:%02d:%02d", @tmparray);
 }
 
+=head2 padzeros()
+
+Pad to 4 digits.
+
+=cut
+
 #pad to 4 digits
 sub padzeros {
   my $date = "$_[0]";
   return sprintf("%04d", int($date));
 }
+
+=head2 pad2digits()
+
+Pad to 2 digits.
+
+=cut
 
 #pad to 2 digits
 sub pad2digits {
@@ -199,11 +255,25 @@ sub pad2digits {
    return sprintf("%02d", int($date));
 }
 
+=head2 pad8digits()
+
+Pad to 8 digits.
+
+=cut
+
 #pad to 8 digits
 sub pad8digits {
    my $date = "$_[0]";
    return sprintf("%08d", int($date));
 }
+
+=head2 $FREUtil->splitDate($date)
+
+date: Date::Manip date string.
+
+Separates a Date::Manip date string into yyyy and mmddhh or mmddhh:mm:ss components.
+
+=cut
 
 # splitDate separates a Date::Manip date string into yyyy and
 # mmddhh or mmddhh:mm:ss components.
@@ -212,6 +282,14 @@ sub splitDate($) {
 
   return $date =~ /^(\d{4,})(\d{4}(?:\d{2}:\d{2}:\d{2})?$)/;
 }
+
+=head2 $FREUtil->unixDate($dateTime, $format)
+
+dateTime: date string in the format: /^\d{4,}\d{4}\d{2}:\d{2}:\d{2}$/
+
+Returns the date using two formats: "%Y%m%d" and "%Y%m%d%H". 
+
+=cut
 
 # unixDate is a simplified version of Date::Manip::UnixDate.  This
 # simplified version will only return the date using two formats:
@@ -247,6 +325,14 @@ sub unixDate($$) {
   }
   return $return;
 }
+
+=head2 FREUtil->dateCalc($date1, $date2)
+
+date1, date2: date strings in the format /^\d{4,}\d{4}\d{2}:\d{2}:\d{2}$/.
+
+Calculate the difference between two date and returns a Date::Manip delta format.  
+
+=cut
 
 # Calculate the difference between two date and returns a Date::Manip
 # delta format.  This is not a full wrapper for Date::Manip::DateCalc
@@ -294,6 +380,15 @@ sub dateCalc($$) {
 
   return Date::Manip::DateCalc($delta,$year_mod,\$err,1);
 }
+
+=head2 $FREUtil->modifydate()
+
+Wrapper for DateCalc handling low year numbers.
+Takes a date(usually of format yyyymmddhh:mm:ss), and modifies it via the
+instructions in $str (i.e. +1 year, -1 second --- using the manipulation rules for Date::Manip.
+
+=cut
+
 
 # wrapper for DateCalc handling low year numbers
 # modifydate takes a date (usually of format yyyymmddhh:mm:ss), and modifies it via the
@@ -361,6 +456,12 @@ sub modifydate {
   return $yyyy . $nMDT;
 }
 
+=head2 $FREUtil->isaLeapYear($year)
+
+Determine if a given year is a leap year.
+
+=cut
+
 # Determine if a given year is a leap year
 #
 # This routine is to be used within FREUtil.pm.  This is why no checks
@@ -378,6 +479,12 @@ sub isaLeapYear($) {
   return $return;
 }
 
+=head2 $FREUtil->daysInMonth($month)
+
+Return number of days in month.
+
+=cut
+
 # Return number of days in month
 #
 # This routine is only to be used within FREUtil.pm.  This is why no
@@ -389,6 +496,12 @@ sub daysInMonth($) {
 
   return $monthDays[$month-1];
 }
+
+=head2 $FREUtil->daysSince01Jan($month, $day, $year)
+
+Return the number of days from Jan 01 of the year given. 
+
+=cut
 
 # Return the number of days from Jan 01 of the year given
 #
@@ -407,6 +520,12 @@ sub daysSince01Jan ($$$) {
   }
   $days += $day;
 }
+
+=head2 $FREUtil->daysSince1BC($month, $day, $year)
+
+Wrapper to Date::Manip::Date_DaysSince1BC to deal with possible years beyond 9999.
+
+=cut
 
 # Wrapper to Date::Manip::Date_DaysSince1BC to deal with possible years beyond 9999
 sub daysSince1BC($$$) {
@@ -436,6 +555,15 @@ sub daysSince1BC($$$) {
 
   return $numDaysCompYears + daysSince01Jan($mon,$day,$year);
 }
+
+=head2 $FREUtil->dateCmp($date1, $date2)
+
+date1, date2: date strings
+
+Wrapper for Date::Manip::Date_Cmp which uses cmp on the separate date components. 
+
+=cut
+
 
 # Wrapper for Date::Manip::Date_Cmp.  As Date_Cmp for DM5 "does little
 # more than use 'cmp'." However, since cmp will not work as required if
@@ -472,6 +600,12 @@ sub dateCmp ($$) {
   }
   return $return;
 }
+
+=head2 $FREUtil->graindate()
+
+Return appropriate date granularity.
+
+=cut
 
 #return appropriate date granularity
 sub graindate {
@@ -523,6 +657,12 @@ sub graindate {
    return $formatstr;
 }
 
+=head2 $FREUtil->timeabbrev()
+
+Return appropriate abbreviation.
+
+=cut
+
 #return appropriate abbreviation
 sub timeabbrev {
    my $freq = $_[0];
@@ -544,6 +684,13 @@ sub timeabbrev {
    }
 }
 
+=head2 $FREUtil->getppNode()
+
+Find correct postProcess node to use, following inherits.
+
+=cut
+
+
 #find correct postProcess node to use, following inherits
 sub getppNode {
    my $e = $_[0];
@@ -563,6 +710,13 @@ sub getppNode {
    }
 }
 
+=head2 $FREUtil->cleanstr()
+
+Clean up a string that should be space delimited tokens.
+
+=cut
+
+
 sub cleanstr
 # ------ clean up a string that should be space delimited tokens
 {
@@ -574,6 +728,13 @@ sub cleanstr
   $str =~ s/ +/ /g;
   return $str;
 }
+
+=head2 $FREUtil->makeminutes($string)
+
+Translates $string in "HH:MM:SS" format to minutes integer.
+
+=cut
+
 
 sub makeminutes($)
 # ------ arguments: $string
@@ -589,6 +750,13 @@ sub makeminutes($)
    return $min;
 }
 
+=head2 $FREUtil-> strStripPaired($string, $pattern)
+
+Strip paired substrings, surrounding the $string. All heading and tailing whitespaces will be stripped as well.
+
+=cut
+
+
 sub strStripPaired($;$)
 # ------ arguments: $string $pattern
 # ------ strip paired substrings, surrounding the $string
@@ -599,6 +767,11 @@ sub strStripPaired($;$)
   $s =~ s/^\s*$p(.*)$p\s*$/$1/s;
   return $s;
 }
+
+=head2 $FREUtil->strFindByPattern($mapping, $key)
+
+
+=cut
 
 sub strFindByPattern($@)
 # ------ arguments: $mapping $key
@@ -644,6 +817,11 @@ sub strFindByPattern($@)
   }
 }
 
+=head2 $FREUtil->strFindByInterval($mapping, $number)
+
+=cut
+
+
 sub strFindByInterval($$)
 # ------ arguments: $mapping $number
 {
@@ -686,6 +864,13 @@ sub strFindByInterval($$)
   }
 }
 
+=head2 $FREUtil->listUnique(@list)
+
+Return the argument @list with all the duplicates removed.
+
+=cut
+
+
 sub listUnique(@)
 # ------ arguments: @list
 # ------ return the argument @list with all the duplicates removed
@@ -694,6 +879,12 @@ sub listUnique(@)
   foreach my $e (@_) {push @result, $e unless grep($_ eq $e, @result)}
   return @result;
 }
+
+=head2 $FREUtil->listDuplicates(@list)
+
+Return all the duplicates found in the argument @list.
+
+=cut
 
 sub listDuplicates(@)
 # ------ arguments: @list
@@ -704,6 +895,12 @@ sub listDuplicates(@)
   return FREUtil::listUnique(@result);
 }
 
+=head2 $FREUtil->fileOwner($filename)
+
+Returns owner of the $filename.
+
+=cut
+
 sub fileOwner($)
 # ------ arguments: $filename
 # ------ returns owner of the $filename
@@ -711,6 +908,12 @@ sub fileOwner($)
   my $stat = stat(shift);
   return getpwuid($stat->File::stat::uid);
 }
+
+=head2 $FREUtil->fileIsArchive($filename)
+
+Returns 1 if the $filename is archive.
+
+=cut
 
 sub fileIsArchive($)
 # ------ arguments: $filename
@@ -720,6 +923,12 @@ sub fileIsArchive($)
   return ($p =~ m/$e$/);
 }
 
+=head2 $FREUtil->fileArchiveExtensionStrip($filename)
+
+Returns the $filename with archive extension stripped.
+
+=cut
+
 sub fileArchiveExtensionStrip($)
 # ------ arguments: $filename
 # ------ returns the $filename with archive extension stripped
@@ -728,6 +937,12 @@ sub fileArchiveExtensionStrip($)
   $p =~ s/$e$//;
   return $p;
 }
+
+=head2 $FREUtil->createDir($dirName)
+
+Create a (multilevel) directory, passed as an argument return the created directory or an empty value.
+
+=cut
 
 sub createDir($)
 # ------ arguments: $dirName
@@ -751,6 +966,13 @@ sub createDir($)
   }
 }
 
+=head2 $FREUtil->dirContains($dirName, $string)
+
+Return a number of times the $string is contained in the $dirName.
+
+=cut
+
+
 sub dirContains($$)
 # ------ arguments: $dirName $string
 # ------ return a number of times the $string is contained in the $dirName
@@ -759,6 +981,12 @@ sub dirContains($$)
   my @dlist = split('/', $d);
   return scalar(grep($_ eq $s, @dlist));
 }
+
+=head2 $FREUtil->environmentVariablesExpand($string)
+
+Expand environment variable placeholders in the given $string.
+
+=cut
 
 sub environmentVariablesExpand($)
 # ------ arguments: $string
@@ -776,6 +1004,16 @@ sub environmentVariablesExpand($)
   }
   return $s;
 }
+
+=head2 $FREUtil->timeString($timeString)
+
+timeString: optional
+
+Converts time to a human-decipherable string.
+Suitable for use in a filename (sortable, no spaces, colons, etc).
+Resolution of seconds.
+
+=cut
 
 sub timeString
 # ------ arguments: $timeString (optional)
@@ -803,6 +1041,12 @@ sub timeString
   );
 }
 
+=head2 $FREUtil->jobID()
+
+Return the current job ID, if it's available. 
+
+=cut
+
 sub jobID()
 # ------ arguments: none
 # ------ return the current job id, if it's available
@@ -821,11 +1065,22 @@ sub jobID()
   }
 }
 
+=head2 $FREUtil->home()
+
+Return home directory.
+
+=cut
+
 sub home()
 # ------ arguments: none
 {
   return $ENV{FRE_COMMANDS_HOME};
 }
+
+=head2 $FREUtil->optionIntegersListParse($name, $value)
+
+
+=cut
 
 sub optionIntegersListParse($$)
 # ------ arguments: $name $value
@@ -862,6 +1117,11 @@ sub optionIntegersListParse($$)
   }
 }
 
+=head2 $FREUtil->optionValuesListParse($name, $value, @allowedValuesList)
+
+
+=cut
+
 sub optionValuesListParse($$@)
 # ------ arguments: $name $value @allowedValuesList
 {
@@ -893,6 +1153,16 @@ sub optionValuesListParse($$@)
     return ('', "The --$n option value is missed");
   }
 }
+
+=head2 $FREUtil->decodeChildStatus($?, $!)
+
+Returns decoded child process native error status as a string.
+The child process native status is a word. The low order byte's
+lowest 7 bits hold the signal number if the child was terminated
+by a signal. The high order byte holds the exit status if the
+child exited. See ``perldoc -f system'' for more information. 
+
+=cut
 
 sub decodeChildStatus($$)
 # ------ arguments: $? $!

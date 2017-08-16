@@ -15,6 +15,12 @@
 # Designed and written by V. Balaji, Amy Langenhorst and Aleksey Yakovlev
 #
 
+=head1 NAME
+
+FRE-FREXML
+
+=cut
+
 package FREXML;
 
 use strict; 
@@ -25,6 +31,18 @@ use XML::Dumper();
 # //////////////////////////////////////////////////////////////////////////////
 # ///////////////////////////////////////////////////////////////// Utilities //
 # //////////////////////////////////////////////////////////////////////////////
+
+=head1 INTERNAL SUBROUTINES
+
+=head2 $standardize->($ref, $refType)
+
+Standardize XML.
+
+ref:
+refType: Format of $ref (e.g. scalar, array, hash).
+
+=cut
+
 
 my $standardize;
 $standardize = sub($$)
@@ -72,6 +90,17 @@ $standardize = sub($$)
 # //////////////////////////////////////////////////////// Exported Functions //
 # //////////////////////////////////////////////////////////////////////////////
 
+=head1 EXPORTED FUNCTIONS
+
+=head2 $frexml->save($fileName, $refToHash)
+
+Save hash as an XML document file.
+
+fileName: Out file. 
+refToHash: Hash to convert to XML.
+
+=cut
+
 sub save($$)
 # ------ arguments: $fileName $refToHash
 # ------ called as regular function
@@ -82,6 +111,16 @@ sub save($$)
   $standardize->(\%h, 'HASH');
   XML::Dumper::pl2xml(\%h, $n);
 }
+
+=head2 $frexml->verify($fileName, $refToHash)
+
+Pass an XML document file an a has of values to verify.
+Return true if all subnodes have the prescribed value.
+
+filename: XML document file.
+refToHash: Hash values to verify.
+
+=cut
 
 sub verify($$)
 # ------ arguments: $filename $refToHash
@@ -103,7 +142,7 @@ sub verify($$)
   {
     return 1;
   }
-}
+},
 
 # //////////////////////////////////////////////////////////////////////////////
 # //////////////////////////////////////////////////////////// Initialization //

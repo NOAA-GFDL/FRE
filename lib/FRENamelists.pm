@@ -10,6 +10,12 @@
 # Designed and written by V. Balaji, Amy Langenhorst and Aleksey Yakovlev
 #
 
+=head1 NAME
+
+FRE-FRENamelists
+
+=cut
+
 package FRENamelists;
 
 use strict;
@@ -33,6 +39,20 @@ use constant PATTERN_TAIL_ALL	=> qr/((?:[,\n]\s*\w+(?:\s*\[\s*\d+(?:\s*,\s*\d+)*
 # ///////////////////////////////////////////////////////////////// Utilities //
 # //////////////////////////////////////////////////////////////////////////////
 
+=head1 INTERNAL SUBROUTINES
+
+=head2 $namelistValueGet->($object, $namelistName, $variable, $pattern, $tail)
+
+Return namelist content. 
+
+object:
+namelistName:
+variable:
+pattern:
+tail:
+
+=cut
+
 my $namelistValueGet = sub($$$$$)
 # ------ arguments: $object $namelistName $variable $pattern $tail
 {
@@ -48,6 +68,19 @@ my $namelistValueGet = sub($$$$$)
     return undef;
   }
 };
+
+=head2 $namelistValuePut-> ($object, $namelistName, $variable, $value, $pattern, $tail)
+
+Puts placeholder for namelist objects.
+
+object:
+namelistName:
+variable:
+value:
+pattern:
+tail:
+
+=cut
 
 my $namelistValuePut = sub($$$$$$)
 # ------ arguments: $object $namelistName $variable $value $pattern $tail
@@ -78,6 +111,16 @@ my $namelistValuePut = sub($$$$$$)
 # ////////////////////////////////// Class initialization/copying/termination //
 # //////////////////////////////////////////////////////////////////////////////
 
+=head1 OBJECT METHODS
+
+=head2 $FRENamelists->new($className)
+
+Create empty namelist set.
+
+className:String that contains the name of the command.
+
+=cut
+
 sub new($)
 # ------ arguments: $className
 # ------ create empty namelist set
@@ -86,6 +129,12 @@ sub new($)
   bless $r, $class;
   return $r;
 }
+
+=head2 $FRENamelists->DESTROY()
+
+Destroy FRE object.
+
+=cut
 
 sub DESTROY
 # ------ arguments: $object
@@ -97,6 +146,12 @@ sub DESTROY
 # ////////////////////////////////////// Exported Functions - Namelists Level //
 # //////////////////////////////////////////////////////////////////////////////
 
+=head2 $FRENamelists->copy($object)
+
+Returns a deep copy of the object.
+
+=cut
+
 sub copy($)
 # ------ arguments: $object
 # ------ return a deep copy of the object
@@ -106,6 +161,12 @@ sub copy($)
   return $s;
 }
 
+=head2 $FRENamelists->names($object)
+
+Return a list of namelist names.
+
+=cut
+
 sub names($)
 # ------ arguments: $object
 # ------ return a list of namelist names
@@ -113,6 +174,12 @@ sub names($)
   my $r = shift;
   return sort keys %{$r};
 }
+
+=head2 $FRENamelists->asFortranString($object)
+
+Return as fortran string.
+
+=cut
 
 sub asFortranString($)
 # ------ arguments: $object
@@ -122,6 +189,12 @@ sub asFortranString($)
   foreach my $name (sort keys %{$r}) {$s .= $r->namelistAsFortranString($name)}
   return $s;
 }
+
+=head2 $FRENamelists->asXMLString($object)
+
+Return as XML string.
+
+=cut
 
 sub asXMLString($)
 # ------ arguments: $object
@@ -136,6 +209,12 @@ sub asXMLString($)
 # ////////////////////////////// Exported Functions - A Single Namelist Level //
 # //////////////////////////////////////////////////////////////////////////////
 
+=head2 $FRENamelists->namelistExists($object, $namelistName)
+
+Checks to see if object exists in namelist.
+
+=cut 
+
 sub namelistExists($$)
 # ------ arguments: $object $namelistName
 # ------ called as object method
@@ -143,6 +222,12 @@ sub namelistExists($$)
   my ($r, $n) = @_;
   return exists($r->{$n});
 }
+
+=head2 $FRENamelists->namelistGet($object, $namelistName)
+
+Returns object in namelist. 
+
+=cut
 
 sub namelistGet($$)
 # ------ arguments: $object $namelistName
@@ -152,6 +237,12 @@ sub namelistGet($$)
   return $r->{$n};
 }
 
+=head2 $FRENamelists->namelistPut($object, $namelistName, $namelistContent)
+
+Puts $namelistContent with $namelistName.
+
+=cut
+
 sub namelistPut($$$)
 # ------ arguments: $object $namelistName $namelistContent
 # ------ called as object method
@@ -159,6 +250,12 @@ sub namelistPut($$$)
   my ($r, $n, $c) = @_;
   $r->{$n} = $c;
 }
+
+=head2 $FRENamelists->namelistAsFortranString($object, $namelistName)
+
+Returns namelist as Fortran String.
+
+=cut
 
 sub namelistAsFortranString($$)
 # ------ arguments: $object $namelistName
@@ -170,6 +267,12 @@ sub namelistAsFortranString($$)
   $s .= '/' . "\n\n";
   return $s;
 }
+
+=head2 $FRENamelists->namelistAsXMLString($object, $namelistName)
+
+Returns namelist as XML String.
+
+=cut
 
 sub namelistAsXMLString($$)
 # ------ arguments: $object $namelistName
@@ -186,6 +289,16 @@ sub namelistAsXMLString($$)
 # ///////////////////// Exported Functions - A Single Namelist Variable Level //
 # //////////////////////////////////////////////////////////////////////////////
 
+=head2 $FRENamelists->namelistBooleanGet($object, $namelistName, $variable)
+
+Namelist as boolean format.
+
+object:
+namelistName:
+variable:
+
+=cut
+
 sub namelistBooleanGet($$$)
 # ------ arguments: $object $namelistName $variable
 {
@@ -200,11 +313,23 @@ sub namelistBooleanGet($$$)
   }
 }
 
+=head2 $FRENamelists->namelistBooleanPut($object, $namelistName, $variable, $value)
+
+Put boolean $value in namelist.
+
+=cut
+
 sub namelistBooleanPut($$$$)
 # ------ arguments: $object $namelistName $variable $value
 {
   $namelistValuePut->(@_[0,1,2], ($_[3]) ? '.true.' : '.false.', FRENamelists::PATTERN_BOOLEAN, '');
 }
+
+=head2 $FRENamelists->namelistIntegerGet($object, $namelistName, $variable)
+
+Namelist as integer format.
+
+=cut
 
 sub namelistIntegerGet($$$)
 # ------ arguments: $object $namelistName $variable
@@ -212,11 +337,23 @@ sub namelistIntegerGet($$$)
   return $namelistValueGet->(@_, FRENamelists::PATTERN_INTEGER, FRENamelists::PATTERN_TAIL_BREAK);
 } 
 
+=head2 $FRENamelists->namelistIntegerPut($object, $namelistName, $variable, $value)
+
+Put integer $value in namelist.
+
+=cut
+
 sub namelistIntegerPut($$$$)
 # ------ arguments: $object $namelistName $variable $value
 {
   $namelistValuePut->(@_, FRENamelists::PATTERN_INTEGER, FRENamelists::PATTERN_TAIL_BREAK);
 }
+
+=head2 $FRENamelists->namelistDoubleQuotedStringGet($object, $namelistName, $variable)
+
+Namelist as double quoted string format.
+
+=cut
 
 sub namelistDoubleQuotedStringGet($$$)
 # ------ arguments: $object $namelistName $variable
@@ -224,11 +361,23 @@ sub namelistDoubleQuotedStringGet($$$)
   return $namelistValueGet->(@_, FRENamelists::PATTERN_DQSTRING, '');
 } 
 
+=head2 $FRENamelists->namelistDoubleQuotedStringPut($object, $namelistName, $variable, $value)
+
+Put double quoted string $value in namelist.
+
+=cut
+
 sub namelistDoubleQuotedStringPut($$$$)
 # ------ arguments: $object $namelistName $variable $value
 {
   $namelistValuePut->(@_[0,1,2], "\"$_[3]\"", FRENamelists::PATTERN_DQSTRING, '');
 }
+
+=head2 $FRENamelists->namelistSingleQuotedStringGet($object, $namelistName, $variable)
+
+Namelist as single quoted string format.
+
+=cut
 
 sub namelistSingleQuotedStringGet($$$)
 # ------ arguments: $object $namelistName $variable
@@ -236,11 +385,22 @@ sub namelistSingleQuotedStringGet($$$)
   return $namelistValueGet->(@_, FRENamelists::PATTERN_SQSTRING, '');
 } 
 
+=head2 $FRENamelists->namelistSingleQuotedStringPut($object, $namelistName, $variable, $value)
+
+Put single quoted string $value in namelist.
+
+=cut
+
 sub namelistSingleQuotedStringPut($$$$)
 # ------ arguments: $object $namelistName $variable $value
 {
   $namelistValuePut->(@_[0,1,2], "'$_[3]'", FRENamelists::PATTERN_SQSTRING, '');
 }
+
+=head2 $FRENamelists->namelistDateGet($object, $namelistName, $variable)
+
+
+=cut
 
 sub namelistDateGet($$$)
 # ------ arguments: $object $namelistName $variable
@@ -248,11 +408,19 @@ sub namelistDateGet($$$)
   return $namelistValueGet->(@_, FRENamelists::PATTERN_DATE, FRENamelists::PATTERN_TAIL_BREAK);
 } 
 
+=head2 $FRENamelists->namelistDatePut($object, $namelistName, $variable, $value)
+
+=cut
+
 sub namelistDatePut($$$$)
 # ------ arguments: $object $namelistName $variable $value
 {
   $namelistValuePut->(@_, FRENamelists::PATTERN_DATE, FRENamelists::PATTERN_TAIL_BREAK);
 }
+
+=head2 $FRENamelists->namelistLayoutGet($object, $namelistName, $variable)
+
+=cut
 
 sub namelistLayoutGet($$$)
 # ------ arguments: $object $namelistName $variable
@@ -260,17 +428,29 @@ sub namelistLayoutGet($$$)
   return $namelistValueGet->(@_, FRENamelists::PATTERN_LAYOUT, FRENamelists::PATTERN_TAIL_BREAK);
 } 
 
+=head2 $FRENamelists->namelistLayoutPut($object, $namelistName, $variable, $value)
+
+=cut
+
 sub namelistLayoutPut($$$$)
 # ------ arguments: $object $namelistName $variable $value
 {
   $namelistValuePut->(@_, FRENamelists::PATTERN_LAYOUT, FRENamelists::PATTERN_TAIL_BREAK);
 }
 
+=head2 $FRENamelists->namelistTypelessGet($object, $namelistName, $variable)
+
+=cut
+
 sub namelistTypelessGet($$$)
 # ------ arguments: $object $namelistName $variable
 {
   return $namelistValueGet->(@_, FRENamelists::PATTERN_TYPELESS, FRENamelists::PATTERN_TAIL_ALL);
 }
+
+=head2 $FRENamelists->namelistTypelessPut($object, $namelistName, $variable, $value)
+
+=cut 
 
 sub namelistTypelessPut($$$$)
 # ------ arguments: $object $namelistName $variable $value
@@ -281,6 +461,13 @@ sub namelistTypelessPut($$$$)
 # //////////////////////////////////////////////////////////////////////////////
 # ///////////////////// Exported Functions - Additional utilities             //
 # //////////////////////////////////////////////////////////////////////////////
+
+=head2 $FRENamelists->mergeNamelistContent($base_namelist_content, $override_namelist_content)
+
+Combines base and override namelist content for a single namelist,
+overwriting and combining as expected.
+
+=cut
 
 # Combines base and override namelist content for a single namelist,
 #   overwriting and combining as expected.

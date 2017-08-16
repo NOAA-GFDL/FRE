@@ -13,6 +13,12 @@
 # Designed and written by V. Balaji, Amy Langenhorst and Aleksey Yakovlev
 #
 
+=head1 NAME
+
+FRE-FRETargets
+
+=cut
+
 package FRETargets;
 
 use strict;
@@ -30,6 +36,16 @@ use constant TARGET_FOLLOWERS	=> ('hdf5', 'openmp');
 # //////////////////////////////////////////////////////////////////////////////
 # //////////////////////////////////////////////////////// Exported Functions //
 # //////////////////////////////////////////////////////////////////////////////
+
+=head1 EXPORTED FUNCTIONS
+
+=head2 $FRETargets->standardize($targetList)
+
+Return standard representation of the target list (as a string) and optional error message
+
+targetList: Target list string.
+
+=cut
 
 sub standardize($)
 # ------ arguments: $targetList
@@ -88,6 +104,15 @@ sub standardize($)
   }
 }
 
+=head2 $FRETargets->contains($targetList $target)
+
+Returns number of instances of $target in $targetList.
+
+target: Target string (e.g. prod-openmp).
+targetList: Target list string.
+
+=cut
+
 sub contains($$)
 # ------ arguments: $targetList $target
 {
@@ -95,11 +120,23 @@ sub contains($$)
   return scalar(grep($_ eq $t, split('-', $l))) > 0;
 }
 
+=head2 $FRETargets->containsProd($targetList)
+
+Returns 1 if $targetList contains 'prod'. 
+
+=cut
+
 sub containsProd($)
 # ------ arguments: $targetList
 {
   return FRETargets::contains(shift, 'prod');
 }
+
+=head2 $FRETargets->containsRepro($targetList)
+
+Returns 1 if $targetList contains 'repro'.
+
+=cut
 
 sub containsRepro($)
 # ------ arguments: $targetList
@@ -107,11 +144,23 @@ sub containsRepro($)
   return FRETargets::contains(shift, 'repro');
 }
 
+=head2 $FRETargets->containsDebug($targetList) 
+
+Returns 1 if $targetList contains 'debug'.
+
+=cut
+
 sub containsDebug($)
 # ------ arguments: $targetList
 {
   return FRETargets::contains(shift, 'debug');
 }
+
+=head2 $FRETargets->containsHDF5($targetList) 
+
+Returns 1 if $targetList contains 'hdf5'.
+
+=cut
 
 sub containsHDF5($)
 # ------ arguments: $targetList
@@ -119,11 +168,23 @@ sub containsHDF5($)
   return FRETargets::contains(shift, 'hdf5');
 }
 
+=head2 $FRETargets->containsOpenMP($targetlist) 
+
+Returns 1 if $targetList contains 'openmp'. 
+
+=cut
+
 sub containsOpenMP($)
 # ------ arguments: $targetList
 {
   return FRETargets::contains(shift, 'openmp');
 }
+
+=head2 $FRETargets->starters()
+
+return TARGET_STARTERS;
+
+=cut
 
 sub starters()
 # ------ arguments: none
@@ -131,17 +192,36 @@ sub starters()
   return TARGET_STARTERS;
 }
 
+=head2 $FRETargets->followers()
+
+return TARGET_FOLLOWERS;
+
+=cut
+
 sub followers()
 # ------ arguments: none
 {
   return TARGET_FOLLOWERS;
 }
 
+=head2 $FRETargets->all()
+
+return (TARGET_STARTERS, TARGET_FOLLOWERS);
+
+=cut
+
+
 sub all()
 # ------ arguments: none
 {
   return (TARGET_STARTERS, TARGET_FOLLOWERS);
 }
+
+=head2 $FRETargets->allCombinations()
+
+Returns list of all possible combinations of target starters and followers.
+
+=cut
 
 sub allCombinations()
 # ------ arguments: none
