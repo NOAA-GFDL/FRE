@@ -2,8 +2,8 @@ source $MODULESHOME/init/csh
 
 module use -a /ncrc/home2/fms/local/modulefiles
 module unload PrgEnv-pgi PrgEnv-intel PrgEnv-gnu PrgEnv-cray
-module unload netcdf fre
-module load PrgEnv-gnu/5.2.82
+module unload cray-netcdf fre
+module load PrgEnv-gnu/6.0.3
 module swap gcc gcc/$(COMPILER_VERSION)
 module load fre/$(FRE_VERSION)
 module load git
