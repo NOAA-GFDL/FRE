@@ -1,0 +1,1 @@
+../ncrc_common/gnu.mk
