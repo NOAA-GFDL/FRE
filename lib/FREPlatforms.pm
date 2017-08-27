@@ -145,7 +145,7 @@ sub siteDir($)
 # ------ arguments: $site
 {
   my ($site, $siteRoot, $siteHead) = $siteParse->(shift);
-  return (defined($site)) ? $siteDir->($siteRoot) : '';
+  return (defined($site)) ? $siteDir->($site) : '';
 }
 
 sub siteReplace($$)
