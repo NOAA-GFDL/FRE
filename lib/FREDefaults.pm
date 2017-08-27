@@ -77,6 +77,7 @@ use constant STATUS_XML_NOT_VALID			=>  1;
 
 use constant STATUS_COMMAND_GENERIC_PROBLEM		=> 10;
 use constant STATUS_COMMAND_NO_EXPERIMENTS		=> 11;
+use constant STATUS_COMMAND_PLATFORM_PROBLEM    => 12;
 
 use constant STATUS_FS_GENERIC_PROBLEM			=> 20;
 use constant STATUS_FS_PERMISSION_PROBLEM		=> 21;
