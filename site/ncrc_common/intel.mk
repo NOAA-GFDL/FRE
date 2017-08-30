@@ -80,8 +80,9 @@ ifneq ($(OPENMP),)
 CFLAGS += $(CFLAGS_OPENMP)
 FFLAGS += $(FFLAGS_OPENMP)
 LDFLAGS += $(LDFLAGS_OPENMP)
-# to correct a loader bug on gaea: envars below set by module load intel
-LIBS += -L$(INTEL_PATH)/$(INTEL_MAJOR_VERSION)/$(INTEL_MINOR_VERSION)/lib/intel64 -lifcoremt
+ifeq ($(INTEL_MAJOR_VERSION),15.0)
+STATIC_LIBS := /opt/intel/compilers_and_libraries_2016.3.210/linux/compiler/lib/intel64_lin/libifcoremt.a
+endif
 endif
 
 ifneq ($(VERBOSE),)
