@@ -31,17 +31,17 @@ evalTAP () {
 # Run the FRE tests
 do_tests () {
   case $FRE_SYSTEM_SITE in
-	  gfdl )
-	    PATH=$PATH:/home/sdu/opt/bats/bin
-		  ;;
-	  gfdl-ws )
-		  PATH=$PATH:/home/sdu/opt/bats/bin
-		  ;;
+    gfdl )
+      PATH=$PATH:/home/sdu/opt/bats/bin
+      ;;
+    gfdl-ws )
+      PATH=$PATH:/home/sdu/opt/bats/bin
+      ;;
     theia )
       PATH=${PATH}:/home/Seth.Underwood/opt/bats/0.4.0/bin
       ;;
     ncrc3 )
-		  PATH=$PATH:/ncrc/home2/Seth.Underwood/opt/bats/0.4.0/bin
+      PATH=$PATH:/ncrc/home2/Seth.Underwood/opt/bats/0.4.0/bin
       ;;
     ncrc4 )
       PATH=$PATH:/ncrc/home2/Seth.Underwood/opt/bats/0.4.0/bin
@@ -50,6 +50,7 @@ do_tests () {
 
   export PATH
 
+  # Run tests that require an XML
   pushd xml
 
   local command="bats -t ../frelist.bats"
@@ -75,6 +76,16 @@ do_tests () {
   rm -f frerun.tap
 
   popd
+
+  # Other tests that don't require an XML
+  local other_exit=0
+  for t in $( ls [0-9][0-9]-*.bats )
+  do
+     command="bats -t ${t}"
+     echo $command
+     $command | tee ${t}.tap 2>&1
+     other_exit=$(expr $other_exit + $(evalTAP ${t}.tap))
+  done
 
   local myExit=$(expr $frelist_exit + $fremake_exit + $frerun_exit)
 
@@ -189,7 +200,7 @@ do_deploy () {
 myExit=0
 
 # Settings to run tests if not run in GITLAB_CI
-if [ -z ${BITLAB_CI+x} ]
+if [ -z ${GITLAB_CI+x} ]
 then
   # Not running with gitlab CI
   CI_JOB_STAGE=test
