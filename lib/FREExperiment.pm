@@ -165,21 +165,13 @@ $experimentCreate = sub($$$)
 	  }
 	  else {
 	      # Now, let's check to see if they've set it to no!
-	      if ( $dbswitchValue =~ /(no|false|off)/i ){
-		  $r->{MDBIswitch} = 0;
-	      } elsif ( $dbswitchValue =~ /^\$/ ){
-		  # The DBswitch was set to a shell variable, but let's look in the
-		  # XML properties to see if they actually set it to off
-		  $dbswitchValue =~ s/^\$//;
-		  $dbswitchValue = $fre->{properties}->{$dbswitchValue};
-		  if ( $dbswitchValue =~ /(no|false|off)/ ){
+	      if ( $dbswitchValue =~ /^(no|false|off)$/i ){
 		      $r->{MDBIswitch} = 0;
-		  }
+	      }
 		  else {
 		      # The DBswitch wasn't off|false|no, so Put all the things in Curator!
 		      $r->{MDBIswitch} = 1;
 		  }
-	      }
 	  }
       }
       else {
