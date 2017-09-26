@@ -8,7 +8,7 @@
 #
 
 package FREExperiment;
-
+use Data::Dumper;
 use strict;
 
 use List::Util();
