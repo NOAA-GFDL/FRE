@@ -384,11 +384,11 @@ sub analysis {
          my $asrcfile = "$component.$tt.$ssn.nc";
          if ($opt_V) {print "asrcfile:: $asrcfile\n"};
 
-         # only proceed if ending analysis time == -t time
-         unless ($arrayofExptsH[$ii]{time} =~ /^$arrayofExptsH[0]{aendYear}/) {
-             print STDERR "ANALYSIS: skipping accumulative $aScriptout because ending analysis year ($arrayofExptsH[0]{aendYear}) != ending time specified on command-line -t ($arrayofExptsH[$ii]{time})\n";
-             next;
-         }
+         # only proceed if ending analysis time == -t time, unless -Y or -Z are given
+        if (!$opt_Y and !$opt_Z and $arrayofExptsH[$ii]{time} !~ /^$arrayofExptsH[0]{aendYear}/) {
+            print STDERR "ANALYSIS: skipping accumulative $aScriptout because ending analysis year ($arrayofExptsH[0]{aendYear}) != ending time specified on command-line -t ($arrayofExptsH[$ii]{time})\n";
+            next;
+        }
 
         #----#---- fill the variables in the template
         #if ($opt_V) {print STDERR "fill these vars: @arrayofExptsH\n,$figureDir\n,$aScript\n,$aScriptout\n,$iExpt\n,$workdir\n,$mode\n"; }
