@@ -33,7 +33,7 @@ MPI_ROOT    = $(MPICH_DIR)
 INCLUDE = -I$(NETCDF_ROOT)/include
 
 FPPFLAGS = $(INCLUDE)
-FFLAGS = -s real64 -s integer32 -h byteswapio -h nosecond_underscore -e m -h keepfiles -e0 -ez
+FFLAGS = -s real64 -s integer32 -h byteswapio -h nosecond_underscore -e m -h keepfiles -e0 -ez -N1023
 FFLAGS_OPT = -O3 -O fp2 -G2
 FFLAGS_DEBUG = -g -R bc
 FFLAGS_REPRO = -O2 -O fp2 -G2
