@@ -155,7 +155,7 @@ $experimentCreate = sub($$$)
       $r->{node} = $fre->experimentNode($e);
       # ---------------------------- Figure out whether experiment belongs in database or not
       my $publicMetadataNode = $fre->experimentNode($e)->findnodes('publicMetadata');
-      if ( defined $publicMetadataNode ){
+      if ( $publicMetadataNode ){
 	  my $dbswitchValue = $fre->experimentNode($e)->findvalue('publicMetadata/@DBswitch');
 	  if ( ! $dbswitchValue ){
 	      # The user took the time to create the publicMetadata tags,
