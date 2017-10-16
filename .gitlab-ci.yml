@@ -1,0 +1,95 @@
+before_script:
+  - hostname
+
+.testScript: &testScript
+  script:
+    - source ${MODULESHOME}/init/bash
+    - module unuse ${FMS_HOME}/local/modulefiles
+    - module use ${FMS_HOME}/local/modulefiles_test
+    - module load fre/test
+    - cd t/FRE_tests
+    - ./run_tests
+
+.deployScript: &deployScript
+  only:
+    - master
+  script:
+    - ${CI_PROJECT_DIR}/t/FRE_tests/run_tests
+
+ncrc3:
+  tags:
+    - ncrc3
+  variables:
+    FRE_COMMANDS_TEST: ${CI_PROJECT_DIR}
+    MODULESHOME: /opt/modules/default
+    FMS_HOME: /ncrc/home2/fms
+  <<: *testScript
+
+ncrc4:
+  tags:
+    - ncrc4
+  variables:
+    FRE_COMMANDS_TEST: ${CI_PROJECT_DIR}
+    MODULESHOME: /opt/cray/pe/modules/default
+    FMS_HOME: /ncrc/home2/fms
+  <<: *testScript
+
+theia:
+  tags:
+    - theia
+  variables:
+    FRE_COMMANDS_TEST: ${CI_PROJECT_DIR}
+    PROJECT_DIR: /scratch4/GFDL/gfdlscr
+    MODULESHOME: /apps/lmod/lmod
+    FMS_HOME: /home/fms
+  #<<: *testScript
+  script:
+    - echo skipping theia until modules are fixed
+
+gfdl-ws:
+  tags:
+    - gfdl-ws
+  variables:
+    FRE_COMMANDS_TEST: ${CI_PROJECT_DIR}
+    MODULESHOME: /usr/local/Modules/default
+    FMS_HOME: /home/fms
+  <<: *testScript
+
+gfdl:
+  tags:
+    - gfdl
+  variables:
+    FRE_COMMANDS_TEST: ${CI_PROJECT_DIR}
+    MODULESHOME: /usr/share/Modules
+    FMS_HOME: /home/fms
+  <<: *testScript
+
+stage:ncrc:
+   stage: deploy
+   environment:
+     name: stage_ncrc
+   tags:
+      - ncrc_deploy
+   variables:
+      FRE_COMMANDS_DIR: /ncrc/home2/fms/local/opt/fre-commands/test
+   <<: *deployScript
+
+stage:theia:
+   stage: deploy
+   environment:
+     name: stage_theia
+   tags:
+      - theia_deploy
+   variables:
+      FRE_MOD_DIR: /home/fms/local/opt/fre-commands/test
+   <<: *deployScript
+
+stage:gfdl:
+   stage: deploy
+   environment:
+     name: stage_gfdl
+   tags:
+      - gfdl-ws_deploy
+   variables:
+      FRE_MOD_DIR: /home/fms/local/opt/fre-commands/test
+   <<: *deployScript

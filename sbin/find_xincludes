@@ -99,7 +99,7 @@ use XML::LibXML();
         } ## end if ( -f $filename and ...)
         else {
             print STDERR "The file '$filename' isn't found or not readable\n" if $v;
-            return 1;
+            return 1; # just a measly warning ....
         }
     } ## end sub Process($$$$$)
 
@@ -118,7 +118,12 @@ use XML::LibXML();
     if ( $opt{version} ) { print STDERR find_xincludes::VERSION, "\n" and exit 0; }
     if ( $opt{help} ) { print STDERR find_xincludes::Help() and exit 0; }
 
+
     if ( scalar(@ARGV) == 1 ) {
+        if ( ! -r $ARGV[0] ) {
+            print STDERR "File $ARGV[0] unreadable\n";
+            exit 1;
+        }
         my @list     = ();
         my $parser   = XML::LibXML->new();
         my $filename = File::Spec->rel2abs( $ARGV[0] );
