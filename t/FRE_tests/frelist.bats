@@ -4,6 +4,12 @@
 # for the tests to pass.  DO NOT adjust unless needed, this includes removing
 # whitespace.
 
+load test_helpers
+
+setup() {
+    unique_string="date$(date +%s)pid$$"
+}
+
 @test "frelist is in PATH" {
     run which frelist
     echo "Got: \"$output\""
@@ -62,12 +68,26 @@ CM2.1U_Control-1990_E1.M_3B_snowmelt_static_ocn6x5 INHERITS FROM CM2.1U_Control-
     [ "$status" -eq 0 ]
 }
 
+@test "Validate Curator tags when Curator tags don't exist" {
+    output_good="*FATAL*: No CMIP Curator tags found; see CMIP metadata tag documentation at http://cobweb.gfdl.noaa.gov/~pcmdi/CMIP6_Curator/xml_documentation"
+
+    run frelist -c -x CM2.1U.xml CM2.1U_Control-1990_E1.M_3A
+    echo "Expected: \"$output_good\""
+    echo "Got: \"$output\""
+    echo "Exit status: $status"
+    [ "$status" -eq 30 ]
+    [ "$output" = "$output_good" ]
+}
+
 @test "Validate Curator tags" {
     # Need more tests with bad XMLs to catch invalid XMLs
-    run frelist -c -x CM2.1U.xml CM2.1U_Control-1990_E1.M_3A
+    output_good="<NOTE> : The XML file 'publicMetadata' has been successfully validated"
+    run frelist -c -x CM2.1U.xml CM2.1U_Control-1990_E1.M_3B_snowmelt_static_ocn6x5
+    echo "Expected: \"$output_good\""
     echo "Got: \"$output\""
     echo "Exit status: $status"
     [ "$status" -eq 0 ]
+    [ "$output" = "$output_good" ]
 }
 
 @test "List experiments no platform listed" {
@@ -83,25 +103,12 @@ CM2.1U_Control-1990_E1.M_3B_snowmelt_static_ocn6x5 INHERITS FROM CM2.1U_Control-
     [[ "$output_good" =~ "$output" ]]
 }
 
-@test "List experiments when --platform=ncrc2.intel" {
+@test "List experiments when --platform=${default_platform}" {
     output_good="CM2.1U_Control-1990_E1.M_3A
 CM2.1U_Control-1990_E1.M_3B_snowmelt INHERITS FROM CM2.1U_Control-1990_E1.M_3A
 CM2.1U_Control-1990_E1.M_3B_snowmelt_static_ocn6x5 INHERITS FROM CM2.1U_Control-1990_E1.M_3B_snowmelt"
 
-    run frelist -p ncrc2.intel -x CM2.1U.xml
-    echo "Expected: \"$output_good\""
-    echo "Got:      \"$output\""
-    echo "Exit status: $status"
-    [ "$status" -eq 0 ]
-    [[ "$output_good" =~ "$output" ]]
-}
-
-@test "List experiments when --platform=intel" {
-    output_good="CM2.1U_Control-1990_E1.M_3A
-CM2.1U_Control-1990_E1.M_3B_snowmelt INHERITS FROM CM2.1U_Control-1990_E1.M_3A
-CM2.1U_Control-1990_E1.M_3B_snowmelt_static_ocn6x5 INHERITS FROM CM2.1U_Control-1990_E1.M_3B_snowmelt"
-
-    run frelist -p intel -x CM2.1U.xml
+    run frelist -p ${default_platform} -x CM2.1U.xml
     echo "Expected: \"$output_good\""
     echo "Got:      \"$output\""
     echo "Exit status: $status"
@@ -122,6 +129,21 @@ CM2.1U_Control-1990_E1.M_3B_snowmelt_static_ocn6x5"
     [[ "$output_good" =~ "$output" ]]
 }
 
+@test "Capture bad project setting" {
+    output_good="*FATAL*: Your project name 'gfdl_YOURGROUPLETTER' appears to be invalid, please correct your XML's platform section."
+
+    # Skip if not on ncrc3 or ncrc4
+    if [ "${FRE_SYSTEM_SITE}" != "ncrc3" -a "${FRE_SYSTEM_SITE}" != "ncrc4" ]; then
+        skip "Test only valid on ncrc3 and ncrc4 sites"
+    fi
+    run frelist -p ${FRE_SYSTEM_SITE}.yourgroupletter -x CM2.1U.xml
+    echo "Expected: \"$output_good\""
+    echo "Got:      \"$output\""
+    echo "Exit status: $status"
+    [ "$status" -eq 30 ]
+    [[ "$output_good" =~ "$output" ]]
+}
+
 @test "List experiment description" {
     output_good="CM2.1U_Control-1990_E1.M_3A
 ---------------------------------------------------------------------
@@ -129,13 +151,16 @@ CM2.1U_Control-1990_E1.M_3B_snowmelt_static_ocn6x5"
       This experiment is same as the latest CM2.1U_Control-1860_D1 specified in
       /home/ccsp/fjz/ipcc_ar4_preK/CM2.1U_Control-1860_D1.xml, except for:
       1. running with year 1990 radiative forcing and 1990 land cover
-      2. the executable is built with Khartoum code on sep 01, 2004 by this xml file:
+      2. the executable is built with Khartoum code on sep 01, 2004 by
+         this xml file:
          /home/fjz/cm2.1_K_20040901/CM2.1U_Control-1860_D1.xml
-      3. the initCond is based on /archive/fjz/IC/CM3_ic_00010101.cpio but
-         reformed to one time level by Matt.
-      4. the diagTable has some addtions for energy balance terms suggested by Tony R.
+      3. the initCond is based on /archive/fjz/IC/CM3_ic_00010101.cpio
+         but reformed to one time level by Matt.
+      4. the diagTable has some addtions for energy balance terms
+         suggested by Tony R.
       5. run 30 atmos and 20 ocean PEs
-    "
+    
+"
 
     run frelist -D -x CM2.1U.xml CM2.1U_Control-1990_E1.M_3A
     echo "Expected: \"$output_good\""
@@ -145,127 +170,403 @@ CM2.1U_Control-1990_E1.M_3B_snowmelt_static_ocn6x5"
     [[ "$output_good" =~ "$output" ]]
 }
 
-@test "Get stdout directory for --platform=ncrc2.intel" {
-    output_good="/lustre/f1/.*/ulm_201505/CM2.1U_Control-1990_E1.M_3A/ncrc2.intel-prod/stdout"
+@test "Get stdout directory for --platform=${default_platform}" {
+    case ${FRE_SYSTEM_SITE} in
+	ncrc3 )
+	    stdoutRoot="/lustre/f1"
+	    ;;
+	ncrc4 )
+	    stdoutRoot="/lustre/f1"
+	    ;;
+	gfdl-ws )
+	    stdoutRoot="/home"
+	    ;;
+	gfdl )
+	    stdoutRoot="/home"
+	    ;;
+	theia )
+	    stdoutRoot="/scratch4/GFDL/gfdlscr"
+	    ;;
+	* )
+	    skip "Unknown site '${FRE_SYSTEM_SITE}'."
+	    ;;
+    esac
 
-    run frelist -p ncrc2.intel -d stdout -x CM2.1U.xml CM2.1U_Control-1990_E1.M_3A
+    output_good="${stdoutRoot}/$USER/.*/CM2.1U_Control-1990_E1.M_3A/${FRE_SYSTEM_SITE}.intel-prod/stdout"
+
+    run frelist -p ${default_platform} -d stdout -x CM2.1U.xml CM2.1U_Control-1990_E1.M_3A
     echo "Expected: \"$output_good\""
     echo "Got:      \"$output\""
     echo "Exit status: $status"
     [ "$status" -eq 0 ]
-    [ $( expr "$output" : "$output_good" ) -gt 0 ]
+    string_matches_pattern "$output" "$output_good"
 }
 
-@test "Get analysis and archive directories for --platform=gfdl.ncrc2-intel" {
-    output_good="archive: /archive/.*/ulm_201505/CM2.1U_Control-1990_E1.M_3A/gfdl.ncrc2-intel-prod
-analysis: /archive/.*/ulm_201505/CM2.1U_Control-1990_E1.M_3A/gfdl.ncrc2-intel-prod/analysis"
+@test "Get analysis and archive directories for --platform=gfdl.${FRE_SYSTEM_SITE}-intel" {
+    case ${FRE_SYSTEM_SITE} in
+	gfdl-ws )
+	    userStr=$USER
+	    platform=gfdl.${FRE_SYSTEM_SITE}-intel
+	    ;;
+	gfdl )
+	    userStr=$USER
+	    platform=gfdl.intel
+	    ;;
+	* )
+	    userStr=\$USER
+	    platform=gfdl.${FRE_SYSTEM_SITE}-intel
+	    ;;
+    esac
 
-    run frelist -p gfdl.ncrc2-intel -d analysis,archive -x CM2.1U.xml CM2.1U_Control-1990_E1.M_3A
-    [ "$status" -eq 0 ]
+    output_good="archive: /archive/$userStr/.*/CM2.1U_Control-1990_E1.M_3A/${platform}-prod
+analysis: /archive/$userStr/.*/CM2.1U_Control-1990_E1.M_3A/${platform}-prod/analysis"
+
+    run frelist -p ${platform} -d analysis,archive -x CM2.1U.xml CM2.1U_Control-1990_E1.M_3A
     echo "Expected: \"$output_good\""
     echo "Got:      \"$output\""
     echo "Exit status: $status"
-    [ $( expr "$output" : "$output_good" ) -gt 0 ]
+    [ "$status" -eq 0 ]
+    string_matches_pattern "$output" "$output_good"
 }
 
-@test "List all directories for ncrc2.intel" {
+@test "List all directories for ${FRE_SYSTEM_SITE}.intel" {
     # Assume all directories are correct, if the ones above are
     # This is to only check that this specific command runs
-    run frelist -d all -x CM2.1U.xml -p ncrc2.intel
+    run frelist -d all -x CM2.1U.xml -p ${default_platform}
     echo "Got: \"$output\""
     echo "Exit status: $status"
     [ "$status" -eq 0 ]
 }
 
-@test "Get the executable --platform=ncrc2.intel" {
-    output_good="/lustre/f1/unswept/.*/ulm_201505/CM2.1U_Control-1990_E1.M_3A/ncrc2.intel-prod/exec/fms_CM2.1U_Control-1990_E1.M_3A.x CM2.1U_Control-1990_E1.M_3A"
+@test "Get the executable --platform=${default_platform}" {
+    case ${FRE_SYSTEM_SITE} in
+	ncrc3 )
+	    execRoot="/lustre/f1/unswept"
+	    ;;
+	ncrc4 )
+	    execRoot="/lustre/f1/unswept"
+	    ;;
+	gfdl-ws )
+	    execRoot="/home"
+	    ;;
+	gfdl )
+	    execRoot="/home"
+	    ;;
+	theia )
+	    execRoot="/scratch4/GFDL/gfdlscr"
+	    ;;
+	* )
+	    skip "Unknown site '${FRE_SYSTEM_SITE}'."
+	    ;;
+    esac
 
-    run frelist -p ncrc2.intel -E -x CM2.1U.xml CM2.1U_Control-1990_E1.M_3A
+    output_good="$execRoot/$USER/.*/CM2.1U_Control-1990_E1.M_3A/${FRE_SYSTEM_SITE}.intel-prod/exec/fms_CM2.1U_Control-1990_E1.M_3A.x CM2.1U_Control-1990_E1.M_3A"
+
+    run frelist -p ${default_platform} -E -x CM2.1U.xml CM2.1U_Control-1990_E1.M_3A
     echo "Expected: \"$output_good\""
     echo "Got:      \"$output\""
     echo "Exit status: $status"
     [ "$status" -eq 0 ]
-    [ $( expr "$output" : "$output_good" ) -gt 0 ]
+    string_matches_pattern "$output" "$output_good"
 }
 
-@test "Get the executable from inherited experiment --platform=ncrc2.intel" {
-    output_good="/lustre/f1/unswept/.*/ulm_201505/CM2.1U_Control-1990_E1.M_3A/ncrc2.intel-prod/exec/fms_CM2.1U_Control-1990_E1.M_3A.x CM2.1U_Control-1990_E1.M_3A"
+@test "Get the executable from inherited experiment --platform=${default_platform}" {
+    case ${FRE_SYSTEM_SITE} in
+	ncrc3 )
+	    execRoot="/lustre/f1/unswept"
+	    ;;
+	ncrc4 )
+	    execRoot="/lustre/f1/unswept"
+	    ;;
+	gfdl-ws )
+	    execRoot="/home"
+	    ;;
+	gfdl )
+	    execRoot="/home"
+	    ;;
+	theia )
+	    execRoot="/scratch4/GFDL/gfdlscr"
+	    ;;
+	* )
+	    skip "Unknown site '${FRE_SYSTEM_SITE}'."
+	    ;;
+    esac
 
-    run frelist -p ncrc2.intel -E -x CM2.1U.xml CM2.1U_Control-1990_E1.M_3B_snowmelt
+    output_good="$execRoot/$USER/.*/CM2.1U_Control-1990_E1.M_3A/${FRE_SYSTEM_SITE}.intel-prod/exec/fms_CM2.1U_Control-1990_E1.M_3A.x CM2.1U_Control-1990_E1.M_3A"
+
+    run frelist -p ${default_platform} -E -x CM2.1U.xml CM2.1U_Control-1990_E1.M_3B_snowmelt
     echo "Expected: \"$output_good\""
     echo "Got:      \"$output\""
     echo "Exit status: $status"
     [ "$status" -eq 0 ]
-    [ $( expr "$output" : "$output_good" ) -gt 0 ]
+    string_matches_pattern "$output" "$output_good"
 }
 
 @test "Get the executable with a remote user" {
     # Pick a remote site
-    case $( hostname ) in
-	an??? )
-	    REMOTE_SITE=ncrc2.intel
-	    output_good="/lustre/f1/unswept/REM_USER/ulm_201505/CM2.1U_Control-1990_E1.M_3A/ncrc2.intel-prod/exec/fms_CM2.1U_Control-1990_E1.M_3A.x CM2.1U_Control-1990_E1.M_3A"
+    case $FRE_SYSTEM_SITE in
+	ncrc3 )
+	    REMOTE_SITE=gfdl-ws.intel
+	    ;;
+	ncrc4 )
+	    REMOTE_SITE=theia.intel
+	    ;;
+	gfdl | gfdl-ws )
+	    REMOTE_SITE=ncrc4.intel
+	    ;;
+	theia )
+	    REMOTE_SITE=gfdl.theia-intel
 	    ;;
 	* )
-	    REMOTE_SITE=gfdl.intel
-	    output_good="/home/REM_USER/ulm_201505/CM2.1U_Control-1990_E1.M_3A/gfdl.intel-prod/exec/fms_CM2.1U_Control-1990_E1.M_3A.x CM2.1U_Control-1990_E1.M_3A"
+	    skip "Unknown site '${FRE_SYSTEM_SITE}'."
 	    ;;
     esac
+    case $REMOTE_SITE in
+	ncrc4.intel )
+	    execRoot="/lustre/f1/unswept"
+	    ;;
+	gfdl-ws.intel )
+	    execRoot="/home"
+	    ;;
+	theia.intel )
+	    execRoot="/scratch4/GFDL/gfdlscr"
+	    ;;
+	gfdl.theia-intel )
+	    execRoot="/home"
+	    ;;
+    esac
+
+    output_good="${execRoot}/REM_USER/.*/CM2.1U_Control-1990_E1.M_3A/${REMOTE_SITE}-prod/exec/fms_CM2.1U_Control-1990_E1.M_3A.x CM2.1U_Control-1990_E1.M_3A"
 
     run frelist -R REM_USER -p ${REMOTE_SITE} -E -x CM2.1U.xml CM2.1U_Control-1990_E1.M_3A
     echo "Expected \"$output_good\""
     echo "Got:     \"$output\""
     echo "Exit status: $status"
     [ "$status" -eq 0 ]
-    [[ "$output_good" =~ "$output" ]]
+    string_matches_pattern "$output" "$output_good"
 }
 
 @test "Get the executable for all experiments with --target=openmp,repro" {
-    output_good="CM2.1U_Control-1990_E1.M_3A /lustre/f1/unswept/$USER/ulm_201505/CM2.1U_Control-1990_E1.M_3A/ncrc2.intel-repro-openmp/exec/fms_CM2.1U_Control-1990_E1.M_3A.x CM2.1U_Control-1990_E1.M_3A
-CM2.1U_Control-1990_E1.M_3B_snowmelt /lustre/f1/unswept/$USER/ulm_201505/CM2.1U_Control-1990_E1.M_3A/ncrc2.intel-repro-openmp/exec/fms_CM2.1U_Control-1990_E1.M_3A.x CM2.1U_Control-1990_E1.M_3A
-CM2.1U_Control-1990_E1.M_3B_snowmelt_static_ocn6x5 /lustre/f1/unswept/$USER/ulm_201505/CM2.1U_Control-1990_E1.M_3B_snowmelt_static_ocn6x5/ncrc2.intel-repro-openmp/exec/fms_CM2.1U_Control-1990_E1.M_3B_snowmelt_static_ocn6x5.x CM2.1U_Control-1990_E1.M_3B_snowmelt_static_ocn6x5"
+    case ${FRE_SYSTEM_SITE} in
+	ncrc3 )
+	    execRoot="/lustre/f1/unswept"
+	    ;;
+	ncrc4 )
+	    execRoot="/lustre/f1/unswept"
+	    ;;
+	gfdl-ws )
+	    execRoot="/home"
+	    ;;
+	gfdl )
+	    execRoot="/home"
+	    ;;
+	theia )
+	    execRoot="/scratch4/GFDL/gfdlscr"
+	    ;;
+	* )
+	    skip "Unknown site '${FRE_SYSTEM_SITE}'."
+	    ;;
+    esac
 
-    run frelist -p ncrc2.intel -t openmp,repro -E -R ${USER} -x CM2.1U.xml
+    output_good="CM2.1U_Control-1990_E1.M_3A $execRoot/$USER/.*/CM2.1U_Control-1990_E1.M_3A/${FRE_SYSTEM_SITE}.intel-repro-openmp/exec/fms_CM2.1U_Control-1990_E1.M_3A.x CM2.1U_Control-1990_E1.M_3A
+CM2.1U_Control-1990_E1.M_3B_snowmelt $execRoot/$USER/.*/CM2.1U_Control-1990_E1.M_3A/${FRE_SYSTEM_SITE}.intel-repro-openmp/exec/fms_CM2.1U_Control-1990_E1.M_3A.x CM2.1U_Control-1990_E1.M_3A
+CM2.1U_Control-1990_E1.M_3B_snowmelt_static_ocn6x5 $execRoot/$USER/.*/CM2.1U_Control-1990_E1.M_3B_snowmelt_static_ocn6x5/${FRE_SYSTEM_SITE}.intel-repro-openmp/exec/fms_CM2.1U_Control-1990_E1.M_3B_snowmelt_static_ocn6x5.x CM2.1U_Control-1990_E1.M_3B_snowmelt_static_ocn6x5"
+
+    run frelist -p ${default_platform} -t openmp,repro -E -R ${USER} -x CM2.1U.xml
     echo "Expected: \"$output_good\""
     echo "Got:      \"$output\""
     echo "Exit status: $status"
     [ "$status" -eq 0 ]
-    [[ "$output_good" =~ "$output" ]]
+    string_matches_pattern "$output" "$output_good"
 }
 
 @test "Get the namelist for an inherited experiment" {
     # The namelist is long, for now just checking the exit status
-    run frelist -p intel -N -x CM2.1U.xml CM2.1U_Control-1990_E1.M_3B_snowmelt
+    # This test requires the platform to be able to run, which gfdl cannot.  Skip on gfdl
+    case ${FRE_SYSTEM_SITE} in
+	gfdl )
+	    skip "Don't test frelist on Analysis"
+	    ;;
+    esac
+
+    run frelist -p ${default_platform} -N -x CM2.1U.xml CM2.1U_Control-1990_E1.M_3B_snowmelt
     echo "Got: \"$output\""
     echo "Exit status: $status"
     [ "$status" -eq 0 ]
 }
 
-#@test "Extract platform csh section --platform=gfdl.intel" {
-#    output_good="
-#        source \$MODULESHOME/init/csh
-#        module purge
-#        module load fre/bronx-10
-#        
-#      "
+@test "Get the number of nodes that would be requested for an experiment production run" {
+    case "$FRE_SYSTEM_SITE" in
+        ncrc? )
+            num_nodes=7
+            ;;
+        theia )
+            num_nodes=3
+            ;;
+        * )
+            skip "--nodes not supported on site '${FRE_SYSTEM_SITE}'"
+    esac
 
-#    run frelist -p gfdl.intel -S -x CM2.1U.xml
-#    echo "Expected: \"$output_good\""
-#    echo "Got:      \"$output\""
-#    echo "Exit status: $status"
-#    [ "$status" -eq 0 ]
-#    [[ "$output_good" =~ "$output" ]]
-#}
+    output_good="CM2.1U_Control-1990_E1.M_3B_snowmelt production would request $num_nodes nodes.
+CM2.1U_Control-1990_E1.M_3B_snowmelt INHERITS FROM CM2.1U_Control-1990_E1.M_3A"
+
+    run frelist -p ${default_platform} -t prod,openmp -x CM2.1U.xml CM2.1U_Control-1990_E1.M_3B_snowmelt --nodes
+
+    echo "Expected: \"$output_good\""
+    echo "Got: \"$output\""
+    echo "Exit status: $status"
+    [ "$output" = "$output_good" ]
+    [ "$status" -eq 0 ]
+}
+
+@test "Get the number of nodes that would be requested for an experiment's regression runs" {
+    case "$FRE_SYSTEM_SITE" in
+        ncrc? )
+            num_nodes=2
+            ;;
+        theia )
+            num_nodes=3
+            ;;
+        * )
+            skip "--nodes not supported on site '${FRE_SYSTEM_SITE}'"
+    esac
+
+    output_good="CM2.1U_Control-1990_E1.M_3B_snowmelt regression/basic would request $num_nodes nodes.
+CM2.1U_Control-1990_E1.M_3B_snowmelt regression/restarts would request $num_nodes nodes.
+CM2.1U_Control-1990_E1.M_3B_snowmelt INHERITS FROM CM2.1U_Control-1990_E1.M_3A"
+
+    run frelist -p ${default_platform} -t prod,openmp -x CM2.1U.xml CM2.1U_Control-1990_E1.M_3B_snowmelt -r basic,restarts --nodes
+
+    echo "Expected: \"$output_good\""
+    echo "Got: \"$output\""
+    echo "Exit status: $status"
+    [ "$output" = "$output_good" ]
+    [ "$status" -eq 0 ]
+}
+
+@test "Get the number of nodes that would be requested for all production runs" {
+    case "$FRE_SYSTEM_SITE" in
+        ncrc? )
+            num_nodes=7
+            ;;
+        theia )
+            num_nodes=3
+            ;;
+        * )
+            skip "--nodes not supported on site '${FRE_SYSTEM_SITE}'"
+    esac
+
+    output_good="CM2.1U_Control-1990_E1.M_3A is not configured for production run
+CM2.1U_Control-1990_E1.M_3A
+CM2.1U_Control-1990_E1.M_3B_snowmelt production would request $num_nodes nodes.
+CM2.1U_Control-1990_E1.M_3B_snowmelt INHERITS FROM CM2.1U_Control-1990_E1.M_3A
+CM2.1U_Control-1990_E1.M_3B_snowmelt_static_ocn6x5 production would request $num_nodes nodes.
+CM2.1U_Control-1990_E1.M_3B_snowmelt_static_ocn6x5 INHERITS FROM CM2.1U_Control-1990_E1.M_3B_snowmelt"
+
+    run frelist -p ${default_platform} -t prod,openmp -x CM2.1U.xml --nodes
+
+    echo "Expected: \"$output_good\""
+    echo "Got: \"$output\""
+    echo "Exit status: $status"
+    [ "$output" = "$output_good" ]
+    [ "$status" -eq 0 ]
+}
+
+@test "Get the number of nodes that would be requested for regression suite" {
+    case "$FRE_SYSTEM_SITE" in
+        ncrc? )
+            output_good="CM2.1U_Control-1990_E1.M_3A regression/basic would request 2 nodes.
+CM2.1U_Control-1990_E1.M_3A regression/restarts would request 2 nodes.
+CM2.1U_Control-1990_E1.M_3A regression/scaling #1 would request 2 nodes.
+CM2.1U_Control-1990_E1.M_3A regression/scaling #2 would request 2 nodes.
+CM2.1U_Control-1990_E1.M_3A regression/scaling #3 would request 3 nodes.
+CM2.1U_Control-1990_E1.M_3A regression/scaling #4 would request 6 nodes.
+CM2.1U_Control-1990_E1.M_3A
+CM2.1U_Control-1990_E1.M_3B_snowmelt regression/basic would request 2 nodes.
+CM2.1U_Control-1990_E1.M_3B_snowmelt regression/restarts would request 2 nodes.
+CM2.1U_Control-1990_E1.M_3B_snowmelt regression/scaling #1 would request 2 nodes.
+CM2.1U_Control-1990_E1.M_3B_snowmelt regression/scaling #2 would request 2 nodes.
+CM2.1U_Control-1990_E1.M_3B_snowmelt regression/scaling #3 would request 3 nodes.
+CM2.1U_Control-1990_E1.M_3B_snowmelt regression/scaling #4 would request 6 nodes.
+CM2.1U_Control-1990_E1.M_3B_snowmelt INHERITS FROM CM2.1U_Control-1990_E1.M_3A
+CM2.1U_Control-1990_E1.M_3B_snowmelt_static_ocn6x5 regression/basic would request 2 nodes.
+CM2.1U_Control-1990_E1.M_3B_snowmelt_static_ocn6x5 regression/restarts would request 2 nodes.
+CM2.1U_Control-1990_E1.M_3B_snowmelt_static_ocn6x5 regression/scaling #1 would request 2 nodes.
+CM2.1U_Control-1990_E1.M_3B_snowmelt_static_ocn6x5 regression/scaling #2 would request 3 nodes.
+CM2.1U_Control-1990_E1.M_3B_snowmelt_static_ocn6x5 INHERITS FROM CM2.1U_Control-1990_E1.M_3B_snowmelt"
+            ;;
+        theia )
+            output_good="CM2.1U_Control-1990_E1.M_3A regression/basic would request 1 nodes.
+CM2.1U_Control-1990_E1.M_3A regression/restarts would request 1 nodes.
+CM2.1U_Control-1990_E1.M_3A regression/scaling #1 would request 1 nodes.
+CM2.1U_Control-1990_E1.M_3A regression/scaling #2 would request 1 nodes.
+CM2.1U_Control-1990_E1.M_3A regression/scaling #3 would request 1 nodes.
+CM2.1U_Control-1990_E1.M_3A regression/scaling #4 would request 2 nodes.
+CM2.1U_Control-1990_E1.M_3A
+CM2.1U_Control-1990_E1.M_3B_snowmelt regression/basic would request 3 nodes.
+CM2.1U_Control-1990_E1.M_3B_snowmelt regression/restarts would request 3 nodes.
+CM2.1U_Control-1990_E1.M_3B_snowmelt regression/scaling #1 would request 3 nodes.
+CM2.1U_Control-1990_E1.M_3B_snowmelt regression/scaling #2 would request 3 nodes.
+CM2.1U_Control-1990_E1.M_3B_snowmelt regression/scaling #3 would request 3 nodes.
+CM2.1U_Control-1990_E1.M_3B_snowmelt regression/scaling #4 would request 3 nodes.
+CM2.1U_Control-1990_E1.M_3B_snowmelt INHERITS FROM CM2.1U_Control-1990_E1.M_3A
+CM2.1U_Control-1990_E1.M_3B_snowmelt_static_ocn6x5 regression/basic would request 3 nodes.
+CM2.1U_Control-1990_E1.M_3B_snowmelt_static_ocn6x5 regression/restarts would request 3 nodes.
+CM2.1U_Control-1990_E1.M_3B_snowmelt_static_ocn6x5 regression/scaling #1 would request 3 nodes.
+CM2.1U_Control-1990_E1.M_3B_snowmelt_static_ocn6x5 regression/scaling #2 would request 3 nodes.
+CM2.1U_Control-1990_E1.M_3B_snowmelt_static_ocn6x5 INHERITS FROM CM2.1U_Control-1990_E1.M_3B_snowmelt"
+            ;;
+        * )
+            skip "--nodes not supported on site '${FRE_SYSTEM_SITE}'"
+    esac
+
+    run frelist -p ${default_platform} -t prod,openmp -x CM2.1U.xml -r suite --nodes
+
+    echo "Expected: \"$output_good\""
+    echo "Got: \"$output\""
+    echo "Exit status: $status"
+    [ "$output" = "$output_good" ]
+    [ "$status" -eq 0 ]
+}
+
+@test "Extract platform csh section --platform=gfdl.${FRE_SYSTEM_SITE}-intel" {
+    output_good="
+# Platform environment defaults from ${FRE_COMMANDS_HOME}/site/gfdl/env.defaults
+source \$MODULESHOME/init/csh
+module use -a /home/fms/local/modulefiles
+module purge
+module load fre/$FRE_COMMANDS_VERSION
+module load fre-analysis
+module load git
+
+# Platform environment overrides from XML"
+
+    sed -e "s/\(^ *<property *name=\"FRE_VERSION\" *value=\"\).*\(\"\)/\1${FRE_COMMANDS_VERSION}\2/" CM2.1U.xml > ${unique_string}-temp.xml
+    run frelist -p gfdl.${FRE_SYSTEM_SITE}-intel -S -x ${unique_string}-temp.xml
+    echo "Expected: \"$output_good\""
+    echo "Got:      \"$output\""
+    echo "Exit status: $status"
+    [ "$status" -eq 0 ]
+    string_matches_pattern "$output" "$output_good"
+    rm -f ${unique_string}-temp.xml
+}
 
 @test "Accept regression option" {
-    run frelist -r foo -x CM2.1U.xml -p ncrc2.intel
+    run frelist -r foo -x CM2.1U.xml -p ${default_platform}
     echo "Got: \"$output\""
     echo "Exit status: $status"
     [ "$status" -eq 0 ]
 }
 
 @test "Print namelist for regression basic, inherited experiment" {
-    run frelist -r basic -N -x CM2.1U.xml CM2.1U_Control-1990_E1.M_3B_snowmelt -p ncrc2.intel
+    # This test requires the platform to be able to run, which gfdl cannot.  Skip on gfdl
+    case ${FRE_SYSTEM_SITE} in
+	gfdl )
+	    skip "Don't test frelist on Analysis"
+	    ;;
+    esac
+
+    run frelist -r basic -N -x CM2.1U.xml CM2.1U_Control-1990_E1.M_3B_snowmelt -p ${default_platform}
     echo "Got: \"$output\""
     echo "Exit status: $status"
     [ "$status" -eq 0 ]
@@ -277,15 +578,22 @@ CM2.1U_Control-1990_E1.M_3B_snowmelt_static_ocn6x5 /lustre/f1/unswept/$USER/ulm_
 /////////////////////////////////////////////////////////////////////////////////////////////////////
 LABEL      RUN#  DUPE  POSTFIX                                                                       
 -----------------------------------------------------------------------------------------------------
-basic         0        1x0m8d_30x1_20x1                
-restarts      0        2x0m4d_30x1_20x1                
-scaling       0        1x0m8d_30x1_12x1                
-scaling       1        1x0m8d_30x1_30x1                
-scaling       2        1x0m8d_30x1_42x1                
-scaling       3        1x0m8d_30x1_120x1               
+basic         0        1x0m8d_30x1a_20x1o              
+restarts      0        2x0m4d_30x1a_20x1o              
+scaling       0        1x0m8d_30x1a_12x1o              
+scaling       1        1x0m8d_30x1a_30x1o              
+scaling       2        1x0m8d_30x1a_42x1o              
+scaling       3        1x0m8d_30x2a_120x1o             
 -----------------------------------------------------------------------------------------------------"
 
-    run frelist -x CM2.1U.xml -p gfdl.intel -r suite --postfix CM2.1U_Control-1990_E1.M_3A
+    # This test requires the platform to be able to run, which gfdl cannot.  Skip on gfdl
+    case ${FRE_SYSTEM_SITE} in
+	gfdl )
+	    skip "Don't test frelist on Analysis"
+	    ;;
+    esac
+
+    run frelist -x CM2.1U.xml -p ${default_platform} -t openmp -r suite --postfix CM2.1U_Control-1990_E1.M_3A
     echo "Expected: \"$output_good\""
     echo "Got:      \"$output\""
     echo "Exit status: $status"
@@ -328,7 +636,7 @@ scaling       3        1x0m8d_30x1_120x1
 
       '
 
-    run frelist -p ncrc2.intel -e 'input/fieldTable' -x CM2.1U.xml CM2.1U_Control-1990_E1.M_3A
+    run frelist -p ${default_platform} -e 'input/fieldTable' -x CM2.1U.xml CM2.1U_Control-1990_E1.M_3A
     echo "Expected: \"$output_good\""
     echo "Got:      \"$output\""
     echo "Exit status: $status"
@@ -337,33 +645,34 @@ scaling       3        1x0m8d_30x1_120x1
 }
 
 @test "Test -Xml option" {
-    run frelist -X -x CM2.1U.xml -p ncrc2.intel CM2.1U_Control-1990_E1.M_3B_snowmelt_static_ocn6x5
+    run frelist -X -x CM2.1U.xml -p ${default_platform} CM2.1U_Control-1990_E1.M_3B_snowmelt_static_ocn6x5
     echo "Got: \"$output\""
     echo "Exit status: $status"
     [ "$status" -eq 0 ]
 }
 
-#@test "Test inherit of external XML file" {
-#    output_good="
-#           source \$MODULESHOME/init/csh
-#           module purge
-#           module load fre/bronx-10
+@test "Test inherit of external XML file" {
+    skip "MOM6 needs to be updated to bronx-11 first"
+    output_good="
+           source \$MODULESHOME/init/csh
+           module purge
+           module load fre/bronx-10
 
-#           module use -a /home/John.Krasting/local/modulefiles
-#           module load jpk-analysis/0.0.4
-           #Some tricks to use the refineDiag and analysis scripts from a checkout of MOM6 at gfdl 
-#           setenv FREVERSION fre/bronx-10           
-#           setenv NBROOT /nbhome/${USER}/ulm_201505_mom6_2014.12.24/\$(name)/gfdl.ncrc2-intel-prod
-#           mkdir -p \$NBROOT
-#           cd \$NBROOT
-#           git clone /home/fms/git/ocean/mom6
-#
-#         "
+           module use -a /home/John.Krasting/local/modulefiles
+           module load jpk-analysis/0.0.4
+          #Some tricks to use the refineDiag and analysis scripts from a checkout of MOM6 at gfdl 
+           setenv FREVERSION fre/bronx-10           
+           setenv NBROOT /nbhome/${USER}/.*_mom6_2014.12.24/\$(name)/gfdl.ncrc2-intel-prod
+           mkdir -p \$NBROOT
+           cd \$NBROOT
+           git clone /home/fms/git/ocean/mom6
 
-#    run frelist -R ${USER} -p gfdl.ncrc2-intel -S -x MOM6_solo.xml
-#    echo "Expected: \"$output_good\""
-#    echo "Got:      \"$output\""
-#    echo "Exit status: $status"
-#    [ "$status" -eq 0 ]
-#    [[ "$output_good" =~ "$output" ]]
-#}
+         "
+
+    run frelist -R ${USER} -p gfdl.ncrc2-intel -S -x MOM6_solo.xml
+    echo "Expected: \"$output_good\""
+    echo "Got:      \"$output\""
+    echo "Exit status: $status"
+    [ "$status" -eq 0 ]
+    [[ "$output_good" =~ "$output" ]]
+}

@@ -154,17 +154,29 @@ $experimentCreate = sub($$$)
       $r->{name} = $e;
       $r->{node} = $fre->experimentNode($e);
       # ---------------------------- Figure out whether experiment belongs in database or not
-      if ( $fre->experimentNode($e)->findvalue('publicMetadata/@DBswitch')) {
-	  $r->{MDBIswitch} = $fre->experimentNode($e)->findvalue('publicMetadata/@DBswitch');
-	  if ( $fre->experimentNode($e)->findvalue('publicMetadata/project') =~ /^"?cmip\d"?$/i ){
-	      # Run publicMetadata validation if it is a CMIP experiment
-	      FRE::curator($fre->{xmlfileAbsPath}, $e , 1)
-		    if $fre->{caller} =~ /(frepp|frerun)/;
+      my $publicMetadataNode = $fre->experimentNode($e)->findnodes('publicMetadata');
+      if ( defined $publicMetadataNode ){
+	  my $dbswitchValue = $fre->experimentNode($e)->findvalue('publicMetadata/@DBswitch');
+	  if ( ! $dbswitchValue ){
+	      # The user took the time to create the publicMetadata tags,
+	      # but they failed to set any DBswitch, so we're no assuming that they want the
+	      # experiment in the database per discussions on 9/25/17.
+	      $r->{MDBIswitch} = 1;
+	  }
+	  else {
+	      # Now, let's check to see if they've set it to no!
+	      if ( $dbswitchValue =~ /^(no|false|off)$/i ){
+		      $r->{MDBIswitch} = 0;
+	      }
+		  else {
+		      # The DBswitch wasn't off|false|no, so Put all the things in Curator!
+		      $r->{MDBIswitch} = 1;
+		  }
 	  }
       }
       else {
-	  # Assume that the default is off
-	  $r->{MDBIswitch} = "off";
+	  # No publicMetadata no Curator
+	  $r->{MDBIswitch} = 0;
       }
       # ------------------------------------------------------ create and verify directories
       $experimentDirsCreate->($r);

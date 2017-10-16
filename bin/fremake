@@ -376,16 +376,14 @@ use FREXML();
             close $scoScriptHandle;
             chmod 0755, $scoScriptName;
             system $scoScriptName;
-            if (!$?)
-            {
-               FREXML::save(fremake::checkoutVerifyName($z), $r);
-               return (1, FREDefaults::STATUS_OK);
-            }
-            else
+            if ($?)
             {
                $fre->out(FREMsg::FATAL, "The checkout script '$scoScriptName' failed! ($?)");
                return (0, FREDefaults::STATUS_FRE_SOURCE_PROBLEM);
             }
+	    processCompileCleanExecDir($z, 1);
+	    FREXML::save(fremake::checkoutVerifyName($z), $r);
+	    return (1, FREDefaults::STATUS_OK);
          }
          else
          {
@@ -524,21 +522,22 @@ use FREXML();
       }
    }
 
-   sub processCompileCleanExecDir($)
-   # ------ arguments: $exp
+   sub processCompileCleanExecDir
+   # ------ arguments: $exp $performDistClean
    {
-      my $z = shift;
-      my ($execDir, $fre) = ($z->execDir(), $z->fre());
+      my ($z, $performDistClean) = @_;
+      my ($execDir, $fre, $cmpScriptName) = ($z->execDir(), $z->fre(), fremake::compileScriptName($z));
+      my $cleanCmd = $performDistClean ? "distclean; rm -f $cmpScriptName" : "clean";
       if (-f "$execDir/Makefile" && -r "$execDir/Makefile")
       {
-         qx(cd $execDir; make clean);
+         qx(cd $execDir; make $cleanCmd);
          if (!$?)
          {
-            $fre->out(FREMsg::WARNING, "The executable directory '$execDir' has been cleaned by the 'make clean'");
+            $fre->out(FREMsg::WARNING, "The executable directory '$execDir' has been cleaned by the 'make $cleanCmd'");
          }
          else
          {
-            $fre->out(FREMsg::WARNING, "Unable to clean the executable directory '$execDir' by the 'make clean' ($?)");
+            $fre->out(FREMsg::WARNING, "Unable to clean the executable directory '$execDir' by the 'make $cleanCmd' ($?)");
          }
       }
       else
@@ -550,6 +549,7 @@ use FREXML();
             $fre->out(FREMsg::WARNING, "The executable directory '$execDir' has been cleaned") if $n > 0;
          }
       }
+
    }
 
    sub processCompileClean($%)
@@ -787,6 +787,8 @@ use FREXML();
       $cmpScript .= "set mkmf_template = $mkmfTemplate\n\n";
 
       $cmpScript .= "# ---------------- set environment\n\n";
+      $cmpScript .= sprintf "source %s/init/tcsh\n", $fre->property('FRE.tool.modules.home');
+      $cmpScript .= sprintf "module use %s\n", $ENV{FRE_SYSTEM_MODULEFILES_DIR} || $fre->property('FRE.tool.modules.use');
       $cmpScript .= "if ( \$echoOn ) unset echo\n";
       $cmpScript .= "source $envScriptName\n";
       $cmpScript .= "if ( \$echoOn ) set echo\n\n";
@@ -839,45 +841,9 @@ use FREXML();
             # Add compile csh section
             $cmpScript .= "$ref->{compileCsh}\n" if $ref->{compileCsh};
             $cmpScript .= "cd \$bld_dir\n";
-            # Add cpp section, if requested
-            if ( $ref->{doF90Cpp} ) {
-               my $cppIncDirsList = '';
-               if ( $includeDirsList ) {
-                  foreach my $path ( split(/\s+/,$includeDirsList) ) {
-                     if ($path =~ /^-I\//)
-                     {
-                        $path =~ s/$srcDir/\$src_dir/;
-                     }
-                     else
-                     {
-                        $path =~ s/-I/-I\$src_dir\//;
-                     }
-                     $cppIncDirsList .= "$path ";
-                  }
-               }
-               $cmpScript .= "sed -e 's/${tab}/\\t/' >$name/Makefile-cpp <<EOF\n";
-               $cmpScript .= "CPPDEFS = ";
-               $cmpScript .= "$ref->{cppDefs}" if $ref->{cppDefs};
-	       $cmpScript .= " -D_FILE_VERSION=\"\\\`git-version-string \\\$<\\\`\"";
-               $cmpScript .= "\n";
-               $cmpScript .= "ifeq (\\\$(NETCDF),3)\n";
-               $cmpScript .= "  ifneq (\\\$(findstring -Duse_netCDF,\\\$(CPPDEFS)),)\n";
-               $cmpScript .= "    CPPDEFS += -Duse_LARGEFILE\n";
-               $cmpScript .= "  endif\n";
-               $cmpScript .= "endif\n\n";
-               $cmpScript .= "vpath %.F90 \\\$(shell find $paths_str -type d)\n\n";
-               $cmpScript .= "$name/%.f90: %.F90\n";
-               $cmpScript .= "${tab}cpp \\\$(CPPDEFS) -nostdinc -P -C -v ";
-               $cmpScript .= "$cppIncDirsList " if $cppIncDirsList;
-               $cmpScript .= "-o \\\$@ \\\$<\n\n";
-               $cmpScript .= "EOF\n\n";
-               $cmpScript .= "foreach foo ( `grep '\\.[fF]90\$' $name/$pathNames` )\n";
-               $cmpScript .= "   make $makeOverrides -f $name/Makefile-cpp $name/\$foo:t:r.f90\n";
-               $cmpScript .= "   sed -i -e \"\\@\${foo}@ c\\\${bld_dir}/$name/\$foo:t:r.f90\" \$bld_dir/$name/$pathNames\n";
-               $cmpScript .= "end\n\n";
-            }
             $cmpScript .= "pushd $name\n";
             $cmpScript .= "mkmf -m Makefile -a \$src_dir -b \$bld_dir -p lib$name.a -t \$mkmf_template";
+            $cmpScript .= " --use-cpp" if ($ref->{doF90Cpp});
             $cmpScript .= " -g" if ($checkoutInfo->{$name}->{vcBrand} eq 'git'); # Add the git-version hash if using git
             $cmpScript .= " -c \"$ref->{cppDefs}\"" if $ref->{cppDefs};
             $cmpScript .= " -o \"$otherFlags\"" if $otherFlags;

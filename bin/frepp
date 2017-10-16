@@ -256,7 +256,7 @@ EOF
    $maxyrs=0;
    $maxdisk=0;
    $do_static = 1;
-   $fredb_timeout = 300;
+   $fredb_timeout = 60;
    $historyfiles="";
    %dtvars = ();
    $basenpes = 1;
@@ -440,7 +440,7 @@ $version_head .= "-x $abs_xml_path ";
    #   print "Running ln -s $abs_xml_path $archivedir/$shortxml\n" if $opt_v;
    #   system("ln -s $abs_xml_path $archivedir/$shortxml");
    #}
-   my $mdbi = lc($exp->{MDBIswitch}) =~ /(on|true|yes)/i;
+   my $mdbi = $exp->{MDBIswitch};
 
    my $tmphistdir = "";
    if ( "$workdir" eq "" ) {
@@ -1114,6 +1114,14 @@ if ( "\$fregrid_wt" != '' ) then
         endif
       end
 endif
+
+# Get the associated_files
+foreach assocFileBase ( `ncdump -h \$fregrid_in.nc | $grepAssocFiles` )
+   set assocFileYear = `echo \$assocFileBase | cut -c 1-4`
+   foreach aff ( \$histDir/\$assocFileYear*/*\${assocFileBase}* )
+      if ( ! -e `basename \$aff` ) ln -s \$aff .
+   end
+end
 EOF
       $call_tile_fregrid .= <<EOF;
 if (\$#attCmds > 0) then
