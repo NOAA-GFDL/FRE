@@ -2556,6 +2556,7 @@ $checktransfer
                set assocFiles = `ncdump -h \$hsmsrcfile | $grepAssocFiles`
                foreach assocFile ( \$assocFiles )
                   $time_hsmget \$hsmget -a $refinedir -p $ptmpDir/history_refineDiag -w $tmphistdir \$hsmdate/\\*\${assocFile:r}.\\*
+                  $time_hsmget \$hsmget -a $opt_d -p $ptmpDir/history -w $tmphistdir \$hsmdate/\\*\${assocFile:r}.\\*
                end
    end
   end
@@ -5040,7 +5041,7 @@ sub monthlyTSfromdailyTS {
    #
    my $variables = FREUtil::cleanstr( $_[0]->findvalue('variables') );
    if ("$variables" eq "") {
-      $variables = $dtvars{$component};
+      $variables = $dtvars{"all_$component"};
       $variables =~ s/,/ /g;
    }
    my $dmgetvars = $variables;
@@ -5128,7 +5129,7 @@ foreach var ( $variables )
         endif
 
         set t = `ncdump -h \$in.\$var.nc | grep -i '.*=.*unlimited.*currently' | awk '{print \$1}'`
-        $time_ncks ncks \$ncksopt -d \$t,\$d1,\$d2 -ahF \$in.\$var.nc \$y1\$m1.\$var.daily.nc
+        $time_ncks ncks \$ncksopt -d \$t,\$d1,\$d2 \$in.\$var.nc \$y1\$m1.\$var.daily.nc
         $check_ncks
         $time_timavg \$TIMAVG -o \$y1\$m1.\$var.nc \$y1\$m1.\$var.daily.nc
         $retry_timavg
@@ -5138,6 +5139,7 @@ foreach var ( $variables )
       end
    end
 
+   $time_rm rm -f \$in.\$var.nc
    if ( -e \$out.\$var.nc ) rm -f \$out.\$var.nc
    $time_ncrcat ncrcat \$ncrcatopt *??.\$var.nc \$out.\$var.nc
    $check_ncrcat
