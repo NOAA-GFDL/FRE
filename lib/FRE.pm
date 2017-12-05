@@ -335,8 +335,8 @@ sub validate($$)
       }
       else
       {
-    _print_validation_errors($@, $x);
-     FREMsg::out($v, FREMsg::FATAL, "The XML file '$x' is not valid");
+	_print_validation_errors($x, $schemaLocation);
+	FREMsg::out($v, FREMsg::FATAL, "The XML file '$x' is not valid");
 	return undef;
       }
     }
@@ -354,74 +354,65 @@ sub validate($$)
 }
 
 sub _print_validation_errors {
-# ------ argument: $LibXML::Error
+# ------ arguments: XML filepath, XML schema filepath
 # ------ returns nothing, prints report
-    my ($error, $xml, $collection) = @_;
+    my ($xml, $schema) = @_;
 
-    my ($file, $line, $message) = ($error->file, $error->line, $error->message);
-    chomp $message;
-    $collection->{$file}->{$line}->{$message} = 1;
+    # Run xmllint, which is in the libxml2 module which is loaded by FRE
+    # the validation errors are in standard error
+    my @xmllint_output
+        = split "\n", `xmllint --xinclude --schema $schema --xinclude --noout $xml 2>&1`;
+    # the last line just says "fails to validate" which we already know
+    pop @xmllint_output;
 
-    if ($error->{_prev}) {
-        _print_validation_errors($error->{_prev}, $xml, $collection);
+    # Collect the errors
+    my (%xml_errors, %include_errors);
+    for (@xmllint_output) {
+        my ($file, $line, undef, undef, $message) = split ':', $_, 5;
+        $message =~ s/^ +//;
+        if ($file eq $xml) {
+            $xml_errors{$line}{$message} = 1;
+        }
+        else {
+            $include_errors{$file}{$line}{$message} = 1;
+        }
     }
-    else {
-        my $xml_errors = $collection->{$xml};
-        my $include_errors = { map { $_ => $collection->{$_} } grep !/^$xml$/, keys %$collection };
-        my ($xml_count, $include_count, %include_count);
 
-        # include errors are double-counted so weed them out
-        for my $include (keys %$include_errors) {
-            for my $include_line (keys %{$include_errors->{$include}}) {
-                for my $include_message (keys %{$include_errors->{$include}->{$include_line}}) {
-                    ++$include_count;
-                    ++$include_count{$include};
-                    for my $xml_line (keys %$xml_errors) {
-                        for my $xml_message (keys %{$xml_errors->{$xml_line}}) {
-                            $xml_errors->{$xml_line}->{$xml_message} = 0
-                                if $include_line == $xml_line and $include_message eq $xml_message;
-                        }
-                    }
-                }
-            }
-        }
-        for my $xml_line (keys %$xml_errors) {
-            for my $xml_message (keys %{$xml_errors->{$xml_line}}) {
-                ++$xml_count if $xml_errors->{$xml_line}->{$xml_message};
-            }
-        }
+    # Print the report
+    my $total_errors = scalar(keys %xml_errors) + scalar keys %include_errors;
+    my $message
+        = $total_errors > 100
+        ? "Many XML validation errors; first 100 shown below"
+        : "$total_errors XML validation errors";
+    my $x = 78 - length $message;
+    printf "%s $message %s\n", '*' x int($x/2), '*' x ceil($x/2);
+    my $spacer = '';    # print a newline but not for the first file
+    my $count = 0;
 
-        my $N = $xml_count + $include_count;
-        my $message
-            = $N > 100
-            ? "Many XML validation errors; first 100 shown below"
-            : "$N XML validation errors";
-        my $x = 78 - length $message;
-        printf "%s $message %s\n", '*' x int($x/2), '*' x ceil($x/2);
-
-        my $y;
-        if ($xml_count) {
-            $y = "\n";
-            print "$xml:\n";
-            for my $xml_line (sort { $a <=> $b } keys %$xml_errors) {
-                for my $xml_message (sort keys %{$xml_errors->{$xml_line}}) {
-                    print "    Line $xml_line - $xml_message\n" if $xml_errors->{$xml_line}->{$xml_message};
-                }
+    # print the XML errors
+    if (%xml_errors) {
+        $spacer = "\n";
+        print "$xml:\n" if $count < 100;
+        for my $line (sort { $a <=> $b } keys %xml_errors) {
+            for my $message (sort keys %{$xml_errors{$line}}) {
+                print "    Line $line - $message\n" if $count < 100;
+                ++$count;
             }
         }
-        for my $include (keys %$include_errors) {
-            if ($include_count{$include}) {
-                print "$y$include:\n";
-                $y = "\n";
-                for my $include_line (sort { $a <=> $b } keys %{$include_errors->{$include}}) {
-                    for my $include_message (sort keys %{$include_errors->{$include}->{$include_line}}) {
-                        print "    Line $include_line - $include_message\n";
-                    }
-                }
-            }
-        }
-        print '*' x 80 . "\n";
     }
+
+    # print the include errors
+    for my $file (keys %include_errors) {
+        print "$spacer$file:\n" if $count < 100;
+        $spacer = "\n";
+        for my $line (sort { $a <=> $b } keys %{$include_errors{$file}}) {
+            for my $message (sort keys %{$include_errors{$file}{$line}}) {
+                print "    Line $line - $message\n" if $count < 100;
+            }
+        }
+    }
+
+    print '*' x 80 . "\n";
 }
 
 # //////////////////////////////////////////////////////////////////////////////
