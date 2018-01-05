@@ -169,8 +169,7 @@ CM2.1U_Control-1990_E1.M_3B_snowmelt_static_ocn6x5"
       4. the diagTable has some addtions for energy balance terms
          suggested by Tony R.
       5. run 30 atmos and 20 ocean PEs
-
-"
+     "
 
     run frelist -D -x CM2.1U.xml CM2.1U_Control-1990_E1.M_3A
     echo "Expected: \"$output_good\""
@@ -574,14 +573,14 @@ module load git
     output_good="
 /// CM2.1U_Control-1990_E1.M_3A
 /////////////////////////////////////////////////////////////////////////////////////////////////////
-LABEL      RUN#  DUPE  POSTFIX
+LABEL      RUN#  DUPE  POSTFIX                                                                       
 -----------------------------------------------------------------------------------------------------
-basic         0        1x0m8d_30x1a_20x1o
-restarts      0        2x0m4d_30x1a_20x1o
-scaling       0        1x0m8d_30x1a_12x1o
-scaling       1        1x0m8d_30x1a_30x1o
-scaling       2        1x0m8d_30x1a_42x1o
-scaling       3        1x0m8d_30x2a_120x1o
+basic         0        1x0m8d_30x1a_20x1o              
+restarts      0        2x0m4d_30x1a_20x1o              
+scaling       0        1x0m8d_30x1a_12x1o              
+scaling       1        1x0m8d_30x1a_30x1o              
+scaling       2        1x0m8d_30x1a_42x1o              
+scaling       3        1x0m8d_30x2a_120x1o             
 -----------------------------------------------------------------------------------------------------"
 
     # This test requires the platform to be able to run, which gfdl cannot.  Skip on gfdl
