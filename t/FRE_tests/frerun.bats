@@ -78,7 +78,7 @@ add_submit_cmd_to_last_line_good() {
 }
 
 @test "Create run script when experiment listed on frerun command line, and rts.xml exists" {
-    case "$FRE_SYSTEM_SITE" in
+    case "${default_platform%%.*}" in
         ncrc? )
             platform="ncrc"
             root_stem="/lustre/f1"
@@ -140,7 +140,7 @@ add_submit_cmd_to_last_line_good() {
 }
 
 @test "Create run script when XML listed on frerun command line and XML file exists" {
-    case "$FRE_SYSTEM_SITE" in
+    case "${default_platform%%.*}" in
         ncrc? )
             platform="ncrc"
             root_stem="/lustre/f1"
@@ -195,7 +195,7 @@ add_submit_cmd_to_last_line_good() {
 }
 
 @test "Create run script when --platform=${default_platform}" {
-    case "$FRE_SYSTEM_SITE" in
+    case "${default_platform%%.*}" in
         ncrc? )
             platform="ncrc"
             root_stem="/lustre/f1"
@@ -238,7 +238,7 @@ add_submit_cmd_to_last_line_good() {
 }
 
 @test "Create run script when --target=prod" {
-    case "$FRE_SYSTEM_SITE" in
+    case "${default_platform%%.*}" in
         ncrc? )
             platform="ncrc"
             root_stem="/lustre/f1"
@@ -281,7 +281,7 @@ add_submit_cmd_to_last_line_good() {
 }
 
 @test "State directory exists but --extend, --overwrite, or --unique not specified" {
-    case "$FRE_SYSTEM_SITE" in
+    case "${default_platform%%.*}" in
         ncrc? )
             platform="ncrc"
             root_stem="/lustre/f1"
@@ -338,7 +338,7 @@ ${lines[$((num_lines-1))]}"
 }
 
 @test "Create run script when state directory exists and --overwrite is specified" {
-    case "$FRE_SYSTEM_SITE" in
+    case "${default_platform%%.*}" in
         ncrc? )
             platform="ncrc"
             root_stem="/lustre/f1"
@@ -386,7 +386,7 @@ ${lines[$((num_lines-1))]}"
 }
 
 @test "Create run script when state directory exists and --unique is specified" {
-    case "$FRE_SYSTEM_SITE" in
+    case "${default_platform%%.*}" in
         ncrc? )
             platform="ncrc"
             root_stem="/lustre/f1"
@@ -434,7 +434,7 @@ ${lines[$((num_lines-1))]}"
 }
 
 @test "Create run script when state directory exists and --extend is specified" {
-    case "$FRE_SYSTEM_SITE" in
+    case "${default_platform%%.*}" in
         ncrc? )
             platform="ncrc"
             root_stem="/lustre/f1"
