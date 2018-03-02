@@ -1760,7 +1760,7 @@ EOF
 
 
       #TIMESERIES - HOURLY
-      my @hrfreqs = ('hourly','2hr','3hr','4hr','6hr','8hr','12hr','120hr');
+      my @hrfreqs = ('30min', 'hourly','2hr','3hr','4hr','6hr','8hr','12hr','120hr');
       foreach my $hrfreq ( @hrfreqs ) {
          my @tsNodes = sort by_chunk $ppcNode->findnodes("timeSeries[\@freq='$hrfreq']");
          my @chunks = map { $_->findvalue('@chunkLength') } @tsNodes;
@@ -3675,6 +3675,9 @@ sub gettimelevels {
       } else {
          return 365*24*$cl;
       }
+   } elsif( $freq =~ /(\d+)min$/ ) {
+      my $count_per_hour = 60 / $1;
+      return 365 * 24 * $count_per_hour * $cl;
    } elsif( "$freq" =~ /season/ ) {
       return 1*$cl;  #only one season per year per file, so this must be 1
    } else{

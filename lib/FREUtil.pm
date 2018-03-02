@@ -492,6 +492,9 @@ sub graindate {
    } elsif ($freq =~ /(?>hr|hour)/i) {
      # Return yyyymmddhh
      ($formatstr) = parseDate($date) =~ /^(\d{4,}\d{2}\d{2}\d{2}):\d{2}:\d{2}$/;
+   } elsif ($freq =~ /min$/i) {
+     # Return yyyymmddhhMM
+     ($formatstr) = parseDate($date) =~ /^(\d{4,}\d{2}\d{2}\d{2}:\d{2}):\d{2}$/;
    } elsif ($freq =~ /season/i) {
      my ($year, $month) = parseDate($date) =~ /^(\d{4,})(\d{2})\d{2}\d{2}:\d{2}:\d{2}$/;
      unless (int($month)%3==0) {
@@ -538,6 +541,8 @@ sub timeabbrev {
       return $freq;
    } elsif ( "$freq" =~ /season/ ) {
       return "sea";
+   } elsif ( $freq =~ /min$/ ) {
+      return "min";
    } else {
       print STDERR "WARNING: frequency not recognized in timeabbrev\n";
       return "unknown";
