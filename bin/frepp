@@ -1042,7 +1042,10 @@ endif
 EOF
       $call_tile_fregrid .= <<'EOF';
 if ( $?variables && "$variables" != '' ) then
-   set interpvars = "$variables"
+   # auxillary static variables such as a,b,*_bnds must be passed through fregrid for CMIP use
+   set static_vars = ( `$NCVARS -s0123 $fregrid_in.tile1.nc` )
+   set static_vars = `echo $static_vars |sed 's/ /,/g'`
+   set interpvars = `echo "$variables,$static_vars" | sed 's/,$//'`
    unset variables
 else
    set interpvars = ( `$NCVARS $ncvars_arg $fregrid_in.tile1.nc` )
