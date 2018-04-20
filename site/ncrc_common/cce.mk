@@ -67,6 +67,9 @@ endif
 ifneq ($(OPENMP),)
 CFLAGS += $(CFLAGS_OPENMP)
 FFLAGS += $(FFLAGS_OPENMP)
+else
+CFLAGS += -h noomp
+FFLAGS += -h noomp
 endif
 
 ifneq ($(VERBOSE),)
