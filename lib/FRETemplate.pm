@@ -712,7 +712,7 @@ sub setVersionInfo($$$$%)
     my $value = ($key eq 'xmlfile') ? $configFileAbsPathName : $o{$key};
     if ($key eq 'ncores')
     {
-      $info .= '--' . $key . '=' .$value;
+      $info .= ' --' . $key . '=' .$value;
     }
     elsif ($value eq '1')
     {
