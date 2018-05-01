@@ -1,5 +1,57 @@
 # Bronx-12 Release Notes
 
+FRE Bronx-12 was released in April 2017. The major features were support for the Warsaw FMS release and CMIP6, along with smaller features and bug fixes. There have been 5 patches, mostly containing additional changes needed for CMIP6 runs, and more bug fixes.
+
+## Patches
+
+**Patch 5: 30 April 2018**
+* includeDir transfer bug-fix (Bronx-12 introduced a transfer mechanism to copy an awg_include-type directory from gaea to GFDL, which failed to work properly in some cases)
+* adjust_dry_mass bug-fix (Bronx-12 introduced a FRE runscript variable to indicate whether the model start time is equal to the current model time, which was set incorrectly for restart regression runs)
+* Updates from MOM development, which will be needed for CMIP runs that use MOM6
+    * new POSIX Bourne shell list_paths. No difference, but includes a -L symlink option that will be used by MOM
+    * mkmf updates from github NOAA-GFDL/mkmf project
+* Change to Cray make template to handle non-OPENMP builds (fixes MOM build error when not using openmp)
+* Update to make templates for intel and GNU for GFDL workstations (to fix build error)
+* frepp 30-min timeseries update. “30min” is now an accepted timeseries frequency, e.g.
+`
+     <component type="CFsite" source="CFsites">
+        <timeSeries freq="30min" chunkLength=”5yr"/>
+      </component>
+`
+* frepp timeSeries <variables> tag update. When the <variables> tag is used to request a certain set of fields for timeseries, static fields are passed through fregrid. split_ncvars will then include these needed CMIP fields (a,b,*_bnds) in the split-out fields
+* FRE tools now use a relative-path perl rather than the system perl, so that the modulefiles can load a suitable version of perl for each site.
+
+
+**Patch 4: January 2018**
+* Turn off default dual-running for C4
+* Added `area` to frepp hard-wired exception list to regrid using conserve_order1
+
+**Patch 3: November 2017**
+* For regridding refineDiag history files, look for associated_files in regular history files in addition to history_refineDiag files
+* Fix in output.stager that resulted in incorrect 600 permissions on some history files
+* frepp fix to generate monthly timeseries from daily history data
+* fremake fixes for cray compiler
+
+**Patch 2: October 2017**
+* Changes to handle the C3 software upgrade
+* New scheme to pass unmasked ocean_static.nc fields into ocean_static.nc history file (needed for regridding certain ocean fields, and also desired generally e.g. for LAS). The feature is activated if a experiment uses an ocean mask is used. If activated, the output.stager will try to append an unmasked/reference ocean_static.nc file to the ocean_static.nc history file. If the gridSpec file is a tarfile and it contains ocean_static.nc that file will be used. Otherwise, it will use the ocean_static_no_mask.nc "history" file (style in some MDT XMLs). If no reference file is found, a warning will be printed but no error. The output.stager HS logs contain the logs for this feature.
+* Added `frelist --diagtable` option that prints out the full diagtable to stdout
+* output.stager bug fix related to uncompressing land restart files
+* Bug fix for frepp automatic Curator ingestion feature
+* Adjustment for frepp -A to allow out-of-order analysis scripts if -Y or -Z is used
+* Changes to XML schema CMIP6 `<publicMetadata>` tags
+* Added some ocean fields to the hard-wired unregriddable list
+* Use associated_files in tripolar regridding (was already done for tiled regridding)
+
+**Patch 1: June 2017**
+* Bug fix for the frepp --plus option
+* output.stager to not decompress particular type of compressed land history files (static_veg_out)
+* use the PPAN bigmem queue for ocean_annual and ocean_monthly frepp jobs
+* frepp changes to increase /ptmp: only active job schooling if ptmpDir is on /vftmp and change default ptmpDir to be /ptmp/$USER (#240)
+* Change to XML schema to allow more xinclude use
+* fremake fix for C4 Intel-15 openmp compiles
+* frepp fix for regridded tripolar timeaverages
+
 ## Features
 * **New FRE include directory and include directory transfer**. A new FRE directory `includeDir` is defined at all sites and is transferred by the `output.stager` from remote sites to GFDL. The goal is to standardize the referencing of AWG and OWG include files (e.g. diag tables, data tables, analysis scripts) within the XML and normalize the transfer process currently done within csh blocks. See [feature documentation](/docs/run/include_dir.md).
 * **Analysis validation suite**. Not a FRE feature per se, but a tool to check expected output of analysis scripts. See [feature documentation](/docs/analysis/validation.md).

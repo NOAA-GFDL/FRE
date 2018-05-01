@@ -1,4 +1,4 @@
-#!/usr/bin/perl
+#!/usr/bin/env perl
 #
 #-----------------------------------------------------------------------
 #              mkmf: Perl script for makefile construction
@@ -38,7 +38,7 @@ sub ensureTrailingSlash {
    local $/ = '/'; chomp @_[0]; @_[0] .= '/';
 }
 
-my $version = '19.2.0';
+my $version = '19.3.0';
 
 # initialize variables: use getopts for these
 GetOptions("abspath|a=s" => \$opt_a,
@@ -50,7 +50,7 @@ GetOptions("abspath|a=s" => \$opt_a,
            "includes|I=s@" => \$opt_I,
            "makefile|m=s" => \$opt_m,
            "otherflags|o=s" => \$opt_o,
-	   "linkflags|l=s" => \$opt_l,
+           "linkflags|l=s" => \$opt_l,
            "program|p=s" => \$opt_p,
            "template|t=s" => \$opt_t,
            "verbose|v" => \$opt_v,
@@ -81,17 +81,22 @@ my @inc_suffixes = ( q/\.H/, q/\.fh/, q/\.h/, q/\.inc/, q/\.h90/ );
 # suffixes for the target (mkmf -p): if isn't on the list below it's a program
 my @tgt_suffixes = ( q/\.a/ );
 
-my %compile_cmd = (                     # command to create .o file from a given source file suffix
-      q/.F/   => q/$(FC) $(CPPDEFS) $(CPPFLAGS) $(FPPFLAGS) $(FFLAGS) $(OTHERFLAGS) $(OTHER_FFLAGS) -c/,
-      q/.F90/ => q/$(FC) $(CPPDEFS) $(CPPFLAGS) $(FPPFLAGS) $(FFLAGS) $(OTHERFLAGS) $(OTHER_FFLAGS) -c/,
+my %compile_cmd = ( # commands to create .o file from a given source file suffix
+      # Fix formed Fortran files
+      q/.F/   => q/$(FC) $(CPPDEFS) $(FPPFLAGS) $(FFLAGS) $(OTHERFLAGS) $(OTHER_FFLAGS) -c/,
+      q/.f/   => q/$(FC) $(FPPFLAGS) $(FFLAGS) $(OTHERFLAGS) $(OTHER_FFLAGS) -c/,
+      # Free formed Fortran files
+      q/.F90/ => q/$(FC) $(CPPDEFS) $(FPPFLAGS) $(FFLAGS) $(OTHERFLAGS) $(OTHER_FFLAGS) -c/,
+      q/.f90/ => q/$(FC) $(FPPFLAGS) $(FFLAGS) $(OTHERFLAGS) $(OTHER_FFLAGS) -c/,
+      # C files
       q/.c/   => q/$(CC) $(CPPDEFS) $(CPPFLAGS) $(CFLAGS) $(OTHERFLAGS) $(OTHER_CFLAGS) -c/,
-      q/.C/   => q/$(CXX) $(CPPDEFS) $(CPPFLAGS) $(CFLAGS) $(OTHERFLAGS) $(OTHER_CFLAGS) -c/,
-      q/.cc/  => q/$(CXX) $(CPPDEFS) $(CPPFLAGS) $(CFLAGS) $(OTHERFLAGS) $(OTHER_CPPFLAGS) -c/,
-      q/.cp/  => q/$(CXX) $(CPPDEFS) $(CPPFLAGS) $(CFLAGS) $(OTHERFLAGS) $(OTHER_CPPFLAGS) -c/,
-      q/.cxx/ => q/$(CXX) $(CPPDEFS) $(CPPFLAGS) $(CFLAGS) $(OTHERFLAGS) $(OTHER_CPPFLAGS) -c/,
-      q/.c++/ => q/$(CXX) $(CPPDEFS) $(CPPFLAGS) $(CFLAGS) $(OTHERFLAGS) $(OTHER_CPPFLAGS) -c/,
-      q/.f/   => q/$(FC) $(FFLAGS) $(OTHERFLAGS) $(OTHER_FFLAGS) -c/,
-      q/.f90/ => q/$(FC) $(FFLAGS) $(OTHERFLAGS) $(OTHER_FFLAGS) -c/              );
+      # C++ files
+      q/.C/   => q/$(CXX) $(CPPDEFS) $(CPPFLAGS) $(CXXFLAGS) $(OTHERFLAGS) $(OTHER_CXXFLAGS) -c/,
+      q/.cc/  => q/$(CXX) $(CPPDEFS) $(CPPFLAGS) $(CXXFLAGS) $(OTHERFLAGS) $(OTHER_CXXFLAGS) -c/,
+      q/.cpp/ => q/$(CXX) $(CPPDEFS) $(CPPFLAGS) $(CXXFLAGS) $(OTHERFLAGS) $(OTHER_CXXFLAGS) -c/,
+      q/.cxx/ => q/$(CXX) $(CPPDEFS) $(CPPFLAGS) $(CXXFLAGS) $(OTHERFLAGS) $(OTHER_CXXFLAGS) -c/,
+      q/.c++/ => q/$(CXX) $(CPPDEFS) $(CPPFLAGS) $(CXXFLAGS) $(OTHERFLAGS) $(OTHER_CXXFLAGS) -c/,
+      );
 my %delim_match = ( q/'/ => q/'/,       # hash to find includefile delimiter pair
                     q/"/ => q/"/,
                     q/</ => q/>/ );
@@ -239,7 +244,7 @@ foreach $target ( @targets ) {
          if( $suffix && !$actual_source_of{$object} ) {
             if ( $opt_a and substr($path,0,1) ne '/' ) { # if an abs_path exists, attach it to all relative paths
                ensureTrailingSlash($path);
-               $path = '' if $path eq './';
+               $path =~ s@^\./@@;
                $source_of{$object} = '$(SRCROOT)' . "$path$name$suffix";
                $path = $opt_a . $path;
             }
@@ -255,7 +260,7 @@ foreach $target ( @targets ) {
       $object = "$name.o";
       if ( !$actual_source_of{$object} ) {
          if ( $suffix ) {
-            $path = '' if $path eq './';
+            $path =~ s@^\./@@;
             if ( $opt_a and substr($path,0,1) ne '/' ) { # if an abs_path exists, attach it to all relative paths
                ensureTrailingSlash($path);
                $source_of{$object} = '$(SRCROOT)' . "$path$name$suffix";
@@ -276,12 +281,12 @@ foreach $target ( @targets ) {
                   next if ( $_ eq "\n");
                   $line = $_;
                   my @wordlist = split;
-                  $file = @wordlist[$#wordlist]; # last word on line
+                  $file = $wordlist[$#wordlist]; # last word on line
                   ( $name, $path, $suffix ) = fileparse( $file, @src_suffixes );
                   print "file=$file suffix=$suffix in $target\n" if $opt_d;
                   $object = "$name.o";
                   if ( $suffix && !$actual_source_of{$object} ) {
-                     $path = '' if $path eq './';
+                     $path =~ s@^\./@@;
                      if ( $opt_a and ( substr($path,0,1) ne '/' ) ) { # if an abs_path exists, attach it to all relative paths
                         ensureTrailingSlash($path);
                         $source_of{$object} = '$(SRCROOT)' . "$path$name$suffix";
@@ -417,7 +422,8 @@ foreach $object ( sort @objects ) {
 
    @cmdline = "$object: $source_of{$object}";
    ( $name, $path, $suffix ) = fileparse( $actual_source_of{$object}, @src_suffixes );
-   $off_sources{$source_of{$object}} = 1 unless( $path eq './' or $path eq '' );
+   $path =~ s@^\./@@;
+   $off_sources{$source_of{$object}} = 1 unless( $path =~ '^\s*$' );
 #includes: done in subroutine since it must be recursively called to look for embedded includes
    @includepaths = '';
    &get_include_list( $object, $actual_source_of{$object} );
@@ -474,8 +480,8 @@ foreach $object ( sort @objects ) {
       foreach ( split /\s+/, $includes_in{$file} ) {
          print "object=$object, file=$file, include=$_.\n" if $opt_d;
          ( $incname, $incpath, $incsuffix ) = fileparse( $_, @inc_suffixes );
+         $incpath =~ s@^\./@@;
          if( $incsuffix ) {     # only check for files with proper suffix
-            undef $incpath if $incpath eq './';
             if( $incpath =~ /^\// ) {
                @paths = $incpath; # exact incpath specified, use it
             } else {
@@ -484,7 +490,7 @@ foreach $object ( sort @objects ) {
             foreach ( @paths ) {
                local $/ = '/'; chomp; # remove trailing / if present
                my $newincpath = "$_/$incpath" if $_;
-               undef $newincpath if $newincpath eq './';
+               $newincpath =~ s@^\./@@;
                $incfile = "$newincpath$incname$incsuffix";
                if ( $opt_a and ( substr($newincpath,0,1) ne '/' ) ) {
                   $newincpath = '$(SRCROOT)' . $newincpath;
