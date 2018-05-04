@@ -43,9 +43,7 @@ def diff(file1,file2):
 
 
 def gcp_file(filepath):
-    print(filepath)
     if re.match(r'\w+:.+',filepath):
-        print("good")
         tmpdir = tempfile.mkdtemp()
         try:
             run([gcp,"-v",filepath,tmpdir])
@@ -55,7 +53,6 @@ def gcp_file(filepath):
         name = os.path.basename(filepath.split(":",count=1)[-1])
         return os.path.join(tmpdir,name)
     else:
-        print("bad")
         raise ValueError("path %s does not match gcp format.\n" % filepath)
 
 
@@ -130,7 +127,8 @@ def main(file1,file2):
             sys.stderr.write(str(e))
             failed.append(os.path.basename(f[0]))
 
-    print("%d/%d files passed." % ((len(files_list)-len(failed)),len(files_list)))
+    print("%d/%d files passed." % ((len(files_list)-len(failed)),
+          len(files_list)))
     print("Files that failed:")
     for f in failed:
         print("\t%s" % f)
@@ -146,9 +144,16 @@ if __name__ == "__main__":
                         nargs="+",
                         help="file/directory that will be diffed."
                              + "  Directories will be fully walked.")
+    parser.add_argument("-v",
+                        "--verbose",
+                        help="increase output verbosity.",
+                        action="store_true")
     args = parser.parse_args()
 
-    logging.basicConfig(level=logging.INFO)
+    if args.verbose:
+        logging.basicConfig(level=logging.INFO)
+    else:
+        logging.basicConfig(level=logging.ERROR)
 
     ref = FileObj(args.reference[0])
     for f in args.files:
