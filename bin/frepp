@@ -6164,6 +6164,29 @@ EOF
         $mkdircommand .= "$outdir ";
         if ( $int > $maxyrs ) { $maxyrs = $int; }
 
+        #get variables
+        my $uservariables = FREUtil::cleanstr( $_[0]->findvalue('variables') );
+        $uservariables =~ s/ /,/g;
+
+        #my $availablevars = $dtvars{"all_$src"};
+        #$availablevars =~ s/^/,/g;
+        #$availablevars =~ s/$/,/g;
+        my $variables = '';
+        foreach my $v ( split( ',', $uservariables ) ) {
+
+            #if ( $availablevars =~ /,$v,/ ) {
+            #$variables = "$variables $v";
+            #} else {
+            $variables = "$variables $v";
+
+            #}
+        }
+        $variables =~ s/^ //g;
+        $variables =~ s/ /,/g;
+        if ( "$variables" ne "" ) {
+            print STDERR "        from xml, vars are '$variables'\n" if $opt_v;
+        }
+
         #check for missing files
         my $diag_source = $_[0]->findvalue('@diagSource');
         my @monthnodes  = $ppcNode->findnodes('timeSeries[@freq="monthly"]');
@@ -6192,6 +6215,7 @@ EOF
         }
         my $getlist = $filelist;
         $getlist =~ s/\$monthf\$tile/*/g;
+        my @files = split / /, $filelist;
 
         #   print "filelist is $filelist\n";
         #   print "getlist is $getlist\n";
@@ -6237,31 +6261,62 @@ end
 
 $tilestart
 
-set month = 1
-while (\$month <= 12)
-   set monthf = `echo \$month | sed 's/.*/0&/;s/.\\(..\\)/\\1/'`
-   if ( -e month.nc ) rm -f month.nc
-   $time_ncrcat ncrcat \$ncrcatopt $filelist month.nc
-   $check_ncrcat
-   $time_timavg \$TIMAVG -o $component.$start-$end.\$monthf\$tile.nc month.nc
-   $retry_timavg
-      $time_timavg \$TIMAVG -o $component.$start-$end.\$monthf\$tile.nc month.nc
-   $check_timavg
-   $time_ncatted ncatted -h -O -a filename,global,m,c,"$component.$start-$end.\$monthf\$tile.nc" $component.$start-$end.\$monthf\$tile.nc
-   $check_ncatted
-   $compress
-   $time_mv $mvfile $component.$start-$end.\$monthf\$tile.nc \$outdir/
-   if ( \$status ) then
-      echo "WARNING: data transfer failure, retrying..."
-      $time_mv $mvfile $component.$start-$end.\$monthf\$tile.nc \$outdir/
-      $checktransfer
-   endif
-   $time_rm rm $component.$start-$end.\$monthf\$tile.nc
-   $time_dmput dmput \$outdir/$component.$start-$end.\$monthf\$tile.nc
-   $time_rm rm -f month.nc
-   @ month++
-end
-
+echo 'Made it to problem code'
+if ( ?$variables && "$variables" != '' ) then
+    set static_vars = (`\$NCVARS -s0123 $files[0]`) 
+    set static_vars = `echo \$static_vars |sed 's/ /,/g'`
+    set vars = ("$variables","\$static_vars")
+    unset variables
+    set month = 1
+    while (\$month <= 12)
+        set monthf = `echo \$month | sed 's/.*/0&/;s/.\\(..\\)/\\1/'`
+        if ( -e month.nc ) rm -f month.nc
+        $time_ncrcat ncrcat \$ncrcatopt -v \$vars $filelist month.nc
+        $check_ncrcat
+        $time_timavg \$TIMAVG -o $component.$start-$end.\$monthf\$tile.nc month.nc
+        $retry_timavg
+        $time_timavg \$TIMAVG -o $component.$start-$end.\$monthf\$tile.nc month.nc
+        $check_timavg
+        $time_ncatted ncatted -h -O -a filename,global,m,c,"$component.$start-$end.\$monthf\$tile.nc" $component.$start-$end.\$monthf\$tile.nc
+        $check_ncatted
+        $compress
+        $time_mv $mvfile $component.$start-$end.\$monthf\$tile.nc \$outdir/
+        if ( \$status ) then
+            echo "WARNING: data transfer failure, retrying..."
+            $time_mv $mvfile $component.$start-$end.\$monthf\$tile.nc \$outdir/
+            $checktransfer
+        endif
+        $time_rm rm $component.$start-$end.\$monthf\$tile.nc
+        $time_dmput dmput \$outdir/$component.$start-$end.\$monthf\$tile.nc
+        $time_rm rm -f month.nc
+        @ month++
+    end
+else
+    set month = 1
+    while (\$month <= 12)
+        set monthf = `echo \$month | sed 's/.*/0&/;s/.\\(..\\)/\\1/'`
+        if ( -e month.nc ) rm -f month.nc
+        $time_ncrcat ncrcat \$ncrcatopt -v \$vars $filelist month.nc
+        $check_ncrcat
+        $time_timavg \$TIMAVG -o $component.$start-$end.\$monthf\$tile.nc month.nc
+        $retry_timavg
+        $time_timavg \$TIMAVG -o $component.$start-$end.\$monthf\$tile.nc month.nc
+        $check_timavg
+        $time_ncatted ncatted -h -O -a filename,global,m,c,"$component.$start-$end.\$monthf\$tile.nc" $component.$start-$end.\$monthf\$tile.nc
+        $check_ncatted
+        $compress
+        $time_mv $mvfile $component.$start-$end.\$monthf\$tile.nc \$outdir/
+        if ( \$status ) then
+            echo "WARNING: data transfer failure, retrying..."
+            $time_mv $mvfile $component.$start-$end.\$monthf\$tile.nc \$outdir/
+            $checktransfer
+        endif
+        $time_rm rm $component.$start-$end.\$monthf\$tile.nc
+        $time_dmput dmput \$outdir/$component.$start-$end.\$monthf\$tile.nc
+        $time_rm rm -f month.nc
+        @ month++
+    end
+endif
 $tileend
 
 EOF
