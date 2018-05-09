@@ -1227,6 +1227,7 @@ if ( $?variables && "$variables" != '' ) then
    set static_vars = `echo $static_vars |sed 's/ /,/g'`
    set interpvars = `echo "$variables,$static_vars" | sed 's/,$//'`
    unset variables
+   unset static_vars
 else
    set interpvars = ( `$NCVARS $ncvars_arg $fregrid_in.tile1.nc` )
    set interpvars = `echo $interpvars |sed 's/ /,/g'`
@@ -6167,19 +6168,9 @@ EOF
         #get variables
         my $uservariables = FREUtil::cleanstr( $_[0]->findvalue('variables') );
         $uservariables =~ s/ /,/g;
-
-        #my $availablevars = $dtvars{"all_$src"};
-        #$availablevars =~ s/^/,/g;
-        #$availablevars =~ s/$/,/g;
         my $variables = '';
         foreach my $v ( split( ',', $uservariables ) ) {
-
-            #if ( $availablevars =~ /,$v,/ ) {
-            #$variables = "$variables $v";
-            #} else {
             $variables = "$variables $v";
-
-            #}
         }
         $variables =~ s/^ //g;
         $variables =~ s/ /,/g;
@@ -6215,8 +6206,8 @@ EOF
         }
         my $getlist = $filelist;
         $getlist =~ s/\$monthf\$tile/*/g;
+        my @first_file = split / /, $filelist;
 
-        #my @files = split / /,$filelist;
         #   print "filelist is $filelist\n";
         #   print "getlist is $getlist\n";
         my $tilestart = "set tile = ''";
@@ -6260,13 +6251,15 @@ foreach file (\$files)
 end
 
 $tilestart
-
-echo 'Made it to problem code'
-if ( \$?variables && "\$variables" != '' ) then
-    set static_vars = (`\$NCVARS -s0123 \$files[0]`) 
+#get static variables from first file (e.g. 1850.01.nc) from list_ncvars
+#hard-code average vars and time_bnds which are skipped in list_ncvars but needed for timavg.csh
+if ( \$?variables && "$variables" != '' ) then
+    set static_vars = (`\$NCVARS -s0123 $first_file[0]`) 
     set static_vars = `echo \$static_vars |sed 's/ /,/g'`
-    set vars = ("$variables","\$static_vars")
+    set avg_vars = (average_T1,average_T2,average_DT,time_bnds)
+    set vars = ("$variables","\$static_vars","\$avg_vars")
     unset variables
+    unset static_vars
     set month = 1
     while (\$month <= 12)
         set monthf = `echo \$month | sed 's/.*/0&/;s/.\\(..\\)/\\1/'`
@@ -6291,6 +6284,7 @@ if ( \$?variables && "\$variables" != '' ) then
         $time_rm rm -f month.nc
         @ month++
     end
+unset vars
 else
     set month = 1
     while (\$month <= 12)
