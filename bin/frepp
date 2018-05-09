@@ -4866,6 +4866,15 @@ EOF
    $convertSeg
    end
 
+echo `made it to the problem code`
+if ( \$?variables && "$variables" != '' ) then
+    set static_vars = (`\$NCVARS -s0123 \$file`) 
+    set static_vars = `echo \$static_vars |sed 's/ /,/g'`
+    set avg_vars = (average_T1,average_T2,average_DT,time_bnds)
+    set vars = ("$variables","\$static_vars","\$avg_vars")
+    unset variables
+    unset static_vars
+endif
 set month = 1
 while (\$month <= 12)
 set i = 1
@@ -4873,8 +4882,12 @@ while ( \$i <= 6 )
 
    set monthf = `echo \$month | sed 's/.*/0&/;s/.\\(..\\)/\\1/'`
    set histmonth = "\$monthf"
-
-   $time_ncrcat ncrcat \$ncrcatopt *\${histmonth}01.$diag_source$tile.nc month.nc
+   
+   if ( \$?variables && "$variables" != '' ) then
+      $time_ncrcat ncrcat \$ncrcatopt -v \$vars *\${histmonth}01.$diag_source$tile.nc month.nc
+   else
+      $time_ncrcat ncrcat \$ncrcatopt *\${histmonth}01.$diag_source$tile.nc month.nc
+   endif
    $check_ncrcat
    $time_rm rm -f *\${histmonth}01.$diag_source$tile.nc
 EOF
@@ -4987,13 +5000,27 @@ foreach hDate ( @hDates )
    end
    $convertSeg
 end
+echo `made it to the not cubic problem code`
+if ( \$?variables && "$variables" != '' ) then
+    set static_vars = (`\$NCVARS -s0123 \$file`) 
+    set static_vars = `echo \$static_vars |sed 's/ /,/g'`
+    set avg_vars = (average_T1,average_T2,average_DT,time_bnds)
+    set vars = ("$variables","\$static_vars","\$avg_vars")
+    unset variables
+    unset static_vars
+endif
+
 set month = 1
 while (\$month <= 12)
    set monthf = `echo \$month | sed 's/.*/0&/;s/.\\(..\\)/\\1/'`
    set histmonth = "\$monthf"
 
    if ( -e month.nc ) rm -f month.nc
-   $time_ncrcat ncrcat \$ncrcatopt *\${histmonth}01.$diag_source.nc month.nc
+   if ( \$?variables && "$variables" != '' ) then
+      $time_ncrcat ncrcat \$ncrcatopt -v \$vars *\${histmonth}01.$diag_source.nc month.nc
+   else
+      $time_ncrcat ncrcat \$ncrcatopt *\${histmonth}01.$diag_source.nc month.nc
+   endif
    $check_ncrcat
    $time_rm rm -f *\${histmonth}01.$diag_source.nc
 EOF
@@ -6260,11 +6287,16 @@ if ( \$?variables && "$variables" != '' ) then
     set vars = ("$variables","\$static_vars","\$avg_vars")
     unset variables
     unset static_vars
+endif
     set month = 1
     while (\$month <= 12)
         set monthf = `echo \$month | sed 's/.*/0&/;s/.\\(..\\)/\\1/'`
         if ( -e month.nc ) rm -f month.nc
-        $time_ncrcat ncrcat \$ncrcatopt -v \$vars $filelist month.nc
+        if ( \$?variables && "$variables" != '' ) then
+            $time_ncrcat ncrcat \$ncrcatopt -v \$vars $filelist month.nc
+        else
+            $time_ncrcat ncrcat \$ncrcatopt $filelist month.nc
+        endif
         $check_ncrcat
         $time_timavg \$TIMAVG -o $component.$start-$end.\$monthf\$tile.nc month.nc
         $retry_timavg
@@ -6285,32 +6317,6 @@ if ( \$?variables && "$variables" != '' ) then
         @ month++
     end
 unset vars
-else
-    set month = 1
-    while (\$month <= 12)
-        set monthf = `echo \$month | sed 's/.*/0&/;s/.\\(..\\)/\\1/'`
-        if ( -e month.nc ) rm -f month.nc
-        $time_ncrcat ncrcat \$ncrcatopt $filelist month.nc
-        $check_ncrcat
-        $time_timavg \$TIMAVG -o $component.$start-$end.\$monthf\$tile.nc month.nc
-        $retry_timavg
-        $time_timavg \$TIMAVG -o $component.$start-$end.\$monthf\$tile.nc month.nc
-        $check_timavg
-        $time_ncatted ncatted -h -O -a filename,global,m,c,"$component.$start-$end.\$monthf\$tile.nc" $component.$start-$end.\$monthf\$tile.nc
-        $check_ncatted
-        $compress
-        $time_mv $mvfile $component.$start-$end.\$monthf\$tile.nc \$outdir/
-        if ( \$status ) then
-            echo "WARNING: data transfer failure, retrying..."
-            $time_mv $mvfile $component.$start-$end.\$monthf\$tile.nc \$outdir/
-            $checktransfer
-        endif
-        $time_rm rm $component.$start-$end.\$monthf\$tile.nc
-        $time_dmput dmput \$outdir/$component.$start-$end.\$monthf\$tile.nc
-        $time_rm rm -f month.nc
-        @ month++
-    end
-endif
 $tileend
 
 EOF
