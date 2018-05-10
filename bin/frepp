@@ -619,7 +619,6 @@ EOF
             $pbsqueue = $ENV{'PBS_O_QUEUE'};
         }
         else {
-
             # get queue information from $opt_m
             ($pbsqueue) = $opt_m =~ m/-q +(\S+)/;
         }
@@ -956,7 +955,6 @@ EOF
             $basedate = $opt_B;
         }
         else {
-
             #look in coupler_nml if basedate set to $baseDate
             chomp( $basedate = $diagtablecontent[1] );
             $basedate =~ s/^\s*//g;
@@ -1539,7 +1537,6 @@ EOF
                             next;
                         }
                         else {
-
                             #check that jobid is still running
                             my $jobrunning = isjobrunning($state);
                             print "Checking state in $statefile: $state: jobrunning: $jobrunning\n";
@@ -1829,7 +1826,6 @@ EOF
                         $cshscript .= monthlyAVfromav( $taNode, $sim0, $subint );
                     }
                     else {
-
                         #does monthly 1year and monthly xyear, order is unimportant
                         $cshscript .= monthlyAVfromhist( $taNode, $sim0 );
                     }
@@ -2383,7 +2379,6 @@ EOF
                                 }
                             }
                             else {
-
                        #print "Required year ($hDate) has already been completed for $component.\n";
                             }
                         }
@@ -2437,7 +2432,6 @@ EOF
                             next;
                         }
                         else {
-
                             #check that jobid is still running
                             my $jobrunning = isjobrunning($depstate);
                             print "Checking state of job $depstate: jobrunning=$jobrunning\n";
@@ -3112,12 +3106,11 @@ EOF
                 execute( 'ac-arch', "mkdir -p $s" );
             }
             else {
-
                 #if ( $opt_v ) { print "executing mkdircommand: $mkdircommand\n"; }
                 execute( 'ac-arch', $mkdircommand );
             }
             $mkdircommand = "mkdir -p ";
-        } ## end if ( "$mkdircommand" ne...)
+        }
 
         return $mkdircommand;
     } ## end sub createdirs
@@ -3134,7 +3127,6 @@ EOF
             return system("$qloginHome/bin/hpcs_ssh_init; $qloginHome/bin/hpcs_ssh '$h' '$c'");
         }
         else {
-
             # ----------------------------- other hosts
             return system("$c");
         }
@@ -3174,7 +3166,6 @@ EOF
             $csh .= "$expt\n";
         }
         else {
-
             #call frepp -A for analysis scripts
             $csh .= "\n/usr/bin/env perl $absfrepp -A -x $abs_xml_path -t $hDate -s -v ";
             if ($opt_P) { $csh .= "--platform $opt_P "; }
@@ -3663,7 +3654,6 @@ EOF
             return qw(0101 0201 0301 0401 0501 0601 0701 0801 0901 1001 1101 1201);
         }
         else {
-
 #print STDERR "ERROR: segTime $segTime not supported.  Try 1,2,3,4,6 or 12 month segments.\n" if not $opt_f;
 #return ();
             die
@@ -4564,9 +4554,8 @@ EOF
                     $filelist .= "$component.$year.$abbrev.\$var ";
                 }
                 if ( $abbrev =~ "SON" and $aggregateTS ) {
-                    $makecpio
-                        = createcpio( "\$tempCache/$outdirpath", $outdir, "$component.$begin-$year",
-                        FREUtil::timeabbrev($freq), 1 );
+                    $makecpio = createcpio( "\$tempCache/$outdirpath", $outdir,
+                        "$component.$begin-$year", FREUtil::timeabbrev($freq), 1 );
                 }
                 my $compress = compress_csh( $chunkedoutfile, $check_nccopy );
                 $catfiles = <<EOF;
@@ -4866,7 +4855,6 @@ EOF
    $convertSeg
    end
 
-echo `made it to the problem code`
 if ( \$?variables && "$variables" != '' ) then
     set static_vars = (`\$NCVARS -s0123 \$file`) 
     set static_vars = `echo \$static_vars |sed 's/ /,/g'`
@@ -5000,7 +4988,6 @@ foreach hDate ( @hDates )
    end
    $convertSeg
 end
-echo `made it to the not cubic problem code`
 if ( \$?variables && "$variables" != '' ) then
     set static_vars = (`\$NCVARS -s0123 \$file`) 
     set static_vars = `echo \$static_vars |sed 's/ /,/g'`
@@ -5215,9 +5202,8 @@ $retry_timavg
 $check_timavg
 
 EOF
-                $csh
-                    .= zInterpolate( $zInterp, "modellevels$tile.nc", "$yr2do.$diag_source$tile.nc",
-                    $caltype, $variables, $diag_source );
+                $csh .= zInterpolate( $zInterp, "modellevels$tile.nc",
+                    "$yr2do.$diag_source$tile.nc", $caltype, $variables, $diag_source );
 
             }
             else {
@@ -5410,7 +5396,6 @@ EOF
     sub annualAVxyrfromann {
 
         #taNode = $_[0] ;
-        print("annualAVxyrfromann\n");
         my $sim0            = $_[1];
         my $ppcNode         = $_[2];
         my $annavnodes      = $_[3];
@@ -5658,7 +5643,6 @@ EOF
         my $out_start
             = FREUtil::graindate( FREUtil::modifydate( $tEND, "-$chunkLength yr +1 sec" ), $freq );
         my $out_end = FREUtil::graindate( $tEND, $freq );
-
         #
         my $variables = FREUtil::cleanstr( $_[0]->findvalue('variables') );
         if ( "$variables" eq "" ) {
@@ -5797,7 +5781,6 @@ EOF
         my $source     = $_[0]->findvalue('@source');
         if ( "$source" eq "" ) { $source = $ppcNode->findvalue('@source'); }
         if ( "$avgatt" ne "" ) {
-
             if ( "$avgatt" eq "daily" ) {
                 return monthlyTSfromdailyTS( $_[0], $sim0, $startofrun );
             }
@@ -6243,17 +6226,8 @@ EOF
         if ( $int > $maxyrs ) { $maxyrs = $int; }
 
         #get variables
-        my $uservariables = FREUtil::cleanstr( $_[0]->findvalue('variables') );
-        $uservariables =~ s/ /,/g;
-        my $variables = '';
-        foreach my $v ( split( ',', $uservariables ) ) {
-            $variables = "$variables $v";
-        }
-        $variables =~ s/^ //g;
+        my $variables = FREUtil::cleanstr( $_[0]->findvalue('variables') );
         $variables =~ s/ /,/g;
-        if ( "$variables" ne "" ) {
-            print STDERR "        from xml, vars are '$variables'\n" if $opt_v;
-        }
 
         #check for missing files
         my $diag_source = $_[0]->findvalue('@diagSource');
@@ -6347,6 +6321,7 @@ endif
         else
             $time_ncrcat ncrcat \$ncrcatopt $filelist month.nc
         endif
+        unset vars
         $check_ncrcat
         $time_timavg \$TIMAVG -o $component.$start-$end.\$monthf\$tile.nc month.nc
         $retry_timavg
@@ -6366,7 +6341,6 @@ endif
         $time_rm rm -f month.nc
         @ month++
     end
-unset vars
 $tileend
 
 EOF
@@ -6381,7 +6355,6 @@ EOF
     sub annualAVfromav {
 
         #taNode = $_[0] ;
-        print("annualAVfromav\n");
         my $sim0   = $_[1];
         my $subint = $_[2];
 
@@ -6702,7 +6675,6 @@ EOF
             $csh .= $cubiccsh;
         } ## end elsif ( "$sourceGrid" eq ...)
         else {
-
             #DATA ALREADY LATLON
 
             # convert latlon/tripolar to latlon
