@@ -5378,72 +5378,73 @@ $time_rm rm -f annual.nc
 
 EOF
 
-        } ## end else [ if ( "$sourceGrid" eq ...)]
-        if ($opt_z) { $csh .= end_systime(); }
-        $csh .= mailerrors($outdir);
-        return $csh;
-    } ## end sub annualAV1yrfromhist
+   }
+   if ($opt_z) { $csh .= end_systime(); }
+   $csh .= mailerrors($outdir);
+   return $csh;
+}
 
-    #TIMEAVERAGES - ANNUAL XYR
-    sub annualAVxyrfromann {
+#TIMEAVERAGES - ANNUAL XYR
+sub annualAVxyrfromann {
+   #taNode = $_[0] ;
+   print("annualAVxyrfromann\n");
+   my $sim0 = $_[1];
+   my $ppcNode = $_[2];
+   my $annavnodes = $_[3];
+   my $annCalcInterval = $_[4];
 
-        #taNode = $_[0] ;
-        my $sim0            = $_[1];
-        my $ppcNode         = $_[2];
-        my $annavnodes      = $_[3];
-        my $annCalcInterval = $_[4];
+   my $src = 'annual';
+   my $interval = $_[0]->findvalue('@interval');
+   my $chunkLength = $_[0]->findvalue('@chunkLength');
+   my $sim0f = FREUtil::graindate($sim0,$src);
+   my $t0f = FREUtil::graindate($t0,$src);
+   my $tENDf = FREUtil::graindate($tEND,$src);
+   my $outdirpath = "$component/av/$src"."_$interval";
+   my $outdir = "$ppRootDir/$outdirpath";
+   my $tmp = FREUtil::modifydate($tEND,"+ 1 sec");
+   my $yrsSoFar = &Delta_Format( FREUtil::dateCalc($sim0,$tmp) ,0,"%yd");
+   my $int = $interval;
+   $int =~ s/yr//;
+   my $mod = $yrsSoFar % $int;
+   unless( $mod == 0 ) { return ""; }
+   $mkdircommand .= "$outdir ";
+   if( $int > $maxyrs ) { $maxyrs = $int; }
+   my $first = FREUtil::padzeros($t0f-$int+1);
 
-        my $src         = 'annual';
-        my $interval    = $_[0]->findvalue('@interval');
-        my $chunkLength = $_[0]->findvalue('@chunkLength');
-        my $sim0f       = FREUtil::graindate( $sim0, $src );
-        my $t0f         = FREUtil::graindate( $t0, $src );
-        my $tENDf       = FREUtil::graindate( $tEND, $src );
-        my $outdirpath  = "$component/av/$src" . "_$interval";
-        my $outdir      = "$ppRootDir/$outdirpath";
-        my $tmp         = FREUtil::modifydate( $tEND, "+ 1 sec" );
-        my $yrsSoFar    = &Delta_Format( FREUtil::dateCalc( $sim0, $tmp ), 0, "%yd" );
-        my $int         = $interval;
-        $int =~ s/yr//;
-        my $mod = $yrsSoFar % $int;
-        unless ( $mod == 0 ) { return ""; }
-        $mkdircommand .= "$outdir ";
-        if ( $int > $maxyrs ) { $maxyrs = $int; }
-        my $first = FREUtil::padzeros( $t0f - $int + 1 );
+   #check for missing files
+   my $diag_source = $_[0]->findvalue('@diagSource');
+   my @monthnodes = $_[0]->parentNode->findnodes('timeSeries[@freq="monthly"]');
+   if ( scalar @monthnodes and "$diag_source" eq "" ) {
+    my $monthnode = $_[0]->parentNode->findnodes('timeSeries[@freq="monthly"]')->get_node(1);
+    $diag_source = $monthnode->getAttribute('@source');
+   }
+   if ( "$diag_source" eq "" ) { $diag_source = $_[0]->findvalue('../@source'); }
+   if ( "$diag_source" eq "") { $diag_source = $component."_month"; }
 
-        #check for missing files
-        my $diag_source = $_[0]->findvalue('@diagSource');
-        my @monthnodes  = $_[0]->parentNode->findnodes('timeSeries[@freq="monthly"]');
-        if ( scalar @monthnodes and "$diag_source" eq "" ) {
-            my $monthnode
-                = $_[0]->parentNode->findnodes('timeSeries[@freq="monthly"]')->get_node(1);
-            $diag_source = $monthnode->getAttribute('@source');
-        }
-        if ( "$diag_source" eq "" ) { $diag_source = $_[0]->findvalue('../@source'); }
-        if ( "$diag_source" eq "" ) { $diag_source = $component . "_month"; }
+   my $csh = '';
 
-        my $csh = '';
+   #always do 1yr ann av calculation, but only archive if annCalcInterval not 1yr
+   if ( "$annCalcInterval" ne "1yr" and not $annavnodes ) { $annavnodes = 0; }
+   my $newnode = XML::LibXML::Element->new( 'timeAverage' );
+   $newnode->setAttribute( 'source','annual' );
+   $newnode->setAttribute( 'interval','1yr' );
+   $ppcNode->appendChild($newnode);
+   my $annNode = $ppcNode->findnodes('timeAverage[@source="annual" and @interval="1yr"]')->get_node(1);
+   foreach my $i ( 0 .. ($int-1) ) {
+      my $annyr = $userstartyear;
+      $annyr -= $i;
+      $annyr = FREUtil::padzeros($annyr)."0101";
+      #print "\nNOTE: Calling annualAV1yrfromhist( $annNode, $sim0, $annavnodes, $annyr )\n\n";
+      $csh .= annualAV1yrfromhist( $annNode, $sim0, $annavnodes, $annyr );
+      last if "$annCalcInterval" eq "1yr";
+   }
 
-        #always do 1yr ann av calculation, but only archive if annCalcInterval not 1yr
-        if ( "$annCalcInterval" ne "1yr" and not $annavnodes ) { $annavnodes = 0; }
-        my $newnode = XML::LibXML::Element->new('timeAverage');
-        $newnode->setAttribute( 'source',   'annual' );
-        $newnode->setAttribute( 'interval', '1yr' );
-        $ppcNode->appendChild($newnode);
-        my $annNode
-            = $ppcNode->findnodes('timeAverage[@source="annual" and @interval="1yr"]')->get_node(1);
-        foreach my $i ( 0 .. ( $int - 1 ) ) {
-            my $annyr = $userstartyear;
-            $annyr -= $i;
-            $annyr = FREUtil::padzeros($annyr) . "0101";
+   #get variables
+   my $variables = FREUtil::cleanstr( $_[0]->findvalue('variables') );
+   $variables =~ s/ /,/g;
 
-           #print "\nNOTE: Calling annualAV1yrfromhist( $annNode, $sim0, $annavnodes, $annyr )\n\n";
-            $csh .= annualAV1yrfromhist( $annNode, $sim0, $annavnodes, $annyr );
-            last if "$annCalcInterval" eq "1yr";
-        }
-
-        $csh .= setcheckpt("annualAVxyrfromann_$interval");
-        $csh .= <<EOF;
+   $csh .= setcheckpt("annualAVxyrfromann_$interval");
+   $csh .= <<EOF;
 
 #####################################
 echo 'timeAverage ($component $src $interval averages)'
@@ -5471,26 +5472,23 @@ EOF
                         $filelist .= "\$anndir/$component.$year.ann.tile$i.nc ";
                         $getlist  .= "$component.$year.ann.tile$i.nc ";
                     }
-                }
-                else {                                                           # LATLON
-                    $filelist .= "\$anndir/$component.$year.ann.nc ";
-                    $getlist  .= "$component.$year.ann.nc ";
-                }
-            }
-            my $check_ncrcat  = errorstr("NCRCAT ($component $src $interval averages)");
-            my $check_timavg  = retryonerrorend("TIMAVG ($component $src $interval averages)");
-            my $retry_timavg  = retryonerrorstart("TIMAVG");
-            my $check_ncatted = errorstr("NCATTED ($component $src $interval averages)");
-            my $check_dmget   = errorstr("DMGET ($component $src $interval averages)");
-            my $check_nccopy  = errorstr("NCCOPY ($component $src $interval averages)");
+         } else { # LATLON
+            $filelist .= "\$anndir/$component.$year.ann.nc ";
+            $getlist .= "$component.$year.ann.nc ";
+         }
+      }
+      my @first_file = split / /,$getlist;
+      my $check_ncrcat = errorstr("NCRCAT ($component $src $interval averages)");
+      my $check_timavg = retryonerrorend("TIMAVG ($component $src $interval averages)");
+      my $retry_timavg = retryonerrorstart("TIMAVG");
+      my $check_ncatted = errorstr("NCATTED ($component $src $interval averages)");
+      my $check_dmget = errorstr("DMGET ($component $src $interval averages)");
+      my $check_nccopy = errorstr("NCCOPY ($component $src $interval averages)");
 
-            if ( "$sourceGrid" eq 'cubedsphere' and "$xyInterp" eq '' ) {        # CUBIC
-                my $tile = '.tile$i';
-                my $compress
-                    = compress_csh(
-                    "\$tempCache/$outdirpath/$component.$first-$endinterval.ann$tile.nc",
-                    $check_nccopy );
-                $csh .= <<EOF;
+   if ("$sourceGrid" eq 'cubedsphere' and "$xyInterp" eq '') { # CUBIC
+      my $tile = '.tile$i';
+      my $compress = compress_csh("\$tempCache/$outdirpath/$component.$first-$endinterval.ann$tile.nc", $check_nccopy);
+      $csh .= <<EOF;
 foreach file ($filelist)
    set f = \$file:t
    if ( ! -f \$f ) then
@@ -5509,7 +5507,18 @@ while ( \$i <= 6 )
    foreach file ($getlist)
       if (\$file =~ \*$tile\*) set filelist = ( \$filelist \$file )
    end
-   $time_ncrcat ncrcat \$ncrcatopt \$filelist \$work/xyears.nc
+   if ( \$?variables && "$variables" != '' ) then
+   set static_vars = (`\$NCVARS -s0123 \$file`) 
+   set static_vars = `echo \$static_vars |sed 's/ /,/g'`
+   set avg_vars = (average_T1,average_T2,average_DT,time_bnds)
+   set vars = ("$variables","\$static_vars","\$avg_vars")
+   unset variables
+   unset static_vars
+      $time_ncrcat ncrcat \$ncrcatopt -v \$vars \$filelist \$work/xyears.nc
+   else
+      $time_ncrcat ncrcat \$ncrcatopt \$filelist \$work/xyears.nc
+   endif
+   unset vars
    $check_ncrcat
    $time_timavg \$TIMAVG -o \$tempCache/$outdirpath/$component.$first-$endinterval.ann$tile.nc \$work/xyears.nc
    $retry_timavg
@@ -5547,7 +5556,18 @@ foreach file ($filelist)
    endif
 end
 if ( -e xyears.nc ) rm -f xyears.nc
-$time_ncrcat ncrcat \$ncrcatopt $getlist \$work/xyears.nc
+if ( \$?variables && "$variables" != '' ) then
+   set static_vars = (`\$NCVARS -s0123 @first_file`) 
+   set static_vars = `echo \$static_vars |sed 's/ /,/g'`
+   set avg_vars = (average_T1,average_T2,average_DT,time_bnds)
+   set vars = ("$variables","\$static_vars","\$avg_vars")
+   unset variables
+   unset static_vars
+   $time_ncrcat ncrcat \$ncrcatopt -v \$vars $getlist \$work/xyears.nc
+else
+   $time_ncrcat ncrcat \$ncrcatopt $getlist \$work/xyears.nc
+endif
+unset vars
 $check_ncrcat
 $time_timavg \$TIMAVG -o \$tempCache/$outdirpath/$component.$first-$endinterval.ann.nc \$work/xyears.nc
 $retry_timavg
@@ -6321,50 +6341,49 @@ $tileend
 
 EOF
 
-        if ($opt_z) { $csh .= end_systime(); }
-        $csh .= mailerrors($outdir);
+   if ($opt_z) { $csh .= end_systime(); }
+   $csh .= mailerrors($outdir);
 
-        return $csh;
-    } ## end sub monthlyAVfromav
+   return $csh;
+}
 
-    #TIMEAVERAGES - ANNUAL XYR
-    sub annualAVfromav {
+#TIMEAVERAGES - ANNUAL XYR
+sub annualAVfromav {
+   #taNode = $_[0] ;
+   print("annualAVfromav\n");
+   my $sim0 = $_[1];
+   my $subint = $_[2];
 
-        #taNode = $_[0] ;
-        my $sim0   = $_[1];
-        my $subint = $_[2];
+   my $src = 'annual';
+   my $interval = $_[0]->findvalue('@interval');
+   my $chunkLength = $_[0]->findvalue('@chunkLength');
+   my $sim0f = FREUtil::graindate($sim0,$src);
+   my $t0f = FREUtil::graindate($t0,$src);
+   my $tENDf = FREUtil::graindate($tEND,$src);
+   my $outdir = "$ppRootDir/$component/av/$src"."_$interval";
+   my $srcdir = "$ppRootDir/$component/av/$src"."_$subint"."yr";
+   my $tmp = FREUtil::modifydate($tEND,"+ 1 sec");
+   my $yrsSoFar = &Delta_Format( FREUtil::dateCalc($sim0,$tmp) ,0,"%yd");
+   my $int = $interval;
+   $int =~ s/yr//;
+   my $mod = $yrsSoFar % $int;
+   unless( $mod == 0 ) { return ""; }
+   $mkdircommand .= "$outdir ";
+   if( $int > $maxyrs ) { $maxyrs = $int; }
+   my $first = FREUtil::padzeros($t0f-$int+1);
 
-        my $src         = 'annual';
-        my $interval    = $_[0]->findvalue('@interval');
-        my $chunkLength = $_[0]->findvalue('@chunkLength');
-        my $sim0f       = FREUtil::graindate( $sim0, $src );
-        my $t0f         = FREUtil::graindate( $t0, $src );
-        my $tENDf       = FREUtil::graindate( $tEND, $src );
-        my $outdir      = "$ppRootDir/$component/av/$src" . "_$interval";
-        my $srcdir      = "$ppRootDir/$component/av/$src" . "_$subint" . "yr";
-        my $tmp         = FREUtil::modifydate( $tEND, "+ 1 sec" );
-        my $yrsSoFar    = &Delta_Format( FREUtil::dateCalc( $sim0, $tmp ), 0, "%yd" );
-        my $int         = $interval;
-        $int =~ s/yr//;
-        my $mod = $yrsSoFar % $int;
-        unless ( $mod == 0 ) { return ""; }
-        $mkdircommand .= "$outdir ";
-        if ( $int > $maxyrs ) { $maxyrs = $int; }
-        my $first = FREUtil::padzeros( $t0f - $int + 1 );
+   #check for missing files
+   my $diag_source =  $_[0]->findvalue('@diagSource');
+   my @monthnodes = $_[0]->parentNode->findnodes('timeSeries[@freq="monthly"]');
+   if ( scalar @monthnodes and "$diag_source" eq "" ) {
+    my $monthnode = $_[0]->parentNode->findnodes('timeSeries[@freq="monthly"]')->get_node(1);
+    $diag_source = $monthnode->getAttribute('@source');
+   }
+   if ( "$diag_source" eq "" ) { $diag_source = $_[0]->findvalue('../@source'); }
+   if ( "$diag_source" eq "") { $diag_source = $component."_month"; }
 
-        #check for missing files
-        my $diag_source = $_[0]->findvalue('@diagSource');
-        my @monthnodes  = $_[0]->parentNode->findnodes('timeSeries[@freq="monthly"]');
-        if ( scalar @monthnodes and "$diag_source" eq "" ) {
-            my $monthnode
-                = $_[0]->parentNode->findnodes('timeSeries[@freq="monthly"]')->get_node(1);
-            $diag_source = $monthnode->getAttribute('@source');
-        }
-        if ( "$diag_source" eq "" ) { $diag_source = $_[0]->findvalue('../@source'); }
-        if ( "$diag_source" eq "" ) { $diag_source = $component . "_month"; }
-
-        my $csh = setcheckpt("annualAVfromav_$interval");
-        $csh .= <<EOF;
+   my $csh = setcheckpt("annualAVfromav_$interval");
+   $csh .= <<EOF;
 #####################################
 echo 'timeAverage ($component $src $interval averages from $subint yr averages)'
 set outdir = $outdir
