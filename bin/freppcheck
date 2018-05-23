@@ -7,7 +7,7 @@
 
 use strict;
 use Cwd;
-use Getopt::Long(':config', 'no_ignore_case');
+use Getopt::Long( ':config', 'no_ignore_case' );
 use XML::LibXML;
 use File::Path;
 use File::Spec;
@@ -17,430 +17,455 @@ use FREUtil qw(padzeros cleanstr);
 use FRE();
 use FREExperiment();
 
+{    #begin package AVnodes
 
-{ #begin package AVnodes
-package AVnodes;
-sub new {
-    my $class = shift;
-    my ($freq, $interval,$firstyr,$lastyr,$asrcdir,$c) = @_;
-    my $ref = { freq => $freq,
-                interval => $interval,
-                firstyr => $firstyr,
-                lastyr => $lastyr,
-                asrcdir => $asrcdir,
-                component => $c,
-    };
-    return bless ($ref, $class);
-}
+    package AVnodes;
 
-sub list_all_files {
-   my $self = shift;
-   my @files = ();
-   my $component = $self->{component};
-   my $chunkend = $self->{firstyr} + $self->{interval} - 1;
-   my $lastyr = $self->{lastyr};
-   my $seasons = $self->lookup_ssn;
-   while ($chunkend <= $lastyr) {
-      my $chunkbeg = FREUtil::padzeros($chunkend - $self->{interval} + 1);
-         $chunkend = FREUtil::padzeros($chunkend);
+    sub new {
+        my $class = shift;
+        my ( $freq, $interval, $firstyr, $lastyr, $asrcdir, $c ) = @_;
+        my $ref = {
+            freq      => $freq,
+            interval  => $interval,
+            firstyr   => $firstyr,
+            lastyr    => $lastyr,
+            asrcdir   => $asrcdir,
+            component => $c,
+        };
+        return bless( $ref, $class );
+    }
+
+    sub list_all_files {
+        my $self      = shift;
+        my @files     = ();
+        my $component = $self->{component};
+        my $chunkend  = $self->{firstyr} + $self->{interval} - 1;
+        my $lastyr    = $self->{lastyr};
+        my $seasons   = $self->lookup_ssn;
+        while ( $chunkend <= $lastyr ) {
+            my $chunkbeg = FREUtil::padzeros( $chunkend - $self->{interval} + 1 );
+            $chunkend = FREUtil::padzeros($chunkend);
             my $thechunk;
+
             # taking care of interval 1
-            if ($chunkbeg eq $chunkend) {
-               $thechunk = $chunkbeg;
-            }else{
-               $thechunk = "$chunkbeg-$chunkend";
+            if ( $chunkbeg eq $chunkend ) {
+                $thechunk = $chunkbeg;
             }
-         foreach my $ssn (@$seasons) {
-            # if component is tiled, loop for tiles 1 thru 6 instead
-            my @list = $self->{is_tiled} ? (qw( .tile1 .tile2 .tile3 .tile4 .tile5 .tile6 )) : ('');
-            for my $x (@list) {
-                my $thisfile = "$component.$thechunk.$ssn$x.nc";
-                @files = ($thisfile, @files);
+            else {
+                $thechunk = "$chunkbeg-$chunkend";
             }
+            foreach my $ssn (@$seasons) {
+
+                # if component is tiled, loop for tiles 1 thru 6 instead
+                my @list
+                    = $self->{is_tiled} ? (qw( .tile1 .tile2 .tile3 .tile4 .tile5 .tile6 )) : ('');
+                for my $x (@list) {
+                    my $thisfile = "$component.$thechunk.$ssn$x.nc";
+                    @files = ( $thisfile, @files );
+                }
+            }
+            $chunkend = FREUtil::padzeros( $chunkend + $self->{interval} );
+        } ## end while ( $chunkend <= $lastyr)
+        return \@files;
+    } ## end sub list_all_files
+
+    sub checking {
+        my $self         = shift;
+        my $cdir         = Cwd::cwd;
+        my @missingfiles = ();
+        my $files        = $self->list_all_files;
+        chdir $self->{asrcdir};
+        foreach my $f ( sort @$files ) {
+            if ( !-f $f ) { push( @missingfiles, $f ); }
         }
-        $chunkend = FREUtil::padzeros($chunkend + $self->{interval} );
-   }
-   return \@files;
-}
+        chdir $cdir;
+        return \@missingfiles;
+    }
 
-sub checking {
-   my $self = shift;
-   my $cdir = Cwd::cwd;
-   my @missingfiles = ();
-   my $files = $self->list_all_files;
-   chdir $self->{asrcdir};
-   foreach my $f (sort @$files) {
-      if (! -f $f) { push (@missingfiles ,$f); }
-   }
-   chdir $cdir;
-   return \@missingfiles;
-}
+    sub reporting {
+        my $self         = shift;
+        my $missingfiles = $_[0];
 
-sub reporting {
-   my $self = shift;
-   my $missingfiles = $_[0] ;
+        if ( @$missingfiles > 0 ) {
+            print "\n # OOPS ### missing files in $self->{asrcdir}\ \n";
+            foreach my $missingfile (@$missingfiles) { print "   ### missing: $missingfile\n"; }
+        }
+        else {
+            print "\n # No files missing in $self->{asrcdir}\n";
+        }
+        return scalar(@$missingfiles);
+    }
 
-   if (@$missingfiles > 0 ) {
-       print  "\n # OOPS ### missing files in $self->{asrcdir}\ \n";
-       foreach my $missingfile (@$missingfiles) {print  "   ### missing: $missingfile\n"; }
-   } else {
-       print  "\n # No files missing in $self->{asrcdir}\n";
-   }
-   return scalar(@$missingfiles);
-}
-sub lookup_ssn {
-   my $self = shift;
-   my $src=$self->{freq};
-   my @seasons = ();
-   if ($src eq "monthly" ) {
-       @seasons = ("01","02","03","04","05","06","07","08","09","10","11","12");
-   } elsif ($src eq "seasonal" ) {
-       @seasons = ("DJF","MAM","JJA","SON");
-   } elsif ($src eq "annual") {
-       @seasons = ("ann");
-   }
-   return \@seasons;
-}
+    sub lookup_ssn {
+        my $self    = shift;
+        my $src     = $self->{freq};
+        my @seasons = ();
+        if ( $src eq "monthly" ) {
+            @seasons = ( "01", "02", "03", "04", "05", "06", "07", "08", "09", "10", "11", "12" );
+        }
+        elsif ( $src eq "seasonal" ) {
+            @seasons = ( "DJF", "MAM", "JJA", "SON" );
+        }
+        elsif ( $src eq "annual" ) {
+            @seasons = ("ann");
+        }
+        return \@seasons;
+    }
 
-} #end package AVnodes
+}    #end package AVnodes
 
-{ #begin package TSnodes
-package TSnodes;
-sub new {
-    my $class = shift;
-    my ($freq, $interval,$firstyr,$lastyr,$asrcdir,$c,$source,$optM,$variables,$is_tiled,$pp_root_dir) = @_;
+{    #begin package TSnodes
 
-    # static file checking
-    # TSnodes object now contains hashref %existing_static_vars, whose keys
-    # are variables known to exist in the static file for the given component $c
-    # If the static file is missing or one more more of the static tiles are missing,
-    # %existing_static_vars will be empty
-    # Otherwise we use dmget and list_ncvars to get the variables from the
-    # static file or the variables from the first static tile
-    # If there are any errors in either program, a warning will be printed
-    # and the hash will be empty.
-    my @static_files
-        = map
-            { File::Spec->catfile($pp_root_dir, $c, "$c.static$_.nc") }
+    package TSnodes;
+
+    sub new {
+        my $class = shift;
+        my ($freq,   $interval, $firstyr,   $lastyr,   $asrcdir, $c,
+            $source, $optM,     $variables, $is_tiled, $pp_root_dir
+        ) = @_;
+
+        # static file checking
+        # TSnodes object now contains hashref %existing_static_vars, whose keys
+        # are variables known to exist in the static file for the given component $c
+        # If the static file is missing or one more more of the static tiles are missing,
+        # %existing_static_vars will be empty
+        # Otherwise we use dmget and list_ncvars to get the variables from the
+        # static file or the variables from the first static tile
+        # If there are any errors in either program, a warning will be printed
+        # and the hash will be empty.
+        my @static_files = map { File::Spec->catfile( $pp_root_dir, $c, "$c.static$_.nc" ) }
             $is_tiled ? (qw( .tile1 .tile2 .tile3 .tile4 .tile5 .tile6 )) : ('');
 
-    my $static_files_exist = do {
-        my $ok = 1;
-        for (@static_files) {
-            $ok = 0 unless -f;
-        }
-        $ok;
-    };
-
-    my %existing_static_vars;
-    if ($static_files_exist) {
-        Try::Tiny::try {
-            my $command = "dmget $static_files[0]";
-            system $command;
-            my $exit_code = $? >> 8;
-            die "$command returned exit code $exit_code" if $exit_code;
-
-            $command = "list_ncvars.csh -st01234 $static_files[0]";
-            my $output = `$command`;
-            $exit_code = $? >> 8;
-            die "$command returned exit code $exit_code" if $exit_code;
-            die "$command returning in error: $output" if $output =~ /ERROR/;
-
-            my @vars = split ' ', $output;
-            @existing_static_vars{ @vars } = ();
-        }
-        Try::Tiny::catch {
-            print "WARNING: failure in retrieving static vars: $_";
+        my $static_files_exist = do {
+            my $ok = 1;
+            for (@static_files) {
+                $ok = 0 unless -f;
+            }
+            $ok;
         };
+
+        my %existing_static_vars;
+        if ($static_files_exist) {
+            Try::Tiny::try {
+                my $command = "dmget $static_files[0]";
+                system $command;
+                my $exit_code = $? >> 8;
+                die "$command returned exit code $exit_code" if $exit_code;
+
+                $command = "list_ncvars.csh -st01234 $static_files[0]";
+                my $output = `$command`;
+                $exit_code = $? >> 8;
+                die "$command returned exit code $exit_code" if $exit_code;
+                die "$command returning in error: $output" if $output =~ /ERROR/;
+
+                my @vars = split ' ', $output;
+                @existing_static_vars{@vars} = ();
+            }
+            Try::Tiny::catch {
+                print "WARNING: failure in retrieving static vars: $_";
+            };
+        } ## end if ($static_files_exist)
+
+        my $ref = {
+            freq                 => $freq,
+            interval             => $interval,
+            firstyr              => $firstyr,
+            lastyr               => $lastyr,
+            asrcdir              => $asrcdir,
+            component            => $c,
+            source               => $source,
+            checkcpio            => $optM,
+            variables            => $variables,
+            is_tiled             => $is_tiled,
+            static_files         => \@static_files,
+            existing_static_vars => \%existing_static_vars,
+        };
+        return bless( $ref, $class );
+    } ## end sub new
+
+    sub update_checkvars {
+        my $self = shift;
+        my $vva  = $self->{variables};
+        my @vv   = @$vva;
+        if ( @vv <= 0 ) {
+            print
+                "WARNING: Cannot find a variable to check for $self->{source} ts data, not checking\n";
+            return;
+        }
     }
 
-    my $ref = { freq => $freq,
-                interval => $interval,
-                firstyr => $firstyr,
-                lastyr => $lastyr,
-                asrcdir => $asrcdir,
-                component => $c,
-                source => $source,
-                checkcpio => $optM,
-                variables => $variables,
-                is_tiled => $is_tiled,
-                static_files => \@static_files,
-                existing_static_vars => \%existing_static_vars,
-    };
-    return bless ($ref, $class);
-}
+    sub list_all_files {
+        my $self = shift;
+        my %files;
+        my $component       = $self->{component};
+        my $path            = $self->{asrcdir};
+        my $chunkend        = $self->{firstyr} + $self->{interval} - 1;
+        my $lastyr          = $self->{lastyr};
+        my $seasons         = $self->lookup_ssn;
+        my $checkvars       = $self->{variables};
+        my @cpiofilekeystrs = cpiofilekeystr( $self->{freq} );
+        my $checkcpio       = $self->{checkcpio};
 
-sub update_checkvars {
-   my $self = shift;
-   my $vva = $self->{variables};
-   my @vv = @$vva;
-   if (@vv <= 0) {
-     print "WARNING: Cannot find a variable to check for $self->{source} ts data, not checking\n";
-     return;
-   }
-}
+        while ( $chunkend <= $lastyr ) {
+            my $chunkbeg = FREUtil::padzeros( $chunkend - $self->{interval} + 1 );
+            $chunkend = FREUtil::padzeros($chunkend);
+            my $thechunk = lookup_chunk( $chunkbeg, $chunkend, $self->{freq} );
 
-sub list_all_files {
-   my $self = shift;
-   my %files;
-   my $component = $self->{component};
-   my $path = $self->{asrcdir};
-   my $chunkend = $self->{firstyr} + $self->{interval} - 1;
-   my $lastyr = $self->{lastyr};
-   my $seasons = $self->lookup_ssn;
-   my $checkvars = $self->{variables};
-   my @cpiofilekeystrs =  cpiofilekeystr($self->{freq});
-   my $checkcpio = $self->{checkcpio};
+            my $cpiofile = "$component.$thechunk.$cpiofilekeystrs[0].nc.cpio";
+            if ( !-f "$path/$cpiofile" ) {
+                $cpiofile = "$component.$thechunk.$cpiofilekeystrs[1].nc.cpio";
+            }
 
-   while ($chunkend <= $lastyr) {
-      my $chunkbeg = FREUtil::padzeros($chunkend - $self->{interval} + 1);
-         $chunkend = FREUtil::padzeros($chunkend);
-      my $thechunk = lookup_chunk($chunkbeg,$chunkend,$self->{freq});
+            # if the cpio file exists, then no file in the dir is missing
+            if ( -f "$path/$cpiofile" and $checkcpio eq "reqCpio" ) {
 
-      my $cpiofile = "$component.$thechunk.$cpiofilekeystrs[0].nc.cpio" ;
-      if( ! -f "$path/$cpiofile") {$cpiofile = "$component.$thechunk.$cpiofilekeystrs[1].nc.cpio";}
-      # if the cpio file exists, then no file in the dir is missing
-      if ( -f "$path/$cpiofile" and $checkcpio eq "reqCpio" ) {
-         #print "allowing $path/$cpiofile\n";
-      } else {
-         my ($size, $status);
-         foreach my $thecheckvar (@$checkvars) {
-            # if component is tiled, loop for tiles 1 thru 6 instead
-            my @list = $self->{is_tiled} ? (qw( .tile1 .tile2 .tile3 .tile4 .tile5 .tile6 )) : ('');
-            for my $x (@list) {
-            if ($self->{freq} ne "seasonal") {
-               $size = " ";
-               $status = " ";
-               my $thisfile = "$component.$thechunk.$thecheckvar$x.nc";
-               if ( -f "$path/$thisfile") {
-                 $size = (stat("$path/$thisfile"))[7];
-                 $status = "exist";
-               }
-               $files{$thisfile}{chunk} = $thechunk ;
-               $files{$thisfile}{status} = $status ;
-               $files{$thisfile}{size} = $size ;
+                #print "allowing $path/$cpiofile\n";
+            }
+            else {
+                my ( $size, $status );
+                foreach my $thecheckvar (@$checkvars) {
 
-            } else {
-               foreach my $ssn (@$seasons) {
-                  $size = " ";
-                  $status = " ";
-                  my $thisfile = "$component.$thechunk$ssn.$thecheckvar.nc";
-                  if ( -f "$path/$thisfile") {
-                    $size = (stat("$path/$thisfile"))[7];
-                    $status = "exist";
-                  }
-                  $files{$thisfile}{chunk} = $thechunk ;
-                  $files{$thisfile}{status} = $status ;
-                  $files{$thisfile}{size} = $size ;
-              }
-           }
+                    # if component is tiled, loop for tiles 1 thru 6 instead
+                    my @list
+                        = $self->{is_tiled}
+                        ? (qw( .tile1 .tile2 .tile3 .tile4 .tile5 .tile6 ))
+                        : ('');
+                    for my $x (@list) {
+                        if ( $self->{freq} ne "seasonal" ) {
+                            $size   = " ";
+                            $status = " ";
+                            my $thisfile = "$component.$thechunk.$thecheckvar$x.nc";
+                            if ( -f "$path/$thisfile" ) {
+                                $size   = ( stat("$path/$thisfile") )[7];
+                                $status = "exist";
+                            }
+                            $files{$thisfile}{chunk}  = $thechunk;
+                            $files{$thisfile}{status} = $status;
+                            $files{$thisfile}{size}   = $size;
+
+                        }
+                        else {
+                            foreach my $ssn (@$seasons) {
+                                $size   = " ";
+                                $status = " ";
+                                my $thisfile = "$component.$thechunk$ssn.$thecheckvar.nc";
+                                if ( -f "$path/$thisfile" ) {
+                                    $size   = ( stat("$path/$thisfile") )[7];
+                                    $status = "exist";
+                                }
+                                $files{$thisfile}{chunk}  = $thechunk;
+                                $files{$thisfile}{status} = $status;
+                                $files{$thisfile}{size}   = $size;
+                            }
+                        }
+                    } ## end for my $x (@list)
+                } ## end foreach my $thecheckvar (@$checkvars)
+            } ## end else [ if ( -f "$path/$cpiofile"...)]
+
+            #check the cpio file
+            if ( $checkcpio eq "reqCpio" or $checkcpio eq "reqBoth" ) {
+                if ( $self->{interval} < 21 ) {    #warning: hardcoded
+                    my $size   = " ";
+                    my $status = " ";
+                    if ( -f "$path/$cpiofile" ) {
+                        $size   = ( stat("$path/$cpiofile") )[7];
+                        $status = "exist";
+                    }
+                    $files{$cpiofile}{chunk}  = $thechunk;
+                    $files{$cpiofile}{status} = $status;
+                    $files{$cpiofile}{size}   = $size;
+                }
+            }
+
+            #with no -N, or -M options, the default, don't check the cpio file
+
+            $chunkend = FREUtil::padzeros( $chunkend + $self->{interval} );
+        } ## end while ( $chunkend <= $lastyr)
+        return \%files;
+    } ## end sub list_all_files
+
+    sub reporting_size {
+        my $self          = shift;
+        my $ref           = $_[0];
+        my %infiles       = %$ref;
+        my $missingstatus = 0;
+
+        print "\n # files in $self->{asrcdir}\n";
+        for my $f ( sort { third_field($a) cmp third_field($b) } ( sort keys %infiles ) ) {
+            if ( $infiles{$f}{status} eq "exist" ) {
+                print "   size = $infiles{$f}{size}       for $f\n";
+            }
+            else {
+                print "   ### missing $f    \n";
+                $missingstatus++;
             }
         }
-     }
-
-     #check the cpio file
-     if ($checkcpio eq "reqCpio" or $checkcpio eq "reqBoth" ) {
-        if ( $self->{interval} < 21 ) { #warning: hardcoded
-           my $size = " ";
-           my $status = " ";
-           if ( -f "$path/$cpiofile") {
-              $size = (stat("$path/$cpiofile"))[7];
-              $status = "exist";
-           }
-           $files{$cpiofile}{chunk} = $thechunk ;
-           $files{$cpiofile}{status} = $status ;
-           $files{$cpiofile}{size} = $size ;
-        }
-     }
-
-     #with no -N, or -M options, the default, don't check the cpio file
-
-     $chunkend = FREUtil::padzeros($chunkend + $self->{interval} );
+        return $missingstatus;
     }
-    return \%files;
-}
 
-sub reporting_size {
-   my $self = shift;
-   my $ref = $_[0];
-   my %infiles = %$ref;
-   my $missingstatus=0;
+    sub third_field {
+        my $string = shift;
+        my @fields = split( /\./, $string );
+        return $fields[2];
+    }
 
-   print  "\n # files in $self->{asrcdir}\n";
-   for my $f (sort {third_field($a) cmp third_field($b)} (sort keys %infiles)) {
-     if ($infiles{$f}{status} eq "exist" ) {
-        print  "   size = $infiles{$f}{size}       for $f\n";
-     } else {
-        print  "   ### missing $f    \n";
-        $missingstatus++;
-     }
-   }
-   return $missingstatus;
-}
+    sub reporting {
+        my $self      = shift;
+        my $ref       = $_[0];
+        my %infiles   = %$ref;
+        my $asrcdir   = $self->{asrcdir};
+        my $variables = $_[1];
+        my @vars      = sort @$variables;
 
-sub third_field {
-  my $string = shift;
-  my @fields = split(/\./,$string);
-  return $fields[2];
-}
-
-sub reporting {
-   my $self = shift;
-   my $ref = $_[0];
-   my %infiles = %$ref;
-   my $asrcdir = $self->{asrcdir};
-   my $variables = $_[1];
-   my @vars = sort @$variables;
-
-   #check for missing files
-   my @missingfiles = ();
-   for my $f ( sort keys %infiles) {
-       if ($infiles{$f}{status} ne "exist" ) {
-           my $var = third_field($f);
-           push (@missingfiles, $f ) unless exists $self->{existing_static_vars}->{$var};
-       }
-   }
-
-   if (@missingfiles > 0) {
-       print  "\n # OOPS ### missing files in $self->{asrcdir}\ \n";
-       foreach my $m ( @missingfiles) {
-           my $var = third_field($m);
-           print  "   ### missing: $m or $var in $self->{static_files}->[0]\n";
+        #check for missing files
+        my @missingfiles = ();
+        for my $f ( sort keys %infiles ) {
+            if ( $infiles{$f}{status} ne "exist" ) {
+                my $var = third_field($f);
+                push( @missingfiles, $f ) unless exists $self->{existing_static_vars}->{$var};
+            }
         }
-   } else {
-       print  "\n # No files missing in $self->{asrcdir}\n";
-   }
 
-   #check for tmp files
-   opendir(DIR, $asrcdir);
-   my @tmpfiles = grep { /\.tmp$/ } readdir(DIR);
-   closedir(DIR);
-   if (@tmpfiles > 0) {print  "   ---Found ", $#tmpfiles+1, " .tmp files!!!\n";}
-
-   #check file sizes
-   for my $v ( @vars ) {
-      my @sizes = ();
-      for my $f ( sort keys %infiles) {
-         my $fv = third_field($f);
-         if ( "$fv" eq "$v" ) {
-            if ($infiles{$f}{status} eq "exist" ) {
-               push (@sizes, $infiles{$f}{size} ) ;
+        if ( @missingfiles > 0 ) {
+            print "\n # OOPS ### missing files in $self->{asrcdir}\ \n";
+            foreach my $m (@missingfiles) {
+                my $var = third_field($m);
+                print "   ### missing: $m or $var in $self->{static_files}->[0]\n";
             }
-         }
-      }
+        }
+        else {
+            print "\n # No files missing in $self->{asrcdir}\n";
+        }
 
-      #get the most common element in the sizes array
-      my @n=(); $n[$_{$_}] = $_ for map{$_{$_}++; $_} @sizes;
-      @n = grep { defined } @n;
-      #print "\nMost common: $n[-1]\n\n";
+        #check for tmp files
+        opendir( DIR, $asrcdir );
+        my @tmpfiles = grep {/\.tmp$/} readdir(DIR);
+        closedir(DIR);
+        if ( @tmpfiles > 0 ) { print "   ---Found ", $#tmpfiles + 1, " .tmp files!!!\n"; }
 
-      for my $f ( sort keys %infiles) {
-         my $fv = third_field($f);
-         if ( "$fv" eq "$v" ) {
-            if ($infiles{$f}{status} eq "exist" ) {
-               if ( "$self->{freq}" eq "monthly" or "$self->{freq}" eq "annual" or 
-                    "$self->{freq}" eq "seasonal" ) {
-                  unless ( $infiles{$f}{size} == $n[-1] ) {
-                     print "   ---Suspicious filesize: $f (is $infiles{$f}{size}, should be $n[-1])\n";
-                  }        
-               } else {
-                  unless ( $infiles{$f}{size} == $n[-1] or $infiles{$f}{size} == $n[-2] or $n[-2] eq '' ) {
-                     print "   ---Suspicious filesize: $f (is $infiles{$f}{size}, should be $n[-1] or $n[-2])\n";
-                  }        
-               }
+        #check file sizes
+        for my $v (@vars) {
+            my @sizes = ();
+            for my $f ( sort keys %infiles ) {
+                my $fv = third_field($f);
+                if ( "$fv" eq "$v" ) {
+                    if ( $infiles{$f}{status} eq "exist" ) {
+                        push( @sizes, $infiles{$f}{size} );
+                    }
+                }
             }
-         }
-      }
-   }
-   return scalar (@missingfiles);
 
-}
+            #get the most common element in the sizes array
+            my @n = ();
+            $n[ $_{$_} ] = $_ for map { $_{$_}++; $_ } @sizes;
+            @n = grep {defined} @n;
 
-sub cpiofilekeystr {
-# The key strings in the cpio files
-      my $src = $_[0];
-#     print $src;
-      my %cpiofilekeystr = (
-        "1hr" => ["1hr","1hr"],
-        "2hr" => ["2hr","2hr"],
-        "3hr" => ["3hr","3hr"],
-        "4hr" => ["4hr","4hr"],
-        "6hr" => ["6hr","6hr"],
-        "8hr" => ["8hr","8hr"],
-        "12hr" => ["12hr","12hr"],
-        "120hr" => ["120hr","120hr"],
-	"hourly" => ["hrly","hourly"],
-        "daily" => ["day","day"],
-        "monthly" => ["mon","mon"],
-        "annual" => ["ann", "annual"],
-        "seasonal" => ["sea", "seasonal"],
-      );
-   return  @{ $cpiofilekeystr{$src} } ;
-}
+            #print "\nMost common: $n[-1]\n\n";
 
-sub lookup_ssn {
-   my $self = shift;
-   my $src=$self->{freq};
-   my @seasons = ();
-   if ($src eq "seasonal") {@seasons = (".DJF",".MAM",".JJA",".SON")};
-   return \@seasons;
-}
+            for my $f ( sort keys %infiles ) {
+                my $fv = third_field($f);
+                if ( "$fv" eq "$v" ) {
+                    if ( $infiles{$f}{status} eq "exist" ) {
+                        if (   "$self->{freq}" eq "monthly"
+                            or "$self->{freq}" eq "annual"
+                            or "$self->{freq}" eq "seasonal" ) {
+                            unless ( $infiles{$f}{size} == $n[-1] ) {
+                                print
+                                    "   ---Suspicious filesize: $f (is $infiles{$f}{size}, should be $n[-1])\n";
+                            }
+                        }
+                        else {
+                            unless ( $infiles{$f}{size} == $n[-1]
+                                or $infiles{$f}{size} == $n[-2]
+                                or $n[-2] eq '' ) {
+                                print
+                                    "   ---Suspicious filesize: $f (is $infiles{$f}{size}, should be $n[-1] or $n[-2])\n";
+                            }
+                        }
+                    }
+                } ## end if ( "$fv" eq "$v" )
+            } ## end for my $f ( sort keys %infiles)
+        } ## end for my $v (@vars)
+        return scalar(@missingfiles);
 
-sub lookup_chunk{
-    my ($chunklow,$chunkhi,$src) = @_;
-    #if ($chunklow == $chunkhi) {return $chunklow;}
-    my $chunk = {
-        "1hr"      => "${chunklow}010100-${chunkhi}123123",
-        "2hr"      => "${chunklow}010100-${chunkhi}123123",
-        "3hr"      => "${chunklow}010100-${chunkhi}123123",
-        "4hr"      => "${chunklow}010100-${chunkhi}123123",
-        "6hr"      => "${chunklow}010100-${chunkhi}123123",
-        "8hr"      => "${chunklow}010100-${chunkhi}123123",
-        "12hr"     => "${chunklow}010100-${chunkhi}123123",
-        "120hr"     => "${chunklow}010100-${chunkhi}123123",
-        "hourly"   => "${chunklow}010100-${chunkhi}123123",
-        "daily"    => "${chunklow}0101-${chunkhi}1231",
-        "monthly"  => "${chunklow}01-${chunkhi}12",
-        "annual"   => "${chunklow}-${chunkhi}",
-        "seasonal" => "${chunklow}-${chunkhi}",
-     };
-    return $chunk->{$src};
-}
+    } ## end sub reporting
 
-} # end package TSnodes
+    sub cpiofilekeystr {
 
+        # The key strings in the cpio files
+        my $src = $_[0];
 
-{ #begin package freppcheck
-   package freppcheck;
+        #     print $src;
+        my %cpiofilekeystr = (
+            "1hr"      => [ "1hr",   "1hr" ],
+            "2hr"      => [ "2hr",   "2hr" ],
+            "3hr"      => [ "3hr",   "3hr" ],
+            "4hr"      => [ "4hr",   "4hr" ],
+            "6hr"      => [ "6hr",   "6hr" ],
+            "8hr"      => [ "8hr",   "8hr" ],
+            "12hr"     => [ "12hr",  "12hr" ],
+            "120hr"    => [ "120hr", "120hr" ],
+            "hourly"   => [ "hrly",  "hourly" ],
+            "daily"    => [ "day",   "day" ],
+            "monthly"  => [ "mon",   "mon" ],
+            "annual"   => [ "ann",   "annual" ],
+            "seasonal" => [ "sea",   "seasonal" ],
+        );
+        return @{ $cpiofilekeystr{$src} };
+    } ## end sub cpiofilekeystr
 
-   use constant VERSION => '$Id: freppcheck,v 18.0.4.5.2.10.4.2 2013/05/02 22:15:39 arl Exp $';
+    sub lookup_ssn {
+        my $self    = shift;
+        my $src     = $self->{freq};
+        my @seasons = ();
+        if ( $src eq "seasonal" ) { @seasons = ( ".DJF", ".MAM", ".JJA", ".SON" ) }
+        return \@seasons;
+    }
 
-   use constant OPTLIST =>
-   (
-      'onlyTA|I',      
-      'onlyTS|J',      
-      'Chunks|G=s',      
-      'Freq|F=s',      
-      'generate',      
-      'All|A',      
-      'AllTS|allTS|a',      
-      'Variables|V=s',      
-      'requirecpio|M',      
-      'filesize|L',      
-      'component|c=s',      
-      'dir|d=s',      
-      'ppdir|D=s',      
-      'beginyear|b=s',      
-      'endyear|e=s',      
-      'help|h',      
-      'verbose|v',      
-      'platform|Platform|p=s',
-      'target|Target|t=s',
-      'xmlfile|x=s'      
-   );
+    sub lookup_chunk {
+        my ( $chunklow, $chunkhi, $src ) = @_;
 
+        #if ($chunklow == $chunkhi) {return $chunklow;}
+        my $chunk = {
+            "1hr"      => "${chunklow}010100-${chunkhi}123123",
+            "2hr"      => "${chunklow}010100-${chunkhi}123123",
+            "3hr"      => "${chunklow}010100-${chunkhi}123123",
+            "4hr"      => "${chunklow}010100-${chunkhi}123123",
+            "6hr"      => "${chunklow}010100-${chunkhi}123123",
+            "8hr"      => "${chunklow}010100-${chunkhi}123123",
+            "12hr"     => "${chunklow}010100-${chunkhi}123123",
+            "120hr"    => "${chunklow}010100-${chunkhi}123123",
+            "hourly"   => "${chunklow}010100-${chunkhi}123123",
+            "daily"    => "${chunklow}0101-${chunkhi}1231",
+            "monthly"  => "${chunklow}01-${chunkhi}12",
+            "annual"   => "${chunklow}-${chunkhi}",
+            "seasonal" => "${chunklow}-${chunkhi}",
+        };
+        return $chunk->{$src};
+    } ## end sub lookup_chunk
 
-sub usage {
+}    # end package TSnodes
+
+{    #begin package freppcheck
+
+    package freppcheck;
+
+    use constant VERSION => '$Id: freppcheck,v 18.0.4.5.2.10.4.2 2013/05/02 22:15:39 arl Exp $';
+
+    use constant OPTLIST => (
+        'onlyTA|I',          'onlyTS|J',
+        'Chunks|G=s',        'Freq|F=s',
+        'generate',          'All|A',
+        'AllTS|allTS|a',     'Variables|V=s',
+        'requirecpio|M',     'filesize|L',
+        'component|c=s',     'dir|d=s',
+        'ppdir|D=s',         'beginyear|b=s',
+        'endyear|e=s',       'help|h',
+        'verbose|v',         'platform|Platform|p=s',
+        'target|Target|t=s', 'xmlfile|x=s'
+    );
+
+    sub usage {
         die <<EOF
 
 Synopsis: freppcheck checks for missing postprocessing files for an arbitary number of 
@@ -488,446 +513,502 @@ Examples:
           freppcheck -x xmlfile -p ncrc2.intel -V 'u v' experiment      # just check the u and v variables
 
 EOF
-}
+    } ## end sub usage
 
-sub getppNode {
-   my $exp = $_[0];
-   my $ppNode = $exp->node->findnodes("postProcess")->get_node(1);
-   if( $ppNode ) {
-      return $ppNode;
-   } else {
-      my $parent = $exp->parent;
-      if( "$parent" eq "" ) {
-         print STDERR "WARNING: Can't find postProcess node for experiment '$exp->name()'.\n";
-         return "";
-      } else {
-         getppNode($parent);
-      }
-   }
-}
-
-sub parse_ts_nodes {
-    my $obj = shift;
-    my @nodes = $obj->findnodes('timeSeries');
-    my @objnodes = ();
-    foreach my $node (@nodes) {
-        my %atts = (
-        freq => $node->findvalue('@freq'),
-        source => $node->findvalue('@source'),
-        chunklength => $node->findvalue('@chunkLength'),
-        variables => FREUtil::cleanstr( $node->findvalue('variables') ),
-        );
-        push @objnodes, {%atts };
+    sub getppNode {
+        my $exp    = $_[0];
+        my $ppNode = $exp->node->findnodes("postProcess")->get_node(1);
+        if ($ppNode) {
+            return $ppNode;
+        }
+        else {
+            my $parent = $exp->parent;
+            if ( "$parent" eq "" ) {
+                print STDERR
+                    "WARNING: Can't find postProcess node for experiment '$exp->name()'.\n";
+                return "";
+            }
+            else {
+                getppNode($parent);
+            }
+        }
     }
-    return @objnodes;
-}
 
-sub parse_av_nodes {
-    my $obj = shift;
-    my @nodes = $obj->findnodes('timeAverage');
-    my @objnodes = ();
-    foreach my $node (@nodes) {
-        my %atts = (
-        interval => $node->findvalue('@interval'),
-        source => $node->findvalue('@source'),
-        );
-        push @objnodes, {%atts };
+    sub parse_ts_nodes {
+        my $obj      = shift;
+        my @nodes    = $obj->findnodes('timeSeries');
+        my @objnodes = ();
+        foreach my $node (@nodes) {
+            my %atts = (
+                freq        => $node->findvalue('@freq'),
+                source      => $node->findvalue('@source'),
+                chunklength => $node->findvalue('@chunkLength'),
+                variables   => FREUtil::cleanstr( $node->findvalue('variables') ),
+            );
+            push @objnodes, {%atts};
+        }
+        return @objnodes;
     }
-    return @objnodes;
-}
 
-sub check_ppnodes {
-   my ($e,$p,$opt) = @_;
-   my $checkstatus=0;
+    sub parse_av_nodes {
+        my $obj      = shift;
+        my @nodes    = $obj->findnodes('timeAverage');
+        my @objnodes = ();
+        foreach my $node (@nodes) {
+            my %atts = (
+                interval => $node->findvalue('@interval'),
+                source   => $node->findvalue('@source'),
+            );
+            push @objnodes, {%atts};
+        }
+        return @objnodes;
+    }
 
-   (my $beg_his_yr, my $end_his_yr) = get_start_end_yr($e->{archivedir});
-   my $firstyr_user = $opt->{beginyear} || ask_user_for_year($beg_his_yr,'first');
-   my $lastyr_user = $opt->{endyear} || ask_user_for_year($end_his_yr,'last');
-   if ("$beg_his_yr" eq "") {
-      $beg_his_yr = $firstyr_user;
-   } else {
-      if ($firstyr_user < $beg_his_yr) {
-         print STDERR "\nNOTE: Adjusting first year to first year of available history data ($firstyr_user -> $beg_his_yr)\n";
-         $firstyr_user = $beg_his_yr;
-      }
-   }
-   if ("$end_his_yr" eq "") {
-      $end_his_yr = $lastyr_user;
-   } else {
-      if ($lastyr_user > $end_his_yr) {
-         print STDERR "\nNOTE: Adjusting last year to last year of available history data ($lastyr_user -> $end_his_yr)\n";
-         $lastyr_user = $end_his_yr;
-      }
-   }
-   die "\nERROR: Expt $e->{name}: start year must be smaller than end year:
+    sub check_ppnodes {
+        my ( $e, $p, $opt ) = @_;
+        my $checkstatus = 0;
+
+        ( my $beg_his_yr, my $end_his_yr ) = get_start_end_yr( $e->{archivedir} );
+        my $firstyr_user = $opt->{beginyear} || ask_user_for_year( $beg_his_yr, 'first' );
+        my $lastyr_user  = $opt->{endyear}   || ask_user_for_year( $end_his_yr, 'last' );
+        if ( "$beg_his_yr" eq "" ) {
+            $beg_his_yr = $firstyr_user;
+        }
+        else {
+            if ( $firstyr_user < $beg_his_yr ) {
+                print STDERR
+                    "\nNOTE: Adjusting first year to first year of available history data ($firstyr_user -> $beg_his_yr)\n";
+                $firstyr_user = $beg_his_yr;
+            }
+        }
+        if ( "$end_his_yr" eq "" ) {
+            $end_his_yr = $lastyr_user;
+        }
+        else {
+            if ( $lastyr_user > $end_his_yr ) {
+                print STDERR
+                    "\nNOTE: Adjusting last year to last year of available history data ($lastyr_user -> $end_his_yr)\n";
+                $lastyr_user = $end_his_yr;
+            }
+        }
+        die "\nERROR: Expt $e->{name}: start year must be smaller than end year:
        You specified: $firstyr_user - $lastyr_user\n"
-   if $lastyr_user < $firstyr_user || $firstyr_user <= 0 || $lastyr_user <= 0;
-   print "\nThe following years will be checked: $firstyr_user - $lastyr_user\n";
+            if $lastyr_user < $firstyr_user || $firstyr_user <= 0 || $lastyr_user <= 0;
+        print "\nThe following years will be checked: $firstyr_user - $lastyr_user\n";
 
-   my %ppnodes = %$p;
-   for my $c ( keys %ppnodes ) {
-      my $startdate =  $ppnodes{$c}->{startdate} || $beg_his_yr;
-      my $srcfile =  $ppnodes{$c}->{source};
+        my %ppnodes = %$p;
+        for my $c ( keys %ppnodes ) {
+            my $startdate = $ppnodes{$c}->{startdate} || $beg_his_yr;
+            my $srcfile = $ppnodes{$c}->{source};
 
-      my @avnodes = @{ $ppnodes{$c}{avnodes} };
-      my @tsnodes = @{ $ppnodes{$c}{tsnodes} };
+            my @avnodes = @{ $ppnodes{$c}{avnodes} };
+            my @tsnodes = @{ $ppnodes{$c}{tsnodes} };
 
-      my $commandline_freq;
-      if ($opt->{Freq}) {
-         $commandline_freq =  $opt->{Freq};
-      }
-
-      my $commandline_int;
-      if ($opt->{Chunks}) {
-         $commandline_int =  $opt->{Chunks};
-         # push the annual_1yr av node in if requested to check
-         my %atts_annual_1yr = (
-             interval => "1yr",
-             source => "annual" ,
-             );
-         if (@avnodes > 0 ) {push @avnodes, {%atts_annual_1yr} };
-      }
-
-      #check timeaverages
-      if( !$opt->{onlyTS} ) {
-         for my $av ( @avnodes ) {
-             my $freq = $av->{source};
-             if (defined $commandline_freq and $commandline_freq !~ m/$freq/ ) { next ;}
-             my $interval = $av->{interval};
-             if (defined $commandline_int and $commandline_int !~ m/$interval/ ) { next ;}
-             my $asrcdir = $e->{ppRootDir}."/$c/av/$freq\_$interval";
-             $interval =~ s/yr//;
-             die "ERROR: In component '$c', a timeAverage tag is missing an 'interval' attribute\n" if "$interval" eq '';
-             my $firstyr = adjust_startyr($firstyr_user,$interval,$startdate,$c,$opt->{verbose});
-             my $lastyr = adjust_endyr($lastyr_user,$interval,$startdate);
-             # don't check if the chunks's ending edge is larger than user specified ending year
-             if ($lastyr_user < $interval + $firstyr - 1 ) {next;}
-
-             my $avnoderef = AVnodes->new($freq,$interval,$firstyr,$lastyr,$asrcdir,$c);
-             my $missingfiles = $avnoderef->checking;
-             my $missingstatus = $avnoderef->reporting($missingfiles);
-             if ($missingstatus > 0) { $checkstatus+=$missingstatus; }
-         }
-      }
-      #check timeseries
-      if( !$opt->{onlyTA} ) {
-         for my $ts ( @tsnodes ) {
-           my $freq = $ts->{freq};
-           if (defined $commandline_freq and $commandline_freq !~ m/$freq/ ) { next ;}
-           my $interval = $ts->{chunklength};
-           if (defined $commandline_int and $commandline_int !~ m/$interval/ ) { next ;}
-           $srcfile = $ppnodes{$c}->{source};
-           if ( $ts->{source} ) { $srcfile = $ts->{source}; }
-           #print "freq $ts->{freq}, srcfile $srcfile, chunklength $ts->{chunklength}\n" if $e->{verbose};
-           my $asrcdir = $e->{ppRootDir}."/$c/ts/$freq/$interval";
-           $interval =~ s/yr//;
-           die "ERROR: In component '$c', a timeSeries tag is missing a 'chunklength' attribute\n" if "$interval" eq '';
-           my $firstyr = adjust_startyr($firstyr_user,$interval,$startdate,$c,$opt->{verbose});
-           my $lastyr = adjust_endyr($lastyr_user,$interval,$startdate);
-           # don't check if the chunks's ending edge is larger than user specified ending year
-           if ($lastyr_user < $interval + $firstyr - 1 ) {next;}
-
-           my @checkvars;
-           if( $opt->{Variables} ) { @checkvars = split(/ /, $opt->{Variables}); }
-           if( @checkvars <= 0 ) { @checkvars = split(/ /, $ts->{variables}); }
-           if( @checkvars <= 0 ) {
-               if ( "$freq" eq "annual" or "$freq" eq "seasonal" or "$freq" eq "monthly" ) {
-                  for my $tsmon ( @tsnodes ) {
-                     if ("$tsmon->{freq}" eq "monthly" and "$tsmon->{variables}" ne '') {
-                        @checkvars = split(/ /, $tsmon->{variables}); 
-                     }
-                  }
-               }
-           }
-           if( @checkvars <= 0 and $e->{dtvars}->{$srcfile} ) { @checkvars = split(/,/, $e->{dtvars}->{$srcfile} ); }
-           
-           if( @checkvars <= 0 and $e->{dtvars}->{"all_$srcfile"} ) { @checkvars = split(/,/, $e->{dtvars}->{"all_$srcfile"} ); }
-           #print "$srcfile============$e->{dtvars}->{$srcfile}\n" if $e->{verbose};
-           if (@checkvars <= 0) {
-              print "WARNING: Cannot find a variable to check for $c data, not checking\n";
-              next;
-           }
-           if( !$opt->{AllTS} ) {@checkvars = $checkvars[0];}
-           @checkvars = sort @checkvars;
-
-           my $checkcpio = "reqIndividual";
-           if( $opt->{requirecpio} ) { $checkcpio = "reqCpio"; }
-           if( $opt->{All} ) { $checkcpio = "reqBoth"; }
-
-           print "\nChecking variable(s): @checkvars\n" if $e->{verbose};
-           my $tsnoderef = TSnodes->new($freq,$interval,$firstyr,$lastyr,$asrcdir,$c,$srcfile,$checkcpio,\@checkvars, $p->{$c}->{is_tiled}, $e->{ppRootDir});
-           $tsnoderef->update_checkvars;
-
-           my $allfiles = $tsnoderef->list_all_files;
-           if ($opt->{filesize}) {
-               my $missingstatus = $tsnoderef->reporting_size($allfiles);
-               if ($missingstatus > 0) { $checkstatus+=$missingstatus; }
-           } else { 
-               my $missingstatus = $tsnoderef->reporting($allfiles,\@checkvars);
-               if ($missingstatus > 0) { $checkstatus+=$missingstatus; }
-           }
-
-         }
-      }
-
-   } #end for loop over components
-   print "\n===== Checked $e->{name} for years $firstyr_user - $lastyr_user";
-   if( ! $opt->{onlyTA} ) {
-      if( $opt->{requirecpio} ) {
-         print " on the CPIO FILES";
-      } elsif ( ! $opt->{AllTS}) {
-         print " on the FIRST TS variable only";
-      } else { 
-         print " on all the TS variables";
-      }
-   }
-   print " =====\n";
-   return ( $firstyr_user,$lastyr_user,$checkstatus );
-
-} #end subroutine check_ppnodes
-
-# move the first checking year $firstyr to the lower edge of the chunk
-sub adjust_startyr {
-   my ($firstyr,$interval,$startdate,$c,$verbose) = @_;
-   if (! $startdate) { $startdate = $firstyr;}
-   if ($firstyr <= $startdate) {return $startdate ;}
-   my $adjYr = ($firstyr-$startdate) % $interval;
-   if ( $adjYr != 0 ) { 
-      my $newvalue = $firstyr - $adjYr ;
-      print "\nNOTE: Adjusting the $c first year to check from $firstyr to $newvalue to match the chunk boundaries\n" if $verbose;
-      $firstyr = $newvalue;
-   }
-   return FREUtil::padzeros($firstyr);
-}
-
-# move the last checking year $lastyr to the upper edge of the chunk
-sub adjust_endyr {
-   my ($lastyr,$interval,$startdate) = @_;
-   if (! $startdate) { $startdate = $lastyr;}
-   if ($lastyr <= $startdate + $interval -1 ) { return $startdate + $interval -1 ;}
-   my $adjYr = ($lastyr  - $startdate + 1) % $interval;
-   $lastyr = $lastyr -  $adjYr ;
-   if ( ($lastyr  - $startdate + 1) % $interval != 0) { die "ERROR: end year not on chunk edge\n"; }
-   if ($lastyr <= $startdate + $interval -1 ) { $lastyr = $startdate + $interval -1 ;}
-   return  FREUtil::padzeros($lastyr);
-}
-
-# determine the first and last history file years available
-sub get_start_end_yr{
-   my $datadir = $_[0];
-   unless ( $datadir =~ /history$/ ) { $datadir .= "/history"; }
-
-   opendir(DIR, "$datadir");
-   my @existing = sort( grep { /^........\.nc\.(cpio|tar)$/ } readdir(DIR) );
-   closedir(DIR);
-
-   my $startyr = substr($existing[0],0,4);
-   my $endyr = substr($existing[$#existing],0,4);
-   return $startyr,$endyr;
-}
-
-#ask the user for the year range to check
-sub ask_user_for_year{
-   my ($year,$which) = @_;
-   print STDERR " Enter the ".$which." year to check (default $year) : ";
-   chomp(my $answer=<STDIN>);
-   return $answer || $year;
-}
-
-
-
-} #end freppcheck package
-
-
-{ #begin main program
-my %opt =
-  (
-    'target'    => FREDefaults::Target(),
-    'xmlfile'   => FREDefaults::XMLFile(),
-    'All'       => 0,
-    'AllTS'     => 0,
-    'N'         => 0,
-    'requirecpio' => 0,
-    'filesize'  => 0,
-    'component' => 0,
-    'beginyear' => 0,
-    'endyear'   => 0,
-    'help'      => 0,
-    'verbose'   => 0,
-    'dir'       => '',
-    'ppdir'     => '',
-    'Variables' => 0,
-    'onlyTA'    => 0,
-    'onlyTS'    => 0,
-    'Chunks'    => 0,
-    'Freq'      => 0,
-    'u'         => 0
-  );
-
-   Getopt::Long::GetOptions(\%opt, freppcheck::OPTLIST) or (print freppcheck::usage() and exit(1));
-   #$optstring = "ATNMLc:y:ht:vx:d:V:IJG:F:u:";
-
-   if( $opt{help} or "$#ARGV" eq "-1" ) {freppcheck::usage();}
-   if( $opt{All} ) {$opt{requirecpio} = 1; $opt{AllTS} = 1;}
-   my $checkstatus=0;
-
-   my $fre = FRE->new('freppcheck', %opt) or exit(1);
-
-   for my $expt (@ARGV) {
-      print "   \n\n#======= checking missing files for experiment $expt ======\n\n";
-  
-      my $exp = FREExperiment->new($fre, $expt) or exit(1);
-      $fre->setCurrentExperimentName($expt);      
-
-    my $root = $exp->node()->findnodes('..')->get_node(1);
-    my $rtsVersion = $fre->version();
-    my $workdir = $exp->workDir();
-    my $archivedir = $exp->archiveDir();
-    if ("$opt{dir}" ne '') {$archivedir = $opt{dir};}
-    my $analysisdir = $exp->analysisDir();
-    my $statedir = $exp->stateDir()."/postProcess";
-    print "State files in: " . $statedir . "\n" if $opt{verbose};
-    my $rootdir = $exp->rootDir();
-    my $ppNode = freppcheck::getppNode($exp);
-    unless( $ppNode ) { print "No postProcess node found, exiting\n";exit; }
-    
-    my $ppRootDir = $exp->postProcessDir();
-    if ("$opt{ppdir}" ne '') {$ppRootDir = $opt{ppdir};}
-    #not supported for now: if( $opt{u} ) { $ppRootDir .= "_$opt{u}"; }
-
-    #get list of all diagnostic output files from source attributes, remove duplicates
-    my %dtvars;
-    my @diagtablecontent = split('\n',$exp->extractTable('diagTable'));
-    
-    my @ppComponentNodes = $ppNode->findnodes("component");
-    if( $opt{component} and $opt{component} ne "split") {
-      @ppComponentNodes = $ppNode->findnodes("component[\@type='$opt{component}']");
-    }  
-
-   foreach my $ppcNode ( @ppComponentNodes ) {
-
-      my $component = $ppcNode->findvalue('@type');
-      my @sourceatts = $ppcNode->findnodes('*/@source');
-      push @sourceatts, $ppcNode->findnodes('@source');
-      my @dts = map { $_->findvalue('.') } @sourceatts;
-      push @dts, "$component"."_month";
-      my @dtsources = ();
-      my %seen = ();
-      foreach my $d (@dts) {
-         #push(@dtsources, $_) unless ($_=~/monthly/ or $_=~/annual/ or $_=~/seasonal/ or $seen{$_}++);
-         unless ($d=~/^monthly$/ or $d=~/^annual$/ or $d=~/^seasonal$/ or $seen{$d}++) {
-            foreach (@diagtablecontent) {
-            if ( /.*,.*,\s*"(\w*)"\s*,\s*"$d"\s*,.*,.*,.*,.*/ and not /^#/ ) {
-                push(@dtsources, $d);
-                last;
+            my $commandline_freq;
+            if ( $opt->{Freq} ) {
+                $commandline_freq = $opt->{Freq};
             }
+
+            my $commandline_int;
+            if ( $opt->{Chunks} ) {
+                $commandline_int = $opt->{Chunks};
+
+                # push the annual_1yr av node in if requested to check
+                my %atts_annual_1yr = (
+                    interval => "1yr",
+                    source   => "annual",
+                );
+                if ( @avnodes > 0 ) { push @avnodes, {%atts_annual_1yr} }
             }
-         }
-      }
-      if ($opt{verbose}) {print "Diag_table source files for $component: '@dtsources'\n";}
 
-      #get list of variables for each file from diag table information.
-      foreach my $srcfile (@dtsources) {
-         my @dtv = ();
-         my @dtvall = ();
+            #check timeaverages
+            if ( !$opt->{onlyTS} ) {
+                for my $av (@avnodes) {
+                    my $freq = $av->{source};
+                    if ( defined $commandline_freq and $commandline_freq !~ m/$freq/ ) { next; }
+                    my $interval = $av->{interval};
+                    if ( defined $commandline_int and $commandline_int !~ m/$interval/ ) { next; }
+                    my $asrcdir = $e->{ppRootDir} . "/$c/av/$freq\_$interval";
+                    $interval =~ s/yr//;
+                    die
+                        "ERROR: In component '$c', a timeAverage tag is missing an 'interval' attribute\n"
+                        if "$interval" eq '';
+                    my $firstyr = adjust_startyr( $firstyr_user, $interval, $startdate, $c,
+                        $opt->{verbose} );
+                    my $lastyr = adjust_endyr( $lastyr_user, $interval, $startdate );
 
-         foreach (@diagtablecontent) {
-            if ( /.*,.*,\s*"(\w*)"\s*,\s*"$srcfile"\s*,.*,\s*(\S*)\s*,.*,.*/ and not /^#/ ) {
-                #push @dtvall,$1 unless $2 =~ /none/;
-                my ($v,$av) = ($1,$2);
-                $av =~ s/"//g;
-                if ( $av =~ /min/ ) {
-                    if ( $v =~ /_min$/i ) {
-                        push @dtvall,"$v";
-                    } else {
-                        push @dtvall,"${v}_min";
+                 # don't check if the chunks's ending edge is larger than user specified ending year
+                    if ( $lastyr_user < $interval + $firstyr - 1 ) { next; }
+
+                    my $avnoderef
+                        = AVnodes->new( $freq, $interval, $firstyr, $lastyr, $asrcdir, $c );
+                    my $missingfiles  = $avnoderef->checking;
+                    my $missingstatus = $avnoderef->reporting($missingfiles);
+                    if ( $missingstatus > 0 ) { $checkstatus += $missingstatus; }
+                } ## end for my $av (@avnodes)
+            } ## end if ( !$opt->{onlyTS} )
+
+            #check timeseries
+            if ( !$opt->{onlyTA} ) {
+                for my $ts (@tsnodes) {
+                    my $freq = $ts->{freq};
+                    if ( defined $commandline_freq and $commandline_freq !~ m/$freq/ ) { next; }
+                    my $interval = $ts->{chunklength};
+                    if ( defined $commandline_int and $commandline_int !~ m/$interval/ ) { next; }
+                    $srcfile = $ppnodes{$c}->{source};
+                    if ( $ts->{source} ) { $srcfile = $ts->{source}; }
+
+     #print "freq $ts->{freq}, srcfile $srcfile, chunklength $ts->{chunklength}\n" if $e->{verbose};
+                    my $asrcdir = $e->{ppRootDir} . "/$c/ts/$freq/$interval";
+                    $interval =~ s/yr//;
+                    die
+                        "ERROR: In component '$c', a timeSeries tag is missing a 'chunklength' attribute\n"
+                        if "$interval" eq '';
+                    my $firstyr = adjust_startyr( $firstyr_user, $interval, $startdate, $c,
+                        $opt->{verbose} );
+                    my $lastyr = adjust_endyr( $lastyr_user, $interval, $startdate );
+
+                 # don't check if the chunks's ending edge is larger than user specified ending year
+                    if ( $lastyr_user < $interval + $firstyr - 1 ) { next; }
+
+                    my @checkvars;
+                    if ( $opt->{Variables} ) { @checkvars = split( / /, $opt->{Variables} ); }
+                    if ( @checkvars <= 0 )   { @checkvars = split( / /, $ts->{variables} ); }
+                    if ( @checkvars <= 0 ) {
+                        if ( "$freq" eq "annual" or "$freq" eq "seasonal" or "$freq" eq "monthly" )
+                        {
+                            for my $tsmon (@tsnodes) {
+                                if ( "$tsmon->{freq}" eq "monthly" and "$tsmon->{variables}" ne '' )
+                                {
+                                    @checkvars = split( / /, $tsmon->{variables} );
+                                }
+                            }
+                        }
                     }
-                } elsif ( $av =~ /max/ ) {
-                    if ( $v =~ /_max$/i ) {
-                        push @dtvall,"$v";
-                    } else {
-                        push @dtvall,"${v}_max";
+                    if ( @checkvars <= 0 and $e->{dtvars}->{$srcfile} ) {
+                        @checkvars = split( /,/, $e->{dtvars}->{$srcfile} );
                     }
-                } elsif ( $av !~ /none/ ) {
-                    push @dtvall,$v;
+
+                    if ( @checkvars <= 0 and $e->{dtvars}->{"all_$srcfile"} ) {
+                        @checkvars = split( /,/, $e->{dtvars}->{"all_$srcfile"} );
+                    }
+
+                    #print "$srcfile============$e->{dtvars}->{$srcfile}\n" if $e->{verbose};
+                    if ( @checkvars <= 0 ) {
+                        print
+                            "WARNING: Cannot find a variable to check for $c data, not checking\n";
+                        next;
+                    }
+                    if ( !$opt->{AllTS} ) { @checkvars = $checkvars[0]; }
+                    @checkvars = sort @checkvars;
+
+                    my $checkcpio = "reqIndividual";
+                    if ( $opt->{requirecpio} ) { $checkcpio = "reqCpio"; }
+                    if ( $opt->{All} )         { $checkcpio = "reqBoth"; }
+
+                    print "\nChecking variable(s): @checkvars\n" if $e->{verbose};
+                    my $tsnoderef
+                        = TSnodes->new( $freq, $interval, $firstyr, $lastyr, $asrcdir, $c, $srcfile,
+                        $checkcpio, \@checkvars, $p->{$c}->{is_tiled},
+                        $e->{ppRootDir} );
+                    $tsnoderef->update_checkvars;
+
+                    my $allfiles = $tsnoderef->list_all_files;
+                    if ( $opt->{filesize} ) {
+                        my $missingstatus = $tsnoderef->reporting_size($allfiles);
+                        if ( $missingstatus > 0 ) { $checkstatus += $missingstatus; }
+                    }
+                    else {
+                        my $missingstatus = $tsnoderef->reporting( $allfiles, \@checkvars );
+                        if ( $missingstatus > 0 ) { $checkstatus += $missingstatus; }
+                    }
+
+                } ## end for my $ts (@tsnodes)
+            } ## end if ( !$opt->{onlyTA} )
+
+        }    #end for loop over components
+        print "\n===== Checked $e->{name} for years $firstyr_user - $lastyr_user";
+        if ( !$opt->{onlyTA} ) {
+            if ( $opt->{requirecpio} ) {
+                print " on the CPIO FILES";
+            }
+            elsif ( !$opt->{AllTS} ) {
+                print " on the FIRST TS variable only";
+            }
+            else {
+                print " on all the TS variables";
+            }
+        }
+        print " =====\n";
+        return ( $firstyr_user, $lastyr_user, $checkstatus );
+
+    }    #end subroutine check_ppnodes
+
+    # move the first checking year $firstyr to the lower edge of the chunk
+    sub adjust_startyr {
+        my ( $firstyr, $interval, $startdate, $c, $verbose ) = @_;
+        if ( !$startdate ) { $startdate = $firstyr; }
+        if ( $firstyr <= $startdate ) { return $startdate; }
+        my $adjYr = ( $firstyr - $startdate ) % $interval;
+        if ( $adjYr != 0 ) {
+            my $newvalue = $firstyr - $adjYr;
+            print
+                "\nNOTE: Adjusting the $c first year to check from $firstyr to $newvalue to match the chunk boundaries\n"
+                if $verbose;
+            $firstyr = $newvalue;
+        }
+        return FREUtil::padzeros($firstyr);
+    }
+
+    # move the last checking year $lastyr to the upper edge of the chunk
+    sub adjust_endyr {
+        my ( $lastyr, $interval, $startdate ) = @_;
+        if ( !$startdate ) { $startdate = $lastyr; }
+        if ( $lastyr <= $startdate + $interval - 1 ) { return $startdate + $interval - 1; }
+        my $adjYr = ( $lastyr - $startdate + 1 ) % $interval;
+        $lastyr = $lastyr - $adjYr;
+        if ( ( $lastyr - $startdate + 1 ) % $interval != 0 ) {
+            die "ERROR: end year not on chunk edge\n";
+        }
+        if ( $lastyr <= $startdate + $interval - 1 ) { $lastyr = $startdate + $interval - 1; }
+        return FREUtil::padzeros($lastyr);
+    }
+
+    # determine the first and last history file years available
+    sub get_start_end_yr {
+        my $datadir = $_[0];
+        unless ( $datadir =~ /history$/ ) { $datadir .= "/history"; }
+
+        opendir( DIR, "$datadir" );
+        my @existing = sort( grep {/^........\.nc\.(cpio|tar)$/} readdir(DIR) );
+        closedir(DIR);
+
+        my $startyr = substr( $existing[0],          0, 4 );
+        my $endyr   = substr( $existing[$#existing], 0, 4 );
+        return $startyr, $endyr;
+    }
+
+    #ask the user for the year range to check
+    sub ask_user_for_year {
+        my ( $year, $which ) = @_;
+        print STDERR " Enter the " . $which . " year to check (default $year) : ";
+        chomp( my $answer = <STDIN> );
+        return $answer || $year;
+    }
+
+}    #end freppcheck package
+
+{    #begin main program
+    my %opt = (
+        'target'      => FREDefaults::Target(),
+        'xmlfile'     => FREDefaults::XMLFile(),
+        'All'         => 0,
+        'AllTS'       => 0,
+        'N'           => 0,
+        'requirecpio' => 0,
+        'filesize'    => 0,
+        'component'   => 0,
+        'beginyear'   => 0,
+        'endyear'     => 0,
+        'help'        => 0,
+        'verbose'     => 0,
+        'dir'         => '',
+        'ppdir'       => '',
+        'Variables'   => 0,
+        'onlyTA'      => 0,
+        'onlyTS'      => 0,
+        'Chunks'      => 0,
+        'Freq'        => 0,
+        'u'           => 0
+    );
+
+    Getopt::Long::GetOptions( \%opt, freppcheck::OPTLIST )
+        or ( print freppcheck::usage() and exit(1) );
+
+    #$optstring = "ATNMLc:y:ht:vx:d:V:IJG:F:u:";
+
+    if ( $opt{help} or "$#ARGV" eq "-1" ) { freppcheck::usage(); }
+    if ( $opt{All} ) { $opt{requirecpio} = 1; $opt{AllTS} = 1; }
+    my $checkstatus = 0;
+
+    my $fre = FRE->new( 'freppcheck', %opt ) or exit(1);
+
+    for my $expt (@ARGV) {
+        print "   \n\n#======= checking missing files for experiment $expt ======\n\n";
+
+        my $exp = FREExperiment->new( $fre, $expt ) or exit(1);
+        $fre->setCurrentExperimentName($expt);
+
+        my $root       = $exp->node()->findnodes('..')->get_node(1);
+        my $rtsVersion = $fre->version();
+        my $workdir    = $exp->workDir();
+        my $archivedir = $exp->archiveDir();
+        if ( "$opt{dir}" ne '' ) { $archivedir = $opt{dir}; }
+        my $analysisdir = $exp->analysisDir();
+        my $statedir    = $exp->stateDir() . "/postProcess";
+        print "State files in: " . $statedir . "\n" if $opt{verbose};
+        my $rootdir = $exp->rootDir();
+        my $ppNode  = freppcheck::getppNode($exp);
+        unless ($ppNode) { print "No postProcess node found, exiting\n"; exit; }
+
+        my $ppRootDir = $exp->postProcessDir();
+        if ( "$opt{ppdir}" ne '' ) { $ppRootDir = $opt{ppdir}; }
+
+        #not supported for now: if( $opt{u} ) { $ppRootDir .= "_$opt{u}"; }
+
+        #get list of all diagnostic output files from source attributes, remove duplicates
+        my %dtvars;
+        my @diagtablecontent = split( '\n', $exp->extractTable('diagTable') );
+
+        my @ppComponentNodes = $ppNode->findnodes("component");
+        if ( $opt{component} and $opt{component} ne "split" ) {
+            @ppComponentNodes = $ppNode->findnodes("component[\@type='$opt{component}']");
+        }
+
+        foreach my $ppcNode (@ppComponentNodes) {
+
+            my $component  = $ppcNode->findvalue('@type');
+            my @sourceatts = $ppcNode->findnodes('*/@source');
+            push @sourceatts, $ppcNode->findnodes('@source');
+            my @dts = map { $_->findvalue('.') } @sourceatts;
+            push @dts, "$component" . "_month";
+            my @dtsources = ();
+            my %seen      = ();
+            foreach my $d (@dts) {
+
+      #push(@dtsources, $_) unless ($_=~/monthly/ or $_=~/annual/ or $_=~/seasonal/ or $seen{$_}++);
+                unless ( $d =~ /^monthly$/
+                    or $d =~ /^annual$/
+                    or $d =~ /^seasonal$/
+                    or $seen{$d}++ ) {
+                    foreach (@diagtablecontent) {
+                        if ( /.*,.*,\s*"(\w*)"\s*,\s*"$d"\s*,.*,.*,.*,.*/ and not /^#/ ) {
+                            push( @dtsources, $d );
+                            last;
+                        }
+                    }
                 }
             }
-            #omit static/instantaneous variables
-            if ( /.*,.*,\s*"(\w*)"\s*,\s*"$srcfile"\s*,.*,\s*\.true\.\s*,.*,.*/ and not /^#/ ) {
-               push @dtv,$1;
+            if ( $opt{verbose} ) { print "Diag_table source files for $component: '@dtsources'\n"; }
+
+            #get list of variables for each file from diag table information.
+            foreach my $srcfile (@dtsources) {
+                my @dtv    = ();
+                my @dtvall = ();
+
+                foreach (@diagtablecontent) {
+                    if ( /.*,.*,\s*"(\w*)"\s*,\s*"$srcfile"\s*,.*,\s*(\S*)\s*,.*,.*/ and not /^#/ )
+                    {
+
+                        #push @dtvall,$1 unless $2 =~ /none/;
+                        my ( $v, $av ) = ( $1, $2 );
+                        $av =~ s/"//g;
+                        if ( $av =~ /min/ ) {
+                            if ( $v =~ /_min$/i ) {
+                                push @dtvall, "$v";
+                            }
+                            else {
+                                push @dtvall, "${v}_min";
+                            }
+                        }
+                        elsif ( $av =~ /max/ ) {
+                            if ( $v =~ /_max$/i ) {
+                                push @dtvall, "$v";
+                            }
+                            else {
+                                push @dtvall, "${v}_max";
+                            }
+                        }
+                        elsif ( $av !~ /none/ ) {
+                            push @dtvall, $v;
+                        }
+                    } ## end if ( /.*,.*,\s*"(\w*)"\s*,\s*"$srcfile"\s*,.*,\s*(\S*)\s*,.*,.*/...)
+
+                    #omit static/instantaneous variables
+                    if ( /.*,.*,\s*"(\w*)"\s*,\s*"$srcfile"\s*,.*,\s*\.true\.\s*,.*,.*/
+                        and not /^#/ ) {
+                        push @dtv, $1;
+                    }
+                } ## end foreach (@diagtablecontent)
+                my $varstr    = join( ',', @dtv );
+                my $varstrall = join( ',', @dtvall );
+                my $srcfileall = "all_$srcfile";
+                if ( "$varstr" ne "" ) {
+                    $dtvars{$srcfile} = $varstr;
+
+         #if ($opt{verbose}) {print "$srcfile vars, static/instant omitted: $dtvars{$srcfile}\n\n";}
+                }
+                if ( "$varstrall" ne "" ) {
+                    $dtvars{$srcfileall} = $varstrall;
+                    if ( $opt{verbose} ) {
+                        print "All $srcfile diag_table variables: $dtvars{$srcfileall}\n\n";
+                    }
+                }
+            } ## end foreach my $srcfile (@dtsources)
+        } ## end foreach my $ppcNode (@ppComponentNodes)
+
+        my %H_expt = ();
+        $H_expt{name}        = $exp->name();
+        $H_expt{rtsVersion}  = $rtsVersion;
+        $H_expt{root}        = $root;
+        $H_expt{rootdir}     = $rootdir;
+        $H_expt{archivedir}  = $archivedir;
+        $H_expt{analysisdir} = $analysisdir;
+        $H_expt{workdir}     = $workdir;
+        $H_expt{ppNode}      = $ppNode;
+        $H_expt{ppRootDir}   = $ppRootDir;
+        $H_expt{dtvars}      = \%dtvars;
+        $H_expt{verbose}     = $opt{verbose};
+        my $expt_ref = \%H_expt;
+
+        my %comps_rec;
+        foreach my $ppcNode (@ppComponentNodes) {
+            my $type = $ppcNode->findvalue('@type');
+            my $rec  = {};
+            $rec->{startdate} = $ppcNode->findvalue('@start');
+            $rec->{source}    = $ppcNode->findvalue('@source');
+            $rec->{tsnodes}   = [ freppcheck::parse_ts_nodes($ppcNode) ];
+            $rec->{avnodes}   = [ freppcheck::parse_av_nodes($ppcNode) ];
+
+ # in the XML, if the PP component has property sourceGrid it matches /cubedsphere/ and doesn't have
+ # the xyInterp property, assume it's in the 6-tile format
+            my $is_cubedsphere = $ppcNode->hasAttribute('sourceGrid')
+                && $ppcNode->findvalue('@sourceGrid') =~ /cubedsphere/ ? 1 : 0;
+            my $is_tiled = $is_cubedsphere && !$ppcNode->hasAttribute('xyInterp') ? 1 : 0;
+
+            # check for backwards combatility
+            my $is_tiled_legacy = $ppcNode->hasAttribute('cubicToLatLon')
+                and $ppcNode->findvalue('@cubicToLatLon') =~ /none/;
+            $is_tiled ||= $is_tiled_legacy;
+            print "NOTE: assuming component $type is in 6-tile format\n"
+                if $is_tiled and $opt{verbose};
+            $rec->{is_tiled} = $is_tiled;
+
+            $comps_rec{ ($type) } = $rec;
+        } ## end foreach my $ppcNode (@ppComponentNodes)
+        my $pp_ref = \%comps_rec;
+
+        ( my $beg, my $end, my $missingstatus )
+            = freppcheck::check_ppnodes( $expt_ref, $pp_ref, \%opt );
+        $checkstatus += $missingstatus;
+
+        if ( $opt{generate} ) {
+            if ( !-d $statedir ) { mkpath($statedir) || print $!; }
+            foreach my $ppcNode (@ppComponentNodes) {
+                my $component = $ppcNode->findvalue('@type');
+                print "\nGenerating $component state files for $beg - $end in $statedir...\n";
+                foreach my $year ( $beg .. $end ) {
+                    $year = FREUtil::padzeros($year);
+                    open( STATEFILE, ">$statedir/$component.$year" );
+                    print STATEFILE "OK\n";
+                    close STATEFILE;
+
+                }
             }
-         }
-         my $varstr = join(',',@dtv);
-         my $varstrall = join(',',@dtvall);
-         my $srcfileall = "all_$srcfile";
-         if ( "$varstr" ne "" ) {
-            $dtvars{$srcfile} = $varstr;
-            #if ($opt{verbose}) {print "$srcfile vars, static/instant omitted: $dtvars{$srcfile}\n\n";}
-         }
-         if ( "$varstrall" ne "" ) {
-            $dtvars{$srcfileall} = $varstrall;
-            if ($opt{verbose}) {print "All $srcfile diag_table variables: $dtvars{$srcfileall}\n\n"};
-         }
-      }
-   }
+        }
 
-   my %H_expt = ();
-   $H_expt{name} = $exp->name();
-   $H_expt{rtsVersion} = $rtsVersion;
-   $H_expt{root} = $root;
-   $H_expt{rootdir} = $rootdir;
-   $H_expt{archivedir} = $archivedir;
-   $H_expt{analysisdir} = $analysisdir;
-   $H_expt{workdir} = $workdir;
-   $H_expt{ppNode} = $ppNode;
-   $H_expt{ppRootDir} = $ppRootDir;
-   $H_expt{dtvars} = \%dtvars;
-   $H_expt{verbose} = $opt{verbose};
-   my $expt_ref = \%H_expt;
-      
-   my %comps_rec;
-   foreach  my $ppcNode ( @ppComponentNodes ) {
-      my $type = $ppcNode->findvalue('@type');
-      my $rec = {};
-      $rec->{startdate} = $ppcNode->findvalue('@start');
-      $rec->{source} = $ppcNode->findvalue('@source');
-      $rec->{tsnodes} = [ freppcheck::parse_ts_nodes($ppcNode) ];
-      $rec->{avnodes} = [ freppcheck::parse_av_nodes($ppcNode) ];
+    }    #end loop over experiments
+    exit $checkstatus;
 
-      # in the XML, if the PP component has property sourceGrid it matches /cubedsphere/ and doesn't have
-      # the xyInterp property, assume it's in the 6-tile format
-      my $is_cubedsphere = $ppcNode->hasAttribute('sourceGrid') && $ppcNode->findvalue('@sourceGrid') =~ /cubedsphere/ ? 1 : 0;
-      my $is_tiled = $is_cubedsphere && ! $ppcNode->hasAttribute('xyInterp') ? 1 : 0;
-      # check for backwards combatility
-      my $is_tiled_legacy = $ppcNode->hasAttribute('cubicToLatLon') and $ppcNode->findvalue('@cubicToLatLon') =~ /none/;
-      $is_tiled ||= $is_tiled_legacy;
-      print "NOTE: assuming component $type is in 6-tile format\n" if $is_tiled and $opt{verbose};
-      $rec->{is_tiled} = $is_tiled;
-
-      $comps_rec{ ($type) } =  $rec;
-    }
-    my $pp_ref = \%comps_rec;
-
-    (my $beg, my $end, my $missingstatus) = freppcheck::check_ppnodes($expt_ref,$pp_ref,\%opt);
-    $checkstatus+=$missingstatus;
-
-    if( $opt{generate} ) {
-      if (! -d $statedir) { mkpath($statedir) || print $!; }
-      foreach my $ppcNode ( @ppComponentNodes ) {
-         my $component = $ppcNode->findvalue('@type');
-         print "\nGenerating $component state files for $beg - $end in $statedir...\n";
-         foreach my $year ( $beg .. $end ) {
-            $year = FREUtil::padzeros($year);
-            open (STATEFILE, ">$statedir/$component.$year");
-            print STATEFILE "OK\n";
-            close STATEFILE;
-      
-         }
-      }
-    }
-
-   } #end loop over experiments
-   exit $checkstatus;
-
-} #end main program
+}    #end main program
 

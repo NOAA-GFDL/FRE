@@ -266,7 +266,7 @@ use Cwd();
 use Date::Manip();
 use File::Basename();
 use File::Spec();
-use Getopt::Long(':config', 'no_ignore_case', 'no_auto_abbrev');
+use Getopt::Long( ':config', 'no_ignore_case', 'no_auto_abbrev' );
 use List::Util();
 use POSIX();
 
@@ -286,56 +286,38 @@ use FREUtil();
 
 {
 
-  package frerun;
+    package frerun;
 
-  use constant VERSION => '$Id: frerun,v 18.0.2.81.4.3 2014/11/18 23:31:23 arl Exp $';
+    use constant VERSION => '$Id: frerun,v 18.0.2.81.4.3 2014/11/18 23:31:23 arl Exp $';
 
-  use constant OPTLIST =>
-  (
-    'archive|a!',
-    'check|c',
-    'checksum|C',
-    'cache-history|H',
-    'combine-history|M!',
-    'compress|z=s',
-    'ht!',
-    'mppnccombine-opts=s',
-    'nc4-compress-history|Z',
-    'dual|D!',
-    'extend|e',
-    'free|f!',
-    'novalidate',
-    'output-staging|O=s',
-    'overwrite|o',
-    'project|A=s',
-    'regression|r=s',
-    'remote-user|R=s',
-    'submit-chained|S',
-    'submit-staged',
-    'transfer|T!',
-    'unique|u',
-    'windfall|W',
-    'execute|E',
-    'help|h',
-    'ncores|n=i',
-    'partition|P=s',
-    'platform|p=s',
-    'queue|q=s',
-    'submit|s',
-    'target|t=s',
-    'version|V',
-    'verbose|v+',
-    'walltime|w=i',
-    'xmlfile|x=s'
-  );
-  
-  use constant RUNSCRIPT_TEMPLATE_MAIN => 'runscript.template.main';
+    use constant OPTLIST => (
+        'archive|a!',             'check|c',
+        'checksum|C',             'cache-history|H',
+        'combine-history|M!',     'compress|z=s',
+        'ht!',                    'mppnccombine-opts=s',
+        'nc4-compress-history|Z', 'dual|D!',
+        'extend|e',               'free|f!',
+        'novalidate',             'output-staging|O=s',
+        'overwrite|o',            'project|A=s',
+        'regression|r=s',         'remote-user|R=s',
+        'submit-chained|S',       'submit-staged',
+        'transfer|T!',            'unique|u',
+        'windfall|W',             'execute|E',
+        'help|h',                 'ncores|n=i',
+        'partition|P=s',          'platform|p=s',
+        'queue|q=s',              'submit|s',
+        'target|t=s',             'version|V',
+        'verbose|v+',             'walltime|w=i',
+        'xmlfile|x=s'
+    );
 
-  use constant OUTPUT_COMPRESSION_TYPES => ('ascii', 'restart', 'history');
-  
-  use constant NCORES_DEFAULT => 2;
-  use constant WALLTIME_DEFAULT => 30;
-  
+    use constant RUNSCRIPT_TEMPLATE_MAIN => 'runscript.template.main';
+
+    use constant OUTPUT_COMPRESSION_TYPES => ( 'ascii', 'restart', 'history' );
+
+    use constant NCORES_DEFAULT   => 2;
+    use constant WALLTIME_DEFAULT => 30;
+
 }
 
 # //////////////////////////////////////////////////////////////////////////////
@@ -344,1382 +326,1544 @@ use FREUtil();
 
 {
 
-  package frerun;
+    package frerun;
 
-  my $self = File::Basename::basename($0);
+    my $self = File::Basename::basename($0);
 
-  sub Usage()
-  # ------ arguments: none
-  {
-    my $cwd = Cwd::getcwd();
-    my $xml = FREDefaults::XMLFile();
-    my $tgt = FREDefaults::Target();
-    return
-    (
-      "\n",
-      "  Usage: $self -p|--platform platform [options] experiment [experiment2 ...]\n\n",
-      "  Options:\n\n",
-      "   -a,        --archive                   save the model output in the archive (negatable, default is on)\n",
-      "   -H,        --cache-history             cache history files at a post-processing site (instead of putting them into archive)\n",     
-      "   -c,        --check                     check the model output with the main model run (which makes sense for unique runs only)\n",
-      "   -C,        --checksum                  compute checking sums for all the output data archives to enable their verification\n",
-      "   -M,        --combine-history           combine history files after each segment run (negatable, default is on)\n",
-      "   -z STRING, --compress=STRING           compress model output of type STRING (list of 'ascii', 'restart', 'history' or 'all')\n",
-      "   -Z,        --nc4-compress-history      compress history files using Netcdf4 compression, deflation=2 and shuffle\n",
-      "   -D,        --dual                      create a pair of runscripts - the main one and the dual one (negatable, default depends on site)\n",
-      "   -e,        --extend                    extend default run of existing experiment\n",
-      "   -f,        --free                      free working directory in the end of run (negatable, default depends on site)\n", 
-      "   -O STRING, --output-staging=STRING     type of output data staging (possible values depend on site)\n",     
-      "   -o,        --overwrite                 overwrite the main run of existing experiment\n",
-      "   -A STRING, --project=STRING            project account STRING to charge model running time to\n",
-      "   -r STRING, --regression=STRING         run in regression test mode STRING with minimal output processing\n",
-      "   -R STRING, --remote-user=STRING        use the remote user STRING for the model output transfer to a post-processing site\n",
-      "   -S,        --submit-chained            submit all the created scripts as input data staging jobs, submitting run jobs at their end\n",
-      "   -T,        --transfer                  transfer all the model output back to a post-processing site (negatable, default depends on site)\n",
-      "   -u,        --unique                    create a new unique run of existing experiment\n", 
-      "   -W,        --windfall                  don't charge model running time to the project (may not be supported)\n\n", 
-      "   -E,        --execute                   execute all the created scripts in the current session\n", 
-      "   -h,        --help                      print help message and exit\n",
-      "   -n NUM,    --ncores=NUM                number of processor cores to use for input data staging (default depends on site)\n",
-      "   -P STRING, --partition=STRING          partition STRING to use for model runs\n",
-      "   -p STRING, --platform=STRING           hardware and software platform STRING (required)\n", 
-      "   -q STRING, --queue=STRING              queue STRING to use for model runs\n",
-      "   -s,        --submit                    submit all the created scripts as batch jobs\n",
-      "   -t STRING, --target=STRING             use compilation directives, targeted by STRING (default is '$tgt')\n", 
-      "   -V,        --version                   print the tool version and exit\n",
-      "   -v,        --verbose                   get verbose messages (repeat the option to increase verbosity level)\n", 
-      "   -w NUM,    --walltime=NUM              maximum wall time (in minutes) to use for input data staging (default depends on site)\n", 
-      "   -x FILE,   --xmlfile=FILE              experiment suite XML configuration FILE (default is '$cwd/$xml')\n", 
-      "              --ht                        enable hyperthreading (off by default)\n\n",
-      "  The platform and at least one experiment from the FILE must be listed as an argument.\n\n"
-    );
-  }
-  
-  sub Help()
-  # ------ arguments: none
-  {
-    my @usage = frerun::Usage();
-    my $tgts = join("', '", FRETargets::all());
-    my $tgst = join("', '", FRETargets::starters());
-    return
-    (
-      "\n",
-      "   Synopsis: $self creates a tcsh script to run FRE experiment(s).\n",
-      "@usage",
-      "   Use --noarchive to disallow saving model output into archive (valid for regression tests only).\n",
-      "      The (unpacked) model output will be kept in the disk cache (ptmp) only.\n",
-      "   Use --nocombine-history to disallow combining history files (valid for regression tests only).\n",
-      "      This option is on by default, so history files will be combined after each segment run.\n",
-      "   Use --overwrite, --extend or --unique to manipulate the experiment output directory.\n",
-      "      You can completely overwrite the output directory, you can extend the run of the same experiment,\n",
-      "      or you can create another unique instance of the output directory for the same experiment.\n",
-      "   Use --dual to automatically create a pair of runscripts - the main one and the dual one.\n",
-      "      The dual runscript is functionally identical to runscripts with --unique and --check options enabled,\n",
-      "      it will keep the model output in a separate directory and compare it with the data from the main model run.\n",
-      "      The --dual option is recognized for production runs only.\n", 
-      "   Use --regression to run a regression test instead of the <production> run.\n", 
-      "      Regression tests have minimal treatment of output files.\n",
-      "      This option value can be a single regression test label, or a list of them, separated by comma.\n",
-      "      Any number of regression tests can be requested. The keyword 'all' requests all of them,\n",
-      "      The keyword 'suite' requests all available regression runs, labeled by 'basic', 'restarts' or 'scaling'.\n",
-      "   Use --submit-chained to automatically submit all the created scripts in the chaining mode.\n",
-      "      The script is submitted with parameters, which allow it to perform input data staging,\n",
-      "      to submit the normal run script (provided that the input data staging was successful), and then exit.\n",
-      "      This makes sense, when the input data staging script and the normal run script have to be executed\n",
-      "      in different computing environments (different access to filesystems, etc).\n",
-      "   Use --platform to pick a platform for experiment(s).\n", 
-      "      The <platform> node in the experiment suite configuration file is used\n", 
-      "      to set platform-specific data and instructions.\n",
-      "   Use --target to define compilation and linkage directives for experiment(s).\n",
-      "      Predefined targets refer to groups of directives, existing in the 'mkmf' template file.\n",
-      "      Possible predefined targets are: '$tgts'.\n",
-      "      Any number of targets from this list can be used here, and you can also add your own target (but not more than one).\n",
-      "      Targets '$tgst' are mutually exclusive - not more than one of them is allowed in the target list.\n",
-      "      Your own target should refer to a <compile> node with the corresponding value of its 'target' attribute.\n", 
-      "      Multiple targets are separated by comma or dash. All the directives, referred by multiple targets, are merged.\n", 
-      "   Use --execute to run the created script right away.\n",
-      "      If the target platform is not where $self is being run, do not specify --execute.\n", 
-      "      Submit as a batch job or run by hand on the right platform.\n",
-      "   Use --submit to automatically submit all the created scripts as batch jobs.\n\n"
-    );
-  }
+    sub Usage()
 
-  sub regressionRunScriptName($$)
-  # ------ arguments: $exp $extension
-  {
-    my ($z, $x) = @_;
-    my ($expName, $scriptsDir) = ($z->name(), $z->scriptsDir());
-    return "$scriptsDir/run/${expName}_$x"; 
-  }
-
-  sub productionRunScriptName($$)
-  # ------ arguments: $exp $extension
-  {
-    my ($z, $x) = @_;
-    my ($expName, $scriptsDir) = ($z->name(), $z->scriptsDir());
-    return "$scriptsDir/run/$expName$x"; 
-  }
-
-  sub stdoutMainDir($)
-  # ------ arguments: $exp
-  {
-    my $z = shift;
-    my $stdoutDir = $z->stdoutDir();
-    return "$stdoutDir/run";
-  }
-
-  sub stdoutName($$)
-  # ------ arguments: $exp $scriptName
-  {
-    my ($z, $n) = @_;
-    my ($basename, $stdoutTmpDir, $jobId) = (File::Basename::basename($n), $z->stdoutTmpDir(), FREUtil::jobID());
-    return "$stdoutTmpDir/run/$basename.o$jobId";
-  }
-
-  sub createDirectory($$)
-  # ------ arguments: $fre $directory
-  # ------ create a directory 
-  {
-    my ($fre, $d) = @_;
-    if (-d $d)
+        # ------ arguments: none
     {
-      if (-w $d)
-      {
-        return 1;
-      }
-      else
-      {
-        $fre->out(FREMsg::FATAL, "The directory '$d' exists, but it's not writable");
-	return 0;
-      }
-    }
-    else
+        my $cwd = Cwd::getcwd();
+        my $xml = FREDefaults::XMLFile();
+        my $tgt = FREDefaults::Target();
+        return (
+            "\n",
+            "  Usage: $self -p|--platform platform [options] experiment [experiment2 ...]\n\n",
+            "  Options:\n\n",
+            "   -a,        --archive                   save the model output in the archive (negatable, default is on)\n",
+            "   -H,        --cache-history             cache history files at a post-processing site (instead of putting them into archive)\n",
+            "   -c,        --check                     check the model output with the main model run (which makes sense for unique runs only)\n",
+            "   -C,        --checksum                  compute checking sums for all the output data archives to enable their verification\n",
+            "   -M,        --combine-history           combine history files after each segment run (negatable, default is on)\n",
+            "   -z STRING, --compress=STRING           compress model output of type STRING (list of 'ascii', 'restart', 'history' or 'all')\n",
+            "   -Z,        --nc4-compress-history      compress history files using Netcdf4 compression, deflation=2 and shuffle\n",
+            "   -D,        --dual                      create a pair of runscripts - the main one and the dual one (negatable, default depends on site)\n",
+            "   -e,        --extend                    extend default run of existing experiment\n",
+            "   -f,        --free                      free working directory in the end of run (negatable, default depends on site)\n",
+            "   -O STRING, --output-staging=STRING     type of output data staging (possible values depend on site)\n",
+            "   -o,        --overwrite                 overwrite the main run of existing experiment\n",
+            "   -A STRING, --project=STRING            project account STRING to charge model running time to\n",
+            "   -r STRING, --regression=STRING         run in regression test mode STRING with minimal output processing\n",
+            "   -R STRING, --remote-user=STRING        use the remote user STRING for the model output transfer to a post-processing site\n",
+            "   -S,        --submit-chained            submit all the created scripts as input data staging jobs, submitting run jobs at their end\n",
+            "   -T,        --transfer                  transfer all the model output back to a post-processing site (negatable, default depends on site)\n",
+            "   -u,        --unique                    create a new unique run of existing experiment\n",
+            "   -W,        --windfall                  don't charge model running time to the project (may not be supported)\n\n",
+            "   -E,        --execute                   execute all the created scripts in the current session\n",
+            "   -h,        --help                      print help message and exit\n",
+            "   -n NUM,    --ncores=NUM                number of processor cores to use for input data staging (default depends on site)\n",
+            "   -P STRING, --partition=STRING          partition STRING to use for model runs\n",
+            "   -p STRING, --platform=STRING           hardware and software platform STRING (required)\n",
+            "   -q STRING, --queue=STRING              queue STRING to use for model runs\n",
+            "   -s,        --submit                    submit all the created scripts as batch jobs\n",
+            "   -t STRING, --target=STRING             use compilation directives, targeted by STRING (default is '$tgt')\n",
+            "   -V,        --version                   print the tool version and exit\n",
+            "   -v,        --verbose                   get verbose messages (repeat the option to increase verbosity level)\n",
+            "   -w NUM,    --walltime=NUM              maximum wall time (in minutes) to use for input data staging (default depends on site)\n",
+            "   -x FILE,   --xmlfile=FILE              experiment suite XML configuration FILE (default is '$cwd/$xml')\n",
+            "              --ht                        enable hyperthreading (off by default)\n\n",
+            "  The platform and at least one experiment from the FILE must be listed as an argument.\n\n"
+        );
+    } ## end sub Usage
+
+    sub Help()
+
+        # ------ arguments: none
     {
-      return FREUtil::createDir($d);
-    }
-  }
+        my @usage = frerun::Usage();
+        my $tgts  = join( "', '", FRETargets::all() );
+        my $tgst  = join( "', '", FRETargets::starters() );
+        return (
+            "\n",
+            "   Synopsis: $self creates a tcsh script to run FRE experiment(s).\n",
+            "@usage",
+            "   Use --noarchive to disallow saving model output into archive (valid for regression tests only).\n",
+            "      The (unpacked) model output will be kept in the disk cache (ptmp) only.\n",
+            "   Use --nocombine-history to disallow combining history files (valid for regression tests only).\n",
+            "      This option is on by default, so history files will be combined after each segment run.\n",
+            "   Use --overwrite, --extend or --unique to manipulate the experiment output directory.\n",
+            "      You can completely overwrite the output directory, you can extend the run of the same experiment,\n",
+            "      or you can create another unique instance of the output directory for the same experiment.\n",
+            "   Use --dual to automatically create a pair of runscripts - the main one and the dual one.\n",
+            "      The dual runscript is functionally identical to runscripts with --unique and --check options enabled,\n",
+            "      it will keep the model output in a separate directory and compare it with the data from the main model run.\n",
+            "      The --dual option is recognized for production runs only.\n",
+            "   Use --regression to run a regression test instead of the <production> run.\n",
+            "      Regression tests have minimal treatment of output files.\n",
+            "      This option value can be a single regression test label, or a list of them, separated by comma.\n",
+            "      Any number of regression tests can be requested. The keyword 'all' requests all of them,\n",
+            "      The keyword 'suite' requests all available regression runs, labeled by 'basic', 'restarts' or 'scaling'.\n",
+            "   Use --submit-chained to automatically submit all the created scripts in the chaining mode.\n",
+            "      The script is submitted with parameters, which allow it to perform input data staging,\n",
+            "      to submit the normal run script (provided that the input data staging was successful), and then exit.\n",
+            "      This makes sense, when the input data staging script and the normal run script have to be executed\n",
+            "      in different computing environments (different access to filesystems, etc).\n",
+            "   Use --platform to pick a platform for experiment(s).\n",
+            "      The <platform> node in the experiment suite configuration file is used\n",
+            "      to set platform-specific data and instructions.\n",
+            "   Use --target to define compilation and linkage directives for experiment(s).\n",
+            "      Predefined targets refer to groups of directives, existing in the 'mkmf' template file.\n",
+            "      Possible predefined targets are: '$tgts'.\n",
+            "      Any number of targets from this list can be used here, and you can also add your own target (but not more than one).\n",
+            "      Targets '$tgst' are mutually exclusive - not more than one of them is allowed in the target list.\n",
+            "      Your own target should refer to a <compile> node with the corresponding value of its 'target' attribute.\n",
+            "      Multiple targets are separated by comma or dash. All the directives, referred by multiple targets, are merged.\n",
+            "   Use --execute to run the created script right away.\n",
+            "      If the target platform is not where $self is being run, do not specify --execute.\n",
+            "      Submit as a batch job or run by hand on the right platform.\n",
+            "   Use --submit to automatically submit all the created scripts as batch jobs.\n\n"
+        );
+    } ## end sub Help
 
-  sub getTemplate($$)
-  # ------ arguments: $fre $filename
-  # ------ returns a script template from the site directory
-  # ------ return ($sript, $status)
-  {
-    my ($fre, $n) = @_;
-    my $pathname = $fre->siteDir() . '/' . $n;
-    if (open my $templateHandle, '<', $pathname)
+    sub regressionRunScriptName($$)
+
+        # ------ arguments: $exp $extension
     {
-      $/ = undef;
-      my $s = <$templateHandle>;
-      $s =~ s/^# ?$//mg;
-      $s =~ s/^# .*$//mg;
-      $s =~ s/\n{2,}/\n\n/sg;
-      close $templateHandle;
-      return ($s, FREDefaults::STATUS_OK);
-    }
-    else
-    {
-      $fre->out(FREMsg::FATAL, "The main runscript template '$pathname' isn't found");
-      return (0, FREDefaults::STATUS_FRE_RUN_NO_TEMPLATE);
-    }
-  }
-  
-  sub execName($)
-  # ------ arguments: $exp
-  {
-    my $z = shift;
-    my ($value, $exp) = $z->extractExecutable();
-    if ($value)
-    {
-      return $value;
-    }
-    elsif ($exp)
-    {
-      return $exp->executable();
-    }
-    else
-    {
-      return undef;
-    }
-  }
-
-  sub getRemoteDirs($$$)
-  # ------ arguments: $exp $platform $user
-  {
-    my ($z, $p, $u) = @_;
-    my ($fre, $expName) = ($z->fre(), $z->name());
-    my ($target, $xmlfile) = ($fre->target(), $fre->configFileAbsPathName());
-    my $cmd = "frelist --xmlfile=$xmlfile --platform=$p --target=$target --novalidate --directory=stdout,stmp,archive,include $expName";
-    $cmd .= " --remote-user=$u" if $u;
-    my $res = qx($cmd);
-    if ($? == 0)
-    {
-      my @res = ();
-      foreach my $dir (split(/\n/, $res))
-      {
-        $dir =~ s/^\w+: //;
-	push @res, $dir;
-      }
-      return @res;
-    }
-    else
-    {
-      return ();
-    }
-  }
-  
-  sub getRemotePlatformCsh($$)
-  # ------ arguments: $exp $platform
-  {
-    my ($z, $p) = @_;
-    my $fre = $z->fre();
-    my ($target, $xmlfile) = ($fre->target(), $fre->configFileAbsPathName());
-    my $cmd = "frelist --xmlfile=$xmlfile --platform=$p --target=$target --novalidate --platform-csh";
-    my $res = qx($cmd);
-    if ($? == 0)
-    {
-      $res =~ s/^\s*//mg;
-      $res =~ s/ +/ /mg;
-      $res =~ s/\$/\\\$/mg;
-      $res =~ s/\t+/\t/mg;
-      $res =~ s/\n+/\n/sg;
-      $res =~ s/(?: |\t)/+/sg;
-      $res =~ s/\n/:/sg;
-      $res = $z->placeholdersExpand($res);
-      return $res;
-    }
-    else
-    {
-      return '';
-    }
-  }  
-
-  sub init($%)
-  # ------ arguments: $exp %options
-  # ------ return ($sript, $status)
-  {
-
-    my ($z, %o) = @_;
-    my $fre = $z->fre();
-    
-    my ($s, $status) = frerun::getTemplate($fre, frerun::RUNSCRIPT_TEMPLATE_MAIN);
-    if ($s)
-    {
-
-      # ------------------------------------- executable
-
-      my $execName = frerun::execName($z);
-      if ($execName)
-      {
-	if (-f $execName)
-	{
-	  if (-x $execName)
-	  {
-	    $fre->out(FREMsg::NOTE, "Using executable '$execName'...");
-	  }
-	  else
-	  {
-	    $fre->out(FREMsg::FATAL, "Your executable '$execName' exists, but you don't have permissions to run it");
-            return (0, FREDefaults::STATUS_FS_PERMISSION_PROBLEM);
-	  }
-	}
-	else
-	{
-	  $fre->out(FREMsg::WARNING, "Your executable '$execName' doesn't exist");
-	}
-      }
-      else
-      {
-	$fre->out(FREMsg::FATAL, "Can't determine the executable pathname");
-        return (0, FREDefaults::STATUS_FRE_GENERIC_PROBLEM);
-      }
-
-      # ------------------------------------------------------------------------ output data staging and transfer
-
-      my @flagOutputStagingTypes = split(/;/, $fre->property('FRE.output.staging'));
-      my $flagOutputStagingTypeDefault = $flagOutputStagingTypes[0];
-      my $flagOutputStagingType = $o{'output-staging'} || $z->extractValue('postProcess/@combine');
-      my $flagOutputTransfer = ($o{transfer}) ? 'On' : 'Off';
-
-      if ($flagOutputStagingType)
-      {
-	if (scalar(grep($_ eq $flagOutputStagingType, @flagOutputStagingTypes)) > 0)
-	{
-          $fre->out(FREMsg::NOTE, "The '$flagOutputStagingType' output staging type will be used...");
-	}
-	else
-	{
-	  $fre->out(FREMsg::WARNING, "The '$flagOutputStagingType' output staging type isn't supported at this site - using the '$flagOutputStagingTypeDefault' one...");
-	  $flagOutputStagingType = $flagOutputStagingTypeDefault;
-	}
-      }
-      else
-      {
-        $fre->out(FREMsg::WARNING, "The output staging type isn't defined - using the '$flagOutputStagingTypeDefault' one...");
-        $flagOutputStagingType = $flagOutputStagingTypeDefault;
-      }
-      
-      my $roots = $fre->property("FRE.output.staging.$flagOutputStagingType.transfer$flagOutputTransfer.archive.roots");
-      if ($roots)
-      {
-        my ($archiveDir, $rootsForMatch) = ($z->archiveDir(), $roots);
-	$rootsForMatch =~ s/\$/\\\$/g;
-	if (scalar(grep("$archiveDir/" =~ m/^$_\//, split(';', $rootsForMatch))) == 0)
-	{
-	  my ($msg, @roots) = ('', split(';', $roots));
-	  if (scalar(@roots) > 1)
-	  {
-	    my $rootsForOut = join(', ',  @roots);
-	    $msg = "one of ($rootsForOut) filesystems";
-	  }
-          else
-	  {
-	    $msg = "the '$roots[0]' filesystem";
-	  }
-	  my $flagOutputTransferMsg = ($flagOutputTransfer eq 'On') ? '--transfer' : '--notransfer';
-	  $fre->out(FREMsg::FATAL, "Combination of options --output-staging=$flagOutputStagingType and $flagOutputTransferMsg requires the archive directory to be on $msg");
-          return (0, FREDefaults::STATUS_FS_GENERIC_PROBLEM);
-	}
-      }
-      else
-      {
-	$fre->out(FREMsg::FATAL, "The 'FRE.output.staging.$flagOutputStagingType.transfer$flagOutputTransfer.archive.roots' external property is absent or empty!!!");
-        return (0, FREDefaults::STATUS_FS_GENERIC_PROBLEM);
-      }
-      
-      if ($flagOutputTransfer eq 'On')
-      {
-	if (scalar(@flagOutputStagingTypes) == 1 or $flagOutputStagingType ne 'online')
-	{
-          $fre->out(FREMsg::NOTE, "The model output will be transferred to the post-processing site...");
-	}
-	else
-	{
-          $flagOutputTransfer = 'Off';
-          $fre->out(FREMsg::WARNING, "You can use the --transfer option only when the staging type isn't online - ignored...");
-	}
-      }
-      
-      # --------------------------------------------------------------------------------------- history combining
-
-      my $flagOutputCombineHistory = ($o{'combine-history'}) ? 'On' : 'Off';
-      if ($flagOutputCombineHistory eq 'Off')
-      {
-        $fre->out(FREMsg::NOTE, "The history won't be combined...");
-      }
-
-      # ---------------------------------------------------------------------------------------- combiner options
-
-      # For information about combiner flags, see the combiner help menu with `mppncombine -h'
-
-      my $mppnccombineOptsDefault = "'-64 -h 16384 -m'";
-      my $mppnccombineOptsRestart = $mppnccombineOptsDefault;
-      my $mppnccombineOptsHistory = $mppnccombineOptsDefault;
-
-      # If hidden combiner string specified by --mppnccombine-opts flag found, use it. (This overrides any default behavior)
-      if ( exists $o{'mppnccombine-opts'} )
-      {
-        $mppnccombineOptsHistory = "'$o{'mppnccombine-opts'}'";
-      }
-
-      # If combiner compression flag present, use a default compression setting of deflation level 2 and shuffling turned on
-      elsif ( exists $o{'nc4-compress-history'} )
-      {
-        $mppnccombineOptsHistory = "'-n4 -d 2 -s -h 16384 -m'";
-      }
-
-      # -------------------------------------------------------------------------------- output archiving
-
-      my $flagOutputArchive = ($o{archive}) ? 'On' : 'Off';
-      if ($flagOutputArchive eq 'Off')
-      {
-	if ($o{regression})
-	{
-          $fre->out(FREMsg::NOTE, "The model output will be kept in the disk cache only...");
-	}
-	else
-	{
-          $flagOutputArchive = 'On';
-          $fre->out(FREMsg::WARNING, "You can use the --noarchive option for regression tests only - ignored...");
-	}
-      }
-      
-      # ------------------------------------------------------------------------------ output post-processing
-      
-      my $flagOutputPostProcess = (!$o{regression} && !$o{unique}) ? 'On' : 'Off';
-      
-      # ------------------------------------------------------------------------- getFmsData and its parameters
-
-      my @getFmsData = ($fre->getFmsData() || '$freCommandsHomeDir/bin/get_fms_data');
-      my $fmsRelease = $fre->fmsRelease();
-      push @getFmsData, ('-r', $fmsRelease) if $fmsRelease;
-      
-      # -------------------------------------------------------------------------- remote directories for transfer
-      
-      my ($remotePlatform, $remoteUser, @remoteDirs) = ('', '', '', '', '');
-      if ($flagOutputTransfer eq 'On')
-      {
-        ($remotePlatform, $remoteUser) = (FREPlatforms::siteReplace($fre->platform(), 'gfdl'), $o{'remote-user'});
-	@remoteDirs = frerun::getRemoteDirs($z, $remotePlatform, $remoteUser);
-	if (scalar(@remoteDirs) > 0)
-	{
-          $fre->out(FREMsg::NOTE, "Remote directories to be used:", "stdout  = $remoteDirs[0]", "stmp    = $remoteDirs[1]", "archive = $remoteDirs[2]", "include = $remoteDirs[3]");
-	}
-	else
-	{
-          $fre->out(FREMsg::FATAL, "Unable to determine remote directories - please check your platform '$remotePlatform'");
-          return (0, FREDefaults::STATUS_FS_GENERIC_PROBLEM);
-	}  
-      }
-      
-      # --------------------------------------------------------------------- various remote settings for post-processing
-      
-      my ($remoteModuleFilesDir, $remoteVersion, $remotePlatformCsh) = ('', '', '', '');
-      if ($flagOutputTransfer eq 'On' && $flagOutputPostProcess eq 'On')
-      {
-        $remoteModuleFilesDir = $fre->property('FRE.tool.modules.use.remote');
-        $remotePlatformCsh = frerun::getRemotePlatformCsh($z, $remotePlatform);
-	if ($remotePlatformCsh)
-	{
-          $fre->out(FREMsg::NOTE, "Remote platform csh to be used - '$remotePlatformCsh'");
-          # set remote FRE version, currently only used in the runscript to send the pp.starter job
-          # to pancylc queue if /chaco/
-          $remotePlatformCsh =~ m|fre/([\w-]+)|;
-          $remoteVersion = $1 if $1;
-          if ($remoteVersion) {
-            $fre->out(FREMsg::NOTE, "Remote FRE version - $remoteVersion");
-          }
-          else {
-            $fre->out(FREMsg::NOTE, "Unable to determine remote FRE version");
-          }
-	}
-	else
-	{
-          $fre->out(FREMsg::FATAL, "Unable to determine remote platform csh - please check your platform '$remotePlatform'");
-          return (0, FREDefaults::STATUS_FS_GENERIC_PROBLEM);
-	}
-      }
-
-      # ------------------------------------------------------------ verify include directory
-      my ($includeDir, $includeDirRemote) = ($z->includeDir, $remoteDirs[3]);
-      if (! -e $includeDir) {
-          $fre->out(FREMsg::NOTE, sprintf "Include directory '$includeDir' doesn't exist");
-          $includeDir = $includeDirRemote = "";
-      }
-      elsif (-d $includeDir) {
-          chomp(my $du = `du -smL $includeDir 2> /dev/null`);
-          my $size = (split ' ', $du)[0];
-          if ($size <= 300) {
-            $fre->out(FREMsg::NOTE, "Size of include directory '$includeDir': $size MB");
-          }
-          else {
-            $fre->out(FREMsg::FATAL, "Size of include directory '$includeDir' ($size MB) exceeds 300MB limit; please reduce the directory's size");
-            return (0, FREDefaults::STATUS_FS_GENERIC_PROBLEM);
-          }
-      }
-      else {
-          $fre->out(FREMsg::FATAL, sprintf "Include directory '$includeDir' exists, but isn't a directory");
-          return (0, FREDefaults::STATUS_FS_GENERIC_PROBLEM);
-      }
-      
-      # ------------------------------------------------------------------------- setting constants/variables 
-
-      FRETemplate::setFlag($fre, \$s, 'flagRunType', ($o{regression}) ? 'Regression' : 'Production');
-      FRETemplate::setFlag($fre, \$s, 'flagCheckSum', ($o{checksum}) ? 'On' : 'Off');
-      FRETemplate::setFlag($fre, \$s, 'flagWorkDirClean', ($o{free}) ? 'On' : 'Off');
-      FRETemplate::setFlag($fre, \$s, 'flagOutputType', ($o{extend}) ? 'Extend' : (($o{overwrite}) ? 'Overwrite' : (($o{unique}) ? 'Unique' : 'Initial')));
-      FRETemplate::setFlag($fre, \$s, 'flagOutputFormat', (FRETargets::containsHDF5($fre->target())) ? 'HDF5' : '64Bit');
-      FRETemplate::setFlag($fre, \$s, 'flagOutputStagingType', ucfirst $flagOutputStagingType);
-      FRETemplate::setFlag($fre, \$s, 'flagOutputCacheHistory', ($o{'cache-history'}) ? 'On' : 'Off');
-      FRETemplate::setFlag($fre, \$s, 'flagOutputCombineHistory', $flagOutputCombineHistory);
-      FRETemplate::setFlag($fre, \$s, 'flagOutputCompressAscii', ($o{compress} =~ m/ascii/) ? 'On' : 'Off');
-      FRETemplate::setFlag($fre, \$s, 'flagOutputCompressRestart', ($o{compress} =~ m/restart/) ? 'On' : 'Off');
-      FRETemplate::setFlag($fre, \$s, 'flagOutputCompressHistory', ($o{compress} =~ m/history/) ? 'On' : 'Off');
-      FRETemplate::setFlag($fre, \$s, 'flagOutputArchive', $flagOutputArchive);
-      FRETemplate::setFlag($fre, \$s, 'flagOutputPostProcess', $flagOutputPostProcess);
-      FRETemplate::setFlag($fre, \$s, 'flagOutputXfer', $flagOutputTransfer);
-      FRETemplate::setFlag($fre, \$s, 'flagOutputCheck', ($o{check}) ? 'On' : 'Off');
-      FRETemplate::setFlag($fre, \$s, 'flagVerbosity', ($o{verbose}) ? 'On' : 'Off');
-
-      FRETemplate::setVariable($fre, \$s, 'modulesHomeDir', $fre->property('FRE.tool.modules.home'));
-      FRETemplate::setVariable($fre, \$s, 'freCommandsModuleFilesDir', $ENV{FRE_SYSTEM_MODULEFILES_DIR} || $fre->property('FRE.tool.modules.use'));
-      FRETemplate::setVariable($fre, \$s, 'freCommandsVersion', $ENV{FRE_COMMANDS_VERSION});
-
-      FRETemplate::setVariable($fre, \$s, 'projectInit', $fre->project());
-      FRETemplate::setVariable($fre, \$s, 'windfallFlagInit', ($o{windfall}) ? '1' : '0');
-      FRETemplate::setVariable($fre, \$s, 'partitionInit', $o{partition});
-      FRETemplate::setVariable($fre, \$s, 'queueInit', $o{queue});
-
-      FRETemplate::setVariable($fre, \$s, 'platform', $fre->platform());
-      FRETemplate::setVariable($fre, \$s, 'target', $fre->target());
-      FRETemplate::setVariable($fre, \$s, 'name', $z->name());
-      FRETemplate::setVariable($fre, \$s, 'rtsxml', $fre->configFileAbsPathName());
-      FRETemplate::setVariable($fre, \$s, 'stdoutDir', frerun::stdoutMainDir($z));
-      FRETemplate::setVariable($fre, \$s, 'workDir', $z->workDir());
-      FRETemplate::setVariable($fre, \$s, 'ptmpDir', $z->ptmpDir());
-      FRETemplate::setVariable($fre, \$s, 'archiveDir', $z->archiveDir());
-      FRETemplate::setVariable($fre, \$s, 'executable', $execName);
-      FRETemplate::setVariable($fre, \$s, 'mailMode', $fre->mailMode());
-      FRETemplate::setVariable($fre, \$s, 'includeDir', $includeDir);
-      
-      FRETemplate::setVariable($fre, \$s, 'platformRemote', "'$remotePlatform'");
-      FRETemplate::setVariable($fre, \$s, 'userRemote', "'$remoteUser'"); 
-      FRETemplate::setVariable($fre, \$s, 'stdoutDirRemote', "'$remoteDirs[0]'");
-      FRETemplate::setVariable($fre, \$s, 'stmpDirRemote', "'$remoteDirs[1]'");
-      FRETemplate::setVariable($fre, \$s, 'archiveDirRemote', "'$remoteDirs[2]'");
-      FRETemplate::setVariable($fre, \$s, 'includeDirRemote', $includeDirRemote);
-      FRETemplate::setVariable($fre, \$s, 'freCommandsModuleFilesDirRemote', "'$remoteModuleFilesDir'");
-      FRETemplate::setVariable($fre, \$s, 'freCommandsVersionRemote', "'$remoteVersion'");
-      FRETemplate::setVariable($fre, \$s, 'envRemote', "'$remotePlatformCsh'");
-      
-      FRETemplate::setVariable($fre, \$s, 'outputStagerPartition', $fre->property('FRE.scheduler.outputStager.partition'));
-      FRETemplate::setVariable($fre, \$s, 'outputStagerQueue', $fre->property('FRE.scheduler.outputStager.queue'));
-      FRETemplate::setVariable($fre, \$s, 'outputStagerCoreSpec', $fre->property('FRE.scheduler.outputStager.coreSpec'));
-      FRETemplate::setVariable($fre, \$s, 'outputStagerRuntimeAscii', $fre->property('FRE.scheduler.outputStager.runtime.ascii') || $fre->property('FRE.scheduler.runtime.max'));
-      FRETemplate::setVariable($fre, \$s, 'outputStagerRuntimeRestart', $fre->property('FRE.scheduler.outputStager.runtime.restart') || $fre->property('FRE.scheduler.runtime.max'));
-      FRETemplate::setVariable($fre, \$s, 'outputStagerRuntimeHistory', $fre->property('FRE.scheduler.outputStager.runtime.history') || $fre->property('FRE.scheduler.runtime.max'));
-      
-      FRETemplate::setVariable($fre, \$s, 'outputStagerSavePartition', $fre->property('FRE.scheduler.outputStager.save.partition'));
-      FRETemplate::setVariable($fre, \$s, 'outputStagerSaveQueue', $fre->property('FRE.scheduler.outputStager.save.queue'));
-      FRETemplate::setVariable($fre, \$s, 'outputStagerSaveCoreSpec', $fre->property('FRE.scheduler.outputStager.save.coreSpec'));
-      FRETemplate::setVariable($fre, \$s, 'outputStagerSaveRuntimeAscii', $fre->property('FRE.scheduler.outputStager.save.runtime.ascii') || $fre->property('FRE.scheduler.runtime.max'));
-      FRETemplate::setVariable($fre, \$s, 'outputStagerSaveRuntimeRestart', $fre->property('FRE.scheduler.outputStager.save.runtime.restart') || $fre->property('FRE.scheduler.runtime.max'));
-      FRETemplate::setVariable($fre, \$s, 'outputStagerSaveRuntimeHistory', $fre->property('FRE.scheduler.outputStager.save.runtime.history') || $fre->property('FRE.scheduler.runtime.max'));
-      FRETemplate::setVariable($fre, \$s, 'outputStagerSaveRetries', $fre->property('FRE.scheduler.outputStager.save.retries'));
-      
-      FRETemplate::setVariable($fre, \$s, 'outputStagerXferPartition', $fre->property('FRE.scheduler.outputStager.transfer.partition'));
-      FRETemplate::setVariable($fre, \$s, 'outputStagerXferQueue', $fre->property('FRE.scheduler.outputStager.transfer.queue'));
-      FRETemplate::setVariable($fre, \$s, 'outputStagerXferCoreSpec', $fre->property('FRE.scheduler.outputStager.transfer.coreSpec'));
-      FRETemplate::setVariable($fre, \$s, 'outputStagerXferRuntimeAscii', $fre->property('FRE.scheduler.outputStager.transfer.runtime.ascii') || $fre->property('FRE.scheduler.runtime.max'));
-      FRETemplate::setVariable($fre, \$s, 'outputStagerXferRuntimeRestart', $fre->property('FRE.scheduler.outputStager.transfer.runtime.restart') || $fre->property('FRE.scheduler.runtime.max'));
-      FRETemplate::setVariable($fre, \$s, 'outputStagerXferRuntimeHistory', $fre->property('FRE.scheduler.outputStager.transfer.runtime.history') || $fre->property('FRE.scheduler.runtime.max'));
-      FRETemplate::setVariable($fre, \$s, 'outputStagerXferRetries', $fre->property('FRE.scheduler.outputStager.transfer.retries'));
-      
-      FRETemplate::setVariable($fre, \$s, 'workDirCleanerPartition', $fre->property('FRE.scheduler.workDirCleaner.partition'));
-      FRETemplate::setVariable($fre, \$s, 'workDirCleanerQueue', $fre->property('FRE.scheduler.workDirCleaner.queue'));
-      FRETemplate::setVariable($fre, \$s, 'workDirCleanerCoreSpec', $fre->property('FRE.scheduler.workDirCleaner.coreSpec'));
-      FRETemplate::setVariable($fre, \$s, 'workDirCleanerRuntime', $fre->property('FRE.scheduler.workDirCleaner.runtime') || $fre->property('FRE.scheduler.runtime.max'));
-      
-      FRETemplate::setVariable($fre, \$s, 'finisherPartition', $fre->property('FRE.scheduler.finisher.partition'));
-      FRETemplate::setVariable($fre, \$s, 'finisherQueue', $fre->property('FRE.scheduler.finisher.queue'));
-      FRETemplate::setVariable($fre, \$s, 'finisherCoreSpec', $fre->property('FRE.scheduler.finisher.coreSpec'));
-      FRETemplate::setVariable($fre, \$s, 'finisherRuntime', $fre->property('FRE.scheduler.finisher.runtime') || $fre->property('FRE.scheduler.runtime.max'));
-      
-      FRETemplate::setVariable($fre, \$s, 'ppStarterPartition', $fre->property('FRE.scheduler.ppStarter.partition'));
-      FRETemplate::setVariable($fre, \$s, 'ppStarterCoreSpec', $fre->property('FRE.scheduler.ppStarter.coreSpec'));
-      FRETemplate::setVariable($fre, \$s, 'ppStarterCombineOffLargeOffQueue', $fre->property('FRE.scheduler.ppStarter.combineOff.largeOff.queue'));
-      FRETemplate::setVariable($fre, \$s, 'ppStarterCombineOffLargeOffRuntime', $fre->property('FRE.scheduler.ppStarter.combineOff.largeOff.runtime'));
-      FRETemplate::setVariable($fre, \$s, 'ppStarterCombineOffLargeOnQueue', $fre->property('FRE.scheduler.ppStarter.combineOff.largeOn.queue'));
-      FRETemplate::setVariable($fre, \$s, 'ppStarterCombineOffLargeOnRuntime', $fre->property('FRE.scheduler.ppStarter.combineOff.largeOn.runtime'));
-      FRETemplate::setVariable($fre, \$s, 'ppStarterCombineOnLargeOffQueue', $fre->property('FRE.scheduler.ppStarter.combineOn.largeOff.queue'));
-      FRETemplate::setVariable($fre, \$s, 'ppStarterCombineOnLargeOffRuntime', $fre->property('FRE.scheduler.ppStarter.combineOn.largeOff.runtime'));
-      FRETemplate::setVariable($fre, \$s, 'ppStarterCombineOnLargeOnQueue', $fre->property('FRE.scheduler.ppStarter.combineOn.largeOn.queue'));
-      FRETemplate::setVariable($fre, \$s, 'ppStarterCombineOnLargeOnRuntime', $fre->property('FRE.scheduler.ppStarter.combineOn.largeOn.runtime'));
-      FRETemplate::setVariable($fre, \$s, 'ppStarterHistorySizeThreshold', $fre->property('FRE.scheduler.ppStarter.historySize.threshold'));
-      
-      FRETemplate::setList($fre, \$s, 'windfallOptionsSet', FRETemplate::schedulerAccountAsString($fre, 1));
-      FRETemplate::setList($fre, \$s, 'windfallOptionsUnset', FRETemplate::schedulerAccountAsString($fre, 0));
-      FRETemplate::setList($fre, \$s, 'ppRefineDiagScriptNames', $z->extractPPRefineDiagScripts());
-      FRETemplate::setList($fre, \$s, 'getFmsData', @getFmsData);
-
-      FRETemplate::setVariable($fre, \$s, 'mppnccombineOptsRestart', $mppnccombineOptsRestart );
-      FRETemplate::setVariable($fre, \$s, 'mppnccombineOptsHistory', $mppnccombineOptsHistory );
-
-      FRETemplate::setVariable($fre, \$s, 'FreCommandsSrcDir', $z->extractExecutable()->srcDir());
-      FRETemplate::setVariable($fre, \$s, 'FreCommandsBldDir', $z->extractExecutable()->execDir());
-
-      # ------------------------------------------ normal return
-
-      return ($s, FREDefaults::STATUS_OK);
-
-    }
-    else
-    {
-    
-      return (0, $status);
-      
+        my ( $z, $x ) = @_;
+        my ( $expName, $scriptsDir ) = ( $z->name(), $z->scriptsDir() );
+        return "$scriptsDir/run/${expName}_$x";
     }
 
-  }
+    sub productionRunScriptName($$)
 
-  sub setInputVariableFile($$$)
-  # ------ arguments: $refToScript $exp $variableName
-  # ------ internal helper to setup an input file, defined via a shell variable
-  {
-    my ($r, $z, $n) = @_;
-    my ($fre, $fileName) = ($z->fre(), $z->extractVariableFile($n));
-    if ($fileName)
+        # ------ arguments: $exp $extension
     {
-      $fre->out(FREMsg::NOTE, "name='$n' value='$fileName'");
-      FRETemplate::setVariable($fre, $r, $n, $fileName);
-    }
-    else
-    {
-      $fre->out(FREMsg::WARNING, "Variable '$n' has no value");
-      FRETemplate::setVariable($fre, $r, $n, "''");
-    }
-  }
-
-  sub setInputInitialConditions($$)
-  # ------ arguments: $refToScript $exp
-  {
-    my ($r, $z) = @_;
-    frerun::setInputVariableFile($r, $z, 'initCond');
-  }
-
-  sub setInputGridSpecification($$)
-  # ------ arguments: $refToScript $exp
-  {
-    my ($r, $z) = @_;
-    frerun::setInputVariableFile($r, $z, 'gridSpec');
-  }
-
-  sub setAllShellCommands($$)
-  # ------ arguments: $refToScript $exp
-  {
-  
-    my ($r, $z) = @_;
-    my $fre = $z->fre();
-
-    my %adjustment =
-    (
-      init	=> ['if ( $currentSeg == 1 ) then'."\n", "\n".'endif'."\n"],
-      postInit	=> ['if ( $currentSeg != 1 ) then'."\n", "\n".'endif'."\n"]
-    );
-
-    FRETemplate::setShellCommands($fre, $r, 'platformCsh',
-                                  $fre->default_platform_csh . $fre->platformValue('csh'));
-    FRETemplate::setShellCommands($fre, $r, 'NiNaCplatformCsh', FREPlatforms::getPlatformSpecificNiNaCLoadCommands());
-    FRETemplate::setShellCommands($fre, $r, 'expRuntimeCsh', $z->extractShellCommands('runtime/csh'));
-    FRETemplate::setShellCommands($fre, $r, 'expInputCshInit', $z->extractShellCommands('input/csh[not(@type="always") and not(@type="postInit")]', %adjustment));
-    FRETemplate::setShellCommands($fre, $r, 'expInputCshAlwaysOrNotInit', $z->extractShellCommands('input/csh[@type="always" or @type="postInit"]', %adjustment));
-    FRETemplate::setShellCommands($fre, $r, 'expPostProcessCsh', $z->extractShellCommands('postProcess/csh'));
-    
-  }
-
-  sub calendarType($)
-  # ------ arguments: $namelistsHandle
-  {
-    my $h = shift;
-    my $result = 'no_calendar';
-    foreach my $name ('coupler_nml', 'main_nml', 'ocean_solo_nml', 'standalone_rad_nml')
-    {
-      my $value = $h->namelistDoubleQuotedStringGet($name, 'calendar') || $h->namelistSingleQuotedStringGet($name, 'calendar');
-      if ($value)
-      {
-        $result = $value;
-	last; 
-      }
-    }
-    return $result;
-  }
-
-  sub baseDate($)
-  # ------ arguments: $namelistsHandle
-  {
-    my $h = shift;
-    my $baseDate = $h->namelistDateGet('coupler_nml', 'current_date') || '0,0,0,0,0,0';
-    $baseDate =~ s/,/ /g;
-    return $baseDate;
-  }
-
-  sub setTables($$$)
-  # ------ arguments: $refToScript $exp $namelistsHandle
-  {
-  
-    my ($r, $z, $h) = @_;
-    my $fre = $z->fre();
-    
-    $fre->out(FREMsg::NOTE, "Extracting tables...");
-
-    # -------------------------------------------------------------- diagTable
-    
-    if (defined(my $diagTable = $z->extractTable('diagTable')))
-    {
-      my $baseDate = frerun::baseDate($h);
-      FRETemplate::setVariable($fre, $r, 'baseDate', "'$baseDate'");
-      $diagTable =~ s/^\s*\$baseDate\s*$/$baseDate/m;
-      FRETemplate::setTable($fre, $r, 'diag_table', $diagTable);
-    }
-    else
-    {
-      $fre->out(FREMsg::FATAL, "A problem with the diagnostic table");
-      return (0, FREDefaults::STATUS_FS_GENERIC_PROBLEM);
+        my ( $z, $x ) = @_;
+        my ( $expName, $scriptsDir ) = ( $z->name(), $z->scriptsDir() );
+        return "$scriptsDir/run/$expName$x";
     }
 
-    # -------------------------------------------------------------------------- fieldTable
+    sub stdoutMainDir($)
 
-    if (defined(my $fieldTable = $z->extractTable('fieldTable')))
+        # ------ arguments: $exp
     {
-      if ($h->namelistGet('coupler_nml'))
-      {
-        # Adding a new line character just in case ...
-        $fieldTable .= "\n";
-	if ($fieldTable !~ /^\s*"TRACER"\s*,\s*"atmos_mod"\s*,\s*"sphum".*/im)
-	{
-          $fieldTable .= '# added by FRE: sphum must be present in atmos' . "\n";
-	  $fieldTable .= ' "TRACER", "atmos_mod",    "sphum"' . "\n";
-	  $fieldTable .= '           "longname",     "specific humidity"' . "\n";
-	  $fieldTable .= '           "units",        "kg/kg" /'. "\n";
-	}
-	if ($fieldTable !~ /^\s*"TRACER"\s*,\s*"land_mod"\s*,\s*"sphum".*/im)
-	{
-          $fieldTable .= '# added by FRE: sphum must be present on land' . "\n";
-	  $fieldTable .= ' "TRACER", "land_mod",     "sphum"' . "\n";
-	  $fieldTable .= '           "longname",     "specific humidity"' . "\n";
-	  $fieldTable .= '           "units",        "kg/kg" /' . "\n";
-	}
-      }
-      FRETemplate::setTable($fre, $r, 'field_table', $fieldTable);
-    }
-    else
-    {
-      $fre->out(FREMsg::FATAL, "A problem with the field table");
-      return (0, FREDefaults::STATUS_FS_GENERIC_PROBLEM);
+        my $z         = shift;
+        my $stdoutDir = $z->stdoutDir();
+        return "$stdoutDir/run";
     }
 
-    # -------------------------------------------------------------------------------- dataTable
-    
-    if (defined(my $dataTable = $z->extractTable('dataTable')))
+    sub stdoutName($$)
+
+        # ------ arguments: $exp $scriptName
     {
-      FRETemplate::setTable($fre, $r, 'data_table', $dataTable);
-    }
-    else
-    {
-      $fre->out(FREMsg::FATAL, "A problem with the data table");
-      return (0, FREDefaults::STATUS_FS_GENERIC_PROBLEM);
+        my ( $z, $n ) = @_;
+        my ( $basename, $stdoutTmpDir, $jobId )
+            = ( File::Basename::basename($n), $z->stdoutTmpDir(), FREUtil::jobID() );
+        return "$stdoutTmpDir/run/$basename.o$jobId";
     }
 
-    # ------------------------------------------------------------------------ tracerTreeTable
-    
-    if (defined(my $tracerTreeTable = $z->extractTable('tracerTreeTable')))
-    {
-      FRETemplate::setTable($fre, $r, 'ocean_tracer_tree', $tracerTreeTable);
-    }
-    else
-    {
-      $fre->out(FREMsg::FATAL, "A problem with the tracer tree table");
-      return (0, FREDefaults::STATUS_FS_GENERIC_PROBLEM);
-    }
+    sub createDirectory($$)
 
-    # -------------------------------------------------------------------- tracerTreeInit
-    
-    if (defined(my $tracerTreeInit = $z->extractTable('tracerTreeInit')))
+        # ------ arguments: $fre $directory
+        # ------ create a directory
     {
-      FRETemplate::setTable($fre, $r, 'ocean_tracer_tree_init', $tracerTreeInit);
-    }
-    else
-    {
-      $fre->out(FREMsg::FATAL, "A problem with the tracer tree initialization");
-      return (0, FREDefaults::STATUS_FS_GENERIC_PROBLEM);
-    }
-
-    # ------------------------------- normal return
-    
-    return (1, FREDefaults::STATUS_OK);
-
-  }
-
-  sub setRegressionTimingParameters($$$$$$)
-  # ------ arguments: $refToScript $exp $refToInfo $partition $queue $dualFlag
-  {
-
-    my ($r, $z, $i, $p, $q, $f) = @_;
-    my ($expName, $fre) = ($z->name(), $z->fre());
-    # -------------------------------------------- extract timing parameters
-    my @ma = split(' ', $i->{months});
-    my @da = split(' ', $i->{days});
-    my @ha = split(' ', $i->{hours});
-    my $rt = $i->{runTimeMinutes};
-    # ------------------------------------------------------------- set timing parameters in the script
-    FRETemplate::setVariable($fre, $r, 'segmentsPerSimulation', scalar(@ma));
-    FRETemplate::setVariable($fre, $r, 'segmentsPerPPCall', 0);
-    FRETemplate::setVariable($fre, $r, 'segmentsPerJob', scalar(@ma));
-    FRETemplate::setVariable($fre, $r, 'jobsPerSimulation', 1);
-    FRETemplate::setList($fre, $r, 'monthslist', @ma);
-    FRETemplate::setList($fre, $r, 'dayslist', @da);
-    FRETemplate::setList($fre, $r, 'hourslist', @ha);
-    # -------------------------------------------------------------- set scheduler resources
-    FRETemplate::setSchedulerResources($fre, $r, 'run', undef, $rt * 60, $p, $q, $f);
-  }
-  
-  sub setProductionTimingParameters($$$$$$)
-  # ------ arguments: $refToScript $exp $refToInfo $partition $queue $dualFlag
-  {
-    my ($r, $z, $i, $p, $q, $f) = @_;
-    my ($expName, $fre) = ($z->name(), $z->fre());
-    # -------------------------------------------- extract timing parameters 
-    my $simTime    = $i->{simTimeMonths};
-    my $simRunTime = $i->{simRunTimeMinutes};
-    my $segTime    = $i->{segTimeMonths};
-    my $segRunTime = $i->{segRunTimeMinutes};
-    # ---------------------------------------------------------------------------- print original values
-    $fre->out(FREMsg::NOTE, "simTime = $simTime months, segTime = $segTime months");
-    $fre->out(FREMsg::NOTE, "simRunTime = $simRunTime minutes, segRunTime = $segRunTime minutes");
-    # --------------------------------------------------------------------------------- calculate major timing parameters
-    my $segPerSim = POSIX::ceil($simTime / $segTime);
-    $fre->out(FREMsg::NOTE, "segPerSim ($segPerSim) = simTime ($simTime) / segTime ($segTime) (rounded up)");
-    my $segPerJob = POSIX::floor($simRunTime / $segRunTime);
-    $fre->out(FREMsg::NOTE, "segPerJob ($segPerJob) = simRunTime ($simRunTime) / segRunTime ($segRunTime) (rounded down)");
-    my $jobPerSim = POSIX::ceil($segPerSim / $segPerJob);  
-    $fre->out(FREMsg::NOTE, "jobPerSim ($jobPerSim) = segPerSim ($segPerSim) / segPerJob ($segPerJob) (rounded up)");
-    # ------------------------------------------------------------------------------------------------ create months/days lists
-    my @ma = ($segTime) x $segPerJob;
-    my @da = ('0') x $segPerJob; 
-    my @ha = ('0') x $segPerJob; 
-    # ------------------------------------------------------------------------ calculate the segments number per post-processor call 
-    my $segmentsPerPPCall = 0;
-    if ($simTime >= 12)
-    {
-      if (12 % $segTime == 0)
-      {
-        $segmentsPerPPCall = 12 / $segTime;
-      }
-      else
-      {
-        $fre->out(FREMsg::WARNING, "The segment length ($segTime months) is not a divisor of 12 - the postprocessor won't be called");
-      }
-    }
-    else
-    {
-      $fre->out(FREMsg::WARNING, "The production run length ($simTime months) < 1 year - the postprocessor won't be called");
-    }
-    # ------------------------------------------------------------------------------ set timing parameters in the script
-    FRETemplate::setVariable($fre, $r, 'segmentsPerSimulation', $segPerSim);
-    FRETemplate::setVariable($fre, $r, 'segmentsPerPPCall', $segmentsPerPPCall);
-    FRETemplate::setVariable($fre, $r, 'segmentsPerJob', $segPerJob);
-    FRETemplate::setVariable($fre, $r, 'jobsPerSimulation', $jobPerSim);
-    FRETemplate::setList($fre, $r, 'monthslist', @ma);
-    FRETemplate::setList($fre, $r, 'dayslist', @da);
-    FRETemplate::setList($fre, $r, 'hourslist', @ha);
-    # --------------------------------------------------------------------- set scheduler resources
-    FRETemplate::setSchedulerResources($fre, $r, 'run', undef, $simRunTime * 60, $p, $q, $f);
-  }
-
-  sub setRegressionDirectories($$$%)
-  # ------ arguments: $script $exp $extension %options
-  # ------ setups state and output directories and writes them in the script
-  # ------ if the state directory exists and the "unique" option is on, then appends a number to the $extension
-  # ------ if the state directory exists and the "overwrite" option is on, then removes both directories and recreates the state one
-  # ------ return ($script, $extension, $status)
-  {
-
-    my ($s, $z, $x, %o) = @_;
-    
-    my ($fre, $sd, $od, $res) = ($z->fre(), $z->stateDir() . "/$x", $z->archiveDir() . "/$x", '');
-    
-    if (-d $sd)
-    {
-      if (-w $sd)
-      {
-	if ($o{unique})
-	{
-          {my $i = 1; while (-d "$sd$i") {$i++;} $sd .= $i; $od .= $i; $x .= $i;} 
-          $res = FREUtil::createDir("$sd/run");
-	}
-	elsif ($o{overwrite})
-	{
-          qx(rm -rf $sd/run $od/ascii $od/restart $od/history);
-          $res = FREUtil::createDir("$sd/run");
-	}
-	elsif (-d "$sd/run")
-	{
-          $fre->out(FREMsg::FATAL, "The state directory '$sd/run' exists, so you must specify either --overwrite or --unique");
-	  return (0, 0, FREDefaults::STATUS_FRE_RUN_GENERIC_PROBLEM);
-	}
-	else
-	{
-          $res = FREUtil::createDir("$sd/run");
-	}
-      }
-      else
-      {
-        $fre->out(FREMsg::FATAL, "The state directory '$sd' is not writable");
-      }
-    }
-    else
-    {
-      $res = FREUtil::createDir("$sd/run");
-    }
-
-    if ($res)
-    {
-      $fre->out(FREMsg::NOTE, "The state directory '$sd/run' has been created successfully");
-      FRETemplate::setVariable($fre, \$s, 'stateDir', "$sd/run");
-      FRETemplate::setVariable($fre, \$s, 'outputDir', $od);
-      return ($s, $x, FREDefaults::STATUS_OK);
-    }
-    else
-    {
-      $fre->out(FREMsg::FATAL, "Unable to create the state directory '$sd/$x/run'");
-      return (0, 0, FREDefaults::STATUS_FS_GENERIC_PROBLEM);
-    }
-
-  }
-
-  sub setProductionDirectories($$%)
-  # ------ arguments: $script $exp %options
-  # ------ setups state and output directories and writes them in the script
-  # ------ if the state directory exists and the "unique" option is on, then returns non-empty extension
-  # ------ if the state directory exists and the "overwrite" option is on, then removes both directories and recreates the state one
-  # ------ return ($script, $extension, $status)
-  {
-
-    my ($s, $z, %o) = @_;
-    
-    my ($fre, $sd, $od, $x, $res) = ($z->fre(), $z->stateDir(), $z->archiveDir(), '', '');
-    
-    if (-d $sd)
-    {
-      if (-w $sd)
-      {
-	if ($o{unique})
-	{
-          $fre->out(FREMsg::NOTE, "Performing unique production run, no post-processing for this run");
-          {my $i = 1; while (-d "$sd/$i") {$i++;} $sd .= "/$i"; $od .= "/$i"; $x = "__$i";}
-          $res = FREUtil::createDir("$sd/run");
-	}
-	elsif ($o{overwrite})
-	{
-	  qx(rm -rf $sd/run $od/ascii $od/restart $od/history $od/postProcess $od/analysis);
-          $res = FREUtil::createDir("$sd/run");
-	}
-	elsif ($o{extend})
-	{
-          $res = FREUtil::createDir("$sd/run");
-	}
-	elsif (-d "$sd/run")
-	{
-          $fre->out(FREMsg::FATAL, "The state directory '$sd/run' exists, so you must specify --extend, --overwrite or --unique");
-	  return (0, 0, FREDefaults::STATUS_FRE_RUN_GENERIC_PROBLEM);
-	}
-	else
-	{
-          $res = FREUtil::createDir("$sd/run");
-	}
-      }
-      else
-      {
-        $fre->out(FREMsg::FATAL, "The state directory '$sd' is not writable");
-      }
-    }
-    else
-    {
-      $res = FREUtil::createDir("$sd/run");
-    }
-    
-    
-    if ($res)
-    {
-      $fre->out(FREMsg::NOTE, "The state directory '$sd/run' has been created successfully");
-      FRETemplate::setVariable($fre, \$s, 'stateDir', "$sd/run");
-      FRETemplate::setVariable($fre, \$s, 'outputDir', $od);
-      return ($s, $x, FREDefaults::STATUS_OK);
-    }
-    else
-    {
-      $fre->out(FREMsg::FATAL, "Unable to create the state directory '$sd/run'");
-      return (0, 0, FREDefaults::STATUS_FS_GENERIC_PROBLEM);
-    }
-    
-  }
-  
-  sub setRegressionTimeStampOptions($$$)
-  # ------ arguments: $refToScript $exp $refToInfo
-  # ------ update timestamp options
-  {
-    my ($r, $z, $i) = @_;
-    my $fre = $z->fre();
-    my $calendarType = frerun::calendarType($i->{namelists});
-    my $timeStampOptions = ($calendarType eq 'no_calendar') ? '-f days' : (($i->{hoursDefined}) ? '-hf digital' : '-f digital');
-    FRETemplate::setList($fre, $r, 'timeStampOptions', $timeStampOptions);
-  }
-
-  sub setProductionTimeStampOptions($$$)
-  # ------ arguments: $refToScript $exp $refToInfo
-  # ------ update timestamp options
-  {
-    my ($r, $z, $i) = @_;
-    my $fre = $z->fre();
-    my $calendarType = frerun::calendarType($i->{namelists});
-    my $timeStampOptions = ($calendarType eq 'no_calendar') ? '-f days' : '-f digital';
-    FRETemplate::setList($fre, $r, 'timeStampOptions', $timeStampOptions);
-  }
-
-  sub setMPI($$$)
-  # ------ arguments: $refToScript $exp $refToMPIInfo
-  {
-    my ($r, $z, $i) = @_;
-    my ($fre, $coupler, $npes, $refNPes, $refNTds) = ($z->fre(), $i->{coupler}, $i->{npes}, $i->{npesList}, $i->{ntdsList});
-    FRETemplate::setSchedulerSize($fre, $r, 'run', $coupler, $npes, $refNPes, $refNTds);
-    FRETemplate::setRunCommand($fre, $r, $i);
-  }
-  
-  sub outputScriptJobId($$)
-  # ------ arguments: $fre $string
-  # ------ return $jobId
-  {
-    my ($fre, $s, $j) = @_;
-    my $submitOutputPattern = $fre->property('FRE.scheduler.submit.output.pattern');
-    return ($s =~ m/$submitOutputPattern/m) ? $1 : '';
-  }
-  
-  sub outputScriptStartTime($)
-  # ------ arguments: $fre
-  # ------ return start time option (for dual run)
-  {
-    my $fre = shift;
-    if (my $delay = $fre->property('FRE.scheduler.dual.delay'))
-    {
-      my $dateTime = Date::Manip::UnixDate(Date::Manip::DateCalc('now', "+$delay"), '%Y%m%d%H%M');
-      return $fre->propertyParameterized('FRE.scheduler.option.startTime', $dateTime);
-    }
-    else
-    {
-      return '';
-    }
-  }
-  
-  sub outputScriptExecuteOrSubmit($$$$%)
-  # ------ arguments: $refToScript $exp $scriptAbsName $stdoutAbsName %options
-  # ------ write $script to the $scriptAbsName file, chmod, and optionally execute or submit
-  # ------ return ($returnCode, $status)
-  {
-    my ($r, $z, $n, $o, %o) = @_;
-    my $fre = $z->fre();
-    my ($stdoutMainDir, $stdoutTmpDir) = (frerun::stdoutMainDir($z), File::Basename::dirname($o));
-    if (frerun::createDirectory($fre, $stdoutMainDir))
-    {
-      if (frerun::createDirectory($fre, $stdoutTmpDir))
-      {
-	my $scriptsDir = File::Basename::dirname($n);
-	if (frerun::createDirectory($fre, $scriptsDir))
-	{
-	  if (open my $scriptHandle, '>', $n)
-	  {
-	    print {$scriptHandle} ${$r};
-	    close $scriptHandle;
-	    if (chmod 0755, $n)
-	    {
-	      if ($o{execute})
-	      {
-		my $res = system("$n 2>&1 | tee $o");
-		if ($res == 0)
-		{
-		  return (1, FREDefaults::STATUS_OK);
-		}
-		else
-		{
-        	  $fre->out(FREMsg::FATAL, "The runscript '$n' failed! ($res)", "Please see the logfile '$o'...");
-		  return (0, FREDefaults::STATUS_FRE_RUN_EXECUTION_PROBLEM);
-		}
-	      }
-	      elsif ($o{submit}) 
-	      {
-		if ($fre->property('FRE.scheduler.enabled'))
-		{
-		  my $submitCommand = $fre->property('FRE.scheduler.submit.command');
-		  $submitCommand .= ' ' . frerun::outputScriptStartTime($fre) if $o{dual};
-		  $submitCommand .= ' ' . $n;
-		  $fre->out(FREMsg::NOTE, "Executing '$submitCommand'...");
-		  my $currentDir = Cwd::getcwd();
-		  if (chdir $stdoutTmpDir)
-		  {
-		    print qx($submitCommand);
-		    chdir $currentDir;
-	            return (1, FREDefaults::STATUS_OK);
-		  }
-		  else
-		  {
-		    $fre->out(FREMsg::FATAL, "Unable to switch to the stdout directory '$stdoutTmpDir'");
-		    return (0, FREDefaults::STATUS_FS_GENERIC_PROBLEM);
-		  }
-        	}
-		else
-		{
-                  $fre->out(FREMsg::WARNING, "The runscript '$n' can't be submitted as a batch job on this site");
-	          return (1, FREDefaults::STATUS_OK);
-		}
-	      }
-	      elsif ($o{'submit-chained'})
-	      {
-		if ($fre->property('FRE.scheduler.enabled'))
-		{
- 	          my ($submitChainCommand, $scriptBasename) = ($fre->property('FRE.scheduler.submit.command'), File::Basename::basename($n));
-		  $submitChainCommand .= ' ' . FRETemplate::schedulerResourcesAsString($fre, 'inputStager', $o{ncores}, $o{walltime} * 60, undef, undef, undef);
-		  $submitChainCommand .= ' ' . FRETemplate::schedulerNamesAsString($fre, "$scriptBasename.input.stager", $stdoutMainDir);
-		  $submitChainCommand .= ' ' . frerun::outputScriptStartTime($fre) if $o{dual};
-		  $submitChainCommand .= ' ' . '-v FRE_STAGE=CHAIN';
-		  $submitChainCommand .= ' ' .  $n;
-		  $fre->out(FREMsg::NOTE, "Executing '$submitChainCommand'...");
-		  my $currentDir = Cwd::getcwd();
-		  if (chdir $stdoutTmpDir)
-		  {
-		    print qx($submitChainCommand);
-		    chdir $currentDir;
-	            return (1, FREDefaults::STATUS_OK);
-		  }
-		  else
-		  {
-		    $fre->out(FREMsg::FATAL, "Unable to switch to the stdout directory '$stdoutTmpDir'");
-		    return (0, FREDefaults::STATUS_FS_GENERIC_PROBLEM);
-		  }
-        	}
-		else
-		{
-                  $fre->out(FREMsg::WARNING, "The runscript '$n' can't be submitted as a batch job on this site");
-	          return (1, FREDefaults::STATUS_OK);
-		}
-	      }
-	      else
-	      {
-		if ($fre->property('FRE.scheduler.enabled'))
-		{
-	          my $submit = $fre->property('FRE.scheduler.submit.command');
-	          print "TO SUBMIT => $submit $n\n";
-	          return (1, FREDefaults::STATUS_OK);
-		}
-		else
-		{
-                  print "The runscript '$n' is ready\n";
-	          return (1, FREDefaults::STATUS_OK);
-		}
-	      }
-	    }
-	    else
-	    {
-              $fre->out(FREMsg::FATAL, "Unable to change the script '$n' permissions");
-	      return (0, FREDefaults::STATUS_FS_GENERIC_PROBLEM);
-	    }
-	  }
-	  else
-	  {
-	    $fre->out(FREMsg::FATAL, "Unable to save the script '$n'");
-	    return (0, FREDefaults::STATUS_FS_GENERIC_PROBLEM);
-	  }
-	}
-	else
-	{
-	  $fre->out(FREMsg::FATAL, "Unable to create scripts directory '$scriptsDir'");
-	  return (0, FREDefaults::STATUS_FS_GENERIC_PROBLEM);
-	}
-      }
-      else
-      {
-	$fre->out(FREMsg::FATAL, "Unable to create temporary stdout directory '$stdoutTmpDir'");
-	return (0, FREDefaults::STATUS_FS_GENERIC_PROBLEM);
-      }
-    }
-    else
-    {
-      $fre->out(FREMsg::FATAL, "Unable to create main stdout directory '$stdoutMainDir'");
-      return (0, FREDefaults::STATUS_FS_GENERIC_PROBLEM);
-    }
-  }
-  
-  sub processRegression($$%)
-  # ------ arguments: $exp $label %options
-  {
-    my ($z, $l, %o) = @_;
-    my ($expName, $fre) = ($z->name(), $z->fre());
-    $fre->out(FREMsg::NOTE, "Creating runscripts for the regression test '$l'...");
-    my ($runScript, $status) = frerun::init($z, %o);
-    if ($runScript)
-    {
-      my @dataSets = $z->extractDatasets();
-      if (FRETemplate::setInputDatasets($fre, \$runScript, \@dataSets))
-      {
-	frerun::setInputInitialConditions(\$runScript, $z);
-	frerun::setInputGridSpecification(\$runScript, $z);
- 	frerun::setAllShellCommands(\$runScript, $z);
-	FRETemplate::setVersionInfo($fre, \$runScript, $0, $expName, %o);	    
-	FRETemplate::setSchedulerAccount($fre, \$runScript, $o{windfall});
-        if (my $regInfo = $z->extractRegressionRunInfo($l, $o{ht}))
-        {
-	  my @runNos = keys %{$regInfo};
-	  my ($ok, $runsNmb) = (1, scalar(@runNos));
-	  foreach my $runNo (sort @runNos)
-	  {
-	    my $runInfo = $regInfo->{$runNo};
-	    my $runInx = ($runsNmb > 1) ? "[$runInfo->{number}]" : ""; 
-            $fre->out(FREMsg::NOTE, "Creating a regression runscript '$l$runInx' for the experiment '$expName'...");
-	    (my $rtScript, my $extension, $status) = frerun::setRegressionDirectories($runScript, $z, $runInfo->{postfix}, %o);
-	    if ($rtScript)
-	    {
-	      (my $rc, $status) = frerun::setTables(\$rtScript, $z, $runInfo->{namelists});
-	      if ($rc)
-	      {
-		frerun::setMPI(\$rtScript, $z, $runInfo->{mpiInfo});
-		frerun::setRegressionTimeStampOptions(\$rtScript, $z, $runInfo);
-		frerun::setRegressionTimingParameters(\$rtScript, $z, $runInfo, $o{partition}, $o{queue}, $o{dual});
-		FRETemplate::setNamelists($fre, \$rtScript, $runInfo->{namelists});
-		my $scriptName = frerun::regressionRunScriptName($z, $extension);
-        	my $stdoutName = frerun::stdoutName($z, $scriptName);
-		my $stdoutTmpDir = File::Basename::dirname($stdoutName);
-        	FRETemplate::setVariable($fre, \$rtScript, 'scriptName', $scriptName);
-		FRETemplate::setVariable($fre, \$rtScript, 'stdoutTmpDir', $stdoutTmpDir);
-        	FRETemplate::setSchedulerNames($fre, \$rtScript, File::Basename::basename($scriptName), $stdoutTmpDir);
-        FRETemplate::setFlag($fre, \$rtScript, 'flagOutputFillGrid', (are_history_files_masked($fre, $runInfo) ? 'On' : 'Off'));
-        	($rc, $status) = frerun::outputScriptExecuteOrSubmit(\$rtScript, $z, $scriptName, $stdoutName, %o);
-		if ($rc)
-		{
-	          $fre->out(FREMsg::NOTE, "A regression runscript '$l$runInx' for the experiment '$expName' has been created successfully");
-		}
-		else
-		{
-		  $fre->out(FREMsg::FATAL, "Unable to create (or run) a regression runscript '$l$runInx' for the experiment '$expName'");
-		  $ok = 0;
-		  last;
-		}
-	      }
-	      else
-	      {
-		$fre->out(FREMsg::FATAL, "Unable to setup tables for regression runscript '$l$runInx' in the experiment '$expName'");
-		$ok = 0;
-		last;
-	      }
-	    }
-	    else
-	    {
-	      $fre->out(FREMsg::FATAL, "Unable to setup output directories for regression runscript '$l$runInx' in the experiment '$expName'");
-	      $ok = 0;
-	      last;
-	    }
-	  }
-	  if ($ok)
-	  {
-            $fre->out(FREMsg::NOTE, "Regression test '$l' in the experiment '$expName' has been processed successfully");
-	    return (1, FREDefaults::STATUS_OK);
-	  }
-	  else
-	  {
-            $fre->out(FREMsg::FATAL, "Unable to process regression test '$l' in the experiment '$expName'");
-	    return (0, $status);
-	  }
+        my ( $fre, $d ) = @_;
+        if ( -d $d ) {
+            if ( -w $d ) {
+                return 1;
+            }
+            else {
+                $fre->out( FREMsg::FATAL, "The directory '$d' exists, but it's not writable" );
+                return 0;
+            }
         }
-	else
-	{
-	  $fre->out(FREMsg::FATAL, "Unable to extract parameters for the regression test '$l' in the experiment '$expName'");
-	  return (0, FREDefaults::STATUS_FRE_RUN_GENERIC_PROBLEM); 
-	}
-      }
-      else
-      {
-        $fre->out(FREMsg::FATAL, "Unable to setup input data for the experiment '$expName'");
-	return (0, FREDefaults::STATUS_FRE_RUN_GENERIC_PROBLEM);
-      }
+        else {
+            return FREUtil::createDir($d);
+        }
     }
-    else
-    {
-      $fre->out(FREMsg::FATAL, "Unable to initialize the experiment '$expName'");
-      return (0, $status);
-    }
-  }
-  
-  sub processProduction($%)
-  # ------ arguments: $exp %options 
-  {
-    my ($z, %o) = @_;
-    my ($expName, $fre) = ($z->name(), $z->fre());
-    $fre->out(FREMsg::NOTE, "Creating a runcript for the experiment '$expName'...");
-    my ($runScript, $status) = frerun::init($z, %o);
-    if ($runScript)
-    {
-      my @dataSets = $z->extractDatasets();
-      if (FRETemplate::setInputDatasets($fre, \$runScript, \@dataSets))
-      {
-	frerun::setInputInitialConditions(\$runScript, $z);
-	frerun::setInputGridSpecification(\$runScript, $z);
- 	frerun::setAllShellCommands(\$runScript, $z);
-	FRETemplate::setVersionInfo($fre, \$runScript, $0, $expName, %o);	    
-	FRETemplate::setSchedulerAccount($fre, \$runScript, $o{windfall});
-        if (my $prdInfo = $z->extractProductionRunInfo($o{ht}))
-        {
-	  ($runScript, my $extension, $status) = frerun::setProductionDirectories($runScript, $z, %o);
-	  if ($runScript)
-	  {
-            (my $rc, $status) = frerun::setTables(\$runScript, $z, $prdInfo->{namelists});
-	    if ($rc)
-	    {
-	      frerun::setMPI(\$runScript, $z, $prdInfo->{mpiInfo});
-	      frerun::setProductionTimeStampOptions(\$runScript, $z, $prdInfo);
-	      frerun::setProductionTimingParameters(\$runScript, $z, $prdInfo, $o{partition}, $o{queue}, $o{dual});
-	      FRETemplate::setNamelists($fre, \$runScript, $prdInfo->{namelists});
-	      my $scriptName = frerun::productionRunScriptName($z, $extension);
-              my $stdoutName = frerun::stdoutName($z, $scriptName);
-	      my $stdoutTmpDir = File::Basename::dirname($stdoutName);
-              FRETemplate::setVariable($fre, \$runScript, 'scriptName', $scriptName);
-	      FRETemplate::setVariable($fre, \$runScript, 'stdoutTmpDir', $stdoutTmpDir);
-              FRETemplate::setSchedulerNames($fre, \$runScript, File::Basename::basename($scriptName), $stdoutTmpDir);
-          FRETemplate::setFlag($fre, \$runScript, 'flagOutputFillGrid', (are_history_files_masked($fre, $prdInfo) ? 'On' : 'Off'));
-              ($rc, $status) = frerun::outputScriptExecuteOrSubmit(\$runScript, $z, $scriptName, $stdoutName, %o);
-	      if ($rc)
-	      {
-		return (1, FREDefaults::STATUS_OK);
-	      }
-	      else
-	      {
-		$fre->out(FREMsg::FATAL, "Unable to create (or run) a runscript for the experiment '$expName'");
-		return (0, $status);
-	      }
-	    }
-	    else
-	    {
-              $fre->out(FREMsg::FATAL, "Unable to setup tables for the experiment '$expName'");
-	      return (0, FREDefaults::STATUS_FRE_RUN_GENERIC_PROBLEM);
-	    }
-	  }
-	  else
-	  {
-	    $fre->out(FREMsg::FATAL, "Unable to setup output directories for the experiment '$expName'");
-	    return (0, $status);
-	  }
-	}
-	else
-	{
-	  $fre->out(FREMsg::FATAL, "Unable to extract production parameters for the experiment '$expName'");
-	  return (0, FREDefaults::STATUS_FRE_RUN_GENERIC_PROBLEM); 
-	}
-      }
-      else
-      {
-        $fre->out(FREMsg::FATAL, "Unable to setup input data for the experiment '$expName'");
-	return (0, FREDefaults::STATUS_FRE_RUN_GENERIC_PROBLEM);
-      }
-    }
-    else
-    {
-      $fre->out(FREMsg::FATAL, "Unable to initialize the experiment '$expName'");
-      return (0, $status);
-    }
-  }
 
-  sub skipExp($)
-  # ------ arguments: $exp 
-  {
-    my $z = shift;
-    my ($expName, $fre) = ($z->name(), $z->fre());
-    $fre->out(FREMsg::FATAL, "Skipping the experiment '$expName'...");
-  }
+    sub getTemplate($$)
 
-  # are_history_files_masked -- tests whether history files contain masked grid info
-  # Currently, only tests whether an ocean mask is used.
-  sub are_history_files_masked($$)
-  # ------ arguments: $fre, $runInfo
-  {
-    my ($fre, $info) = @_;
-    my @components = split ';', $fre->property('FRE.mpi.component.names');
-    my $ocean_index;
-    for my $i (0 .. $#components) {
-        $ocean_index = $i if $components[$i] eq 'ocn';
+        # ------ arguments: $fre $filename
+        # ------ returns a script template from the site directory
+        # ------ return ($sript, $status)
+    {
+        my ( $fre, $n ) = @_;
+        my $pathname = $fre->siteDir() . '/' . $n;
+        if ( open my $templateHandle, '<', $pathname ) {
+            $/ = undef;
+            my $s = <$templateHandle>;
+            $s =~ s/^# ?$//mg;
+            $s =~ s/^# .*$//mg;
+            $s =~ s/\n{2,}/\n\n/sg;
+            close $templateHandle;
+            return ( $s, FREDefaults::STATUS_OK );
+        }
+        else {
+            $fre->out( FREMsg::FATAL, "The main runscript template '$pathname' isn't found" );
+            return ( 0, FREDefaults::STATUS_FRE_RUN_NO_TEMPLATE );
+        }
     }
-    # mask_table="MOM_mask_table" means no mask :)
-    if (my $ocean_mask = $info->{mpiInfo}->{maskTableList}->[$ocean_index]) {
-        return $ocean_mask eq 'MOM_mask_table' ? 0 : 1;
+
+    sub execName($)
+
+        # ------ arguments: $exp
+    {
+        my $z = shift;
+        my ( $value, $exp ) = $z->extractExecutable();
+        if ($value) {
+            return $value;
+        }
+        elsif ($exp) {
+            return $exp->executable();
+        }
+        else {
+            return undef;
+        }
     }
-    else {
-        return 0;
+
+    sub getRemoteDirs($$$)
+
+        # ------ arguments: $exp $platform $user
+    {
+        my ( $z, $p, $u ) = @_;
+        my ( $fre,    $expName ) = ( $z->fre(),      $z->name() );
+        my ( $target, $xmlfile ) = ( $fre->target(), $fre->configFileAbsPathName() );
+        my $cmd
+            = "frelist --xmlfile=$xmlfile --platform=$p --target=$target --novalidate --directory=stdout,stmp,archive,include $expName";
+        $cmd .= " --remote-user=$u" if $u;
+        my $res = qx($cmd);
+        if ( $? == 0 ) {
+            my @res = ();
+            foreach my $dir ( split( /\n/, $res ) ) {
+                $dir =~ s/^\w+: //;
+                push @res, $dir;
+            }
+            return @res;
+        }
+        else {
+            return ();
+        }
+    } ## end sub getRemoteDirs($$$)
+
+    sub getRemotePlatformCsh($$)
+
+        # ------ arguments: $exp $platform
+    {
+        my ( $z, $p ) = @_;
+        my $fre = $z->fre();
+        my ( $target, $xmlfile ) = ( $fre->target(), $fre->configFileAbsPathName() );
+        my $cmd
+            = "frelist --xmlfile=$xmlfile --platform=$p --target=$target --novalidate --platform-csh";
+        my $res = qx($cmd);
+        if ( $? == 0 ) {
+            $res =~ s/^\s*//mg;
+            $res =~ s/ +/ /mg;
+            $res =~ s/\$/\\\$/mg;
+            $res =~ s/\t+/\t/mg;
+            $res =~ s/\n+/\n/sg;
+            $res =~ s/(?: |\t)/+/sg;
+            $res =~ s/\n/:/sg;
+            $res = $z->placeholdersExpand($res);
+            return $res;
+        }
+        else {
+            return '';
+        }
+    } ## end sub getRemotePlatformCsh($$)
+
+    sub init($%)
+
+        # ------ arguments: $exp %options
+        # ------ return ($sript, $status)
+    {
+
+        my ( $z, %o ) = @_;
+        my $fre = $z->fre();
+
+        my ( $s, $status ) = frerun::getTemplate( $fre, frerun::RUNSCRIPT_TEMPLATE_MAIN );
+        if ($s) {
+
+            # ------------------------------------- executable
+
+            my $execName = frerun::execName($z);
+            if ($execName) {
+                if ( -f $execName ) {
+                    if ( -x $execName ) {
+                        $fre->out( FREMsg::NOTE, "Using executable '$execName'..." );
+                    }
+                    else {
+                        $fre->out( FREMsg::FATAL,
+                            "Your executable '$execName' exists, but you don't have permissions to run it"
+                        );
+                        return ( 0, FREDefaults::STATUS_FS_PERMISSION_PROBLEM );
+                    }
+                }
+                else {
+                    $fre->out( FREMsg::WARNING, "Your executable '$execName' doesn't exist" );
+                }
+            }
+            else {
+                $fre->out( FREMsg::FATAL, "Can't determine the executable pathname" );
+                return ( 0, FREDefaults::STATUS_FRE_GENERIC_PROBLEM );
+            }
+
+# ------------------------------------------------------------------------ output data staging and transfer
+
+            my @flagOutputStagingTypes       = split( /;/, $fre->property('FRE.output.staging') );
+            my $flagOutputStagingTypeDefault = $flagOutputStagingTypes[0];
+            my $flagOutputStagingType        = $o{'output-staging'}
+                || $z->extractValue('postProcess/@combine');
+            my $flagOutputTransfer = ( $o{transfer} ) ? 'On' : 'Off';
+
+            if ($flagOutputStagingType) {
+                if ( scalar( grep( $_ eq $flagOutputStagingType, @flagOutputStagingTypes ) ) > 0 ) {
+                    $fre->out( FREMsg::NOTE,
+                        "The '$flagOutputStagingType' output staging type will be used..." );
+                }
+                else {
+                    $fre->out( FREMsg::WARNING,
+                        "The '$flagOutputStagingType' output staging type isn't supported at this site - using the '$flagOutputStagingTypeDefault' one..."
+                    );
+                    $flagOutputStagingType = $flagOutputStagingTypeDefault;
+                }
+            }
+            else {
+                $fre->out( FREMsg::WARNING,
+                    "The output staging type isn't defined - using the '$flagOutputStagingTypeDefault' one..."
+                );
+                $flagOutputStagingType = $flagOutputStagingTypeDefault;
+            }
+
+            my $roots
+                = $fre->property(
+                "FRE.output.staging.$flagOutputStagingType.transfer$flagOutputTransfer.archive.roots"
+                );
+            if ($roots) {
+                my ( $archiveDir, $rootsForMatch ) = ( $z->archiveDir(), $roots );
+                $rootsForMatch =~ s/\$/\\\$/g;
+                if (scalar( grep( "$archiveDir/" =~ m/^$_\//, split( ';', $rootsForMatch ) ) )
+                    == 0 ) {
+                    my ( $msg, @roots ) = ( '', split( ';', $roots ) );
+                    if ( scalar(@roots) > 1 ) {
+                        my $rootsForOut = join( ', ', @roots );
+                        $msg = "one of ($rootsForOut) filesystems";
+                    }
+                    else {
+                        $msg = "the '$roots[0]' filesystem";
+                    }
+                    my $flagOutputTransferMsg
+                        = ( $flagOutputTransfer eq 'On' ) ? '--transfer' : '--notransfer';
+                    $fre->out( FREMsg::FATAL,
+                        "Combination of options --output-staging=$flagOutputStagingType and $flagOutputTransferMsg requires the archive directory to be on $msg"
+                    );
+                    return ( 0, FREDefaults::STATUS_FS_GENERIC_PROBLEM );
+                }
+            } ## end if ($roots)
+            else {
+                $fre->out( FREMsg::FATAL,
+                    "The 'FRE.output.staging.$flagOutputStagingType.transfer$flagOutputTransfer.archive.roots' external property is absent or empty!!!"
+                );
+                return ( 0, FREDefaults::STATUS_FS_GENERIC_PROBLEM );
+            }
+
+            if ( $flagOutputTransfer eq 'On' ) {
+                if ( scalar(@flagOutputStagingTypes) == 1 or $flagOutputStagingType ne 'online' ) {
+                    $fre->out( FREMsg::NOTE,
+                        "The model output will be transferred to the post-processing site..." );
+                }
+                else {
+                    $flagOutputTransfer = 'Off';
+                    $fre->out( FREMsg::WARNING,
+                        "You can use the --transfer option only when the staging type isn't online - ignored..."
+                    );
+                }
+            }
+
+# --------------------------------------------------------------------------------------- history combining
+
+            my $flagOutputCombineHistory = ( $o{'combine-history'} ) ? 'On' : 'Off';
+            if ( $flagOutputCombineHistory eq 'Off' ) {
+                $fre->out( FREMsg::NOTE, "The history won't be combined..." );
+            }
+
+# ---------------------------------------------------------------------------------------- combiner options
+
+            # For information about combiner flags, see the combiner help menu with `mppncombine -h'
+
+            my $mppnccombineOptsDefault = "'-64 -h 16384 -m'";
+            my $mppnccombineOptsRestart = $mppnccombineOptsDefault;
+            my $mppnccombineOptsHistory = $mppnccombineOptsDefault;
+
+# If hidden combiner string specified by --mppnccombine-opts flag found, use it. (This overrides any default behavior)
+            if ( exists $o{'mppnccombine-opts'} ) {
+                $mppnccombineOptsHistory = "'$o{'mppnccombine-opts'}'";
+            }
+
+# If combiner compression flag present, use a default compression setting of deflation level 2 and shuffling turned on
+            elsif ( exists $o{'nc4-compress-history'} ) {
+                $mppnccombineOptsHistory = "'-n4 -d 2 -s -h 16384 -m'";
+            }
+
+ # -------------------------------------------------------------------------------- output archiving
+
+            my $flagOutputArchive = ( $o{archive} ) ? 'On' : 'Off';
+            if ( $flagOutputArchive eq 'Off' ) {
+                if ( $o{regression} ) {
+                    $fre->out( FREMsg::NOTE,
+                        "The model output will be kept in the disk cache only..." );
+                }
+                else {
+                    $flagOutputArchive = 'On';
+                    $fre->out( FREMsg::WARNING,
+                        "You can use the --noarchive option for regression tests only - ignored..."
+                    );
+                }
+            }
+
+# ------------------------------------------------------------------------------ output post-processing
+
+            my $flagOutputPostProcess = ( !$o{regression} && !$o{unique} ) ? 'On' : 'Off';
+
+# ------------------------------------------------------------------------- getFmsData and its parameters
+
+            my @getFmsData = ( $fre->getFmsData() || '$freCommandsHomeDir/bin/get_fms_data' );
+            my $fmsRelease = $fre->fmsRelease();
+            push @getFmsData, ( '-r', $fmsRelease ) if $fmsRelease;
+
+# -------------------------------------------------------------------------- remote directories for transfer
+
+            my ( $remotePlatform, $remoteUser, @remoteDirs ) = ( '', '', '', '', '' );
+            if ( $flagOutputTransfer eq 'On' ) {
+                ( $remotePlatform, $remoteUser )
+                    = ( FREPlatforms::siteReplace( $fre->platform(), 'gfdl' ), $o{'remote-user'} );
+                @remoteDirs = frerun::getRemoteDirs( $z, $remotePlatform, $remoteUser );
+                if ( scalar(@remoteDirs) > 0 ) {
+                    $fre->out( FREMsg::NOTE,
+                        "Remote directories to be used:",
+                        "stdout  = $remoteDirs[0]",
+                        "stmp    = $remoteDirs[1]",
+                        "archive = $remoteDirs[2]",
+                        "include = $remoteDirs[3]"
+                    );
+                }
+                else {
+                    $fre->out( FREMsg::FATAL,
+                        "Unable to determine remote directories - please check your platform '$remotePlatform'"
+                    );
+                    return ( 0, FREDefaults::STATUS_FS_GENERIC_PROBLEM );
+                }
+            } ## end if ( $flagOutputTransfer...)
+
+# --------------------------------------------------------------------- various remote settings for post-processing
+
+            my ( $remoteModuleFilesDir, $remoteVersion, $remotePlatformCsh ) = ( '', '', '', '' );
+            if ( $flagOutputTransfer eq 'On' && $flagOutputPostProcess eq 'On' ) {
+                $remoteModuleFilesDir = $fre->property('FRE.tool.modules.use.remote');
+                $remotePlatformCsh = frerun::getRemotePlatformCsh( $z, $remotePlatform );
+                if ($remotePlatformCsh) {
+                    $fre->out( FREMsg::NOTE,
+                        "Remote platform csh to be used - '$remotePlatformCsh'" );
+
+           # set remote FRE version, currently only used in the runscript to send the pp.starter job
+           # to pancylc queue if /chaco/
+                    $remotePlatformCsh =~ m|fre/([\w-]+)|;
+                    $remoteVersion = $1 if $1;
+                    if ($remoteVersion) {
+                        $fre->out( FREMsg::NOTE, "Remote FRE version - $remoteVersion" );
+                    }
+                    else {
+                        $fre->out( FREMsg::NOTE, "Unable to determine remote FRE version" );
+                    }
+                }
+                else {
+                    $fre->out( FREMsg::FATAL,
+                        "Unable to determine remote platform csh - please check your platform '$remotePlatform'"
+                    );
+                    return ( 0, FREDefaults::STATUS_FS_GENERIC_PROBLEM );
+                }
+            } ## end if ( $flagOutputTransfer...)
+
+            # ------------------------------------------------------------ verify include directory
+            my ( $includeDir, $includeDirRemote ) = ( $z->includeDir, $remoteDirs[3] );
+            if ( !-e $includeDir ) {
+                $fre->out( FREMsg::NOTE, sprintf "Include directory '$includeDir' doesn't exist" );
+                $includeDir = $includeDirRemote = "";
+            }
+            elsif ( -d $includeDir ) {
+                chomp( my $du = `du -smL $includeDir 2> /dev/null` );
+                my $size = ( split ' ', $du )[0];
+                if ( $size <= 300 ) {
+                    $fre->out( FREMsg::NOTE, "Size of include directory '$includeDir': $size MB" );
+                }
+                else {
+                    $fre->out( FREMsg::FATAL,
+                        "Size of include directory '$includeDir' ($size MB) exceeds 300MB limit; please reduce the directory's size"
+                    );
+                    return ( 0, FREDefaults::STATUS_FS_GENERIC_PROBLEM );
+                }
+            }
+            else {
+                $fre->out( FREMsg::FATAL,
+                    sprintf "Include directory '$includeDir' exists, but isn't a directory" );
+                return ( 0, FREDefaults::STATUS_FS_GENERIC_PROBLEM );
+            }
+
+# ------------------------------------------------------------------------- setting constants/variables
+
+            FRETemplate::setFlag( $fre, \$s, 'flagRunType',
+                ( $o{regression} ) ? 'Regression' : 'Production' );
+            FRETemplate::setFlag( $fre, \$s, 'flagCheckSum',     ( $o{checksum} ) ? 'On' : 'Off' );
+            FRETemplate::setFlag( $fre, \$s, 'flagWorkDirClean', ( $o{free} )     ? 'On' : 'Off' );
+            FRETemplate::setFlag( $fre, \$s, 'flagOutputType',
+                ( $o{extend} )
+                ? 'Extend'
+                : ( ( $o{overwrite} ) ? 'Overwrite' : ( ( $o{unique} ) ? 'Unique' : 'Initial' ) ) );
+            FRETemplate::setFlag( $fre, \$s, 'flagOutputFormat',
+                ( FRETargets::containsHDF5( $fre->target() ) ) ? 'HDF5' : '64Bit' );
+            FRETemplate::setFlag( $fre, \$s, 'flagOutputStagingType',
+                ucfirst $flagOutputStagingType );
+            FRETemplate::setFlag( $fre, \$s, 'flagOutputCacheHistory',
+                ( $o{'cache-history'} ) ? 'On' : 'Off' );
+            FRETemplate::setFlag( $fre, \$s, 'flagOutputCombineHistory',
+                $flagOutputCombineHistory );
+            FRETemplate::setFlag( $fre, \$s, 'flagOutputCompressAscii',
+                ( $o{compress} =~ m/ascii/ ) ? 'On' : 'Off' );
+            FRETemplate::setFlag( $fre, \$s, 'flagOutputCompressRestart',
+                ( $o{compress} =~ m/restart/ ) ? 'On' : 'Off' );
+            FRETemplate::setFlag( $fre, \$s, 'flagOutputCompressHistory',
+                ( $o{compress} =~ m/history/ ) ? 'On' : 'Off' );
+            FRETemplate::setFlag( $fre, \$s, 'flagOutputArchive',     $flagOutputArchive );
+            FRETemplate::setFlag( $fre, \$s, 'flagOutputPostProcess', $flagOutputPostProcess );
+            FRETemplate::setFlag( $fre, \$s, 'flagOutputXfer',        $flagOutputTransfer );
+            FRETemplate::setFlag( $fre, \$s, 'flagOutputCheck', ( $o{check} )   ? 'On' : 'Off' );
+            FRETemplate::setFlag( $fre, \$s, 'flagVerbosity',   ( $o{verbose} ) ? 'On' : 'Off' );
+
+            FRETemplate::setVariable( $fre, \$s, 'modulesHomeDir',
+                $fre->property('FRE.tool.modules.home') );
+            FRETemplate::setVariable( $fre, \$s, 'freCommandsModuleFilesDir',
+                $ENV{FRE_SYSTEM_MODULEFILES_DIR} || $fre->property('FRE.tool.modules.use') );
+            FRETemplate::setVariable( $fre, \$s, 'freCommandsVersion', $ENV{FRE_COMMANDS_VERSION} );
+
+            FRETemplate::setVariable( $fre, \$s, 'projectInit', $fre->project() );
+            FRETemplate::setVariable( $fre, \$s, 'windfallFlagInit', ( $o{windfall} ) ? '1' : '0' );
+            FRETemplate::setVariable( $fre, \$s, 'partitionInit', $o{partition} );
+            FRETemplate::setVariable( $fre, \$s, 'queueInit',     $o{queue} );
+
+            FRETemplate::setVariable( $fre, \$s, 'platform',   $fre->platform() );
+            FRETemplate::setVariable( $fre, \$s, 'target',     $fre->target() );
+            FRETemplate::setVariable( $fre, \$s, 'name',       $z->name() );
+            FRETemplate::setVariable( $fre, \$s, 'rtsxml',     $fre->configFileAbsPathName() );
+            FRETemplate::setVariable( $fre, \$s, 'stdoutDir',  frerun::stdoutMainDir($z) );
+            FRETemplate::setVariable( $fre, \$s, 'workDir',    $z->workDir() );
+            FRETemplate::setVariable( $fre, \$s, 'ptmpDir',    $z->ptmpDir() );
+            FRETemplate::setVariable( $fre, \$s, 'archiveDir', $z->archiveDir() );
+            FRETemplate::setVariable( $fre, \$s, 'executable', $execName );
+            FRETemplate::setVariable( $fre, \$s, 'mailMode',   $fre->mailMode() );
+            FRETemplate::setVariable( $fre, \$s, 'includeDir', $includeDir );
+
+            FRETemplate::setVariable( $fre, \$s, 'platformRemote',   "'$remotePlatform'" );
+            FRETemplate::setVariable( $fre, \$s, 'userRemote',       "'$remoteUser'" );
+            FRETemplate::setVariable( $fre, \$s, 'stdoutDirRemote',  "'$remoteDirs[0]'" );
+            FRETemplate::setVariable( $fre, \$s, 'stmpDirRemote',    "'$remoteDirs[1]'" );
+            FRETemplate::setVariable( $fre, \$s, 'archiveDirRemote', "'$remoteDirs[2]'" );
+            FRETemplate::setVariable( $fre, \$s, 'includeDirRemote', $includeDirRemote );
+            FRETemplate::setVariable( $fre, \$s, 'freCommandsModuleFilesDirRemote',
+                "'$remoteModuleFilesDir'" );
+            FRETemplate::setVariable( $fre, \$s, 'freCommandsVersionRemote', "'$remoteVersion'" );
+            FRETemplate::setVariable( $fre, \$s, 'envRemote', "'$remotePlatformCsh'" );
+
+            FRETemplate::setVariable( $fre, \$s, 'outputStagerPartition',
+                $fre->property('FRE.scheduler.outputStager.partition') );
+            FRETemplate::setVariable( $fre, \$s, 'outputStagerQueue',
+                $fre->property('FRE.scheduler.outputStager.queue') );
+            FRETemplate::setVariable( $fre, \$s, 'outputStagerCoreSpec',
+                $fre->property('FRE.scheduler.outputStager.coreSpec') );
+            FRETemplate::setVariable( $fre, \$s, 'outputStagerRuntimeAscii',
+                       $fre->property('FRE.scheduler.outputStager.runtime.ascii')
+                    || $fre->property('FRE.scheduler.runtime.max') );
+            FRETemplate::setVariable( $fre, \$s, 'outputStagerRuntimeRestart',
+                       $fre->property('FRE.scheduler.outputStager.runtime.restart')
+                    || $fre->property('FRE.scheduler.runtime.max') );
+            FRETemplate::setVariable( $fre, \$s, 'outputStagerRuntimeHistory',
+                       $fre->property('FRE.scheduler.outputStager.runtime.history')
+                    || $fre->property('FRE.scheduler.runtime.max') );
+
+            FRETemplate::setVariable( $fre, \$s, 'outputStagerSavePartition',
+                $fre->property('FRE.scheduler.outputStager.save.partition') );
+            FRETemplate::setVariable( $fre, \$s, 'outputStagerSaveQueue',
+                $fre->property('FRE.scheduler.outputStager.save.queue') );
+            FRETemplate::setVariable( $fre, \$s, 'outputStagerSaveCoreSpec',
+                $fre->property('FRE.scheduler.outputStager.save.coreSpec') );
+            FRETemplate::setVariable( $fre, \$s, 'outputStagerSaveRuntimeAscii',
+                       $fre->property('FRE.scheduler.outputStager.save.runtime.ascii')
+                    || $fre->property('FRE.scheduler.runtime.max') );
+            FRETemplate::setVariable( $fre, \$s, 'outputStagerSaveRuntimeRestart',
+                       $fre->property('FRE.scheduler.outputStager.save.runtime.restart')
+                    || $fre->property('FRE.scheduler.runtime.max') );
+            FRETemplate::setVariable( $fre, \$s, 'outputStagerSaveRuntimeHistory',
+                       $fre->property('FRE.scheduler.outputStager.save.runtime.history')
+                    || $fre->property('FRE.scheduler.runtime.max') );
+            FRETemplate::setVariable( $fre, \$s, 'outputStagerSaveRetries',
+                $fre->property('FRE.scheduler.outputStager.save.retries') );
+
+            FRETemplate::setVariable( $fre, \$s, 'outputStagerXferPartition',
+                $fre->property('FRE.scheduler.outputStager.transfer.partition') );
+            FRETemplate::setVariable( $fre, \$s, 'outputStagerXferQueue',
+                $fre->property('FRE.scheduler.outputStager.transfer.queue') );
+            FRETemplate::setVariable( $fre, \$s, 'outputStagerXferCoreSpec',
+                $fre->property('FRE.scheduler.outputStager.transfer.coreSpec') );
+            FRETemplate::setVariable( $fre, \$s, 'outputStagerXferRuntimeAscii',
+                       $fre->property('FRE.scheduler.outputStager.transfer.runtime.ascii')
+                    || $fre->property('FRE.scheduler.runtime.max') );
+            FRETemplate::setVariable( $fre, \$s, 'outputStagerXferRuntimeRestart',
+                       $fre->property('FRE.scheduler.outputStager.transfer.runtime.restart')
+                    || $fre->property('FRE.scheduler.runtime.max') );
+            FRETemplate::setVariable( $fre, \$s, 'outputStagerXferRuntimeHistory',
+                       $fre->property('FRE.scheduler.outputStager.transfer.runtime.history')
+                    || $fre->property('FRE.scheduler.runtime.max') );
+            FRETemplate::setVariable( $fre, \$s, 'outputStagerXferRetries',
+                $fre->property('FRE.scheduler.outputStager.transfer.retries') );
+
+            FRETemplate::setVariable( $fre, \$s, 'workDirCleanerPartition',
+                $fre->property('FRE.scheduler.workDirCleaner.partition') );
+            FRETemplate::setVariable( $fre, \$s, 'workDirCleanerQueue',
+                $fre->property('FRE.scheduler.workDirCleaner.queue') );
+            FRETemplate::setVariable( $fre, \$s, 'workDirCleanerCoreSpec',
+                $fre->property('FRE.scheduler.workDirCleaner.coreSpec') );
+            FRETemplate::setVariable( $fre, \$s, 'workDirCleanerRuntime',
+                       $fre->property('FRE.scheduler.workDirCleaner.runtime')
+                    || $fre->property('FRE.scheduler.runtime.max') );
+
+            FRETemplate::setVariable( $fre, \$s, 'finisherPartition',
+                $fre->property('FRE.scheduler.finisher.partition') );
+            FRETemplate::setVariable( $fre, \$s, 'finisherQueue',
+                $fre->property('FRE.scheduler.finisher.queue') );
+            FRETemplate::setVariable( $fre, \$s, 'finisherCoreSpec',
+                $fre->property('FRE.scheduler.finisher.coreSpec') );
+            FRETemplate::setVariable( $fre, \$s, 'finisherRuntime',
+                       $fre->property('FRE.scheduler.finisher.runtime')
+                    || $fre->property('FRE.scheduler.runtime.max') );
+
+            FRETemplate::setVariable( $fre, \$s, 'ppStarterPartition',
+                $fre->property('FRE.scheduler.ppStarter.partition') );
+            FRETemplate::setVariable( $fre, \$s, 'ppStarterCoreSpec',
+                $fre->property('FRE.scheduler.ppStarter.coreSpec') );
+            FRETemplate::setVariable(
+                $fre, \$s,
+                'ppStarterCombineOffLargeOffQueue',
+                $fre->property('FRE.scheduler.ppStarter.combineOff.largeOff.queue')
+            );
+            FRETemplate::setVariable(
+                $fre, \$s,
+                'ppStarterCombineOffLargeOffRuntime',
+                $fre->property('FRE.scheduler.ppStarter.combineOff.largeOff.runtime')
+            );
+            FRETemplate::setVariable(
+                $fre, \$s,
+                'ppStarterCombineOffLargeOnQueue',
+                $fre->property('FRE.scheduler.ppStarter.combineOff.largeOn.queue')
+            );
+            FRETemplate::setVariable(
+                $fre, \$s,
+                'ppStarterCombineOffLargeOnRuntime',
+                $fre->property('FRE.scheduler.ppStarter.combineOff.largeOn.runtime')
+            );
+            FRETemplate::setVariable(
+                $fre, \$s,
+                'ppStarterCombineOnLargeOffQueue',
+                $fre->property('FRE.scheduler.ppStarter.combineOn.largeOff.queue')
+            );
+            FRETemplate::setVariable(
+                $fre, \$s,
+                'ppStarterCombineOnLargeOffRuntime',
+                $fre->property('FRE.scheduler.ppStarter.combineOn.largeOff.runtime')
+            );
+            FRETemplate::setVariable(
+                $fre, \$s,
+                'ppStarterCombineOnLargeOnQueue',
+                $fre->property('FRE.scheduler.ppStarter.combineOn.largeOn.queue')
+            );
+            FRETemplate::setVariable(
+                $fre, \$s,
+                'ppStarterCombineOnLargeOnRuntime',
+                $fre->property('FRE.scheduler.ppStarter.combineOn.largeOn.runtime')
+            );
+            FRETemplate::setVariable(
+                $fre, \$s,
+                'ppStarterHistorySizeThreshold',
+                $fre->property('FRE.scheduler.ppStarter.historySize.threshold')
+            );
+
+            FRETemplate::setList( $fre, \$s, 'windfallOptionsSet',
+                FRETemplate::schedulerAccountAsString( $fre, 1 ) );
+            FRETemplate::setList( $fre, \$s, 'windfallOptionsUnset',
+                FRETemplate::schedulerAccountAsString( $fre, 0 ) );
+            FRETemplate::setList( $fre, \$s, 'ppRefineDiagScriptNames',
+                $z->extractPPRefineDiagScripts() );
+            FRETemplate::setList( $fre, \$s, 'getFmsData', @getFmsData );
+
+            FRETemplate::setVariable( $fre, \$s, 'mppnccombineOptsRestart',
+                $mppnccombineOptsRestart );
+            FRETemplate::setVariable( $fre, \$s, 'mppnccombineOptsHistory',
+                $mppnccombineOptsHistory );
+
+            FRETemplate::setVariable( $fre, \$s, 'FreCommandsSrcDir',
+                $z->extractExecutable()->srcDir() );
+            FRETemplate::setVariable( $fre, \$s, 'FreCommandsBldDir',
+                $z->extractExecutable()->execDir() );
+
+            # ------------------------------------------ normal return
+
+            return ( $s, FREDefaults::STATUS_OK );
+
+        } ## end if ($s)
+        else {
+
+            return ( 0, $status );
+
+        }
+
+    } ## end sub init($%)
+
+    sub setInputVariableFile($$$)
+
+        # ------ arguments: $refToScript $exp $variableName
+        # ------ internal helper to setup an input file, defined via a shell variable
+    {
+        my ( $r, $z, $n ) = @_;
+        my ( $fre, $fileName ) = ( $z->fre(), $z->extractVariableFile($n) );
+        if ($fileName) {
+            $fre->out( FREMsg::NOTE, "name='$n' value='$fileName'" );
+            FRETemplate::setVariable( $fre, $r, $n, $fileName );
+        }
+        else {
+            $fre->out( FREMsg::WARNING, "Variable '$n' has no value" );
+            FRETemplate::setVariable( $fre, $r, $n, "''" );
+        }
     }
-  }
+
+    sub setInputInitialConditions($$)
+
+        # ------ arguments: $refToScript $exp
+    {
+        my ( $r, $z ) = @_;
+        frerun::setInputVariableFile( $r, $z, 'initCond' );
+    }
+
+    sub setInputGridSpecification($$)
+
+        # ------ arguments: $refToScript $exp
+    {
+        my ( $r, $z ) = @_;
+        frerun::setInputVariableFile( $r, $z, 'gridSpec' );
+    }
+
+    sub setAllShellCommands($$)
+
+        # ------ arguments: $refToScript $exp
+    {
+
+        my ( $r, $z ) = @_;
+        my $fre = $z->fre();
+
+        my %adjustment = (
+            init     => [ 'if ( $currentSeg == 1 ) then' . "\n", "\n" . 'endif' . "\n" ],
+            postInit => [ 'if ( $currentSeg != 1 ) then' . "\n", "\n" . 'endif' . "\n" ]
+        );
+
+        FRETemplate::setShellCommands( $fre, $r, 'platformCsh',
+            $fre->default_platform_csh . $fre->platformValue('csh') );
+        FRETemplate::setShellCommands( $fre, $r, 'NiNaCplatformCsh',
+            FREPlatforms::getPlatformSpecificNiNaCLoadCommands() );
+        FRETemplate::setShellCommands( $fre, $r, 'expRuntimeCsh',
+            $z->extractShellCommands('runtime/csh') );
+        FRETemplate::setShellCommands(
+            $fre, $r,
+            'expInputCshInit',
+            $z->extractShellCommands(
+                'input/csh[not(@type="always") and not(@type="postInit")]', %adjustment
+            )
+        );
+        FRETemplate::setShellCommands(
+            $fre, $r,
+            'expInputCshAlwaysOrNotInit',
+            $z->extractShellCommands(
+                'input/csh[@type="always" or @type="postInit"]', %adjustment
+            )
+        );
+        FRETemplate::setShellCommands( $fre, $r, 'expPostProcessCsh',
+            $z->extractShellCommands('postProcess/csh') );
+
+    } ## end sub setAllShellCommands($$)
+
+    sub calendarType($)
+
+        # ------ arguments: $namelistsHandle
+    {
+        my $h      = shift;
+        my $result = 'no_calendar';
+        foreach my $name ( 'coupler_nml', 'main_nml', 'ocean_solo_nml', 'standalone_rad_nml' ) {
+            my $value = $h->namelistDoubleQuotedStringGet( $name, 'calendar' )
+                || $h->namelistSingleQuotedStringGet( $name, 'calendar' );
+            if ($value) {
+                $result = $value;
+                last;
+            }
+        }
+        return $result;
+    }
+
+    sub baseDate($)
+
+        # ------ arguments: $namelistsHandle
+    {
+        my $h = shift;
+        my $baseDate = $h->namelistDateGet( 'coupler_nml', 'current_date' ) || '0,0,0,0,0,0';
+        $baseDate =~ s/,/ /g;
+        return $baseDate;
+    }
+
+    sub setTables($$$)
+
+        # ------ arguments: $refToScript $exp $namelistsHandle
+    {
+
+        my ( $r, $z, $h ) = @_;
+        my $fre = $z->fre();
+
+        $fre->out( FREMsg::NOTE, "Extracting tables..." );
+
+        # -------------------------------------------------------------- diagTable
+
+        if ( defined( my $diagTable = $z->extractTable('diagTable') ) ) {
+            my $baseDate = frerun::baseDate($h);
+            FRETemplate::setVariable( $fre, $r, 'baseDate', "'$baseDate'" );
+            $diagTable =~ s/^\s*\$baseDate\s*$/$baseDate/m;
+            FRETemplate::setTable( $fre, $r, 'diag_table', $diagTable );
+        }
+        else {
+            $fre->out( FREMsg::FATAL, "A problem with the diagnostic table" );
+            return ( 0, FREDefaults::STATUS_FS_GENERIC_PROBLEM );
+        }
+
+        # -------------------------------------------------------------------------- fieldTable
+
+        if ( defined( my $fieldTable = $z->extractTable('fieldTable') ) ) {
+            if ( $h->namelistGet('coupler_nml') ) {
+
+                # Adding a new line character just in case ...
+                $fieldTable .= "\n";
+                if ( $fieldTable !~ /^\s*"TRACER"\s*,\s*"atmos_mod"\s*,\s*"sphum".*/im ) {
+                    $fieldTable .= '# added by FRE: sphum must be present in atmos' . "\n";
+                    $fieldTable .= ' "TRACER", "atmos_mod",    "sphum"' . "\n";
+                    $fieldTable .= '           "longname",     "specific humidity"' . "\n";
+                    $fieldTable .= '           "units",        "kg/kg" /' . "\n";
+                }
+                if ( $fieldTable !~ /^\s*"TRACER"\s*,\s*"land_mod"\s*,\s*"sphum".*/im ) {
+                    $fieldTable .= '# added by FRE: sphum must be present on land' . "\n";
+                    $fieldTable .= ' "TRACER", "land_mod",     "sphum"' . "\n";
+                    $fieldTable .= '           "longname",     "specific humidity"' . "\n";
+                    $fieldTable .= '           "units",        "kg/kg" /' . "\n";
+                }
+            }
+            FRETemplate::setTable( $fre, $r, 'field_table', $fieldTable );
+        } ## end if ( defined( my $fieldTable...))
+        else {
+            $fre->out( FREMsg::FATAL, "A problem with the field table" );
+            return ( 0, FREDefaults::STATUS_FS_GENERIC_PROBLEM );
+        }
+
+        # -------------------------------------------------------------------------------- dataTable
+
+        if ( defined( my $dataTable = $z->extractTable('dataTable') ) ) {
+            FRETemplate::setTable( $fre, $r, 'data_table', $dataTable );
+        }
+        else {
+            $fre->out( FREMsg::FATAL, "A problem with the data table" );
+            return ( 0, FREDefaults::STATUS_FS_GENERIC_PROBLEM );
+        }
+
+        # ------------------------------------------------------------------------ tracerTreeTable
+
+        if ( defined( my $tracerTreeTable = $z->extractTable('tracerTreeTable') ) ) {
+            FRETemplate::setTable( $fre, $r, 'ocean_tracer_tree', $tracerTreeTable );
+        }
+        else {
+            $fre->out( FREMsg::FATAL, "A problem with the tracer tree table" );
+            return ( 0, FREDefaults::STATUS_FS_GENERIC_PROBLEM );
+        }
+
+        # -------------------------------------------------------------------- tracerTreeInit
+
+        if ( defined( my $tracerTreeInit = $z->extractTable('tracerTreeInit') ) ) {
+            FRETemplate::setTable( $fre, $r, 'ocean_tracer_tree_init', $tracerTreeInit );
+        }
+        else {
+            $fre->out( FREMsg::FATAL, "A problem with the tracer tree initialization" );
+            return ( 0, FREDefaults::STATUS_FS_GENERIC_PROBLEM );
+        }
+
+        # ------------------------------- normal return
+
+        return ( 1, FREDefaults::STATUS_OK );
+
+    } ## end sub setTables($$$)
+
+    sub setRegressionTimingParameters($$$$$$)
+
+        # ------ arguments: $refToScript $exp $refToInfo $partition $queue $dualFlag
+    {
+
+        my ( $r, $z, $i, $p, $q, $f ) = @_;
+        my ( $expName, $fre ) = ( $z->name(), $z->fre() );
+
+        # -------------------------------------------- extract timing parameters
+        my @ma = split( ' ', $i->{months} );
+        my @da = split( ' ', $i->{days} );
+        my @ha = split( ' ', $i->{hours} );
+        my $rt = $i->{runTimeMinutes};
+
+ # ------------------------------------------------------------- set timing parameters in the script
+        FRETemplate::setVariable( $fre, $r, 'segmentsPerSimulation', scalar(@ma) );
+        FRETemplate::setVariable( $fre, $r, 'segmentsPerPPCall',     0 );
+        FRETemplate::setVariable( $fre, $r, 'segmentsPerJob',        scalar(@ma) );
+        FRETemplate::setVariable( $fre, $r, 'jobsPerSimulation',     1 );
+        FRETemplate::setList( $fre, $r, 'monthslist', @ma );
+        FRETemplate::setList( $fre, $r, 'dayslist',   @da );
+        FRETemplate::setList( $fre, $r, 'hourslist',  @ha );
+
+        # -------------------------------------------------------------- set scheduler resources
+        FRETemplate::setSchedulerResources( $fre, $r, 'run', undef, $rt * 60, $p, $q, $f );
+    } ## end sub setRegressionTimingParameters($$$$$$)
+
+    sub setProductionTimingParameters($$$$$$)
+
+        # ------ arguments: $refToScript $exp $refToInfo $partition $queue $dualFlag
+    {
+        my ( $r, $z, $i, $p, $q, $f ) = @_;
+        my ( $expName, $fre ) = ( $z->name(), $z->fre() );
+
+        # -------------------------------------------- extract timing parameters
+        my $simTime    = $i->{simTimeMonths};
+        my $simRunTime = $i->{simRunTimeMinutes};
+        my $segTime    = $i->{segTimeMonths};
+        my $segRunTime = $i->{segRunTimeMinutes};
+
+# ---------------------------------------------------------------------------- print original values
+        $fre->out( FREMsg::NOTE, "simTime = $simTime months, segTime = $segTime months" );
+        $fre->out( FREMsg::NOTE,
+            "simRunTime = $simRunTime minutes, segRunTime = $segRunTime minutes" );
+
+# --------------------------------------------------------------------------------- calculate major timing parameters
+        my $segPerSim = POSIX::ceil( $simTime / $segTime );
+        $fre->out( FREMsg::NOTE,
+            "segPerSim ($segPerSim) = simTime ($simTime) / segTime ($segTime) (rounded up)" );
+        my $segPerJob = POSIX::floor( $simRunTime / $segRunTime );
+        $fre->out( FREMsg::NOTE,
+            "segPerJob ($segPerJob) = simRunTime ($simRunTime) / segRunTime ($segRunTime) (rounded down)"
+        );
+        my $jobPerSim = POSIX::ceil( $segPerSim / $segPerJob );
+        $fre->out( FREMsg::NOTE,
+            "jobPerSim ($jobPerSim) = segPerSim ($segPerSim) / segPerJob ($segPerJob) (rounded up)"
+        );
+
+# ------------------------------------------------------------------------------------------------ create months/days lists
+        my @ma = ($segTime) x $segPerJob;
+        my @da = ('0') x $segPerJob;
+        my @ha = ('0') x $segPerJob;
+
+# ------------------------------------------------------------------------ calculate the segments number per post-processor call
+        my $segmentsPerPPCall = 0;
+        if ( $simTime >= 12 ) {
+            if ( 12 % $segTime == 0 ) {
+                $segmentsPerPPCall = 12 / $segTime;
+            }
+            else {
+                $fre->out( FREMsg::WARNING,
+                    "The segment length ($segTime months) is not a divisor of 12 - the postprocessor won't be called"
+                );
+            }
+        }
+        else {
+            $fre->out( FREMsg::WARNING,
+                "The production run length ($simTime months) < 1 year - the postprocessor won't be called"
+            );
+        }
+
+# ------------------------------------------------------------------------------ set timing parameters in the script
+        FRETemplate::setVariable( $fre, $r, 'segmentsPerSimulation', $segPerSim );
+        FRETemplate::setVariable( $fre, $r, 'segmentsPerPPCall',     $segmentsPerPPCall );
+        FRETemplate::setVariable( $fre, $r, 'segmentsPerJob',        $segPerJob );
+        FRETemplate::setVariable( $fre, $r, 'jobsPerSimulation',     $jobPerSim );
+        FRETemplate::setList( $fre, $r, 'monthslist', @ma );
+        FRETemplate::setList( $fre, $r, 'dayslist',   @da );
+        FRETemplate::setList( $fre, $r, 'hourslist',  @ha );
+
+     # --------------------------------------------------------------------- set scheduler resources
+        FRETemplate::setSchedulerResources( $fre, $r, 'run', undef, $simRunTime * 60, $p, $q, $f );
+    } ## end sub setProductionTimingParameters($$$$$$)
+
+    sub setRegressionDirectories($$$%)
+
+# ------ arguments: $script $exp $extension %options
+# ------ setups state and output directories and writes them in the script
+# ------ if the state directory exists and the "unique" option is on, then appends a number to the $extension
+# ------ if the state directory exists and the "overwrite" option is on, then removes both directories and recreates the state one
+# ------ return ($script, $extension, $status)
+    {
+
+        my ( $s, $z, $x, %o ) = @_;
+
+        my ( $fre, $sd, $od, $res )
+            = ( $z->fre(), $z->stateDir() . "/$x", $z->archiveDir() . "/$x", '' );
+
+        if ( -d $sd ) {
+            if ( -w $sd ) {
+                if ( $o{unique} ) {
+                    {
+                        my $i = 1;
+                        while ( -d "$sd$i" ) { $i++; }
+                        $sd .= $i;
+                        $od .= $i;
+                        $x  .= $i;
+                    }
+                    $res = FREUtil::createDir("$sd/run");
+                }
+                elsif ( $o{overwrite} ) {
+                    qx(rm -rf $sd/run $od/ascii $od/restart $od/history);
+                    $res = FREUtil::createDir("$sd/run");
+                }
+                elsif ( -d "$sd/run" ) {
+                    $fre->out( FREMsg::FATAL,
+                        "The state directory '$sd/run' exists, so you must specify either --overwrite or --unique"
+                    );
+                    return ( 0, 0, FREDefaults::STATUS_FRE_RUN_GENERIC_PROBLEM );
+                }
+                else {
+                    $res = FREUtil::createDir("$sd/run");
+                }
+            } ## end if ( -w $sd )
+            else {
+                $fre->out( FREMsg::FATAL, "The state directory '$sd' is not writable" );
+            }
+        } ## end if ( -d $sd )
+        else {
+            $res = FREUtil::createDir("$sd/run");
+        }
+
+        if ($res) {
+            $fre->out( FREMsg::NOTE,
+                "The state directory '$sd/run' has been created successfully" );
+            FRETemplate::setVariable( $fre, \$s, 'stateDir',  "$sd/run" );
+            FRETemplate::setVariable( $fre, \$s, 'outputDir', $od );
+            return ( $s, $x, FREDefaults::STATUS_OK );
+        }
+        else {
+            $fre->out( FREMsg::FATAL, "Unable to create the state directory '$sd/$x/run'" );
+            return ( 0, 0, FREDefaults::STATUS_FS_GENERIC_PROBLEM );
+        }
+
+    } ## end sub setRegressionDirectories($$$%)
+
+    sub setProductionDirectories($$%)
+
+# ------ arguments: $script $exp %options
+# ------ setups state and output directories and writes them in the script
+# ------ if the state directory exists and the "unique" option is on, then returns non-empty extension
+# ------ if the state directory exists and the "overwrite" option is on, then removes both directories and recreates the state one
+# ------ return ($script, $extension, $status)
+    {
+
+        my ( $s, $z, %o ) = @_;
+
+        my ( $fre, $sd, $od, $x, $res ) = ( $z->fre(), $z->stateDir(), $z->archiveDir(), '', '' );
+
+        if ( -d $sd ) {
+            if ( -w $sd ) {
+                if ( $o{unique} ) {
+                    $fre->out( FREMsg::NOTE,
+                        "Performing unique production run, no post-processing for this run" );
+                    {
+                        my $i = 1;
+                        while ( -d "$sd/$i" ) { $i++; }
+                        $sd .= "/$i";
+                        $od .= "/$i";
+                        $x = "__$i";
+                    }
+                    $res = FREUtil::createDir("$sd/run");
+                }
+                elsif ( $o{overwrite} ) {
+                    qx(rm -rf $sd/run $od/ascii $od/restart $od/history $od/postProcess $od/analysis);
+                    $res = FREUtil::createDir("$sd/run");
+                }
+                elsif ( $o{extend} ) {
+                    $res = FREUtil::createDir("$sd/run");
+                }
+                elsif ( -d "$sd/run" ) {
+                    $fre->out( FREMsg::FATAL,
+                        "The state directory '$sd/run' exists, so you must specify --extend, --overwrite or --unique"
+                    );
+                    return ( 0, 0, FREDefaults::STATUS_FRE_RUN_GENERIC_PROBLEM );
+                }
+                else {
+                    $res = FREUtil::createDir("$sd/run");
+                }
+            } ## end if ( -w $sd )
+            else {
+                $fre->out( FREMsg::FATAL, "The state directory '$sd' is not writable" );
+            }
+        } ## end if ( -d $sd )
+        else {
+            $res = FREUtil::createDir("$sd/run");
+        }
+
+        if ($res) {
+            $fre->out( FREMsg::NOTE,
+                "The state directory '$sd/run' has been created successfully" );
+            FRETemplate::setVariable( $fre, \$s, 'stateDir',  "$sd/run" );
+            FRETemplate::setVariable( $fre, \$s, 'outputDir', $od );
+            return ( $s, $x, FREDefaults::STATUS_OK );
+        }
+        else {
+            $fre->out( FREMsg::FATAL, "Unable to create the state directory '$sd/run'" );
+            return ( 0, 0, FREDefaults::STATUS_FS_GENERIC_PROBLEM );
+        }
+
+    } ## end sub setProductionDirectories($$%)
+
+    sub setRegressionTimeStampOptions($$$)
+
+        # ------ arguments: $refToScript $exp $refToInfo
+        # ------ update timestamp options
+    {
+        my ( $r, $z, $i ) = @_;
+        my $fre          = $z->fre();
+        my $calendarType = frerun::calendarType( $i->{namelists} );
+        my $timeStampOptions
+            = ( $calendarType eq 'no_calendar' )
+            ? '-f days'
+            : ( ( $i->{hoursDefined} ) ? '-hf digital' : '-f digital' );
+        FRETemplate::setList( $fre, $r, 'timeStampOptions', $timeStampOptions );
+    }
+
+    sub setProductionTimeStampOptions($$$)
+
+        # ------ arguments: $refToScript $exp $refToInfo
+        # ------ update timestamp options
+    {
+        my ( $r, $z, $i ) = @_;
+        my $fre              = $z->fre();
+        my $calendarType     = frerun::calendarType( $i->{namelists} );
+        my $timeStampOptions = ( $calendarType eq 'no_calendar' ) ? '-f days' : '-f digital';
+        FRETemplate::setList( $fre, $r, 'timeStampOptions', $timeStampOptions );
+    }
+
+    sub setMPI($$$)
+
+        # ------ arguments: $refToScript $exp $refToMPIInfo
+    {
+        my ( $r, $z, $i ) = @_;
+        my ( $fre, $coupler, $npes, $refNPes, $refNTds )
+            = ( $z->fre(), $i->{coupler}, $i->{npes}, $i->{npesList}, $i->{ntdsList} );
+        FRETemplate::setSchedulerSize( $fre, $r, 'run', $coupler, $npes, $refNPes, $refNTds );
+        FRETemplate::setRunCommand( $fre, $r, $i );
+    }
+
+    sub outputScriptJobId($$)
+
+        # ------ arguments: $fre $string
+        # ------ return $jobId
+    {
+        my ( $fre, $s, $j ) = @_;
+        my $submitOutputPattern = $fre->property('FRE.scheduler.submit.output.pattern');
+        return ( $s =~ m/$submitOutputPattern/m ) ? $1 : '';
+    }
+
+    sub outputScriptStartTime($)
+
+        # ------ arguments: $fre
+        # ------ return start time option (for dual run)
+    {
+        my $fre = shift;
+        if ( my $delay = $fre->property('FRE.scheduler.dual.delay') ) {
+            my $dateTime
+                = Date::Manip::UnixDate( Date::Manip::DateCalc( 'now', "+$delay" ), '%Y%m%d%H%M' );
+            return $fre->propertyParameterized( 'FRE.scheduler.option.startTime', $dateTime );
+        }
+        else {
+            return '';
+        }
+    }
+
+    sub outputScriptExecuteOrSubmit($$$$%)
+
+        # ------ arguments: $refToScript $exp $scriptAbsName $stdoutAbsName %options
+        # ------ write $script to the $scriptAbsName file, chmod, and optionally execute or submit
+        # ------ return ($returnCode, $status)
+    {
+        my ( $r, $z, $n, $o, %o ) = @_;
+        my $fre = $z->fre();
+        my ( $stdoutMainDir, $stdoutTmpDir )
+            = ( frerun::stdoutMainDir($z), File::Basename::dirname($o) );
+        if ( frerun::createDirectory( $fre, $stdoutMainDir ) ) {
+            if ( frerun::createDirectory( $fre, $stdoutTmpDir ) ) {
+                my $scriptsDir = File::Basename::dirname($n);
+                if ( frerun::createDirectory( $fre, $scriptsDir ) ) {
+                    if ( open my $scriptHandle, '>', $n ) {
+                        print {$scriptHandle} ${$r};
+                        close $scriptHandle;
+                        if ( chmod 0755, $n ) {
+                            if ( $o{execute} ) {
+                                my $res = system("$n 2>&1 | tee $o");
+                                if ( $res == 0 ) {
+                                    return ( 1, FREDefaults::STATUS_OK );
+                                }
+                                else {
+                                    $fre->out( FREMsg::FATAL,
+                                        "The runscript '$n' failed! ($res)",
+                                        "Please see the logfile '$o'..."
+                                    );
+                                    return ( 0, FREDefaults::STATUS_FRE_RUN_EXECUTION_PROBLEM );
+                                }
+                            }
+                            elsif ( $o{submit} ) {
+                                if ( $fre->property('FRE.scheduler.enabled') ) {
+                                    my $submitCommand
+                                        = $fre->property('FRE.scheduler.submit.command');
+                                    $submitCommand .= ' ' . frerun::outputScriptStartTime($fre)
+                                        if $o{dual};
+                                    $submitCommand .= ' ' . $n;
+                                    $fre->out( FREMsg::NOTE, "Executing '$submitCommand'..." );
+                                    my $currentDir = Cwd::getcwd();
+                                    if ( chdir $stdoutTmpDir ) {
+                                        print qx($submitCommand);
+                                        chdir $currentDir;
+                                        return ( 1, FREDefaults::STATUS_OK );
+                                    }
+                                    else {
+                                        $fre->out( FREMsg::FATAL,
+                                            "Unable to switch to the stdout directory '$stdoutTmpDir'"
+                                        );
+                                        return ( 0, FREDefaults::STATUS_FS_GENERIC_PROBLEM );
+                                    }
+                                } ## end if ( $fre->property('FRE.scheduler.enabled'...))
+                                else {
+                                    $fre->out( FREMsg::WARNING,
+                                        "The runscript '$n' can't be submitted as a batch job on this site"
+                                    );
+                                    return ( 1, FREDefaults::STATUS_OK );
+                                }
+                            } ## end elsif ( $o{submit} )
+                            elsif ( $o{'submit-chained'} ) {
+                                if ( $fre->property('FRE.scheduler.enabled') ) {
+                                    my ( $submitChainCommand, $scriptBasename ) = (
+                                        $fre->property('FRE.scheduler.submit.command'),
+                                        File::Basename::basename($n)
+                                    );
+                                    $submitChainCommand .= ' '
+                                        . FRETemplate::schedulerResourcesAsString( $fre,
+                                        'inputStager', $o{ncores}, $o{walltime} * 60,
+                                        undef, undef, undef );
+                                    $submitChainCommand .= ' '
+                                        . FRETemplate::schedulerNamesAsString( $fre,
+                                        "$scriptBasename.input.stager",
+                                        $stdoutMainDir );
+                                    $submitChainCommand .= ' ' . frerun::outputScriptStartTime($fre)
+                                        if $o{dual};
+                                    $submitChainCommand .= ' ' . '-v FRE_STAGE=CHAIN';
+                                    $submitChainCommand .= ' ' . $n;
+                                    $fre->out( FREMsg::NOTE, "Executing '$submitChainCommand'..." );
+                                    my $currentDir = Cwd::getcwd();
+
+                                    if ( chdir $stdoutTmpDir ) {
+                                        print qx($submitChainCommand);
+                                        chdir $currentDir;
+                                        return ( 1, FREDefaults::STATUS_OK );
+                                    }
+                                    else {
+                                        $fre->out( FREMsg::FATAL,
+                                            "Unable to switch to the stdout directory '$stdoutTmpDir'"
+                                        );
+                                        return ( 0, FREDefaults::STATUS_FS_GENERIC_PROBLEM );
+                                    }
+                                } ## end if ( $fre->property('FRE.scheduler.enabled'...))
+                                else {
+                                    $fre->out( FREMsg::WARNING,
+                                        "The runscript '$n' can't be submitted as a batch job on this site"
+                                    );
+                                    return ( 1, FREDefaults::STATUS_OK );
+                                }
+                            } ## end elsif ( $o{'submit-chained'...})
+                            else {
+                                if ( $fre->property('FRE.scheduler.enabled') ) {
+                                    my $submit = $fre->property('FRE.scheduler.submit.command');
+                                    print "TO SUBMIT => $submit $n\n";
+                                    return ( 1, FREDefaults::STATUS_OK );
+                                }
+                                else {
+                                    print "The runscript '$n' is ready\n";
+                                    return ( 1, FREDefaults::STATUS_OK );
+                                }
+                            }
+                        } ## end if ( chmod 0755, $n )
+                        else {
+                            $fre->out( FREMsg::FATAL,
+                                "Unable to change the script '$n' permissions" );
+                            return ( 0, FREDefaults::STATUS_FS_GENERIC_PROBLEM );
+                        }
+                    } ## end if ( open my $scriptHandle...)
+                    else {
+                        $fre->out( FREMsg::FATAL, "Unable to save the script '$n'" );
+                        return ( 0, FREDefaults::STATUS_FS_GENERIC_PROBLEM );
+                    }
+                } ## end if ( frerun::createDirectory...)
+                else {
+                    $fre->out( FREMsg::FATAL, "Unable to create scripts directory '$scriptsDir'" );
+                    return ( 0, FREDefaults::STATUS_FS_GENERIC_PROBLEM );
+                }
+            } ## end if ( frerun::createDirectory...)
+            else {
+                $fre->out( FREMsg::FATAL,
+                    "Unable to create temporary stdout directory '$stdoutTmpDir'" );
+                return ( 0, FREDefaults::STATUS_FS_GENERIC_PROBLEM );
+            }
+        } ## end if ( frerun::createDirectory...)
+        else {
+            $fre->out( FREMsg::FATAL, "Unable to create main stdout directory '$stdoutMainDir'" );
+            return ( 0, FREDefaults::STATUS_FS_GENERIC_PROBLEM );
+        }
+    } ## end sub outputScriptExecuteOrSubmit($$$$%)
+
+    sub processRegression($$%)
+
+        # ------ arguments: $exp $label %options
+    {
+        my ( $z, $l, %o ) = @_;
+        my ( $expName, $fre ) = ( $z->name(), $z->fre() );
+        $fre->out( FREMsg::NOTE, "Creating runscripts for the regression test '$l'..." );
+        my ( $runScript, $status ) = frerun::init( $z, %o );
+        if ($runScript) {
+            my @dataSets = $z->extractDatasets();
+            if ( FRETemplate::setInputDatasets( $fre, \$runScript, \@dataSets ) ) {
+                frerun::setInputInitialConditions( \$runScript, $z );
+                frerun::setInputGridSpecification( \$runScript, $z );
+                frerun::setAllShellCommands( \$runScript, $z );
+                FRETemplate::setVersionInfo( $fre, \$runScript, $0, $expName, %o );
+                FRETemplate::setSchedulerAccount( $fre, \$runScript, $o{windfall} );
+                if ( my $regInfo = $z->extractRegressionRunInfo( $l, $o{ht} ) ) {
+                    my @runNos = keys %{$regInfo};
+                    my ( $ok, $runsNmb ) = ( 1, scalar(@runNos) );
+                    foreach my $runNo ( sort @runNos ) {
+                        my $runInfo = $regInfo->{$runNo};
+                        my $runInx = ( $runsNmb > 1 ) ? "[$runInfo->{number}]" : "";
+                        $fre->out( FREMsg::NOTE,
+                            "Creating a regression runscript '$l$runInx' for the experiment '$expName'..."
+                        );
+                        ( my $rtScript, my $extension, $status )
+                            = frerun::setRegressionDirectories( $runScript, $z, $runInfo->{postfix},
+                            %o );
+                        if ($rtScript) {
+                            ( my $rc, $status )
+                                = frerun::setTables( \$rtScript, $z, $runInfo->{namelists} );
+                            if ($rc) {
+                                frerun::setMPI( \$rtScript, $z, $runInfo->{mpiInfo} );
+                                frerun::setRegressionTimeStampOptions( \$rtScript, $z, $runInfo );
+                                frerun::setRegressionTimingParameters( \$rtScript, $z, $runInfo,
+                                    $o{partition}, $o{queue}, $o{dual} );
+                                FRETemplate::setNamelists( $fre, \$rtScript,
+                                    $runInfo->{namelists} );
+                                my $scriptName = frerun::regressionRunScriptName( $z, $extension );
+                                my $stdoutName = frerun::stdoutName( $z, $scriptName );
+                                my $stdoutTmpDir = File::Basename::dirname($stdoutName);
+                                FRETemplate::setVariable( $fre, \$rtScript, 'scriptName',
+                                    $scriptName );
+                                FRETemplate::setVariable( $fre, \$rtScript, 'stdoutTmpDir',
+                                    $stdoutTmpDir );
+                                FRETemplate::setSchedulerNames( $fre, \$rtScript,
+                                    File::Basename::basename($scriptName),
+                                    $stdoutTmpDir );
+                                FRETemplate::setFlag( $fre, \$rtScript, 'flagOutputFillGrid',
+                                    ( are_history_files_masked( $fre, $runInfo ) ? 'On' : 'Off' ) );
+                                ( $rc, $status )
+                                    = frerun::outputScriptExecuteOrSubmit( \$rtScript, $z,
+                                    $scriptName, $stdoutName, %o );
+
+                                if ($rc) {
+                                    $fre->out( FREMsg::NOTE,
+                                        "A regression runscript '$l$runInx' for the experiment '$expName' has been created successfully"
+                                    );
+                                }
+                                else {
+                                    $fre->out( FREMsg::FATAL,
+                                        "Unable to create (or run) a regression runscript '$l$runInx' for the experiment '$expName'"
+                                    );
+                                    $ok = 0;
+                                    last;
+                                }
+                            } ## end if ($rc)
+                            else {
+                                $fre->out( FREMsg::FATAL,
+                                    "Unable to setup tables for regression runscript '$l$runInx' in the experiment '$expName'"
+                                );
+                                $ok = 0;
+                                last;
+                            }
+                        } ## end if ($rtScript)
+                        else {
+                            $fre->out( FREMsg::FATAL,
+                                "Unable to setup output directories for regression runscript '$l$runInx' in the experiment '$expName'"
+                            );
+                            $ok = 0;
+                            last;
+                        }
+                    } ## end foreach my $runNo ( sort @runNos)
+                    if ($ok) {
+                        $fre->out( FREMsg::NOTE,
+                            "Regression test '$l' in the experiment '$expName' has been processed successfully"
+                        );
+                        return ( 1, FREDefaults::STATUS_OK );
+                    }
+                    else {
+                        $fre->out( FREMsg::FATAL,
+                            "Unable to process regression test '$l' in the experiment '$expName'" );
+                        return ( 0, $status );
+                    }
+                } ## end if ( my $regInfo = $z->extractRegressionRunInfo...)
+                else {
+                    $fre->out( FREMsg::FATAL,
+                        "Unable to extract parameters for the regression test '$l' in the experiment '$expName'"
+                    );
+                    return ( 0, FREDefaults::STATUS_FRE_RUN_GENERIC_PROBLEM );
+                }
+            } ## end if ( FRETemplate::setInputDatasets...)
+            else {
+                $fre->out( FREMsg::FATAL,
+                    "Unable to setup input data for the experiment '$expName'" );
+                return ( 0, FREDefaults::STATUS_FRE_RUN_GENERIC_PROBLEM );
+            }
+        } ## end if ($runScript)
+        else {
+            $fre->out( FREMsg::FATAL, "Unable to initialize the experiment '$expName'" );
+            return ( 0, $status );
+        }
+    } ## end sub processRegression($$%)
+
+    sub processProduction($%)
+
+        # ------ arguments: $exp %options
+    {
+        my ( $z, %o ) = @_;
+        my ( $expName, $fre ) = ( $z->name(), $z->fre() );
+        $fre->out( FREMsg::NOTE, "Creating a runcript for the experiment '$expName'..." );
+        my ( $runScript, $status ) = frerun::init( $z, %o );
+        if ($runScript) {
+            my @dataSets = $z->extractDatasets();
+            if ( FRETemplate::setInputDatasets( $fre, \$runScript, \@dataSets ) ) {
+                frerun::setInputInitialConditions( \$runScript, $z );
+                frerun::setInputGridSpecification( \$runScript, $z );
+                frerun::setAllShellCommands( \$runScript, $z );
+                FRETemplate::setVersionInfo( $fre, \$runScript, $0, $expName, %o );
+                FRETemplate::setSchedulerAccount( $fre, \$runScript, $o{windfall} );
+                if ( my $prdInfo = $z->extractProductionRunInfo( $o{ht} ) ) {
+                    ( $runScript, my $extension, $status )
+                        = frerun::setProductionDirectories( $runScript, $z, %o );
+                    if ($runScript) {
+                        ( my $rc, $status )
+                            = frerun::setTables( \$runScript, $z, $prdInfo->{namelists} );
+                        if ($rc) {
+                            frerun::setMPI( \$runScript, $z, $prdInfo->{mpiInfo} );
+                            frerun::setProductionTimeStampOptions( \$runScript, $z, $prdInfo );
+                            frerun::setProductionTimingParameters( \$runScript, $z, $prdInfo,
+                                $o{partition}, $o{queue}, $o{dual} );
+                            FRETemplate::setNamelists( $fre, \$runScript, $prdInfo->{namelists} );
+                            my $scriptName = frerun::productionRunScriptName( $z, $extension );
+                            my $stdoutName = frerun::stdoutName( $z, $scriptName );
+                            my $stdoutTmpDir = File::Basename::dirname($stdoutName);
+                            FRETemplate::setVariable( $fre, \$runScript, 'scriptName',
+                                $scriptName );
+                            FRETemplate::setVariable( $fre, \$runScript, 'stdoutTmpDir',
+                                $stdoutTmpDir );
+                            FRETemplate::setSchedulerNames( $fre, \$runScript,
+                                File::Basename::basename($scriptName),
+                                $stdoutTmpDir );
+                            FRETemplate::setFlag( $fre, \$runScript, 'flagOutputFillGrid',
+                                ( are_history_files_masked( $fre, $prdInfo ) ? 'On' : 'Off' ) );
+                            ( $rc, $status )
+                                = frerun::outputScriptExecuteOrSubmit( \$runScript, $z, $scriptName,
+                                $stdoutName, %o );
+
+                            if ($rc) {
+                                return ( 1, FREDefaults::STATUS_OK );
+                            }
+                            else {
+                                $fre->out( FREMsg::FATAL,
+                                    "Unable to create (or run) a runscript for the experiment '$expName'"
+                                );
+                                return ( 0, $status );
+                            }
+                        } ## end if ($rc)
+                        else {
+                            $fre->out( FREMsg::FATAL,
+                                "Unable to setup tables for the experiment '$expName'" );
+                            return ( 0, FREDefaults::STATUS_FRE_RUN_GENERIC_PROBLEM );
+                        }
+                    } ## end if ($runScript)
+                    else {
+                        $fre->out( FREMsg::FATAL,
+                            "Unable to setup output directories for the experiment '$expName'" );
+                        return ( 0, $status );
+                    }
+                } ## end if ( my $prdInfo = $z->extractProductionRunInfo...)
+                else {
+                    $fre->out( FREMsg::FATAL,
+                        "Unable to extract production parameters for the experiment '$expName'" );
+                    return ( 0, FREDefaults::STATUS_FRE_RUN_GENERIC_PROBLEM );
+                }
+            } ## end if ( FRETemplate::setInputDatasets...)
+            else {
+                $fre->out( FREMsg::FATAL,
+                    "Unable to setup input data for the experiment '$expName'" );
+                return ( 0, FREDefaults::STATUS_FRE_RUN_GENERIC_PROBLEM );
+            }
+        } ## end if ($runScript)
+        else {
+            $fre->out( FREMsg::FATAL, "Unable to initialize the experiment '$expName'" );
+            return ( 0, $status );
+        }
+    } ## end sub processProduction($%)
+
+    sub skipExp($)
+
+        # ------ arguments: $exp
+    {
+        my $z = shift;
+        my ( $expName, $fre ) = ( $z->name(), $z->fre() );
+        $fre->out( FREMsg::FATAL, "Skipping the experiment '$expName'..." );
+    }
+
+    # are_history_files_masked -- tests whether history files contain masked grid info
+    # Currently, only tests whether an ocean mask is used.
+    sub are_history_files_masked($$)
+
+        # ------ arguments: $fre, $runInfo
+    {
+        my ( $fre, $info ) = @_;
+        my @components = split ';', $fre->property('FRE.mpi.component.names');
+        my $ocean_index;
+        for my $i ( 0 .. $#components ) {
+            $ocean_index = $i if $components[$i] eq 'ocn';
+        }
+
+        # mask_table="MOM_mask_table" means no mask :)
+        if ( my $ocean_mask = $info->{mpiInfo}->{maskTableList}->[$ocean_index] ) {
+            return $ocean_mask eq 'MOM_mask_table' ? 0 : 1;
+        }
+        else {
+            return 0;
+        }
+    }
 
 }
 
@@ -1729,436 +1873,458 @@ use FREUtil();
 
 {
 
-  my %opt =
-  (
-    'archive'		=> 1,
-    'combine-history'	=> 1,
-    'target'		=> FREDefaults::Target(),
-    'xmlfile'		=> FREDefaults::XMLFile()
-  );
+    my %opt = (
+        'archive'         => 1,
+        'combine-history' => 1,
+        'target'          => FREDefaults::Target(),
+        'xmlfile'         => FREDefaults::XMLFile()
+    );
 
-  Getopt::Long::GetOptions(\%opt, frerun::OPTLIST) or (print frerun::Usage() and exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM);
-  if ($opt{version}) {print frerun::VERSION,"\n" and exit FREDefaults::STATUS_OK;}
-  if ($opt{help}) {print frerun::Help() and exit FREDefaults::STATUS_OK;}
-  
-  unless (scalar(@ARGV) > 0)
-  {
-    my $self = File::Basename::basename($0);
-    FREMsg::out($opt{verbose}, FREMsg::FATAL, "At least one experiment name is needed on the command line", "Try '$self --help' for more information");
-    exit FREDefaults::STATUS_COMMAND_NO_EXPERIMENTS;
-  }
+    Getopt::Long::GetOptions( \%opt, frerun::OPTLIST )
+        or ( print frerun::Usage() and exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM );
+    if ( $opt{version} ) { print frerun::VERSION, "\n" and exit FREDefaults::STATUS_OK; }
+    if ( $opt{help} ) { print frerun::Help() and exit FREDefaults::STATUS_OK; }
 
-  unless ($opt{extend} + $opt{overwrite} + $opt{unique} <= 1)
-  {
-    FREMsg::out($opt{verbose}, FREMsg::FATAL, "Options --extend, --overwrite and --unique are mutually exclusive - only one of them can be present");
-    exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
-  }
-  
-  unless ($opt{submit} + $opt{'submit-chained'} + $opt{'submit-staged'} <= 1)
-  {
-    FREMsg::out($opt{verbose}, FREMsg::FATAL, "Options --submit, --submit-chained and --submit-staged are mutually exclusive - only one of them can be present");
-    exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
-  }
-  
-  if (exists($opt{compress}))
-  {
-    ($opt{compress}, my @messages) = FREUtil::optionValuesListParse('compress', $opt{compress}, frerun::OUTPUT_COMPRESSION_TYPES);
-    unless (scalar(@messages) == 0)
-    {
-      FREMsg::out($opt{verbose}, FREMsg::FATAL, @messages);
-      exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
+    unless ( scalar(@ARGV) > 0 ) {
+        my $self = File::Basename::basename($0);
+        FREMsg::out(
+            $opt{verbose}, FREMsg::FATAL,
+            "At least one experiment name is needed on the command line",
+            "Try '$self --help' for more information"
+        );
+        exit FREDefaults::STATUS_COMMAND_NO_EXPERIMENTS;
     }
-  }
 
-  if ( exists $opt{'mppnccombine-opts'} and exists $opt{'nc4-compress-history'} )
-  {
-    FREMsg::out($opt{'verbose'}, FREMsg::FATAL, "Options --mppnccombine-opts and --nc4-compress-history are mutually exclusive - only one of them can be present");
-    exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
-  }
-
-  if (exists($opt{regression}))
-  {
-    unless ($opt{regression} && substr($opt{regression}, 0, 1) ne '-')
-    {
-      FREMsg::out($opt{verbose}, FREMsg::FATAL, "The --regression option's value is missing");
-      exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
-    }
-  }
-  
-  if (exists($opt{'remote-user'}))
-  {
-    unless ($opt{'remote-user'} && substr($opt{'remote-user'}, 0, 1) ne '-')
-    {
-      FREMsg::out($opt{verbose}, FREMsg::FATAL, "The --remote-user option's value is missing");
-      exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
-    }
-  }
-  
-  if (exists($opt{platform}))
-  {
-    unless ($opt{platform} && substr($opt{platform}, 0, 1) ne '-')
-    {
-      FREMsg::out($opt{verbose}, FREMsg::FATAL, "The --platform option's value is missing");
-      exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
-    }
-  }
-  
-  if (exists($opt{target}))
-  {
-    unless ($opt{target} && substr($opt{target}, 0, 1) ne '-')
-    {
-      FREMsg::out($opt{verbose}, FREMsg::FATAL, "The --target option's value is missing");
-      exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
-    }
-  }
-  
-  if (exists($opt{xmlfile}))
-  {
-    unless ($opt{xmlfile} && substr($opt{xmlfile}, 0, 1) ne '-')
-    {
-      FREMsg::out($opt{verbose}, FREMsg::FATAL, "The --xmlfile option's value is missing");
-      exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
-    }
-  }
-  
-  if ($opt{check} and !$opt{unique})
-  {
-    FREMsg::out($opt{verbose}, FREMsg::WARNING, "Option --check is allowed only when the option --unique is present, the --check option is ignored");
-    delete $opt{check};
-  }
-
-  if ($opt{dual} and $opt{regression})
-  {
-    FREMsg::out($opt{verbose}, FREMsg::WARNING, "Options --dual and --regression are incompatible, the --dual option is ignored");
-    delete $opt{dual};
-  }
-  
-  if ($opt{dual} and $opt{unique})
-  {
-    FREMsg::out($opt{verbose}, FREMsg::WARNING, "Options --dual and --unique are incompatible, the --dual option is ignored");
-    delete $opt{dual};
-  }
-
-  if ($opt{ht} and (!$opt{target} or $opt{target} !~ /openmp/))
-  {
-    FREMsg::out($opt{verbose}, FREMsg::WARNING, "Option --ht must be used with openmp; the --ht option is ignored");
-    delete $opt{ht};
-  }
-  
-  my $fre = FRE->new('frerun', %opt) or exit FREDefaults::STATUS_FRE_GENERIC_PROBLEM;
-
-  # check for FRE version mismatch between XML and current shell
-  $fre->check_for_fre_version_mismatch;
-  
-  unless ($fre->property('FRE.tool.frerun.enabled'))
-  {
-    my $platformSite = $fre->platformSite();
-    $fre->out(FREMsg::FATAL, "You are not supposed to call this tool on the '$platformSite' site");
-    exit FREDefaults::STATUS_FRE_GENERIC_PROBLEM;
-  }
-  
-  # Is this a site that requires the remote-user option to be used on the command line?
-  if ($fre->property('FRE.option.remoteuser.required') and not exists($opt{'remote-user'}))
-  {
-    FREMsg::out($opt{verbose}, FREMsg::FATAL, "The --remote-user option is required on this site");
-    exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
-  }
-
-
-  if ($opt{'submit-chained'} || $opt{'submit-staged'})
-  {
-    if ($fre->property('FRE.input.staging.enabled'))
-    {
-      if ($opt{'submit-staged'})
-      {
-        delete $opt{'submit-staged'};
-	$opt{'submit-chained'} = 1;
-      }
-    }
-    else
-    {
-      $fre->out(FREMsg::WARNING, "Input staging is not supported on this site");
-      exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
-    }
-  }
-  
-  if (scalar(my @types = split(/;/, $fre->property('FRE.output.staging'))) > 0)
-  {
-    my $typeDefault = $types[0];
-    if (exists($opt{'output-staging'}))
-    {
-      if ($opt{'output-staging'} && substr($opt{'output-staging'}, 0, 1) ne '-')
-      {
-        if (scalar(grep($_ eq $opt{'output-staging'}, @types)) > 0)
-	{
-	  $fre->out(FREMsg::NOTE, "The '$opt{'output-staging'}' output staging type will be used");
-	}
-	elsif (scalar(@types) > 1)
-	{
-	  my $types = join("', '", @types);
-	  $fre->out(FREMsg::FATAL, "The '$opt{'output-staging'}' output staging type isn't allowed", "Allowed types are '$types', the default one is '$typeDefault'");
-	  exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
-	}
-	else
-	{
-	  $fre->out(FREMsg::FATAL, "The '$opt{'output-staging'}' output staging type isn't allowed", "Allowed type is '$typeDefault' only");
-	  exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
-	}
-      }
-      else
-      {
-        $fre->out(FREMsg::FATAL, "The --output-staging option's value is missing");
+    unless ( $opt{extend} + $opt{overwrite} + $opt{unique} <= 1 ) {
+        FREMsg::out( $opt{verbose}, FREMsg::FATAL,
+            "Options --extend, --overwrite and --unique are mutually exclusive - only one of them can be present"
+        );
         exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
-      }
     }
-  }
-  else
-  {
-    $fre->out(FREMsg::FATAL, "The FRE output staging is configured incorrectly");
-    exit FREDefaults::STATUS_FRE_GENERIC_PROBLEM;
-  }
-  
-  if (scalar(my @partitions = split(/;/, $fre->property('FRE.scheduler.partitions'))) > 0)
-  {
-    my $partitionDefault = $partitions[0];
-    if (exists($opt{partition}))
-    {
-      if ($opt{partition} && substr($opt{partition}, 0, 1) ne '-')
-      {
-	if (scalar(grep($_ eq $opt{partition}, @partitions)) > 0)
-	{
-	  $fre->out(FREMsg::NOTE, "The '$opt{partition}' partition will be used");
-	}
-	elsif (scalar(@partitions) > 1)
-	{
-	  my $partitions = join("', '", @partitions);
-	  $fre->out(FREMsg::FATAL, "The '$opt{partition}' partition isn't allowed", "Allowed partitions are '$partitions', the default one is '$partitionDefault'");
-	  exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
-	}
-	else
-	{
-	  $fre->out(FREMsg::FATAL, "The '$opt{partition}' partition isn't allowed", "Allowed partition is '$partitionDefault' only");
-	  exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
-	}
-      }
-      else
-      {
-	$fre->out(FREMsg::FATAL, "The --partition option's value is missing");
-	exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
-      }
+
+    unless ( $opt{submit} + $opt{'submit-chained'} + $opt{'submit-staged'} <= 1 ) {
+        FREMsg::out( $opt{verbose}, FREMsg::FATAL,
+            "Options --submit, --submit-chained and --submit-staged are mutually exclusive - only one of them can be present"
+        );
+        exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
     }
-    else
-    {
-      $fre->out(FREMsg::WARNING, "Option --partition=$partitionDefault has been automatically added");
-      $opt{partition} = $partitionDefault;
-    }
-  }
-  elsif (exists($opt{partition}))
-  {
-    $fre->out(FREMsg::FATAL, "Option --partition is not supported on this site");
-    exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
-  }
 
-  if (scalar(my @queues = split(/;/, ($opt{partition}) ? $fre->property("FRE.scheduler.$opt{partition}.queues") : $fre->property("FRE.scheduler.queues"))) > 0)
-  {
-    my $queueDefault = $queues[0];
-    if (exists($opt{queue}))
-    {
-      if ($opt{queue} && substr($opt{queue}, 0, 1) ne '-')
-      {
-	if (scalar(grep($_ eq $opt{queue}, @queues)) > 0)
-	{
-	  $fre->out(FREMsg::NOTE, "The queue '$opt{queue}' will be used");
-	}
-	elsif (scalar(@queues) > 1)
-	{
-	  my $queues = join("', '", @queues);
-	  $fre->out(FREMsg::FATAL, "The '$opt{queue}' queue isn't allowed", "Allowed queues are '$queues', the default one is '$queueDefault'");
-	  exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
-	}
-	else
-	{
-	  $fre->out(FREMsg::FATAL, "The '$opt{queue}' queue isn't allowed", "Allowed queue is '$queueDefault' only");
-	  exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
-	}
-      }
-      else
-      {
-	$fre->out(FREMsg::FATAL, "The --queue option's value is missing");
-	exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
-      }
-    }
-    else
-    {
-      $fre->out(FREMsg::WARNING, "Option --queue=$queueDefault has been automatically added");
-      $opt{queue} = $queueDefault;
-    }
-  }
-  elsif (exists($opt{queue}))
-  {
-    $fre->out(FREMsg::FATAL, "Option --queue is not supported on this site");
-    exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
-  }
-
-  if ($opt{windfall} and !$fre->property('FRE.scheduler.windfall.enabled'))
-  {
-    $fre->out(FREMsg::FATAL, "Option --windfall is not supported on this site");
-    exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
-  }
-  
-  if (!exists($opt{dual}) and !$opt{regression} and !$opt{unique} and $fre->property('FRE.option.dual.default'))
-  {
-    $fre->out(FREMsg::WARNING, "Option --dual has been automatically added");
-    $opt{dual} = 1;
-  }
-
-  if ($opt{transfer} and !$opt{archive})
-  {
-    $fre->out(FREMsg::WARNING, "Option --transfer is not allowed when the option --noarchive is present, the --transfer option is ignored");
-    delete $opt{transfer};
-  }
-  elsif ($opt{transfer} and $opt{check})
-  {
-    $fre->out(FREMsg::WARNING, "Option --transfer is not allowed when the option --check is present, the --transfer option is ignored");
-    delete $opt{transfer};
-  }
-  elsif ($opt{transfer} and scalar(split(/;/, $fre->property('FRE.output.staging'))) > 1 and $opt{'output-staging'} eq 'online')
-  {  
-    $fre->out(FREMsg::WARNING, "Option --transfer is not allowed when the option --output-staging=online is present, the --transfer option is ignored");
-    delete $opt{transfer};
-  }
-  elsif (!exists($opt{transfer}) and $opt{archive} and !$opt{check} and (scalar(split(/;/, $fre->property('FRE.output.staging'))) == 1 or $opt{'output-staging'} ne 'online') and $fre->property('FRE.option.transfer.default')) 
-  {
-    $fre->out(FREMsg::WARNING, "Option --transfer has been automatically added");
-    $opt{transfer} = 1;
-  }
-  
-  if (!exists($opt{free}) and $fre->property('FRE.option.free.default'))
-  {
-    $fre->out(FREMsg::WARNING, "Option --free has been automatically added");
-    $opt{free} = 1;
-  }
-  
-  {
-    my $ncores = $opt{ncores} || $fre->property('FRE.scheduler.inputStager.coresPerJob.default') || frerun::NCORES_DEFAULT;
-    $opt{ncores} = $ncores;
-  }
-  
-  {
-    my $walltime = $opt{walltime} || $fre->property('FRE.scheduler.inputStager.runtime.default') || frerun::WALLTIME_DEFAULT;
-    $opt{walltime} = $walltime;
-  }
-  
-  my @exps = ();
-  foreach my $expName (FREUtil::listUnique(@ARGV))
-  {
-    my $exp = FREExperiment->new($fre, $expName) or exit FREDefaults::STATUS_FRE_GENERIC_PROBLEM;
-    push @exps, $exp;
-  }
-
-  my $status = FREDefaults::STATUS_OK;
-  
-  foreach my $exp (@exps)
-  {
-
-    # --------------------------------- set the experiment name
-    
-    my $expName = $exp->name();
-    $fre->setCurrentExperimentName($expName);
-    $fre->out(FREMsg::NOTE, "Setting up the experiment '$expName'...");
-
-    # ---------------------------------------------------------------- process the experiment
-    
-    if ($opt{regression})
-    {
-      if (my @labels = $exp->extractRegressionLabels($opt{regression}))
-      {
-        my $ok = 1;
-        foreach my $label (@labels)
-	{
-	  # ----------------------------------------------------------------- regression scripts creation
-	  (my $rc, $status) = frerun::processRegression($exp, $label, %opt);
-	  if ($rc)
-	  {
-	    $fre->out(FREMsg::NOTE, "All the regression runs with label '$label' have been processed successfully");
-	  }
-	  else
-	  {
-	    $fre->out(FREMsg::FATAL, "Unable to process regression runs with label '$label'");
-	    $ok = 0;
-	    last;
-	  }
+    if ( exists( $opt{compress} ) ) {
+        ( $opt{compress}, my @messages )
+            = FREUtil::optionValuesListParse( 'compress', $opt{compress},
+            frerun::OUTPUT_COMPRESSION_TYPES );
+        unless ( scalar(@messages) == 0 ) {
+            FREMsg::out( $opt{verbose}, FREMsg::FATAL, @messages );
+            exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
         }
-	unless ($ok)
-	{
-	  $fre->out(FREMsg::FATAL, "Unable to process all the requested regression tests");
-	  frerun::skipExp($exp) if scalar(@exps) > 1;
-	}
-      }
-      else
-      {
-	$fre->out(FREMsg::FATAL, "Unable to select regression tests to process");
-	frerun::skipExp($exp) if scalar(@exps) > 1;
-	$status = FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
-      }
     }
-    else
+
+    if ( exists $opt{'mppnccombine-opts'} and exists $opt{'nc4-compress-history'} ) {
+        FREMsg::out( $opt{'verbose'}, FREMsg::FATAL,
+            "Options --mppnccombine-opts and --nc4-compress-history are mutually exclusive - only one of them can be present"
+        );
+        exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
+    }
+
+    if ( exists( $opt{regression} ) ) {
+        unless ( $opt{regression} && substr( $opt{regression}, 0, 1 ) ne '-' ) {
+            FREMsg::out( $opt{verbose}, FREMsg::FATAL,
+                "The --regression option's value is missing" );
+            exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
+        }
+    }
+
+    if ( exists( $opt{'remote-user'} ) ) {
+        unless ( $opt{'remote-user'} && substr( $opt{'remote-user'}, 0, 1 ) ne '-' ) {
+            FREMsg::out( $opt{verbose}, FREMsg::FATAL,
+                "The --remote-user option's value is missing" );
+            exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
+        }
+    }
+
+    if ( exists( $opt{platform} ) ) {
+        unless ( $opt{platform} && substr( $opt{platform}, 0, 1 ) ne '-' ) {
+            FREMsg::out( $opt{verbose}, FREMsg::FATAL, "The --platform option's value is missing" );
+            exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
+        }
+    }
+
+    if ( exists( $opt{target} ) ) {
+        unless ( $opt{target} && substr( $opt{target}, 0, 1 ) ne '-' ) {
+            FREMsg::out( $opt{verbose}, FREMsg::FATAL, "The --target option's value is missing" );
+            exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
+        }
+    }
+
+    if ( exists( $opt{xmlfile} ) ) {
+        unless ( $opt{xmlfile} && substr( $opt{xmlfile}, 0, 1 ) ne '-' ) {
+            FREMsg::out( $opt{verbose}, FREMsg::FATAL, "The --xmlfile option's value is missing" );
+            exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
+        }
+    }
+
+    if ( $opt{check} and !$opt{unique} ) {
+        FREMsg::out( $opt{verbose}, FREMsg::WARNING,
+            "Option --check is allowed only when the option --unique is present, the --check option is ignored"
+        );
+        delete $opt{check};
+    }
+
+    if ( $opt{dual} and $opt{regression} ) {
+        FREMsg::out( $opt{verbose}, FREMsg::WARNING,
+            "Options --dual and --regression are incompatible, the --dual option is ignored" );
+        delete $opt{dual};
+    }
+
+    if ( $opt{dual} and $opt{unique} ) {
+        FREMsg::out( $opt{verbose}, FREMsg::WARNING,
+            "Options --dual and --unique are incompatible, the --dual option is ignored" );
+        delete $opt{dual};
+    }
+
+    if ( $opt{ht} and ( !$opt{target} or $opt{target} !~ /openmp/ ) ) {
+        FREMsg::out( $opt{verbose}, FREMsg::WARNING,
+            "Option --ht must be used with openmp; the --ht option is ignored" );
+        delete $opt{ht};
+    }
+
+    my $fre = FRE->new( 'frerun', %opt ) or exit FREDefaults::STATUS_FRE_GENERIC_PROBLEM;
+
+    # check for FRE version mismatch between XML and current shell
+    $fre->check_for_fre_version_mismatch;
+
+    unless ( $fre->property('FRE.tool.frerun.enabled') ) {
+        my $platformSite = $fre->platformSite();
+        $fre->out( FREMsg::FATAL,
+            "You are not supposed to call this tool on the '$platformSite' site" );
+        exit FREDefaults::STATUS_FRE_GENERIC_PROBLEM;
+    }
+
+    # Is this a site that requires the remote-user option to be used on the command line?
+    if ( $fre->property('FRE.option.remoteuser.required') and not exists( $opt{'remote-user'} ) ) {
+        FREMsg::out( $opt{verbose}, FREMsg::FATAL,
+            "The --remote-user option is required on this site" );
+        exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
+    }
+
+    if ( $opt{'submit-chained'} || $opt{'submit-staged'} ) {
+        if ( $fre->property('FRE.input.staging.enabled') ) {
+            if ( $opt{'submit-staged'} ) {
+                delete $opt{'submit-staged'};
+                $opt{'submit-chained'} = 1;
+            }
+        }
+        else {
+            $fre->out( FREMsg::WARNING, "Input staging is not supported on this site" );
+            exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
+        }
+    }
+
+    if ( scalar( my @types = split( /;/, $fre->property('FRE.output.staging') ) ) > 0 ) {
+        my $typeDefault = $types[0];
+        if ( exists( $opt{'output-staging'} ) ) {
+            if ( $opt{'output-staging'} && substr( $opt{'output-staging'}, 0, 1 ) ne '-' ) {
+                if ( scalar( grep( $_ eq $opt{'output-staging'}, @types ) ) > 0 ) {
+                    $fre->out( FREMsg::NOTE,
+                        "The '$opt{'output-staging'}' output staging type will be used" );
+                }
+                elsif ( scalar(@types) > 1 ) {
+                    my $types = join( "', '", @types );
+                    $fre->out( FREMsg::FATAL,
+                        "The '$opt{'output-staging'}' output staging type isn't allowed",
+                        "Allowed types are '$types', the default one is '$typeDefault'"
+                    );
+                    exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
+                }
+                else {
+                    $fre->out( FREMsg::FATAL,
+                        "The '$opt{'output-staging'}' output staging type isn't allowed",
+                        "Allowed type is '$typeDefault' only"
+                    );
+                    exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
+                }
+            } ## end if ( $opt{'output-staging'...})
+            else {
+                $fre->out( FREMsg::FATAL, "The --output-staging option's value is missing" );
+                exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
+            }
+        } ## end if ( exists( $opt{'output-staging'...}))
+    } ## end if ( scalar( my @types...))
+    else {
+        $fre->out( FREMsg::FATAL, "The FRE output staging is configured incorrectly" );
+        exit FREDefaults::STATUS_FRE_GENERIC_PROBLEM;
+    }
+
+    if ( scalar( my @partitions = split( /;/, $fre->property('FRE.scheduler.partitions') ) ) > 0 ) {
+        my $partitionDefault = $partitions[0];
+        if ( exists( $opt{partition} ) ) {
+            if ( $opt{partition} && substr( $opt{partition}, 0, 1 ) ne '-' ) {
+                if ( scalar( grep( $_ eq $opt{partition}, @partitions ) ) > 0 ) {
+                    $fre->out( FREMsg::NOTE, "The '$opt{partition}' partition will be used" );
+                }
+                elsif ( scalar(@partitions) > 1 ) {
+                    my $partitions = join( "', '", @partitions );
+                    $fre->out( FREMsg::FATAL,
+                        "The '$opt{partition}' partition isn't allowed",
+                        "Allowed partitions are '$partitions', the default one is '$partitionDefault'"
+                    );
+                    exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
+                }
+                else {
+                    $fre->out( FREMsg::FATAL,
+                        "The '$opt{partition}' partition isn't allowed",
+                        "Allowed partition is '$partitionDefault' only"
+                    );
+                    exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
+                }
+            } ## end if ( $opt{partition} &&...)
+            else {
+                $fre->out( FREMsg::FATAL, "The --partition option's value is missing" );
+                exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
+            }
+        } ## end if ( exists( $opt{partition...}))
+        else {
+            $fre->out( FREMsg::WARNING,
+                "Option --partition=$partitionDefault has been automatically added" );
+            $opt{partition} = $partitionDefault;
+        }
+    } ## end if ( scalar( my @partitions...))
+    elsif ( exists( $opt{partition} ) ) {
+        $fre->out( FREMsg::FATAL, "Option --partition is not supported on this site" );
+        exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
+    }
+
+    if (scalar(
+            my @queues = split(
+                /;/,
+                ( $opt{partition} )
+                ? $fre->property("FRE.scheduler.$opt{partition}.queues")
+                : $fre->property("FRE.scheduler.queues")
+            )
+        ) > 0
+        ) {
+        my $queueDefault = $queues[0];
+        if ( exists( $opt{queue} ) ) {
+            if ( $opt{queue} && substr( $opt{queue}, 0, 1 ) ne '-' ) {
+                if ( scalar( grep( $_ eq $opt{queue}, @queues ) ) > 0 ) {
+                    $fre->out( FREMsg::NOTE, "The queue '$opt{queue}' will be used" );
+                }
+                elsif ( scalar(@queues) > 1 ) {
+                    my $queues = join( "', '", @queues );
+                    $fre->out( FREMsg::FATAL,
+                        "The '$opt{queue}' queue isn't allowed",
+                        "Allowed queues are '$queues', the default one is '$queueDefault'"
+                    );
+                    exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
+                }
+                else {
+                    $fre->out( FREMsg::FATAL,
+                        "The '$opt{queue}' queue isn't allowed",
+                        "Allowed queue is '$queueDefault' only"
+                    );
+                    exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
+                }
+            } ## end if ( $opt{queue} && substr...)
+            else {
+                $fre->out( FREMsg::FATAL, "The --queue option's value is missing" );
+                exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
+            }
+        } ## end if ( exists( $opt{queue...}))
+        else {
+            $fre->out( FREMsg::WARNING,
+                "Option --queue=$queueDefault has been automatically added" );
+            $opt{queue} = $queueDefault;
+        }
+    } ## end if ( scalar( my @queues...))
+    elsif ( exists( $opt{queue} ) ) {
+        $fre->out( FREMsg::FATAL, "Option --queue is not supported on this site" );
+        exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
+    }
+
+    if ( $opt{windfall} and !$fre->property('FRE.scheduler.windfall.enabled') ) {
+        $fre->out( FREMsg::FATAL, "Option --windfall is not supported on this site" );
+        exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
+    }
+
+    if (    !exists( $opt{dual} )
+        and !$opt{regression}
+        and !$opt{unique}
+        and $fre->property('FRE.option.dual.default') ) {
+        $fre->out( FREMsg::WARNING, "Option --dual has been automatically added" );
+        $opt{dual} = 1;
+    }
+
+    if ( $opt{transfer} and !$opt{archive} ) {
+        $fre->out( FREMsg::WARNING,
+            "Option --transfer is not allowed when the option --noarchive is present, the --transfer option is ignored"
+        );
+        delete $opt{transfer};
+    }
+    elsif ( $opt{transfer} and $opt{check} ) {
+        $fre->out( FREMsg::WARNING,
+            "Option --transfer is not allowed when the option --check is present, the --transfer option is ignored"
+        );
+        delete $opt{transfer};
+    }
+    elsif ( $opt{transfer}
+        and scalar( split( /;/, $fre->property('FRE.output.staging') ) ) > 1
+        and $opt{'output-staging'} eq 'online' ) {
+        $fre->out( FREMsg::WARNING,
+            "Option --transfer is not allowed when the option --output-staging=online is present, the --transfer option is ignored"
+        );
+        delete $opt{transfer};
+    }
+    elsif (
+            !exists( $opt{transfer} )
+        and $opt{archive}
+        and !$opt{check}
+        and ( scalar( split( /;/, $fre->property('FRE.output.staging') ) ) == 1
+            or $opt{'output-staging'} ne 'online' )
+        and $fre->property('FRE.option.transfer.default')
+        ) {
+        $fre->out( FREMsg::WARNING, "Option --transfer has been automatically added" );
+        $opt{transfer} = 1;
+    }
+
+    if ( !exists( $opt{free} ) and $fre->property('FRE.option.free.default') ) {
+        $fre->out( FREMsg::WARNING, "Option --free has been automatically added" );
+        $opt{free} = 1;
+    }
+
     {
-      # ----------------------------------------------------------------- production runscript creation
-      my $dualOn = $opt{dual};
-      (my $rc, $status) = frerun::processProduction($exp, (%opt, 'dual' => 0));
-      if ($rc)
-      {
-	$fre->out(FREMsg::NOTE, "A runscript for the experiment '$expName' has been created successfully");
-	if ($dualOn)
-	{
-	  (my $rc, $status) = frerun::processProduction($exp, (%opt, 'check' => 1, 'extend' => 0, 'overwrite' => 0, 'transfer' => 0, 'unique' => 1));
-	  if ($rc)
-	  {
-	    $fre->out(FREMsg::NOTE, "A dual runscript for the experiment '$expName' has been created successfully");
-	  }
-	  else
-	  {
-	    $fre->out(FREMsg::FATAL, "Unable to create a dual runscript for the experiment '$expName'");
-	    frerun::skipExp($exp) if scalar(@exps) > 1;
-	  }
-	} 
-      }
-      else
-      {
-	$fre->out(FREMsg::FATAL, "Unable to create a runscript for the experiment '$expName'");
-	frerun::skipExp($exp) if scalar(@exps) > 1;
-      }
+        my $ncores 
+            = $opt{ncores}
+            || $fre->property('FRE.scheduler.inputStager.coresPerJob.default')
+            || frerun::NCORES_DEFAULT;
+        $opt{ncores} = $ncores;
     }
-    
-    # ------------------------------------ unset the experiment name
-    
-    $fre->unsetCurrentExperimentName();
 
-  }
-  
-  # ------------------------ Call NiNaC on successful runscript creation if NiNaC module is loaded
-
-  if ( $status == FREDefaults::STATUS_OK and exists( $ENV{'NiNaC_LVL'} ) and $ENV{'NiNaC_LVL'} > 0 )
-  {
-    # Ensure that the xml path is an absolute path
-    my $xmlpath = File::Spec->rel2abs( $opt{'xmlfile'} );
-
-    # Split the xml path into file name and directory path
-    my $xmlfile = File::Basename::basename( $xmlpath );
-    my $xmldir = File::Basename::dirname( $xmlpath );
-
-    # Get the xml dir signature
-    system( $ENV{'NiNaC_XmlRx'}, $xmlfile, $xmldir );
-
-    # Alert the user on NiNaC_XmlRx failure
-    if ( $? != 0 ) {
-      print "NiNaC Note: While NiNaC loaded attempt at NiNaC_XmlRx "
-          . FREUtil::decodeChildStatus($?, $!)
-          . " : FRE continuing as normal.\n";
+    {
+        my $walltime 
+            = $opt{walltime}
+            || $fre->property('FRE.scheduler.inputStager.runtime.default')
+            || frerun::WALLTIME_DEFAULT;
+        $opt{walltime} = $walltime;
     }
-  }
 
-  exit $status;
+    my @exps = ();
+    foreach my $expName ( FREUtil::listUnique(@ARGV) ) {
+        my $exp = FREExperiment->new( $fre, $expName )
+            or exit FREDefaults::STATUS_FRE_GENERIC_PROBLEM;
+        push @exps, $exp;
+    }
+
+    my $status = FREDefaults::STATUS_OK;
+
+    foreach my $exp (@exps) {
+
+        # --------------------------------- set the experiment name
+
+        my $expName = $exp->name();
+        $fre->setCurrentExperimentName($expName);
+        $fre->out( FREMsg::NOTE, "Setting up the experiment '$expName'..." );
+
+        # ---------------------------------------------------------------- process the experiment
+
+        if ( $opt{regression} ) {
+            if ( my @labels = $exp->extractRegressionLabels( $opt{regression} ) ) {
+                my $ok = 1;
+                foreach my $label (@labels) {
+
+     # ----------------------------------------------------------------- regression scripts creation
+                    ( my $rc, $status ) = frerun::processRegression( $exp, $label, %opt );
+                    if ($rc) {
+                        $fre->out( FREMsg::NOTE,
+                            "All the regression runs with label '$label' have been processed successfully"
+                        );
+                    }
+                    else {
+                        $fre->out( FREMsg::FATAL,
+                            "Unable to process regression runs with label '$label'" );
+                        $ok = 0;
+                        last;
+                    }
+                }
+                unless ($ok) {
+                    $fre->out( FREMsg::FATAL,
+                        "Unable to process all the requested regression tests" );
+                    frerun::skipExp($exp) if scalar(@exps) > 1;
+                }
+            } ## end if ( my @labels = $exp...)
+            else {
+                $fre->out( FREMsg::FATAL, "Unable to select regression tests to process" );
+                frerun::skipExp($exp) if scalar(@exps) > 1;
+                $status = FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
+            }
+        } ## end if ( $opt{regression} )
+        else {
+
+   # ----------------------------------------------------------------- production runscript creation
+            my $dualOn = $opt{dual};
+            ( my $rc, $status ) = frerun::processProduction( $exp, ( %opt, 'dual' => 0 ) );
+            if ($rc) {
+                $fre->out( FREMsg::NOTE,
+                    "A runscript for the experiment '$expName' has been created successfully" );
+                if ($dualOn) {
+                    ( my $rc, $status ) = frerun::processProduction(
+                        $exp,
+                        (   %opt,
+                            'check'     => 1,
+                            'extend'    => 0,
+                            'overwrite' => 0,
+                            'transfer'  => 0,
+                            'unique'    => 1
+                        )
+                    );
+                    if ($rc) {
+                        $fre->out( FREMsg::NOTE,
+                            "A dual runscript for the experiment '$expName' has been created successfully"
+                        );
+                    }
+                    else {
+                        $fre->out( FREMsg::FATAL,
+                            "Unable to create a dual runscript for the experiment '$expName'" );
+                        frerun::skipExp($exp) if scalar(@exps) > 1;
+                    }
+                } ## end if ($dualOn)
+            } ## end if ($rc)
+            else {
+                $fre->out( FREMsg::FATAL,
+                    "Unable to create a runscript for the experiment '$expName'" );
+                frerun::skipExp($exp) if scalar(@exps) > 1;
+            }
+        } ## end else [ if ( $opt{regression} )]
+
+        # ------------------------------------ unset the experiment name
+
+        $fre->unsetCurrentExperimentName();
+
+    } ## end foreach my $exp (@exps)
+
+    # ------------------------ Call NiNaC on successful runscript creation if NiNaC module is loaded
+
+    if (    $status == FREDefaults::STATUS_OK
+        and exists( $ENV{'NiNaC_LVL'} )
+        and $ENV{'NiNaC_LVL'} > 0 ) {
+
+        # Ensure that the xml path is an absolute path
+        my $xmlpath = File::Spec->rel2abs( $opt{'xmlfile'} );
+
+        # Split the xml path into file name and directory path
+        my $xmlfile = File::Basename::basename($xmlpath);
+        my $xmldir  = File::Basename::dirname($xmlpath);
+
+        # Get the xml dir signature
+        system( $ENV{'NiNaC_XmlRx'}, $xmlfile, $xmldir );
+
+        # Alert the user on NiNaC_XmlRx failure
+        if ( $? != 0 ) {
+            print "NiNaC Note: While NiNaC loaded attempt at NiNaC_XmlRx "
+                . FREUtil::decodeChildStatus( $?, $! )
+                . " : FRE continuing as normal.\n";
+        }
+    } ## end if ( $status == FREDefaults::STATUS_OK...)
+
+    exit $status;
 
 }
