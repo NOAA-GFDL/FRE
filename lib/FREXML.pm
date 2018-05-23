@@ -17,7 +17,7 @@
 
 package FREXML;
 
-use strict; 
+use strict;
 
 use Scalar::Util();
 use XML::Dumper();
@@ -28,81 +28,75 @@ use XML::Dumper();
 
 my $standardize;
 $standardize = sub($$)
-# ------ arguments: $ref $refType 
+
+    # ------ arguments: $ref $refType
 {
-  my ($r, $t) = @_;
-  if (!$t or $t eq 'SCALAR')
-  {
-    ${$r} =~ s/^\s*#.*$//gm;
-    ${$r} =~ s/(?:^\s+|\s+$)//gs;
-    ${$r} =~ s/\s+/ /gs;
-  }
-  elsif ($t eq 'ARRAY')
-  {
-    for (my $i = 0; $i < scalar @{$r}; $i++)
-    {
-      my $v = $r->[$i];
-      if ($v)
-      {
-	my $t = Scalar::Util::reftype($v);
-        $standardize->(($t) ? $v : \$r->[$i], $t);
-      }
+    my ( $r, $t ) = @_;
+    if ( !$t or $t eq 'SCALAR' ) {
+        ${$r} =~ s/^\s*#.*$//gm;
+        ${$r} =~ s/(?:^\s+|\s+$)//gs;
+        ${$r} =~ s/\s+/ /gs;
     }
-  }
-  elsif ($t eq 'HASH')
-  {
-    delete $r->{lineNumber} if exists $r->{lineNumber};
-    foreach my $k (keys %{$r})
-    {
-      my $v = $r->{$k};
-      if ($v)
-      {
-	my $t = Scalar::Util::reftype($v);
-        $standardize->(($t) ? $v : \$r->{$k}, $t);
-      }
+    elsif ( $t eq 'ARRAY' ) {
+        for ( my $i = 0; $i < scalar @{$r}; $i++ ) {
+            my $v = $r->[$i];
+            if ($v) {
+                my $t = Scalar::Util::reftype($v);
+                $standardize->( ($t) ? $v : \$r->[$i], $t );
+            }
+        }
     }
-  }
-  else
-  {
-    # ------ for future extensions ???
-  }
+    elsif ( $t eq 'HASH' ) {
+        delete $r->{lineNumber} if exists $r->{lineNumber};
+        foreach my $k ( keys %{$r} ) {
+            my $v = $r->{$k};
+            if ($v) {
+                my $t = Scalar::Util::reftype($v);
+                $standardize->( ($t) ? $v : \$r->{$k}, $t );
+            }
+        }
+    }
+    else {
+
+        # ------ for future extensions ???
+    }
 };
-  
+
 # //////////////////////////////////////////////////////////////////////////////
 # //////////////////////////////////////////////////////// Exported Functions //
 # //////////////////////////////////////////////////////////////////////////////
 
 sub save($$)
-# ------ arguments: $fileName $refToHash
-# ------ called as regular function
-# ------ save hash as an XML document file
+
+    # ------ arguments: $fileName $refToHash
+    # ------ called as regular function
+    # ------ save hash as an XML document file
 {
-  my ($n, $r) = @_;
-  my %h = %{$r};
-  $standardize->(\%h, 'HASH');
-  XML::Dumper::pl2xml(\%h, $n);
+    my ( $n, $r ) = @_;
+    my %h = %{$r};
+    $standardize->( \%h, 'HASH' );
+    XML::Dumper::pl2xml( \%h, $n );
 }
 
 sub verify($$)
-# ------ arguments: $filename $refToHash
-# ------ called as regular function
-# ------ pass an XML document file and a hash of values to verify
-# ------ return true if ALL the subnodes have the prescribed value
+
+    # ------ arguments: $filename $refToHash
+    # ------ called as regular function
+    # ------ pass an XML document file and a hash of values to verify
+    # ------ return true if ALL the subnodes have the prescribed value
 {
-  my ($n, $r) = @_;
-  if (open my $handle, '<', $n)
-  {
-    my $x1 = join '', <$handle>;
-    close $handle;
-    my %h = %{$r};
-    $standardize->(\%h, 'HASH');
-    my $x2 = XML::Dumper::pl2xml(\%h);
-    return XML::Dumper::xml_compare($x1, $x2);
-  }
-  else
-  {
-    return 1;
-  }
+    my ( $n, $r ) = @_;
+    if ( open my $handle, '<', $n ) {
+        my $x1 = join '', <$handle>;
+        close $handle;
+        my %h = %{$r};
+        $standardize->( \%h, 'HASH' );
+        my $x2 = XML::Dumper::pl2xml( \%h );
+        return XML::Dumper::xml_compare( $x1, $x2 );
+    }
+    else {
+        return 1;
+    }
 }
 
 # //////////////////////////////////////////////////////////////////////////////

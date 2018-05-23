@@ -16,7 +16,7 @@ use strict;
 use Cwd();
 use File::Basename();
 use File::Spec();
-use Getopt::Long(':config', 'no_ignore_case', 'no_auto_abbrev');
+use Getopt::Long( ':config', 'no_ignore_case', 'no_auto_abbrev' );
 use XML::LibXML();
 
 # //////////////////////////////////////////////////////////////////////////////
@@ -25,16 +25,11 @@ use XML::LibXML();
 
 {
 
-  package find_module_info;
+    package find_module_info;
 
-  use constant VERSION => '$Id: find_module_info,v 1.1.2.1 2011/09/23 19:23:18 afy Exp $';
+    use constant VERSION => '$Id: find_module_info,v 1.1.2.1 2011/09/23 19:23:18 afy Exp $';
 
-  use constant OPTLIST =>
-  (
-    'help|h',
-    'version|V',
-    'verbose|v+'
-  );
+    use constant OPTLIST => ( 'help|h', 'version|V', 'verbose|v+' );
 
 }
 
@@ -44,86 +39,80 @@ use XML::LibXML();
 
 {
 
-  package find_module_info;
-  
-  my $self = File::Basename::basename($0);
+    package find_module_info;
 
-  sub Usage()
-  # ------ arguments: none
-  {
-    return
-    (
-      "\n",
-      "  Usage: $self [options] filename\n\n",
-      "  Options:\n\n",
-      "   -h, --help     print help message and exit\n",
-      "   -v, --verbose  get verbose messages (repeat to get more messages)\n", 
-      "   -V, --version  print the tool version and exit\n\n"
-    );
-  }
-  
-  sub Help()
-  # ------ arguments: none
-  {
-    my @usage = Usage();
-    return
-    (
-      "\n",
-      "   Synopsis: $self returns module directory and modulefile for a given modulename\n",
-      "@usage"
-    );
-  }
-  
-  sub ModulePath()
-  # ------ arguments: none
-  {
-    return (exists($ENV{MODULEPATH})) ? $ENV{MODULEPATH} : '';
-  }
-  
-  sub LMFiles()
-  # ------ arguments: none
-  {
-    if (exists($ENV{_LMFILES_}))
+    my $self = File::Basename::basename($0);
+
+    sub Usage()
+
+        # ------ arguments: none
     {
-      return $ENV{_LMFILES_};
+        return (
+            "\n",
+            "  Usage: $self [options] filename\n\n",
+            "  Options:\n\n",
+            "   -h, --help     print help message and exit\n",
+            "   -v, --verbose  get verbose messages (repeat to get more messages)\n",
+            "   -V, --version  print the tool version and exit\n\n"
+        );
     }
-    else
+
+    sub Help()
+
+        # ------ arguments: none
     {
-      my ($result, $i) = ('', 0);
-      while (1)
-      {
-        my $partName = '_LMFILES_' . sprintf('%03d', $i);
-        if (exists($ENV{$partName}))
-	{
-          $result .= $ENV{$partName};
-	  $i++;
-	}
-	else
-	{
-	  last;
-	}
-      }
-      return $result;
+        my @usage = Usage();
+        return ( "\n",
+            "   Synopsis: $self returns module directory and modulefile for a given modulename\n",
+            "@usage" );
     }
-  }
-  
-  sub Find($$$$)
-  # ------ arguments: $modulepath $lmfiles $modname $verbose
-  {
-    my ($p, $f, $n, $v) = @_;
-    my @paths = split(/:/, $p);
-    foreach my $spec (split(/:/, $f))
+
+    sub ModulePath()
+
+        # ------ arguments: none
     {
-      print STDERR $spec, "\n" if $v;
-      if ($spec =~ m/(\S*)\/$n\/(\S*)/)
-      {
-        my ($dir, $file) = ($1, $2);
-	return (1, $dir, $file) if scalar(grep($_ eq $dir, @paths)) > 0;
-      }
+        return ( exists( $ENV{MODULEPATH} ) ) ? $ENV{MODULEPATH} : '';
     }
-    return 0;
-  }
-  
+
+    sub LMFiles()
+
+        # ------ arguments: none
+    {
+        if ( exists( $ENV{_LMFILES_} ) ) {
+            return $ENV{_LMFILES_};
+        }
+        else {
+            my ( $result, $i ) = ( '', 0 );
+            while (1) {
+                my $partName = '_LMFILES_' . sprintf( '%03d', $i );
+                if ( exists( $ENV{$partName} ) ) {
+                    $result .= $ENV{$partName};
+                    $i++;
+                }
+                else {
+                    last;
+                }
+            }
+            return $result;
+        }
+    }
+
+    sub Find($$$$)
+
+        # ------ arguments: $modulepath $lmfiles $modname $verbose
+    {
+        my ( $p, $f, $n, $v ) = @_;
+        my @paths = split( /:/, $p );
+        foreach my $spec ( split( /:/, $f ) ) {
+            print STDERR $spec, "\n" if $v;
+            if ( $spec =~ m/(\S*)\/$n\/(\S*)/ ) {
+                my ( $dir, $file ) = ( $1, $2 );
+                return ( 1, $dir, $file ) if scalar( grep( $_ eq $dir, @paths ) ) > 0;
+            }
+        }
+        return 0;
+    }
+
 }
 
 # //////////////////////////////////////////////////////////////////////////////
@@ -132,47 +121,41 @@ use XML::LibXML();
 
 {
 
-  my %opt = ();
+    my %opt = ();
 
-  Getopt::Long::GetOptions(\%opt, find_module_info::OPTLIST) or (print STDERR find_module_info::Usage() and exit 1);
-  if ($opt{version}) {print STDERR find_module_info::VERSION,"\n" and exit 0;}
-  if ($opt{help}) {print STDERR find_module_info::Help() and exit 0;}
+    Getopt::Long::GetOptions( \%opt, find_module_info::OPTLIST )
+        or ( print STDERR find_module_info::Usage() and exit 1 );
+    if ( $opt{version} ) { print STDERR find_module_info::VERSION, "\n" and exit 0; }
+    if ( $opt{help} ) { print STDERR find_module_info::Help() and exit 0; }
 
-  if (scalar(@ARGV) == 1)
-  {
-    my $modulepath = find_module_info::ModulePath();
-    if ($modulepath)
-    {
-      my $lmfiles = find_module_info::LMFiles();
-      if ($lmfiles)
-      {
-	my ($status, $dir, $file) = find_module_info::Find($modulepath, $lmfiles, $ARGV[0], $opt{verbose});
-	if ($status)
-	{
-          print $dir, ' ', $ARGV[0], ' ', $file, "\n";
-	}
-	else
-	{
-	  print STDERR "The modulename '$ARGV[0]' is unknown\n";
-	  exit 1;
-	}
-      }
-      else
-      {
-	print STDERR "Environment modules aren't loaded (no _LMFILES_*)\n";
-	exit 1;
-      }
+    if ( scalar(@ARGV) == 1 ) {
+        my $modulepath = find_module_info::ModulePath();
+        if ($modulepath) {
+            my $lmfiles = find_module_info::LMFiles();
+            if ($lmfiles) {
+                my ( $status, $dir, $file )
+                    = find_module_info::Find( $modulepath, $lmfiles, $ARGV[0], $opt{verbose} );
+                if ($status) {
+                    print $dir, ' ', $ARGV[0], ' ', $file, "\n";
+                }
+                else {
+                    print STDERR "The modulename '$ARGV[0]' is unknown\n";
+                    exit 1;
+                }
+            }
+            else {
+                print STDERR "Environment modules aren't loaded (no _LMFILES_*)\n";
+                exit 1;
+            }
+        }
+        else {
+            print STDERR "Environment modules aren't loaded (no MODULEPATH)\n";
+            exit 1;
+        }
+    } ## end if ( scalar(@ARGV) == ...)
+    else {
+        print STDERR "A modulename argument is absent or not a single one\n";
+        exit 1;
     }
-    else
-    {
-      print STDERR "Environment modules aren't loaded (no MODULEPATH)\n";
-      exit 1;
-    }
-  }
-  else
-  {
-    print STDERR "A modulename argument is absent or not a single one\n";
-    exit 1;
-  }
 
 }
