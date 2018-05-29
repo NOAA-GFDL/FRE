@@ -1,70 +1,142 @@
-# template for the Intel fortran compiler
-# typical use with mkmf
+# Template for the Intel Compilers on a Cray System
+#
+# Typical use with mkmf
 # mkmf -t intel.mk -c"-Duse_libMPI -Duse_netCDF" path_names /usr/local/include
+
 ############
-# commands #
+# Commands Macros
 ############
 FC = ftn
 CC = cc
-CXX = CC
-LD = ftn
-#########
-# flags #
-#########
-DEBUG =
-REPRO =
-VERBOSE =
-OPENMP =
+LD = ftn $(MAIN_PROGRAM)
 
-##############################################
-# Need to use at least GNU Make version 3.81 #
-##############################################
+#######################
+# Build target macros
+#
+# Macros that modify compiler flags used in the build.  Target
+# macrose are usually set on the call to make:
+#
+#    make REPRO=on NETCDF=3
+#
+# Most target macros are activated when their value is non-blank.
+# Some have a single value that is checked.  Others will use the
+# value of the macro in the compile command.
+
+DEBUG =              # If non-blank, perform a debug build (Cannot be
+                     # mixed with REPRO or TEST)
+
+REPRO =              # If non-blank, erform a build that guarentees
+                     # reprodicuibilty from run to run.  Cannot be used
+                     # with DEBUG or TEST
+
+TEST  =              # If non-blank, use the compiler options defined in
+                     # the FFLAGS_TEST and CFLAGS_TEST macros.  Cannot be
+                     # use with REPRO or DEBUG
+
+VERBOSE =            # If non-blank, add additional verbosity compiler
+                     # options
+
+OPENMP =             # If non-blank, compile with openmp enabled
+
+NO_OVERRIDE_LIMITS = # If non-blank, do not use the -qoverride-limits
+                     # compiler option.  Default behavior is to compile
+                     # with -qoverride-limits.
+
+NETCDF =             # If value is '3' and CPPDEFS contains
+                     # '-Duse_netCDF', then the additional cpp macro
+                     # '-Duse_LARGEFILE' is added to the CPPDEFS macro.
+
+INCLUDES =           # A list of -I Include directories to be added to the
+                     # the compile command.
+
+SSE = -msse2         # The SSE options to be used to compile.  If blank,
+                     # than use the default SSE settings for the host.
+                     # Current default is to use SSE2.
+
+COVERAGE =           # Add the code coverage compile options.
+
+# Need to use at least GNU Make version 3.81
 need := 3.81
 ok := $(filter $(need),$(firstword $(sort $(MAKE_VERSION) $(need))))
 ifneq ($(need),$(ok))
 $(error Need at least make version $(need).  Load module gmake/3.81)
 endif
 
-MAKEFLAGS += --jobs=8
+# REPRO, DEBUG and TEST need to be mutually exclusive of each other.
+# Make sure the user hasn't supplied two at the same time
+ifdef REPRO
+ifneq ($(DEBUG),)
+$(error Options REPRO and DEBUG cannot be used together)
+else ifneq ($(TEST),)
+$(error Options REPRO and TEST cannot be used together)
+endif
+else ifdef DEBUG
+ifneq ($(TEST),)
+$(error Options DEBUG and TEST cannot be used together)
+endif
+endif
 
-NETCDF_ROOT = $(NETCDF_DIR)
-MPI_ROOT    = $(MPICH_DIR)
-INCLUDE = -I$(NETCDF_ROOT)/include
+MAKEFLAGS += --jobs=$(shell grep '^processor' /proc/cpuinfo | wc -l)
 
-FPPFLAGS := -fpp -Wp,-w $(INCLUDE)
+# Macro for Fortran preprocessor
+FPPFLAGS = -fpp -Wp,-w $(INCLUDES)
+# Fortran Compiler flags for the NetCDF library
+FPPFLAGS += $(shell nf-config --fflags)
 
-FFLAGS := -fno-alias -auto -safe-cray-ptr -ftz -assume byterecl -i4 -r8 -nowarn -sox $(INCLUDE)
-FFLAGS_OPT = -O3 -g -fp-model source  -traceback -qoverride-limits
-FFLAGS_DEBUG = -g -O0 -check -check noarg_temp_created -check nopointer -warn -warn noerrors -fpe0 -traceback -ftrapuv
-FFLAGS_REPRO = -O2 -debug minimal -fp-model source -qoverride-limits
+# Base set of Fortran compiler flags
+FFLAGS := -fno-alias -auto -safe-cray-ptr -ftz -assume byterecl -i4 -r8 -nowarn -sox -traceback
+
+# Flags based on perforance target (production (OPT), reproduction (REPRO), or debug (DEBUG)
+FFLAGS_OPT = -O3 -debug minimal -fp-model source
+FFLAGS_REPRO = -O2 -debug minimal -fp-model source
+FFLAGS_DEBUG = -g -O0 -check -check noarg_temp_created -check nopointer -warn -warn noerrors -fpe0 -ftrapuv
+
+# Flags to add additional build options
 FFLAGS_OPENMP = -qopenmp
+FFLAGS_OVERRIDE_LIMITS = -qoverride-limits
 FFLAGS_VERBOSE = -v -V -what -warn all
+FFLAGS_COVERAGE = -prof-gen=srcpos
 
-CFLAGS := -D__IFC -sox
+# Macro for C preprocessor
+CPPFLAGS = -D__IFC $(INCLUDES)
+# C Compiler flags for the NetCDF library
+CPPFLAGS += $(shell nc-config --cflags)
+
+# Base set of C compiler flags
+CFLAGS := -sox -traceback
+
+# Flags based on perforance target (production (OPT), reproduction (REPRO), or debug (DEBUG)
 CFLAGS_OPT = -O2 -debug minimal
+CFLAGS_REPRO = -O2 -debug minimal
+CFLAGS_DEBUG = -O0 -g -ftrapuv
+
+# Flags to add additional build options
 CFLAGS_OPENMP = -qopenmp
-CFLAGS_DEBUG = -O0 -g -ftrapuv -traceback
 CFLAGS_VERBOSE = -w3
+CFLAGS_COVERAGE = -prof-gen=srcpos
 
 # Optional Testing compile flags.  Mutually exclusive from DEBUG, REPRO, and OPT
 # *_TEST will match the production if no new option(s) is(are) to be tested.
-FFLAGS_TEST = -O3 -debug minimal -fp-model source -qoverride-limits
-CFLAGS_TEST = -O2
+FFLAGS_TEST = $(FFLAGS_OPT)
+CFLAGS_TEST = $(CFLAGS_OPT)
 
+# Linking flags
 LDFLAGS :=
 LDFLAGS_OPENMP := -qopenmp
 LDFLAGS_VERBOSE := -Wl,-V,--verbose,-cref,-M
+LDFLAGS_COVERAGE = -prof-gen=srcpos
 
-# start with blank LIBS
+# Start with blank LIBS
 LIBS :=
 
-ifneq ($(REPRO),)
+# Get compile flags based on target macros.
+ifdef REPRO
 CFLAGS += $(CFLAGS_REPRO)
 FFLAGS += $(FFLAGS_REPRO)
-else ifneq ($(DEBUG),)
+else ifdef DEBUG
 CFLAGS += $(CFLAGS_DEBUG)
 FFLAGS += $(FFLAGS_DEBUG)
-else ifneq ($(TEST),)
+else ifdef TEST
 CFLAGS += $(CFLAGS_TEST)
 FFLAGS += $(FFLAGS_TEST)
 else
@@ -72,15 +144,22 @@ CFLAGS += $(CFLAGS_OPT)
 FFLAGS += $(FFLAGS_OPT)
 endif
 
-ifneq ($(OPENMP),)
+ifdef OPENMP
 CFLAGS += $(CFLAGS_OPENMP)
 FFLAGS += $(FFLAGS_OPENMP)
 LDFLAGS += $(LDFLAGS_OPENMP)
-# to correct a loader bug on gaea: envars below set by module load intel
-LIBS += -L$(INTEL_PATH)/$(INTEL_MAJOR_VERSION)/$(INTEL_MINOR_VERSION)/lib/intel64 -lifcoremt
 endif
 
-ifneq ($(VERBOSE),)
+ifdef SSE
+CFLAGS += $(SSE)
+FFLAGS += $(SSE)
+endif
+
+ifdef NO_OVERRIDE_LIMITS
+FFLAGS += $(FFLAGS_OVERRIDE_LIMITS)
+endif
+
+ifdef VERBOSE
 CFLAGS += $(CFLAGS_VERBOSE)
 FFLAGS += $(FFLAGS_VERBOSE)
 LDFLAGS += $(LDFLAGS_VERBOSE)
@@ -93,13 +172,15 @@ ifeq ($(NETCDF),3)
   endif
 endif
 
-ifneq ($(findstring netcdf-4.0.1,$(LOADEDMODULES)),)
-  LIBS += -lnetcdff -lnetcdf -lhdf5_hl -lhdf5 -lz
-else
-  LIBS += -lnetcdf
+ifdef COVERAGE
+ifdef BUILDROOT
+PROF_DIR=-prof-dir=$(BUILDROOT)
+endif
+CFLAGS += $(CFLAGS_COVERAGE) $(PROF_DIR)
+FFLAGS += $(FFLAGS_COVERAGE) $(PROF_DIR)
+LDFLAGS += $(LDFLAGS_COVERAGE) $(PROF_DIR)
 endif
 
-LIBS +=
 LDFLAGS += $(LIBS)
 
 #---------------------------------------------------------------------------

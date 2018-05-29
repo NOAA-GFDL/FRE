@@ -1,7 +1,7 @@
 # Template for the Intel Compilers on Linux systems
 #
 # Typical use with mkmf
-# mkmf -t linux-intel.mk -c"-Duse_libMPI -Duse_netCDF" path_names /usr/local/include
+# mkmf -t intel.mk -c"-Duse_libMPI -Duse_netCDF" path_names /usr/local/include
 
 ############
 # Command Macros
@@ -22,38 +22,46 @@ LD = ifort
 # Some have a single value that is checked.  Others will use the
 # value of the macro in the compile command.
 
-DEBUG =              # If non-blank, perform a debug build (Cannot be
-                     # mixed with REPRO or TEST)
+# DEBUG
+# If non-blank, perform a debug build (Cannot be mixed with REPRO or
+# TEST)
 
-REPRO =              # If non-blank, erform a build that guarentees
-                     # reprodicuibilty from run to run.  Cannot be used
-                     # with DEBUG or TEST
+# REPRO
+# If non-blank, erform a build that guarentees reprodicuibilty from
+# run to run.  Cannot be used with DEBUG or TEST
 
-TEST  =              # If non-blank, use the compiler options defined in
-                     # the FFLAGS_TEST and CFLAGS_TEST macros.  Cannot be
-                     # use with REPRO or DEBUG
+# TEST
+# If non-blank, use the compiler options defined in the FFLAGS_TEST
+# and CFLAGS_TEST macros.  Cannot be use with REPRO or DEBUG
 
-VERBOSE =            # If non-blank, add additional verbosity compiler
-                     # options
+# VERBOSE
+# If non-blank, add additional verbosity compiler options
 
-OPENMP =             # If non-blank, compile with openmp enabled
+# OPENMP
+# If non-blank, compile with openmp enabled
 
-NO_OVERRIDE_LIMITS = # If non-blank, do not use the -qoverride-limits
-                     # compiler option.  Default behavior is to compile
-                     # with -qoverride-limits.
+# NO_OVERRIDE_LIMITS
+# If non-blank, do not use the -qoverride-limits compiler option.
+# Default behavior is to compile with -qoverride-limits.
 
-NETCDF =             # If value is '3' and CPPDEFS contains
-                     # '-Duse_netCDF', then the additional cpp macro
-                     # '-Duse_LARGEFILE' is added to the CPPDEFS macro.
+# NETCDF
+# If value is '3' and CPPDEFS contains '-Duse_netCDF', then the
+# additional cpp macro '-Duse_LARGEFILE' is added to the CPPDEFS
+# macro.
 
-INCLUDES =           # A list of -I Include directories to be added to the
-                     # the compile command.
+# INCLUDES
+# A list of -I Include directories to be added to the the compile
+# command.
 
-SSE = -msse2         # The SSE options to be used to compile.  If blank,
-                     # than use the default SSE settings for the host.
-                     # Current default is to use SSE2.
+# SSE
+# The SSE options to be used to compile.  If blank, than use the
+# default SSE settings for the host.  Current default is to use SSE2.
+ifndef SSE
+SSE = -msse2
+endif
 
-COVERAGE =           # Add the code coverage compile options.
+# COVERAGE
+# Add the code coverage compile options.
 
 # Need to use at least GNU Make version 3.81
 need := 3.81
@@ -81,9 +89,9 @@ MAKEFLAGS += --jobs=$(shell grep '^processor' /proc/cpuinfo | wc -l)
 # Macro for Fortran preprocessor
 FPPFLAGS = -fpp -Wp,-w $(INCLUDES)
 # Fortran Compiler flags for the NetCDF library
-FFPPLAGS += $(shell nf-config --fflags)
+FPPFLAGS += $(shell nf-config --fflags)
 # Fortran Compiler flags for the MPICH MPI library
-FFPPLAGS += $(shell pkg-config --cflags-only-I mpich2-c)
+FPPFLAGS += $(shell pkg-config --cflags-only-I mpich2-c)
 
 # Base set of Fortran compiler flags
 FFLAGS := -fno-alias -stack_temps -safe_cray_ptr -ftz -assume byterecl -i4 -r8 -nowarn -g -sox -traceback
