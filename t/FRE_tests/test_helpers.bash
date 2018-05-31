@@ -54,3 +54,14 @@ remove_ninac_from_output_and_lines() {
     remove_lines_matching "$ninac"
     remove_output_matching "$ninac"
 }
+
+print_output_and_status() {
+    echo "Got:      \"$output\""
+    echo "Exit status: $status"
+}
+
+print_output_status_and_diff_expected() {
+    echo "Expected: \"$output_good\""
+    print_output_and_status
+    echo "Diff: $(diff <(printf '%s\n' "$output_good") <(printf '%s\n' "$output"))"
+}
