@@ -104,10 +104,7 @@ setup() {
     num_lines=${#lines[@]}
     last_line="${lines[$((num_lines-1))]}"
 
-    echo "Output:   \"$output\""
-    echo "Expected: \"$last_line_good\""
-    echo "Got:      \"$last_line\""
-    echo "Exit status: $status"
+    print_output_status_and_diff_expected_long "$last_line" "$last_line_good"
     [ "$status" -eq 0 ]
     string_matches_pattern "$last_line" "$last_line_good"
     rm -rf "${root_stem}/${USER}/FRE_tests-${unique_string}-temp"
@@ -170,10 +167,7 @@ setup() {
     num_lines=${#lines[@]}
     last_line="${lines[$((num_lines-1))]}"
 
-    echo "Output:   \"$output\""
-    echo "Expected: \"$last_line_good\""
-    echo "Got:      \"$last_line\""
-    echo "Exit status: $status"
+    print_output_status_and_diff_expected_long "$last_line" "$last_line_good"
     [ "$status" -eq 0 ]
     string_matches_pattern "$last_line" "$last_line_good"
     rm -rf "${root_stem}/${USER}/FRE_tests-${unique_string}-temp"
@@ -226,10 +220,7 @@ setup() {
     num_lines=${#lines[@]}
     last_line="${lines[$((num_lines-1))]}"
 
-    echo "Output:   \"$output\""
-    echo "Expected: \"$last_line_good\""
-    echo "Got:      \"$last_line\""
-    echo "Exit status: $status"
+    print_output_status_and_diff_expected_long "$last_line" "$last_line_good"
     [ "$status" -eq 0 ]
     string_matches_pattern "$last_line" "$last_line_good"
     rm -rf "${root_stem}/${USER}/FRE_tests-${unique_string}-temp"
@@ -273,10 +264,7 @@ setup() {
     num_lines=${#lines[@]}
     last_line="${lines[$((num_lines-1))]}"
 
-    echo "Output:   \"$output\""
-    echo "Expected: \"$last_line_good\""
-    echo "Got:      \"$last_line\""
-    echo "Exit status: $status"
+    print_output_status_and_diff_expected_long "$last_line" "$last_line_good"
     [ "$status" -eq 0 ]
     string_matches_pattern "$last_line" "$last_line_good"
     rm -rf "${root_stem}/${USER}/FRE_tests-${unique_string}-temp"
@@ -367,10 +355,7 @@ ${last_line_good}"
     num_lines=${#lines[@]}
     last_line="${lines[$((num_lines-1))]}"
 
-    echo "Output:   \"$output\""
-    echo "Expected: \"$last_line_good\""
-    echo "Got:      \"$last_line\""
-    echo "Exit status: $status"
+    print_output_status_and_diff_expected_long "$last_line" "$last_line_good"
     [ "$status" -eq 0 ]
     string_matches_pattern "$last_line" "$last_line_good"
     rm -rf "${root_stem}/${USER}/FRE_tests-${unique_string}-temp"
@@ -415,10 +400,7 @@ ${last_line_good}"
     num_lines=${#lines[@]}
     last_line="${lines[$((num_lines-1))]}"
 
-    echo "Output:   \"$output\""
-    echo "Expected: \"$last_line_good\""
-    echo "Got:      \"$last_line\""
-    echo "Exit status: $status"
+    print_output_status_and_diff_expected_long "$last_line" "$last_line_good"
     [ "$status" -eq 0 ]
     string_matches_pattern "$last_line" "$last_line_good"
     rm -rf "${root_stem}/${USER}/FRE_tests-${unique_string}-temp"

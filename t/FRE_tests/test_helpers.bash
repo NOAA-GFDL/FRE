@@ -65,3 +65,21 @@ print_output_status_and_diff_expected() {
     print_output_and_status
     echo "Diff: $(diff <(printf '%s\n' "$output_good") <(printf '%s\n' "$output"))"
 }
+
+print_output_status_and_diff_expected_long() {
+    # @param $1 short_output
+    # @param $2 short_output_good
+    # Store original params
+    output_orig="$output"
+    output_good_orig="$output_good"
+
+    # Override params
+    output="$1"
+    output_good="$2"
+
+    print_output_status_and_diff_expected
+
+    # Restore params
+    output="$output_orig"
+    output_good="$output_good_orig"
+}
