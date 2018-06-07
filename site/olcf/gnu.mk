@@ -1,7 +1,7 @@
 # Template for the GNU Compiler Collection on a Cray System
 #
 # Typical use with mkmf
-# mkmf -t ncrc-cray.mk -c"-Duse_libMPI -Duse_netCDF" path_names /usr/local/include
+# mkmf -t gnu.mk -c"-Duse_libMPI -Duse_netCDF" path_names /usr/local/include
 
 ############
 # Commands Macros
