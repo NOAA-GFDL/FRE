@@ -49,9 +49,9 @@ LD = gfortran $(MAIN_PROGRAM)
 # A list of -I Include directories to be added to the the compile
 # command.
 
-# SSE
-# The SSE options to be used to compile.  If blank, than use the
-# default SSE settings for the host.  Current default is to use SSE2.
+# ISA
+# The Intel Instruction Set Archetecture (ISA) compile options to use.
+# If blank, than use the default ISA settings for the host. 
 
 # COVERAGE
 # Add the code coverage compile options.
@@ -158,9 +158,9 @@ FFLAGS += $(FFLAGS_OPENMP)
 LDFLAGS += $(LDFLAGS_OPENMP)
 endif
 
-ifdef SSE
-CFLAGS += $(SSE)
-FFLAGS += $(SSE)
+ifdef ISA
+CFLAGS += $(ISA)
+FFLAGS += $(ISA)
 endif
 
 ifdef VERBOSE
