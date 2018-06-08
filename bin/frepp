@@ -1224,8 +1224,7 @@ if ( $?variables && "$variables" != '' ) then
    set static_vars = ( `$NCVARS -s0123 $fregrid_in.tile1.nc` )
    set static_vars = `echo $static_vars |sed 's/ /,/g'`
    set interpvars = `echo "$variables,$static_vars" | sed 's/,$//'`
-   unset variables
-   unset static_vars
+   unset variables static_vars
 else
    set interpvars = ( `$NCVARS $ncvars_arg $fregrid_in.tile1.nc` )
    set interpvars = `echo $interpvars |sed 's/ /,/g'`
@@ -4855,13 +4854,12 @@ EOF
    $convertSeg
    end
 
-if ( \$?variables && "$variables" != '' ) then
+if ( "$variables" != '' ) then
     set static_vars = (`\$NCVARS -s0123 \$file`) 
     set static_vars = `echo \$static_vars |sed 's/ /,/g'`
     set avg_vars = (average_T1,average_T2,average_DT,time_bnds)
     set vars = ("$variables","\$static_vars","\$avg_vars")
-    unset variables
-    unset static_vars
+    unset static_vars avg_vars
 endif
 set month = 1
 while (\$month <= 12)
@@ -4871,7 +4869,7 @@ while ( \$i <= 6 )
    set monthf = `echo \$month | sed 's/.*/0&/;s/.\\(..\\)/\\1/'`
    set histmonth = "\$monthf"
    
-   if ( \$?variables && "$variables" != '' ) then
+   if ( "$variables" != '' ) then
       $time_ncrcat ncrcat \$ncrcatopt -v \$vars *\${histmonth}01.$diag_source$tile.nc month.nc
    else
       $time_ncrcat ncrcat \$ncrcatopt *\${histmonth}01.$diag_source$tile.nc month.nc
@@ -4988,13 +4986,12 @@ foreach hDate ( @hDates )
    end
    $convertSeg
 end
-if ( \$?variables && "$variables" != '' ) then
+if ( "$variables" != '' ) then
     set static_vars = (`\$NCVARS -s0123 \$file`) 
     set static_vars = `echo \$static_vars |sed 's/ /,/g'`
     set avg_vars = (average_T1,average_T2,average_DT,time_bnds)
     set vars = ("$variables","\$static_vars","\$avg_vars")
-    unset variables
-    unset static_vars
+    unset static_vars avg_vars
 endif
 
 set month = 1
@@ -5003,7 +5000,7 @@ while (\$month <= 12)
    set histmonth = "\$monthf"
 
    if ( -e month.nc ) rm -f month.nc
-   if ( \$?variables && "$variables" != '' ) then
+   if ( "$variables" != '' ) then
       $time_ncrcat ncrcat \$ncrcatopt -v \$vars *\${histmonth}01.$diag_source.nc month.nc
    else
       $time_ncrcat ncrcat \$ncrcatopt *\${histmonth}01.$diag_source.nc month.nc
@@ -5178,18 +5175,16 @@ foreach file ( `ls \$histDir/$hDateyr*/*.grid_spec.tile*.nc`)
 end
 set i = 1
 while ( \$i <= 6 )
-if ( \$?variables && "$variables" != '' ) then
+if ( "$variables" != '' ) then
    set static_vars = (`\$NCVARS -s0123 \$file`) 
    set static_vars = `echo \$static_vars |sed 's/ /,/g'`
    set avg_vars = (average_T1,average_T2,average_DT,time_bnds)
    set vars = ("$variables","\$static_vars","\$avg_vars")
-   unset variables
-   unset static_vars
    $time_ncrcat ncrcat \$ncrcatopt -v \$vars *.$diag_source$tile.nc annual$tile.nc
+   unset static_vars avg_vars vars
 else
    $time_ncrcat ncrcat \$ncrcatopt *.$diag_source$tile.nc annual$tile.nc
 endif
-unset vars
 $check_ncrcat
 $time_rm rm -f *.$diag_source$tile.nc
 EOF
@@ -5299,18 +5294,16 @@ foreach file ( `ls \$histDir/$hDateyr*/*.$diag_source.nc`)
   ln -s \$file .
 end
 if ( -e annual.nc ) rm -f annual.nc
-if ( \$?variables && "$variables" != '' ) then
+if ( "$variables" != '' ) then
    set static_vars = (`\$NCVARS -s0123 \$file`) 
    set static_vars = `echo \$static_vars |sed 's/ /,/g'`
    set avg_vars = (average_T1,average_T2,average_DT,time_bnds)
    set vars = ("$variables","\$static_vars","\$avg_vars")
-   unset variables
-   unset static_vars
    $time_ncrcat ncrcat \$ncrcatopt -v \$vars *.$diag_source.nc annual.nc
+   unset static_vars avg_vars vars
 else
    $time_ncrcat ncrcat \$ncrcatopt *.$diag_source.nc annual.nc
 endif
-unset vars
 $check_ncrcat
 $time_rm rm -f *.$diag_source.nc
 EOF
@@ -5522,18 +5515,16 @@ while ( \$i <= 6 )
    foreach file ($getlist)
       if (\$file =~ \*$tile\*) set filelist = ( \$filelist \$file )
    end
-   if ( \$?variables && "$variables" != '' ) then
-   set static_vars = (`\$NCVARS -s0123 \$file`) 
-   set static_vars = `echo \$static_vars |sed 's/ /,/g'`
-   set avg_vars = (average_T1,average_T2,average_DT,time_bnds)
-   set vars = ("$variables","\$static_vars","\$avg_vars")
-   unset variables
-   unset static_vars
+   if ( "$variables" != '' ) then
+      set static_vars = (`\$NCVARS -s0123 \$file`) 
+      set static_vars = `echo \$static_vars |sed 's/ /,/g'`
+      set avg_vars = (average_T1,average_T2,average_DT,time_bnds)
+      set vars = ("$variables","\$static_vars","\$avg_vars")
       $time_ncrcat ncrcat \$ncrcatopt -v \$vars \$filelist \$work/xyears.nc
+      unset static_vars avg_vars vars
    else
       $time_ncrcat ncrcat \$ncrcatopt \$filelist \$work/xyears.nc
    endif
-   unset vars
    $check_ncrcat
    $time_timavg \$TIMAVG -o \$tempCache/$outdirpath/$component.$first-$endinterval.ann$tile.nc \$work/xyears.nc
    $retry_timavg
@@ -5571,18 +5562,16 @@ foreach file ($filelist)
    endif
 end
 if ( -e xyears.nc ) rm -f xyears.nc
-if ( \$?variables && "$variables" != '' ) then
+if ( "$variables" != '' ) then
    set static_vars = (`\$NCVARS -s0123 $first_file`)
    set static_vars = `echo \$static_vars |sed 's/ /,/g'`
    set avg_vars = (average_T1,average_T2,average_DT,time_bnds)
    set vars = ("$variables","\$static_vars","\$avg_vars")
-   unset variables
-   unset static_vars
    $time_ncrcat ncrcat \$ncrcatopt -v \$vars $getlist \$work/xyears.nc
+   unset static_vars avg_vars vars
 else
    $time_ncrcat ncrcat \$ncrcatopt $getlist \$work/xyears.nc
 endif
-unset vars
 $check_ncrcat
 $time_timavg \$TIMAVG -o \$tempCache/$outdirpath/$component.$first-$endinterval.ann.nc \$work/xyears.nc
 $retry_timavg
@@ -6304,43 +6293,41 @@ end
 $tilestart
 #get static variables from first file (e.g. 1850.01.nc) from list_ncvars
 #hard-code average vars and time_bnds which are skipped in list_ncvars but needed for timavg.csh
-if ( \$?variables && "$variables" != '' ) then
+if ( "$variables" != '' ) then
     set static_vars = (`\$NCVARS -s0123 $first_file`)
     set static_vars = `echo \$static_vars |sed 's/ /,/g'`
     set avg_vars = (average_T1,average_T2,average_DT,time_bnds)
     set vars = ("$variables","\$static_vars","\$avg_vars")
-    unset variables
-    unset static_vars
+    unset static_vars avg_vars
 endif
-    set month = 1
-    while (\$month <= 12)
-        set monthf = `echo \$month | sed 's/.*/0&/;s/.\\(..\\)/\\1/'`
-        if ( -e month.nc ) rm -f month.nc
-        if ( \$?variables && "$variables" != '' ) then
-            $time_ncrcat ncrcat \$ncrcatopt -v \$vars $filelist month.nc
-        else
-            $time_ncrcat ncrcat \$ncrcatopt $filelist month.nc
-        endif
-        unset vars
-        $check_ncrcat
-        $time_timavg \$TIMAVG -o $component.$start-$end.\$monthf\$tile.nc month.nc
-        $retry_timavg
-        $time_timavg \$TIMAVG -o $component.$start-$end.\$monthf\$tile.nc month.nc
-        $check_timavg
-        $time_ncatted ncatted -h -O -a filename,global,m,c,"$component.$start-$end.\$monthf\$tile.nc" $component.$start-$end.\$monthf\$tile.nc
-        $check_ncatted
-        $compress
+set month = 1
+while (\$month <= 12)
+    set monthf = `echo \$month | sed 's/.*/0&/;s/.\\(..\\)/\\1/'`
+    if ( -e month.nc ) rm -f month.nc
+    if ( "$variables" != '' ) then
+        $time_ncrcat ncrcat \$ncrcatopt -v \$vars $filelist month.nc
+    else
+        $time_ncrcat ncrcat \$ncrcatopt $filelist month.nc
+    endif
+    $check_ncrcat
+    $time_timavg \$TIMAVG -o $component.$start-$end.\$monthf\$tile.nc month.nc
+    $retry_timavg
+    $time_timavg \$TIMAVG -o $component.$start-$end.\$monthf\$tile.nc month.nc
+    $check_timavg
+    $time_ncatted ncatted -h -O -a filename,global,m,c,"$component.$start-$end.\$monthf\$tile.nc" $component.$start-$end.\$monthf\$tile.nc
+    $check_ncatted
+    $compress
+    $time_mv $mvfile $component.$start-$end.\$monthf\$tile.nc \$outdir/
+    if ( \$status ) then
+        echo "WARNING: data transfer failure, retrying..."
         $time_mv $mvfile $component.$start-$end.\$monthf\$tile.nc \$outdir/
-        if ( \$status ) then
-            echo "WARNING: data transfer failure, retrying..."
-            $time_mv $mvfile $component.$start-$end.\$monthf\$tile.nc \$outdir/
-            $checktransfer
-        endif
-        $time_rm rm $component.$start-$end.\$monthf\$tile.nc
-        $time_dmput dmput \$outdir/$component.$start-$end.\$monthf\$tile.nc
-        $time_rm rm -f month.nc
-        @ month++
-    end
+        $checktransfer
+    endif
+    $time_rm rm $component.$start-$end.\$monthf\$tile.nc
+    $time_dmput dmput \$outdir/$component.$start-$end.\$monthf\$tile.nc
+    $time_rm rm -f month.nc
+    @ month++
+end
 $tileend
 
 EOF
@@ -6447,18 +6434,16 @@ foreach file ($filelist)
 end
 
 if ( -e xyears.nc ) rm -f xyears.nc
-if ( \$?variables && "$variables" != '' ) then
+if ( "$variables" != '' ) then
    set static_vars = (`\$NCVARS -s0123 \$file`) 
    set static_vars = `echo \$static_vars |sed 's/ /,/g'`
    set avg_vars = (average_T1,average_T2,average_DT,time_bnds)
    set vars = ("$variables","\$static_vars","\$avg_vars")
-   unset variables
-   unset static_vars
    $time_ncrcat ncrcat \$ncrcatopt -v \$vars $filelist xyears.nc
+   unset static_vars avg_vars vars
 else
    $time_ncrcat ncrcat \$ncrcatopt $filelist xyears.nc
 endif
-unset vars
 $check_ncrcat
 $time_timavg \$TIMAVG -o $component.$first-$endinterval.ann\$tile.nc xyears.nc
 $retry_timavg
