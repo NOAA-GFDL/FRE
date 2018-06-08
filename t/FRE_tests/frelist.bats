@@ -594,24 +594,36 @@ scaling       3        1x0m8d_30x2a_120x1o
 }
 
 @test "Test inherit of external XML file" {
-    skip "MOM6 needs to be updated to bronx-11 first"
-    output_good="
-           source \$MODULESHOME/init/csh
+    output_good='
+# Platform environment defaults from '"$FRE_COMMANDS_HOME"'/site/gfdl/env.defaults
+source $MODULESHOME/init/csh
+module use -a /home/fms/local/modulefiles
+module purge
+module load fre/bronx-12
+module load fre-analysis
+module load git
+
+# Platform environment overrides from XML
+
+           source $MODULESHOME/init/csh
            module purge
-           module load fre/bronx-10
+           module load fre/bronx-12
 
            module use -a /home/John.Krasting/local/modulefiles
            module load jpk-analysis/0.0.4
-          #Some tricks to use the refineDiag and analysis scripts from a checkout of MOM6 at gfdl
-           setenv FREVERSION fre/bronx-10
-           setenv NBROOT /nbhome/${USER}/.*_mom6_2014.12.24/\$(name)/gfdl.ncrc2-intel-prod
-           mkdir -p \$NBROOT
-           cd \$NBROOT
-           git clone /home/fms/git/ocean/mom6
+           #Some tricks to use the refineDiag and analysis scripts from a checkout of MOM6 at gfdl 
+           setenv FREVERSION fre/bronx-12
+           setenv NBROOT /nbhome/'"$USER"'/fms/AM3/bronx-12/warsaw_201803/$(name)/gfdl.ncrc3-intel15-prod
+           mkdir -p $NBROOT
+           cd $NBROOT
+           if ( -e mom6) then
+           else
+              git clone /home/fms/git/ocean/mom6
+           endif
 
-         "
+         '
 
-    run frelist -R ${USER} -p gfdl.ncrc2-intel -S -x MOM6_solo.xml
+    run frelist -R ${USER} -p gfdl.ncrc3-intel15 -S -x CM3Z.xml
     print_output_status_and_diff_expected
     [ "$status" -eq 0 ]
     [[ "$output_good" =~ "$output" ]]
