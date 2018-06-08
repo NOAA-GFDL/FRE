@@ -263,10 +263,11 @@ my $schedulerAccount = sub($$)
 
     if ( $fre->property('FRE.scheduler.enabled') ) {
 
-        my $project
-            = ( ($f)
+        my $project = (
+            ($f)
             ? $fre->property('FRE.scheduler.windfall.project.set')
-            : $fre->property('FRE.scheduler.windfall.project.unset') )
+            : $fre->property('FRE.scheduler.windfall.project.unset')
+            )
             || $fre->project();
         my $qos
             = ($f)
@@ -299,7 +300,7 @@ my $schedulerResources = sub($$$$$$$)
     if ( $fre->property('FRE.scheduler.enabled') ) {
 
         my $partition = $p || $fre->property("FRE.scheduler.$j.partition");
-        my $queue 
+        my $queue
             = ( ($f) ? $fre->property('FRE.scheduler.dual.queue') : undef )
             || $q
             || $fre->property("FRE.scheduler.$j.queue");
@@ -405,7 +406,7 @@ my $prepareInputFile = sub($$$)
                     . $tDirName
                     . ' && \\' . "\n";
                 $csh
-                    .= '  ls $hsmDir/' 
+                    .= '  ls $hsmDir/'
                     . $sName
                     . '/* | xargs ln -f -t $workDir/'
                     . $tDirName . "\n";
@@ -425,7 +426,7 @@ my $prepareInputFile = sub($$$)
                     . ' && \\' . "\n"
                     if $tDirectoryFlag;
                 $csh
-                    .= '  ln -f $hsmDir/' 
+                    .= '  ln -f $hsmDir/'
                     . $sName
                     . ' $workDir/'
                     . $tDirName
@@ -775,7 +776,7 @@ sub setRunCommand($$$)
     my ( $fre, $r, $mpiInfo ) = @_;
     my ( $cf, $np, $rp, $rt, $layout, $io_layout, $mask_table, $ranks_per_ens )
         = @{$mpiInfo}
-        {qw( coupler npes npesList ntdsList layoutList ioLayoutList maskTableList ranksPerEnsList )
+        { qw( coupler npes npesList ntdsList layoutList ioLayoutList maskTableList ranksPerEnsList )
         };
 
     my $prefix         = FRETemplate::PRAGMA_PREFIX;

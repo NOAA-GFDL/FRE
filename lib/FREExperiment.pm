@@ -410,7 +410,7 @@ my $overrideRegressionNamelists = sub($$$)
     foreach my $nml ( split( ';', $extractOverrideParams->( $r, $h, $n ) ) ) {
         my ( $name, $var, $val ) = split( /[:=]/, $nml );
         $name =~ s/\s*//g;
-        $var  =~ s/\s*//g;
+        $var =~ s/\s*//g;
         unless ( $name and $var ) {
             $fre->out( FREMsg::WARNING, "Got an empty namelist in overrideParams" );
             next;
@@ -1118,11 +1118,11 @@ sub executableCanBeBuilt($)
 {
     my $r = shift;
     return (   $r->experimentValue('*/source/codeBase') ne ''
-            || $r->experimentValue('*/source/csh')        ne ''
-            || $r->experimentValue('*/compile/cppDefs')   ne ''
-            || $r->experimentValue('*/compile/srcList')   ne ''
+            || $r->experimentValue('*/source/csh') ne ''
+            || $r->experimentValue('*/compile/cppDefs') ne ''
+            || $r->experimentValue('*/compile/srcList') ne ''
             || $r->experimentValue('*/compile/pathNames') ne ''
-            || $r->experimentValue('*/compile/csh')       ne '' );
+            || $r->experimentValue('*/compile/csh') ne '' );
 }
 
 # //////////////////////////////////////////////////////////////////////////////
@@ -1440,7 +1440,7 @@ sub extractNamelists($)
                             }
                         } ## end if ( my $node = $e->node...)
                         $e = $e->parent();
-                    } ## end while ($e)
+                    } ## end GET_BASE_NAMELIST: while ($e)
                     if ($base_namelist_content) {
                         $fre->out( FREMsg::NOTE,
                             "Namelist override for $namelist_name, base settings:" );
@@ -2013,8 +2013,8 @@ sub extractRegressionLabels($$)
             foreach my $optLabel (@optLabels) {
                 push @optUnknownLabels, $optLabel
                     if $optLabel ne 'all'
-                        && $optLabel ne 'suite'
-                        && grep( $_ eq $optLabel, @expLabels ) == 0;
+                    && $optLabel ne 'suite'
+                    && grep( $_ eq $optLabel, @expLabels ) == 0;
             }
         }
         if ( scalar(@optUnknownLabels) == 0 ) {
@@ -2026,7 +2026,7 @@ sub extractRegressionLabels($$)
                 foreach my $expLabel (@expLabels) {
                     push @result, $expLabel
                         if grep( $_ eq $expLabel, @optLabels ) > 0
-                            || grep( $_ eq $expLabel, FREExperiment::REGRESSION_SUITE ) > 0;
+                        || grep( $_ eq $expLabel, FREExperiment::REGRESSION_SUITE ) > 0;
                 }
             }
             else {
@@ -2104,7 +2104,7 @@ sub extractRegressionRunInfo($$$)
                                 $run{runTimeMinutes} = FREUtil::makeminutes($srt);
                                 $run{namelists}      = $nmlsOverridden;
                                 $runs{$i}            = \%run;
-                            } ## end if ( my $mpiInfo = $MPISizeParameters...)
+                            }
                             else {
                                 $fre->out( FREMsg::FATAL,
                                     "The experiment '$expName', the regression test '$l', run '$i' - model size parameters are invalid"
