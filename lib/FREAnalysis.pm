@@ -750,21 +750,21 @@ sub availablechunks {
         my $first = $last;
 
         if ( $src =~ /hr$/ ) {
-            $last  =~ s/..........-//;
+            $last =~ s/..........-//;
             $first =~ s/-..........//;
         }
 
         elsif ( $src =~ /daily$/ ) {
-            $last  =~ s/........-//;
+            $last =~ s/........-//;
             $first =~ s/-........//;
         }
 
         elsif ( $src =~ /monthly$/ and $thevar ne "01" ) {
-            $last  =~ s/......-//;
+            $last =~ s/......-//;
             $first =~ s/-......//;
         }
         else {
-            $last  =~ s/....-//;
+            $last =~ s/....-//;
             $first =~ s/-....//;
         }
 

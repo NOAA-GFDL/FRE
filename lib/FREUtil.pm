@@ -65,6 +65,7 @@ sub getxpathval {
     $value =~ s/\$archive/$::archivedir/g;
     $value =~ s/\$name/$e/g;
     $value =~ s/\$label/$e/g;
+
     if ( "$value" eq "" ) {
         my $mommy = $::root->findvalue("experiment[\@label='$e' or \@name='$e']/\@inherit");
         if ( "$mommy" eq "" ) {
@@ -702,7 +703,7 @@ sub strFindByPattern($@)
                 $result = $mapping;
                 last MAPSEARCH;
             }
-        } ## end while (1)
+        } ## end MAPSEARCH: while (1)
         return $result;
     } ## end if ( scalar(@mappings)...)
     else {
@@ -848,10 +849,9 @@ sub timeString
 {
     my $time = shift || time();    # ------ use current time by default
     my @time = localtime($time);
-    return (  19000000 
-            + $time[5] * 10000 
-            + ( $time[4] + 1 ) * 100 
-            + $time[3] 
+    return (  19000000 + $time[5] * 10000
+            + ( $time[4] + 1 ) * 100
+            + $time[3]
             + $time[2] * 0.01
             + $time[1] * 0.0001
             + $time[0] * 0.000001 );
