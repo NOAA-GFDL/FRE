@@ -843,16 +843,6 @@ EOF
 
         #platform_csh_from_xml and check for FRE version mismatch
         if ( "$platformcsh" ne "" ) {
-            $platformcsh = <<EOF;
-#platform_csh_from_xml
-$platformcsh
-if ( "\$FRE_COMMANDS_HOME" != "\$FRE_COMMANDS_HOME_FREPP" ) then
-  echo "ERROR: FRE version mismatch:"
-  echo "       Frepp version: \$FRE_COMMANDS_HOME_FREPP"
-  echo "       XML loads version: \$FRE_COMMANDS_HOME"
-  exit 1
-endif
-EOF
             my $fremodule = `echo $ENV{LOADEDMODULES} | tr ':' '\n' | egrep '^fre/.+'`;
             chomp $fremodule;
             my $xmlfremodule = $platformcsh;
@@ -879,6 +869,25 @@ EOF
                 print STDERR "         xml version: $xmlfremodule\n";
                 exit 1;
             }
+$platformcsh = <<EOF;
+#platform_csh_from_xml
+$platformcsh
+if ("$xmlfremodule" == "$fremodule" && "$fremodule" == "fre/test") then
+    if ( "\$FRE_COMMANDS_HOME" != "\$FRE_COMMANDS_HOME_FREPP" ) then
+      echo "WARNING: FRE/test version mismatch:"
+      echo "       Frepp version: \$FRE_COMMANDS_HOME_FREPP"
+      echo "       XML loads version: \$FRE_COMMANDS_HOME"
+    endif
+else
+    if ( "\$FRE_COMMANDS_HOME" != "\$FRE_COMMANDS_HOME_FREPP" ) then
+      echo "ERROR: FRE version mismatch:"
+      echo "       Frepp version: \$FRE_COMMANDS_HOME_FREPP"
+      echo "       XML loads version: \$FRE_COMMANDS_HOME"
+      exit 1
+    endif
+endif
+EOF
+
         } ## end if ( "$platformcsh" ne...)
         $cshscripttmpl =~ s/#platform_csh_from_xml/$platformcsh/;
         if ( "$platform" eq 'ia64' ) {
