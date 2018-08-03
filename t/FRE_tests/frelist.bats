@@ -12,22 +12,19 @@ setup() {
 
 @test "frelist is in PATH" {
     run which frelist
-    echo "Got: \"$output\""
-    echo "Exit status: $status"
+    print_output_and_status
     [ "$status" -eq 0 ]
 }
 
 @test "frelist print help message" {
     run frelist -h
-    echo "Got: \"$output\""
-    echo "Exit status: $status"
+    print_output_and_status
     [ "$status" -eq 0 ]
 }
 
 @test "frelist print version" {
     run frelist -V
-    echo "Got: \"$output\""
-    echo "Exit status: $status"
+    print_output_and_status
     [ "$status" -eq 0 ]
 }
 
@@ -38,9 +35,7 @@ setup() {
     fi
 
     run frelist
-    echo "Expected: \"$output_good\""
-    echo "Got:      \"$output\""
-    echo "Exit status: $status"
+    print_output_status_and_diff_expected
     [ "$status" -eq 10 ]
     [[ "$output_good" =~ "$output" ]]
 }
@@ -52,9 +47,7 @@ CM2.1U_Control-1990_E1.M_3B_snowmelt_static_ocn6x5 INHERITS FROM CM2.1U_Control-
 
     cp CM2.1U.xml rts.xml
     run frelist
-    echo "Expected: \"$output_good\""
-    echo "Got: \"$output\""
-    echo "Exit status: $status"
+    print_output_status_and_diff_expected
     [ "$status" -eq 0 ]
     [[ "$output_good" =~ "$output" ]]
     rm rts.xml
@@ -63,8 +56,7 @@ CM2.1U_Control-1990_E1.M_3B_snowmelt_static_ocn6x5 INHERITS FROM CM2.1U_Control-
 @test "Validate XML" {
     # Need more tests with bad XMLs to catch invalid XMLs
     run frelist -C -x CM2.1U.xml
-    echo "Got: \"$output\""
-    echo "Exit status: $status"
+    print_output_and_status
     [ "$status" -eq 0 ]
 }
 
@@ -72,9 +64,7 @@ CM2.1U_Control-1990_E1.M_3B_snowmelt_static_ocn6x5 INHERITS FROM CM2.1U_Control-
     output_good="*FATAL*: No CMIP Curator tags found; see CMIP metadata tag documentation at http://cobweb.gfdl.noaa.gov/~pcmdi/CMIP6_Curator/xml_documentation"
 
     run frelist -c -x CM2.1U.xml CM2.1U_Control-1990_E1.M_3A
-    echo "Expected: \"$output_good\""
-    echo "Got: \"$output\""
-    echo "Exit status: $status"
+    print_output_status_and_diff_expected
     [ "$status" -eq 30 ]
     [ "$output" = "$output_good" ]
 }
@@ -83,9 +73,7 @@ CM2.1U_Control-1990_E1.M_3B_snowmelt_static_ocn6x5 INHERITS FROM CM2.1U_Control-
     # Need more tests with bad XMLs to catch invalid XMLs
     output_good="<NOTE> : The XML file 'publicMetadata' has been successfully validated"
     run frelist -c -x CM2.1U.xml CM2.1U_Control-1990_E1.M_3B_snowmelt_static_ocn6x5
-    echo "Expected: \"$output_good\""
-    echo "Got: \"$output\""
-    echo "Exit status: $status"
+    print_output_status_and_diff_expected
     [ "$status" -eq 0 ]
     [ "$output" = "$output_good" ]
 }
@@ -96,9 +84,7 @@ CM2.1U_Control-1990_E1.M_3B_snowmelt INHERITS FROM CM2.1U_Control-1990_E1.M_3A
 CM2.1U_Control-1990_E1.M_3B_snowmelt_static_ocn6x5 INHERITS FROM CM2.1U_Control-1990_E1.M_3B_snowmelt"
 
     run frelist -x CM2.1U.xml
-    echo "Expected: \"$output_good\""
-    echo "Got:      \"$output\""
-    echo "Exit status: $status"
+    print_output_status_and_diff_expected
     [ "$status" -eq 0 ]
     [[ "$output_good" =~ "$output" ]]
 }
@@ -109,9 +95,7 @@ CM2.1U_Control-1990_E1.M_3B_snowmelt INHERITS FROM CM2.1U_Control-1990_E1.M_3A
 CM2.1U_Control-1990_E1.M_3B_snowmelt_static_ocn6x5 INHERITS FROM CM2.1U_Control-1990_E1.M_3B_snowmelt"
 
     run frelist -p ${default_platform} -x CM2.1U.xml
-    echo "Expected: \"$output_good\""
-    echo "Got:      \"$output\""
-    echo "Exit status: $status"
+    print_output_status_and_diff_expected
     [ "$status" -eq 0 ]
     [[ "$output_good" =~ "$output" ]]
 }
@@ -122,9 +106,7 @@ CM2.1U_Control-1990_E1.M_3B_snowmelt
 CM2.1U_Control-1990_E1.M_3B_snowmelt_static_ocn6x5"
 
     run frelist --no-inherit -x CM2.1U.xml
-    echo "Expected: \"$output_good\""
-    echo "Got:      \"$output\""
-    echo "Exit status: $status"
+    print_output_status_and_diff_expected
     [ "$status" -eq 0 ]
     [[ "$output_good" =~ "$output" ]]
 }
@@ -147,9 +129,7 @@ CM2.1U_Control-1990_E1.M_3B_snowmelt_static_ocn6x5"
     fi
 
     run frelist -p ${ncrc_site}.yourgroupletter -x CM2.1U.xml
-    echo "Expected: \"$output_good\""
-    echo "Got:      \"$output\""
-    echo "Exit status: $status"
+    print_output_status_and_diff_expected
     [ "$status" -eq 30 ]
     [[ "$output_good" =~ "$output" ]]
 }
@@ -172,9 +152,7 @@ CM2.1U_Control-1990_E1.M_3B_snowmelt_static_ocn6x5"
      "
 
     run frelist -D -x CM2.1U.xml CM2.1U_Control-1990_E1.M_3A
-    echo "Expected: \"$output_good\""
-    echo "Got:      \"$output\""
-    echo "Exit status: $status"
+    print_output_status_and_diff_expected
     [ "$status" -eq 0 ]
     [[ "$output_good" =~ "$output" ]]
 }
@@ -201,9 +179,7 @@ CM2.1U_Control-1990_E1.M_3B_snowmelt_static_ocn6x5"
     output_good="${stdoutRoot}/$USER/[a-zA-Z0-9_]\+\?/CM2.1U_Control-1990_E1.M_3A/${default_platform}-prod/stdout"
 
     run frelist -p ${default_platform} -d stdout -x CM2.1U.xml CM2.1U_Control-1990_E1.M_3A
-    echo "Expected: \"$output_good\""
-    echo "Got:      \"$output\""
-    echo "Exit status: $status"
+    print_output_status_and_diff_expected
     [ "$status" -eq 0 ]
     string_matches_pattern "$output" "$output_good"
 }
@@ -228,9 +204,7 @@ CM2.1U_Control-1990_E1.M_3B_snowmelt_static_ocn6x5"
 analysis: /archive/$userStr/.*/CM2.1U_Control-1990_E1.M_3A/${platform}-prod/analysis"
 
     run frelist -p ${platform} -d analysis,archive -x CM2.1U.xml CM2.1U_Control-1990_E1.M_3A
-    echo "Expected: \"$output_good\""
-    echo "Got:      \"$output\""
-    echo "Exit status: $status"
+    print_output_status_and_diff_expected
     [ "$status" -eq 0 ]
     string_matches_pattern "$output" "$output_good"
 }
@@ -239,8 +213,7 @@ analysis: /archive/$userStr/.*/CM2.1U_Control-1990_E1.M_3A/${platform}-prod/anal
     # Assume all directories are correct, if the ones above are
     # This is to only check that this specific command runs
     run frelist -d all -x CM2.1U.xml -p ${default_platform}
-    echo "Got: \"$output\""
-    echo "Exit status: $status"
+    print_output_and_status
     [ "$status" -eq 0 ]
 }
 
@@ -266,9 +239,7 @@ analysis: /archive/$userStr/.*/CM2.1U_Control-1990_E1.M_3A/${platform}-prod/anal
     output_good="$execRoot/$USER/.*/CM2.1U_Control-1990_E1.M_3A/${default_platform}-prod/exec/fms_CM2.1U_Control-1990_E1.M_3A.x CM2.1U_Control-1990_E1.M_3A"
 
     run frelist -p ${default_platform} -E -x CM2.1U.xml CM2.1U_Control-1990_E1.M_3A
-    echo "Expected: \"$output_good\""
-    echo "Got:      \"$output\""
-    echo "Exit status: $status"
+    print_output_status_and_diff_expected
     [ "$status" -eq 0 ]
     string_matches_pattern "$output" "$output_good"
 }
@@ -295,9 +266,7 @@ analysis: /archive/$userStr/.*/CM2.1U_Control-1990_E1.M_3A/${platform}-prod/anal
     output_good="$execRoot/$USER/.*/CM2.1U_Control-1990_E1.M_3A/${default_platform}-prod/exec/fms_CM2.1U_Control-1990_E1.M_3A.x CM2.1U_Control-1990_E1.M_3A"
 
     run frelist -p ${default_platform} -E -x CM2.1U.xml CM2.1U_Control-1990_E1.M_3B_snowmelt
-    echo "Expected: \"$output_good\""
-    echo "Got:      \"$output\""
-    echo "Exit status: $status"
+    print_output_status_and_diff_expected
     [ "$status" -eq 0 ]
     string_matches_pattern "$output" "$output_good"
 }
@@ -339,9 +308,7 @@ analysis: /archive/$userStr/.*/CM2.1U_Control-1990_E1.M_3A/${platform}-prod/anal
     output_good="${execRoot}/REM_USER/.*/CM2.1U_Control-1990_E1.M_3A/${REMOTE_SITE}-prod/exec/fms_CM2.1U_Control-1990_E1.M_3A.x CM2.1U_Control-1990_E1.M_3A"
 
     run frelist -R REM_USER -p ${REMOTE_SITE} -E -x CM2.1U.xml CM2.1U_Control-1990_E1.M_3A
-    echo "Expected \"$output_good\""
-    echo "Got:     \"$output\""
-    echo "Exit status: $status"
+    print_output_status_and_diff_expected
     [ "$status" -eq 0 ]
     string_matches_pattern "$output" "$output_good"
 }
@@ -370,9 +337,7 @@ CM2.1U_Control-1990_E1.M_3B_snowmelt $execRoot/$USER/.*/CM2.1U_Control-1990_E1.M
 CM2.1U_Control-1990_E1.M_3B_snowmelt_static_ocn6x5 $execRoot/$USER/.*/CM2.1U_Control-1990_E1.M_3B_snowmelt_static_ocn6x5/${default_platform}-repro-openmp/exec/fms_CM2.1U_Control-1990_E1.M_3B_snowmelt_static_ocn6x5.x CM2.1U_Control-1990_E1.M_3B_snowmelt_static_ocn6x5"
 
     run frelist -p ${default_platform} -t openmp,repro -E -R ${USER} -x CM2.1U.xml
-    echo "Expected: \"$output_good\""
-    echo "Got:      \"$output\""
-    echo "Exit status: $status"
+    print_output_status_and_diff_expected
     [ "$status" -eq 0 ]
     string_matches_pattern "$output" "$output_good"
 }
@@ -387,8 +352,7 @@ CM2.1U_Control-1990_E1.M_3B_snowmelt_static_ocn6x5 $execRoot/$USER/.*/CM2.1U_Con
     esac
 
     run frelist -p ${default_platform} -N -x CM2.1U.xml CM2.1U_Control-1990_E1.M_3B_snowmelt
-    echo "Got: \"$output\""
-    echo "Exit status: $status"
+    print_output_and_status
     [ "$status" -eq 0 ]
 }
 
@@ -409,9 +373,7 @@ CM2.1U_Control-1990_E1.M_3B_snowmelt INHERITS FROM CM2.1U_Control-1990_E1.M_3A"
 
     run frelist -p ${default_platform} -t prod,openmp -x CM2.1U.xml CM2.1U_Control-1990_E1.M_3B_snowmelt --nodes
 
-    echo "Expected: \"$output_good\""
-    echo "Got: \"$output\""
-    echo "Exit status: $status"
+    print_output_status_and_diff_expected
     [ "$output" = "$output_good" ]
     [ "$status" -eq 0 ]
 }
@@ -434,9 +396,7 @@ CM2.1U_Control-1990_E1.M_3B_snowmelt INHERITS FROM CM2.1U_Control-1990_E1.M_3A"
 
     run frelist -p ${default_platform} -t prod,openmp -x CM2.1U.xml CM2.1U_Control-1990_E1.M_3B_snowmelt -r basic,restarts --nodes
 
-    echo "Expected: \"$output_good\""
-    echo "Got: \"$output\""
-    echo "Exit status: $status"
+    print_output_status_and_diff_expected
     [ "$output" = "$output_good" ]
     [ "$status" -eq 0 ]
 }
@@ -461,10 +421,7 @@ CM2.1U_Control-1990_E1.M_3B_snowmelt_static_ocn6x5 production would request $num
 CM2.1U_Control-1990_E1.M_3B_snowmelt_static_ocn6x5 INHERITS FROM CM2.1U_Control-1990_E1.M_3B_snowmelt"
 
     run frelist -p ${default_platform} -t prod,openmp -x CM2.1U.xml --nodes
-
-    echo "Expected: \"$output_good\""
-    echo "Got: \"$output\""
-    echo "Exit status: $status"
+    print_output_status_and_diff_expected
     [ "$output" = "$output_good" ]
     [ "$status" -eq 0 ]
 }
@@ -518,10 +475,7 @@ CM2.1U_Control-1990_E1.M_3B_snowmelt_static_ocn6x5 INHERITS FROM CM2.1U_Control-
     esac
 
     run frelist -p ${default_platform} -t prod,openmp -x CM2.1U.xml -r suite --nodes
-
-    echo "Expected: \"$output_good\""
-    echo "Got: \"$output\""
-    echo "Exit status: $status"
+    print_output_status_and_diff_expected
     [ "$output" = "$output_good" ]
     [ "$status" -eq 0 ]
 }
@@ -540,9 +494,7 @@ module load git
 
     sed -e "s/\(^ *<property *name=\"FRE_VERSION\" *value=\"\).*\(\"\)/\1${FRE_COMMANDS_VERSION}\2/" CM2.1U.xml > ${unique_string}-temp.xml
     run frelist -p gfdl.${default_platform/./-} -S -x ${unique_string}-temp.xml
-    echo "Expected: \"$output_good\""
-    echo "Got:      \"$output\""
-    echo "Exit status: $status"
+    print_output_status_and_diff_expected
     [ "$status" -eq 0 ]
     string_matches_pattern "$output" "$output_good"
     rm -f ${unique_string}-temp.xml
@@ -550,8 +502,7 @@ module load git
 
 @test "Accept regression option" {
     run frelist -r foo -x CM2.1U.xml -p ${default_platform}
-    echo "Got: \"$output\""
-    echo "Exit status: $status"
+    print_output_and_status
     [ "$status" -eq 0 ]
 }
 
@@ -564,8 +515,7 @@ module load git
     esac
 
     run frelist -r basic -N -x CM2.1U.xml CM2.1U_Control-1990_E1.M_3B_snowmelt -p ${default_platform}
-    echo "Got: \"$output\""
-    echo "Exit status: $status"
+    print_output_and_status
     [ "$status" -eq 0 ]
 }
 
@@ -591,9 +541,7 @@ scaling       3        1x0m8d_30x2a_120x1o
     esac
 
     run frelist -x CM2.1U.xml -p ${default_platform} -t openmp -r suite --postfix CM2.1U_Control-1990_E1.M_3A
-    echo "Expected: \"$output_good\""
-    echo "Got:      \"$output\""
-    echo "Exit status: $status"
+    print_output_status_and_diff_expected
     [ "$status" -eq 0 ]
     [[ "$output_good" =~ "$output" ]]
 }
@@ -634,42 +582,49 @@ scaling       3        1x0m8d_30x2a_120x1o
       '
 
     run frelist -p ${default_platform} -e 'input/fieldTable' -x CM2.1U.xml CM2.1U_Control-1990_E1.M_3A
-    echo "Expected: \"$output_good\""
-    echo "Got:      \"$output\""
-    echo "Exit status: $status"
+    print_output_status_and_diff_expected
     [ "$status" -eq 0 ]
     [[ "$output_good" =~ "$output" ]]
 }
 
 @test "Test -Xml option" {
     run frelist -X -x CM2.1U.xml -p ${default_platform} CM2.1U_Control-1990_E1.M_3B_snowmelt_static_ocn6x5
-    echo "Got: \"$output\""
-    echo "Exit status: $status"
+    print_output_and_status
     [ "$status" -eq 0 ]
 }
 
 @test "Test inherit of external XML file" {
-    skip "MOM6 needs to be updated to bronx-11 first"
-    output_good="
-           source \$MODULESHOME/init/csh
+    output_good='
+# Platform environment defaults from '"$FRE_COMMANDS_HOME"'/site/gfdl/env.defaults
+source $MODULESHOME/init/csh
+module use -a /home/fms/local/modulefiles
+module purge
+module load fre/bronx-12
+module load fre-analysis
+module load git
+
+# Platform environment overrides from XML
+
+           source $MODULESHOME/init/csh
            module purge
-           module load fre/bronx-10
+           module load fre/bronx-12
 
            module use -a /home/John.Krasting/local/modulefiles
            module load jpk-analysis/0.0.4
-          #Some tricks to use the refineDiag and analysis scripts from a checkout of MOM6 at gfdl
-           setenv FREVERSION fre/bronx-10
-           setenv NBROOT /nbhome/${USER}/.*_mom6_2014.12.24/\$(name)/gfdl.ncrc2-intel-prod
-           mkdir -p \$NBROOT
-           cd \$NBROOT
-           git clone /home/fms/git/ocean/mom6
+           #Some tricks to use the refineDiag and analysis scripts from a checkout of MOM6 at gfdl 
+           setenv FREVERSION fre/bronx-12
+           setenv NBROOT /nbhome/'"$USER"'/fms/AM3/bronx-12/warsaw_201803/$(name)/gfdl.ncrc3-intel15-prod
+           mkdir -p $NBROOT
+           cd $NBROOT
+           if ( -e mom6) then
+           else
+              git clone /home/fms/git/ocean/mom6
+           endif
 
-         "
+         '
 
-    run frelist -R ${USER} -p gfdl.ncrc2-intel -S -x MOM6_solo.xml
-    echo "Expected: \"$output_good\""
-    echo "Got:      \"$output\""
-    echo "Exit status: $status"
+    run frelist -R ${USER} -p gfdl.ncrc3-intel15 -S -x CM3Z.xml
+    print_output_status_and_diff_expected
     [ "$status" -eq 0 ]
     [[ "$output_good" =~ "$output" ]]
 }

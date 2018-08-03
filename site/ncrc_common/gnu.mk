@@ -1,54 +1,142 @@
-# template for the GNU fortran compiler on a Cray system
-# typical use with mkmf
+# Template for the GNU Compiler Collection on a Cray System
+#
+# Typical use with mkmf
 # mkmf -t gnu.mk -c"-Duse_libMPI -Duse_netCDF" path_names /usr/local/include
+
 ############
-# commands #
+# Commands Macros
 ############
 FC = ftn
 CC = cc
 LD = ftn $(MAIN_PROGRAM)
-#########
-# flags #
-#########
-DEBUG =
-REPRO =
-VERBOSE =
-OPENMP =
 
-MAKEFLAGS += --jobs=2
+#######################
+# Build target macros
+#
+# Macros that modify compiler flags used in the build.  Target
+# macrose are usually set on the call to make:
+#
+#    make REPRO=on NETCDF=3
+#
+# Most target macros are activated when their value is non-blank.
+# Some have a single value that is checked.  Others will use the
+# value of the macro in the compile command.
 
-FPPFLAGS :=
+# DEBUG
+# If non-blank, perform a debug build (Cannot be mixed with REPRO or
+# TEST)
 
+# REPRO
+# If non-blank, erform a build that guarentees reprodicuibilty from
+# run to run.  Cannot be used with DEBUG or TEST
+
+# TEST
+# If non-blank, use the compiler options defined in the FFLAGS_TEST
+# and CFLAGS_TEST macros.  Cannot be use with REPRO or DEBUG
+
+# VERBOSE
+# If non-blank, add additional verbosity compiler options
+
+# OPENMP
+# If non-blank, compile with openmp enabled
+
+# NETCDF
+# If value is '3' and CPPDEFS contains '-Duse_netCDF', then the
+# additional cpp macro '-Duse_LARGEFILE' is added to the CPPDEFS
+# macro.
+
+# INCLUDES
+# A list of -I Include directories to be added to the the compile
+# command.
+
+# ISA
+# The Intel Instruction Set Archetecture (ISA) compile options to use.
+# If blank, than use the default ISA settings for the host.
+
+# COVERAGE
+# Add the code coverage compile options.
+
+# Need to use at least GNU Make version 3.81
+need := 3.81
+ok := $(filter $(need),$(firstword $(sort $(MAKE_VERSION) $(need))))
+ifneq ($(need),$(ok))
+$(error Need at least make version $(need).  Load module gmake/3.81)
+endif
+
+# REPRO, DEBUG and TEST need to be mutually exclusive of each other.
+# Make sure the user hasn't supplied two at the same time
+ifdef REPRO
+ifneq ($(DEBUG),)
+$(error Options REPRO and DEBUG cannot be used together)
+else ifneq ($(TEST),)
+$(error Options REPRO and TEST cannot be used together)
+endif
+else ifdef DEBUG
+ifneq ($(TEST),)
+$(error Options DEBUG and TEST cannot be used together)
+endif
+endif
+
+MAKEFLAGS += --jobs=$(shell grep '^processor' /proc/cpuinfo | wc -l)
+
+# Macro for Fortran preprocessor
+FPPFLAGS = $(INCLUDES)
+# Fortran Compiler flags for the NetCDF library
+FPPFLAGS += $(shell nf-config --fflags)
+
+# Base set of Fortran compiler flags
 FFLAGS := -fcray-pointer -fdefault-real-8 -fdefault-double-8 -Waliasing -ffree-line-length-none -fno-range-check
+
+# Flags based on perforance target (production (OPT), reproduction (REPRO), or debug (DEBUG)
 FFLAGS_OPT = -O2 -fno-expensive-optimizations
 FFLAGS_REPRO =
 FFLAGS_DEBUG = -O0 -g -W -fbounds-check -ffpe-trap=invalid,zero,overflow
+
+# Flags to add additional build options
 FFLAGS_OPENMP = -fopenmp
 FFLAGS_VERBOSE = -Wall -Wextra
+FFLAGS_COVERAGE =
 
-CFLAGS := -D__IFC
+# Macro for C preprocessor
+CPPFLAGS = -D__IFC $(INCLUDES)
+# C Compiler flags for the NetCDF library
+CPPFLAGS += $(shell nc-config --cflags)
+
+# Base set of C compiler flags
+CFLAGS :=
+
+# Flags based on perforance target (production (OPT), reproduction (REPRO), or debug (DEBUG)
 CFLAGS_OPT = -O2
-CFLAGS_OPENMP = -fopenmp
+CFLAGS_REPRO = -O2
 CFLAGS_DEBUG = -O0 -g
+
+# Flags to add additional build options
+CFLAGS_OPENMP = -fopenmp
 CFLAGS_VERBOSE = -Wall -Wextra
+CFLAGS_COVERAGE =
 
 # Optional Testing compile flags.  Mutually exclusive from DEBUG, REPRO, and OPT
 # *_TEST will match the production if no new option(s) is(are) to be tested.
-FFLAGS_TEST = -O2
-CFLAGS_TEST = -O2
+FFLAGS_TEST = $(FFLAGS_OPT)
+CFLAGS_TEST = $(CFLAGS_OPT)
 
+# Linking flags
 LDFLAGS :=
 LDFLAGS_OPENMP := -fopenmp
 LDFLAGS_VERBOSE :=
+LDFLAGS_COVERAGE :=
 
-ifneq ($(REPRO),)
+# Start with a blank LIBS
+LIBS =
+
+# Get compile flags based on target macros.
+ifdef REPRO
 CFLAGS += $(CFLAGS_REPRO)
 FFLAGS += $(FFLAGS_REPRO)
-endif
-ifneq ($(DEBUG),)
+else ifdef DEBUG
 CFLAGS += $(CFLAGS_DEBUG)
 FFLAGS += $(FFLAGS_DEBUG)
-else ifneq ($(TEST),)
+else ifdef TEST
 CFLAGS += $(CFLAGS_TEST)
 FFLAGS += $(FFLAGS_TEST)
 else
@@ -56,13 +144,18 @@ CFLAGS += $(CFLAGS_OPT)
 FFLAGS += $(FFLAGS_OPT)
 endif
 
-ifneq ($(OPENMP),)
+ifdef OPENMP
 CFLAGS += $(CFLAGS_OPENMP)
 FFLAGS += $(FFLAGS_OPENMP)
 LDFLAGS += $(LDFLAGS_OPENMP)
 endif
 
-ifneq ($(VERBOSE),)
+ifdef ISA
+CFLAGS += $(ISA)
+FFLAGS += $(ISA)
+endif
+
+ifdef VERBOSE
 CFLAGS += $(CFLAGS_VERBOSE)
 FFLAGS += $(FFLAGS_VERBOSE)
 LDFLAGS += $(LDFLAGS_VERBOSE)
@@ -75,15 +168,15 @@ ifeq ($(NETCDF),3)
   endif
 endif
 
-LIBS :=
-
-ifneq ($(findstring netcdf,$(LOADEDMODULES)),)
-  LIBS += -lnetcdff -lnetcdf -lhdf5_hl -lhdf5 -lz
-else
-  LIBS += -lnetcdf
+ifdef COVERAGE
+ifdef BUILDROOT
+PROF_DIR=-prof-dir=$(BUILDROOT)
+endif
+CFLAGS += $(CFLAGS_COVERAGE) $(PROF_DIR)
+FFLAGS += $(FFLAGS_COVERAGE) $(PROF_DIR)
+LDFLAGS += $(LDFLAGS_COVERAGE) $(PROF_DIR)
 endif
 
-LIBS +=
 LDFLAGS += $(LIBS)
 
 #---------------------------------------------------------------------------

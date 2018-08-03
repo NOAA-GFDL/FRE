@@ -72,96 +72,107 @@ use FREMsg();
 # //////////////////////////////////////////////////// Global Return Statuses //
 # //////////////////////////////////////////////////////////////////////////////
 
-use constant STATUS_OK					=>  0;
-use constant STATUS_XML_NOT_VALID			=>  1;
+use constant STATUS_OK            => 0;
+use constant STATUS_XML_NOT_VALID => 1;
 
-use constant STATUS_COMMAND_GENERIC_PROBLEM		=> 10;
-use constant STATUS_COMMAND_NO_EXPERIMENTS		=> 11;
-use constant STATUS_COMMAND_PLATFORM_PROBLEM    => 12;
+use constant STATUS_COMMAND_GENERIC_PROBLEM  => 10;
+use constant STATUS_COMMAND_NO_EXPERIMENTS   => 11;
+use constant STATUS_COMMAND_PLATFORM_PROBLEM => 12;
 
-use constant STATUS_FS_GENERIC_PROBLEM			=> 20;
-use constant STATUS_FS_PERMISSION_PROBLEM		=> 21;
-use constant STATUS_FS_PATH_NOT_EXISTS			=> 22;
-use constant STATUS_FS_PATH_EXISTS			=> 23;
+use constant STATUS_FS_GENERIC_PROBLEM    => 20;
+use constant STATUS_FS_PERMISSION_PROBLEM => 21;
+use constant STATUS_FS_PATH_NOT_EXISTS    => 22;
+use constant STATUS_FS_PATH_EXISTS        => 23;
 
-use constant STATUS_FRE_GENERIC_PROBLEM			=> 30;
-use constant STATUS_FRE_PATH_UNEXPECTED			=> 31;
+use constant STATUS_FRE_GENERIC_PROBLEM => 30;
+use constant STATUS_FRE_PATH_UNEXPECTED => 31;
 
-use constant STATUS_FRE_SOURCE_GENERIC_PROBLEM		=> 40;
-use constant STATUS_FRE_SOURCE_NOT_EXISTS		=> 41;
-use constant STATUS_FRE_SOURCE_PROBLEM			=> 42;
-use constant STATUS_FRE_SOURCE_NO_MATCH			=> 43;
+use constant STATUS_FRE_SOURCE_GENERIC_PROBLEM => 40;
+use constant STATUS_FRE_SOURCE_NOT_EXISTS      => 41;
+use constant STATUS_FRE_SOURCE_PROBLEM         => 42;
+use constant STATUS_FRE_SOURCE_NO_MATCH        => 43;
 
-use constant STATUS_FRE_COMPILE_GENERIC_PROBLEM		=> 50;
-use constant STATUS_FRE_COMPILE_NOT_EXISTS		=> 51;
-use constant STATUS_FRE_COMPILE_PROBLEM			=> 52;
-use constant STATUS_FRE_COMPILE_NO_MATCH		=> 53;
+use constant STATUS_FRE_COMPILE_GENERIC_PROBLEM => 50;
+use constant STATUS_FRE_COMPILE_NOT_EXISTS      => 51;
+use constant STATUS_FRE_COMPILE_PROBLEM         => 52;
+use constant STATUS_FRE_COMPILE_NO_MATCH        => 53;
 
-use constant STATUS_FRE_RUN_GENERIC_PROBLEM		=> 60;
-use constant STATUS_FRE_RUN_NO_TEMPLATE			=> 61;
-use constant STATUS_FRE_RUN_EXECUTION_PROBLEM		=> 62;
+use constant STATUS_FRE_RUN_GENERIC_PROBLEM   => 60;
+use constant STATUS_FRE_RUN_NO_TEMPLATE       => 61;
+use constant STATUS_FRE_RUN_EXECUTION_PROBLEM => 62;
 
-use constant STATUS_DATA_NOT_EXISTS			=> 70;
-use constant STATUS_DATA_NO_MATCH			=> 71;
+use constant STATUS_DATA_NOT_EXISTS => 70;
+use constant STATUS_DATA_NO_MATCH   => 71;
 
 # //////////////////////////////////////////////////////////////////////////////
 # ////////////////////////////////////////////////////////// Global Constants //
 # //////////////////////////////////////////////////////////////////////////////
 
-use constant SITE_CURRENT	=> $ENV{FRE_SYSTEM_SITE};
-use constant SITES_ALL		=> split(/:/, $ENV{FRE_SYSTEM_SITES});
+use constant SITE_CURRENT => $ENV{FRE_SYSTEM_SITE};
+use constant SITES_ALL => split( /:/, $ENV{FRE_SYSTEM_SITES} );
 
-use constant XMLFILE_DEFAULT	=> 'rts.xml';
-use constant TARGET_DEFAULT 	=> 'prod';
+use constant XMLFILE_DEFAULT => 'rts.xml';
+use constant TARGET_DEFAULT  => 'prod';
 
-use constant GLOBAL_NAMES	=> 'site,siteDir,suite,platform,target,name,root,stem';
-use constant EXPERIMENT_DIRS	=> 'root,src,exec,scripts,stdout,stdoutTmp,state,work,ptmp,stmp,archive,postProcess,analysis,include';
-use constant DEFERRED_NAMES	=> 'name';
+use constant GLOBAL_NAMES => 'site,siteDir,suite,platform,target,name,root,stem';
+use constant EXPERIMENT_DIRS =>
+    'root,src,exec,scripts,stdout,stdoutTmp,state,work,ptmp,stmp,archive,postProcess,analysis,include';
+use constant DEFERRED_NAMES => 'name';
 
 # //////////////////////////////////////////////////////////////////////////////
 # //////////////////////////////////////////////////////// Exported Functions //
 # //////////////////////////////////////////////////////////////////////////////
 
 sub Site()
-# ------ arguments: none
+
+    # ------ arguments: none
 {
-  return FREDefaults::SITE_CURRENT;
+    return FREDefaults::SITE_CURRENT;
 }
 
 sub Sites()
-# ------ arguments: none
+
+    # ------ arguments: none
 {
-  return FREDefaults::SITES_ALL;
+    return FREDefaults::SITES_ALL;
 }
 
 sub XMLFile()
-# ------ arguments: none
+
+    # ------ arguments: none
 {
-  return FREDefaults::XMLFILE_DEFAULT;
+    return FREDefaults::XMLFILE_DEFAULT;
 }
 
 sub Target()
-# ------ arguments: none
+
+    # ------ arguments: none
 {
-  return FREDefaults::TARGET_DEFAULT;
+    return FREDefaults::TARGET_DEFAULT;
 }
 
 sub ExperimentDirs()
-# ------ arguments: none
+
+    # ------ arguments: none
 {
-  return split(',', FREDefaults::EXPERIMENT_DIRS);
+    return split( ',', FREDefaults::EXPERIMENT_DIRS );
 }
 
 sub ReservedPropertyNames()
-# ------ arguments: none
+
+    # ------ arguments: none
 {
-  return (split(',', FREDefaults::GLOBAL_NAMES), map($_ . 'Dir', FREDefaults::ExperimentDirs()));
+    return (
+        split( ',', FREDefaults::GLOBAL_NAMES ),
+        map( $_ . 'Dir', FREDefaults::ExperimentDirs() )
+    );
 }
 
 sub DeferredPropertyNames()
-# ------ arguments: none
+
+    # ------ arguments: none
 {
-  return split(',', FREDefaults::DEFERRED_NAMES);
+    return split( ',', FREDefaults::DEFERRED_NAMES );
 }
 
 # //////////////////////////////////////////////////////////////////////////////
@@ -169,14 +180,12 @@ sub DeferredPropertyNames()
 # //////////////////////////////////////////////////////////////////////////////
 
 {
-  my ($site, @sites) = (FREDefaults::Site(), FREDefaults::Sites());
-  if ($site and scalar(grep($_ eq $site, @sites)) > 0)
-  {
-    return 1;
-  }
-  else
-  {
-    FREMsg::out(FREMsg::FATAL, 0, "FRE environment variables aren't set correctly");
-    exit STATUS_FRE_GENERIC_PROBLEM;
-  }
+    my ( $site, @sites ) = ( FREDefaults::Site(), FREDefaults::Sites() );
+    if ( $site and scalar( grep( $_ eq $site, @sites ) ) > 0 ) {
+        return 1;
+    }
+    else {
+        FREMsg::out( FREMsg::FATAL, 0, "FRE environment variables aren't set correctly" );
+        exit STATUS_FRE_GENERIC_PROBLEM;
+    }
 }

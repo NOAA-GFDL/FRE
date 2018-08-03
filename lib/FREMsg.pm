@@ -14,48 +14,45 @@
 
 package FREMsg;
 
-use strict; 
+use strict;
 
 # //////////////////////////////////////////////////////////////////////////////
 # ////////////////////////////////////////////////////////// Global constants //
 # //////////////////////////////////////////////////////////////////////////////
 
-use constant FATAL => 0;
+use constant FATAL   => 0;
 use constant WARNING => 1;
-use constant NOTE => 2;
-use constant INFO => 3;
+use constant NOTE    => 2;
+use constant INFO    => 3;
 
-use constant PREFIX_LIST => ('*FATAL*: ', 'WARNING: ', '<NOTE> : ', '<INFO> : ');
+use constant PREFIX_LIST => ( '*FATAL*: ', 'WARNING: ', '<NOTE> : ', '<INFO> : ' );
 
 # //////////////////////////////////////////////////////////////////////////////
 # //////////////////////////////////////////////////////// Exported Functions //
 # //////////////////////////////////////////////////////////////////////////////
 
 sub out($$@)
-# ------ arguments: $verbosity $level @strings
-# ------ output @strings provided that the 0 <= $level <= $verbosity + 1
+
+    # ------ arguments: $verbosity $level @strings
+    # ------ output @strings provided that the 0 <= $level <= $verbosity + 1
 {
-  my ($v, $l) = (shift, shift);
-  if (0 <= $l and $l <= $v + 1)
-  {
-    my @prefixList = FREMsg::PREFIX_LIST;
-    my $prefix = ($l <= $#prefixList) ? $prefixList[$l] : $prefixList[$#prefixList];
-    my $prefixFiller = ' ' x length($prefix);
-    my $firstLine = 1;
-    foreach my $s (@_)
-    {
-      if ($firstLine)
-      {
-        print STDERR ($prefix, $s, "\n");
-	$firstLine = 0;
-      }
-      else
-      {
-        print STDERR ($prefixFiller, $s, "\n");
-      }
+    my ( $v, $l ) = ( shift, shift );
+    if ( 0 <= $l and $l <= $v + 1 ) {
+        my @prefixList   = FREMsg::PREFIX_LIST;
+        my $prefix       = ( $l <= $#prefixList ) ? $prefixList[$l] : $prefixList[$#prefixList];
+        my $prefixFiller = ' ' x length($prefix);
+        my $firstLine    = 1;
+        foreach my $s (@_) {
+            if ($firstLine) {
+                print STDERR ( $prefix, $s, "\n" );
+                $firstLine = 0;
+            }
+            else {
+                print STDERR ( $prefixFiller, $s, "\n" );
+            }
+        }
     }
-  }
-};
+}
 
 # //////////////////////////////////////////////////////////////////////////////
 # //////////////////////////////////////////////////////////// Initialization //
