@@ -20,22 +20,19 @@ add_submit_cmd_to_last_line_good() {
 
 @test "frerun is in PATH" {
     run which frerun
-    echo "Got: \"$output\""
-    echo "Exit status: $status"
+    print_output_and_status
     [ "$status" -eq 0 ]
 }
 
 @test "frerun print help message" {
     run frerun -h
-    echo "Got: \"$output\""
-    echo "Exit status: $status"
+    print_output_and_status
     [ "$status" -eq 0 ]
 }
 
 @test "frerun print version" {
     run frerun -V
-    echo "Got: \"$output\""
-    echo "Exit status: $status"
+    print_output_and_status
     [ "$status" -eq 0 ]
 }
 
@@ -51,9 +48,7 @@ add_submit_cmd_to_last_line_good() {
     esac
 
     run frerun
-    echo "Expected: \"$output_good\""
-    echo "Got:      \"$output\""
-    echo "Exit status: $status"
+    print_output_status_and_diff_expected
     [ "$status" -eq 11 ]
     [ "$output" = "$output_good" ]
 }
@@ -70,9 +65,7 @@ add_submit_cmd_to_last_line_good() {
 
     rm -f rts.xml
     run frerun -p ${default_platform} CM2.1U_Control-1990_E1.M_3A
-    echo "Expected: \"$output_good\""
-    echo "Got:      \"$output\""
-    echo "Exit status: $status"
+    print_output_status_and_diff_expected
     [ "$status" -eq 30 ]
     [ "$output" = "$output_good" ]
 }
@@ -109,10 +102,7 @@ add_submit_cmd_to_last_line_good() {
     num_lines=${#lines[@]}
     last_line="${lines[$((${num_lines}-1))]}"
 
-    echo "Output:   \"$output\""
-    echo "Expected: \"$last_line_good\""
-    echo "Got:      \"$last_line\""
-    echo "Exit status: $status"
+    print_output_status_and_diff_expected_long "$last_line" "$last_line_good"
     [ "$status" -eq 0 ]
     string_matches_pattern "$last_line" "$last_line_good"
     rm -rf "${root_stem}/${USER}/FRE_tests-${unique_string}-temp"
@@ -132,9 +122,7 @@ add_submit_cmd_to_last_line_good() {
 
     [ ! -f nonexistent_file.xml ] # Assert file doesn't exist
     run frerun -x nonexistent_file.xml -p ${default_platform} CM2.1U_Control-1990_E1.M_3A
-    echo "Expected: \"$output_good\""
-    echo "Got:      \"$output\""
-    echo "Exit status: $status"
+    print_output_status_and_diff_expected
     [ "$status" -eq 30 ]
     [ "$output" = "$output_good" ]
 }
@@ -172,10 +160,7 @@ add_submit_cmd_to_last_line_good() {
     num_lines=${#lines[@]}
     last_line="${lines[$((num_lines-1))]}"
 
-    echo "Output:   \"$output\""
-    echo "Expected: \"$last_line_good\""
-    echo "Got:      \"$last_line\""
-    echo "Exit status: $status"
+    print_output_status_and_diff_expected_long "$last_line" "$last_line_good"
     [ "$status" -eq 0 ]
     string_matches_pattern "$last_line" "$last_line_good"
     rm -rf "${root_stem}/${USER}/FRE_tests-${unique_string}-temp"
@@ -187,9 +172,7 @@ add_submit_cmd_to_last_line_good() {
     output_good="*FATAL*: The --platform option value 'nonexistent_platform.intel' is not valid"
 
     run frerun -x CM2.1U.xml -p nonexistent_platform.intel CM2.1U_Control-1990_E1.M_3B_snowmelt
-    echo "Expected: \"$output_good\""
-    echo "Got:      \"$output\""
-    echo "Exit status: $status"
+    print_output_status_and_diff_expected
     [ "$status" -eq 30 ]
     [ "$output" = "$output_good" ]
 }
@@ -227,10 +210,7 @@ add_submit_cmd_to_last_line_good() {
     num_lines=${#lines[@]}
     last_line="${lines[$((num_lines-1))]}"
 
-    echo "Output:   \"$output\""
-    echo "Expected: \"$last_line_good\""
-    echo "Got:      \"$last_line\""
-    echo "Exit status: $status"
+    print_output_status_and_diff_expected_long "$last_line" "$last_line_good"
     [ "$status" -eq 0 ]
     string_matches_pattern "$last_line" "$last_line_good"
     rm -rf "${root_stem}/${USER}/FRE_tests-${unique_string}-temp"
@@ -270,10 +250,7 @@ add_submit_cmd_to_last_line_good() {
     num_lines=${#lines[@]}
     last_line="${lines[$((num_lines-1))]}"
 
-    echo "Output:   \"$output\""
-    echo "Expected: \"$last_line_good\""
-    echo "Got:      \"$last_line\""
-    echo "Exit status: $status"
+    print_output_status_and_diff_expected_long "$last_line" "$last_line_good"
     [ "$status" -eq 0 ]
     string_matches_pattern "$last_line" "$last_line_good"
     rm -rf "${root_stem}/${USER}/FRE_tests-${unique_string}-temp"
@@ -327,10 +304,7 @@ ${lines[$((num_lines-2))]}"
 ${lines[$((num_lines-1))]}"
     fi
 
-    echo "Output:   \"$output\""
-    echo "Expected: \"$last_3_lines_good\""
-    echo "Got:      \"$last_3_lines\""
-    echo "Exit status: $status"
+    print_output_status_and_diff_expected_long "$last_3_lines" "$last_3_lines_good"
     [ "$status" -eq 60 ]
     [ "$last_3_lines" = "$last_3_lines_good" ]
     rm -rf "${root_stem}/${USER}/FRE_tests-${unique_string}-temp"
@@ -375,10 +349,7 @@ ${lines[$((num_lines-1))]}"
     num_lines=${#lines[@]}
     last_line="${lines[$((num_lines-1))]}"
 
-    echo "Output:   \"$output\""
-    echo "Expected: \"$last_line_good\""
-    echo "Got:      \"$last_line\""
-    echo "Exit status: $status"
+    print_output_status_and_diff_expected_long "$last_line" "$last_line_good"
     [ "$status" -eq 0 ]
     [ "$last_line" = "$last_line_good" ]
     rm -rf "${root_stem}/${USER}/FRE_tests-${unique_string}-temp"
@@ -423,10 +394,7 @@ ${lines[$((num_lines-1))]}"
     num_lines=${#lines[@]}
     last_line="${lines[$((num_lines-1))]}"
 
-    echo "Output:   \"$output\""
-    echo "Expected: \"$last_line_good\""
-    echo "Got:      \"$last_line\""
-    echo "Exit status: $status"
+    print_output_status_and_diff_expected_long "$last_line" "$last_line_good"
     [ "$status" -eq 0 ]
     [ "$last_line" = "$last_line_good" ]
     rm -rf "${root_stem}/${USER}/FRE_tests-${unique_string}-temp"
@@ -471,10 +439,7 @@ ${lines[$((num_lines-1))]}"
     num_lines=${#lines[@]}
     last_line="${lines[$((num_lines-1))]}"
 
-    echo "Output:   \"$output\""
-    echo "Expected: \"$last_line_good\""
-    echo "Got:      \"$last_line\""
-    echo "Exit status: $status"
+    print_output_status_and_diff_expected_long "$last_line" "$last_line_good"
     [ "$status" -eq 0 ]
     string_matches_pattern "$last_line" "$last_line_good"
     rm -rf "${root_stem}/${USER}/FRE_tests-${unique_string}-temp"

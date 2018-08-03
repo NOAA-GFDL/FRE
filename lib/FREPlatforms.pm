@@ -49,14 +49,14 @@
 # ------ Site		= SiteRoot [ SiteExtension ]
 # ------ SiteRoot	= SiteHead [ "-" SiteTail ]
 # ------ SiteHead	= Letter { Letter }
-# ------ SiteTail	= Letter { Letter } 
+# ------ SiteTail	= Letter { Letter }
 # ------ SiteExtension	= Digit { Digit }
 # ------ Tail		= Letter { Letter | "-" }
 # ------------------------------------------------------------------------------
 
 package FREPlatforms;
 
-use strict; 
+use strict;
 
 use FREDefaults();
 use FREUtil();
@@ -65,9 +65,9 @@ use FREUtil();
 # ////////////////////////////////////////////////////////// Global Constants //
 # //////////////////////////////////////////////////////////////////////////////
 
-use constant SITE_LETTER => qr/[a-z]/o;
+use constant SITE_LETTER          => qr/[a-z]/o;
 use constant PLATFORM_TAIL_LETTER => qr/\w/o;
-use constant SITE_TAIL_SEPARATOR => '-';
+use constant SITE_TAIL_SEPARATOR  => '-';
 
 use constant DEFAULT_PLATFORM_ERROR_MSG => <<EOF;
 Default platforms are no longer supported.
@@ -90,145 +90,153 @@ EOF
 # Exits with a descriptive error message and a unique error code if not ok, does nothing if ok
 sub checkPlatform {
     my $platform = shift;
-    if (! $platform or $platform =~ /default/) {
-        FREMsg::out(FREMsg::FATAL, 0, FREPlatforms::DEFAULT_PLATFORM_ERROR_MSG);
+    if ( !$platform or $platform =~ /default/ ) {
+        FREMsg::out( FREMsg::FATAL, 0, FREPlatforms::DEFAULT_PLATFORM_ERROR_MSG );
         exit FREDefaults::STATUS_COMMAND_PLATFORM_PROBLEM;
     }
 }
 
 my $sitePattern = sub()
-# ------ arguments: none
+
+    # ------ arguments: none
 {
-  my ($e, $x) = (FREPlatforms::SITE_LETTER, FREPlatforms::SITE_TAIL_SEPARATOR);
-  return qr/(($e+)(?:$x$e+)?)\d*/o;
+    my ( $e, $x ) = ( FREPlatforms::SITE_LETTER, FREPlatforms::SITE_TAIL_SEPARATOR );
+    return qr/(($e+)(?:$x$e+)?)\d*/o;
 };
 
 my $siteParse = sub($)
-# ------ arguments: $site
+
+    # ------ arguments: $site
 {
-  my ($s, $t) = (shift || FREDefaults::Site(), $sitePattern->());
-  return ($s =~ m/^($t)$/o) ? ($1, $2, $3) : ();
+    my ( $s, $t ) = ( shift || FREDefaults::Site(), $sitePattern->() );
+    return ( $s =~ m/^($t)$/o ) ? ( $1, $2, $3 ) : ();
 };
 
 my $platformParse = sub($)
-# ------ arguments: $platform
+
+    # ------ arguments: $platform
 {
-  my ($p, $t, $z) = (shift, $sitePattern->(), FREPlatforms::PLATFORM_TAIL_LETTER); 
-  if ($p !~ /\./) {
-    FREMsg::out(FREMsg::FATAL, 0, FREPlatforms::PLATFORM_SITE_ERROR_MSG);
-    exit FREDefaults::STATUS_COMMAND_PLATFORM_PROBLEM;
-  }
-  return ($p =~ m/^($t)\.($z(?:$z|-)*)$/o) ? ($1, $2, $3, $4) : ();
+    my ( $p, $t, $z ) = ( shift, $sitePattern->(), FREPlatforms::PLATFORM_TAIL_LETTER );
+    if ( $p !~ /\./ ) {
+        FREMsg::out( FREMsg::FATAL, 0, FREPlatforms::PLATFORM_SITE_ERROR_MSG );
+        exit FREDefaults::STATUS_COMMAND_PLATFORM_PROBLEM;
+    }
+    return ( $p =~ m/^($t)\.($z(?:$z|-)*)$/o ) ? ( $1, $2, $3, $4 ) : ();
 };
 
 my $siteDir = sub($)
-# ------ arguments: $siteRoot
+
+    # ------ arguments: $siteRoot
 {
-  return FREUtil::home() . '/site/' . shift;
+    return FREUtil::home() . '/site/' . shift;
 };
 
 # //////////////////////////////////////////////////////////////////////////////
 # ////////////////////////////////////////////////////////// Global Variables //
 # //////////////////////////////////////////////////////////////////////////////
 
-my ($FREPlatformsSite, $FREPlatformsSiteRoot, $FREPlatformsSiteHead) = $siteParse->();
+my ( $FREPlatformsSite, $FREPlatformsSiteRoot, $FREPlatformsSiteHead ) = $siteParse->();
 
 # //////////////////////////////////////////////////////////////////////////////
 # //////////////////////////////////////////////////////// Exported Functions //
 # //////////////////////////////////////////////////////////////////////////////
 
 sub parse($)
-# ------ arguments: $platform
+
+    # ------ arguments: $platform
 {
-  my ($site, $siteRoot, $siteHead, $tail) = $platformParse->(shift);
-  return (defined($site)) ? ($site, $tail) : ();
+    my ( $site, $siteRoot, $siteHead, $tail ) = $platformParse->(shift);
+    return ( defined($site) ) ? ( $site, $tail ) : ();
 }
 
 sub parseAll($)
-# ------ arguments: $platform
+
+    # ------ arguments: $platform
 {
-  my ($site, $siteRoot, $siteHead, $tail) = $platformParse->(shift);
-  return (defined($site)) ? ($site, $siteRoot, $siteHead, $tail) : ();
+    my ( $site, $siteRoot, $siteHead, $tail ) = $platformParse->(shift);
+    return ( defined($site) ) ? ( $site, $siteRoot, $siteHead, $tail ) : ();
 }
 
 sub siteDir($)
-# ------ arguments: $site
+
+    # ------ arguments: $site
 {
-  my ($site, $siteRoot, $siteHead) = $siteParse->(shift);
-  return (defined($site)) ? $siteDir->($site) : '';
+    my ( $site, $siteRoot, $siteHead ) = $siteParse->(shift);
+    return ( defined($site) ) ? $siteDir->($site) : '';
 }
 
 sub siteReplace($$)
-# ------ arguments: $platform $newSite
+
+    # ------ arguments: $platform $newSite
 {
-  my ($site, $siteRoot, $siteHead, $tail, $newSite, $newSiteRoot, $newSiteHead) = ($platformParse->(shift), $siteParse->(shift));
-  if (defined($site) && defined($newSite))
-  {
-    return "$newSite.$site-$tail";
-  }
-  else
-  {
-    return '';
-  }
+    my ( $site, $siteRoot, $siteHead, $tail, $newSite, $newSiteRoot, $newSiteHead )
+        = ( $platformParse->(shift), $siteParse->(shift) );
+    if ( defined($site) && defined($newSite) ) {
+        return "$newSite.$site-$tail";
+    }
+    else {
+        return '';
+    }
 }
 
 sub siteIsLocal($)
-# ------ arguments: $site
-# ------ return 1 if the $site and the current site have common "site" directory 
+
+    # ------ arguments: $site
+    # ------ return 1 if the $site and the current site have common "site" directory
 {
-  my $site = shift;
-  my $site_root = ($siteParse->($site))[1];
-  if ($site eq $FREPlatformsSite || $site eq $FREPlatformsSiteRoot || $site_root eq $FREPlatformsSiteRoot)
-  {
-    return 1;
-  }
-  else
-  {
-    return 0;
-  }
+    my $site      = shift;
+    my $site_root = ( $siteParse->($site) )[1];
+    if (   $site eq $FREPlatformsSite
+        || $site eq $FREPlatformsSiteRoot
+        || $site_root eq $FREPlatformsSiteRoot ) {
+        return 1;
+    }
+    else {
+        return 0;
+    }
 }
 
 sub siteHasLocalStorage($)
-# ------ arguments: $site
-# ------ return 1 if the $site and the current site have a common file system
+
+    # ------ arguments: $site
+    # ------ return 1 if the $site and the current site have a common file system
 {
-  my $s = shift;
-  if ($s eq $FREPlatformsSite || $s eq $FREPlatformsSiteRoot)
-  {
-    return 1;
-  }
-  elsif (my ($site, $siteRoot, $siteHead) = $siteParse->($s))
-  {
-    return ($siteHead eq $FREPlatformsSiteHead);
-  }
-  else
-  {
-    return 0;
-  }
+    my $s = shift;
+    if ( $s eq $FREPlatformsSite || $s eq $FREPlatformsSiteRoot ) {
+        return 1;
+    }
+    elsif ( my ( $site, $siteRoot, $siteHead ) = $siteParse->($s) ) {
+        return ( $siteHead eq $FREPlatformsSiteHead );
+    }
+    else {
+        return 0;
+    }
 }
 
 sub getPlatformSpecificNiNaCLoadCommands()
-# ------ arguments: none
-# ------ return string of csh commands to load NiNaC
-{
-  # If NiNaC module not loaded, return a comment saying NiNaC wasn't loaded at script creation
-  unless (exists($ENV{'NiNaC_LVL'}) and $ENV{'NiNaC_LVL'} > 0)
-  {
-    return "  # NiNaC not loaded when script created";
-  }
 
-  # Otherwise, return the commands to load NiNaC
-  return "  if ( ! \$?NiNaC_LVL ) set NiNaC_LVL = 1\n\n"
-       . "  # ---- Load NiNaC if NiNaC_LVL is set and greater than zero\n\n"
-       . "  if ( \$?NiNaC_LVL ) then\n"
-       . "    if ( \$NiNaC_LVL > 0 ) then\n\n"
-       . "      # Append directory where NiNaC environment module resides to the module search path\n"
-       . "      module use -a $ENV{'NiNaC_PATH'}\n\n"
-       . "      # Load NiNaC environment module\n"
-       . "      module load NiNaC\n\n"
-       . "    endif\n"
-       . "  endif";
-}
+    # ------ arguments: none
+    # ------ return string of csh commands to load NiNaC
+{
+
+    # If NiNaC module not loaded, return a comment saying NiNaC wasn't loaded at script creation
+    unless ( exists( $ENV{'NiNaC_LVL'} ) and $ENV{'NiNaC_LVL'} > 0 ) {
+        return "  # NiNaC not loaded when script created";
+    }
+
+    # Otherwise, return the commands to load NiNaC
+    return
+          "  if ( ! \$?NiNaC_LVL ) set NiNaC_LVL = 1\n\n"
+        . "  # ---- Load NiNaC if NiNaC_LVL is set and greater than zero\n\n"
+        . "  if ( \$?NiNaC_LVL ) then\n"
+        . "    if ( \$NiNaC_LVL > 0 ) then\n\n"
+        . "      # Append directory where NiNaC environment module resides to the module search path\n"
+        . "      module use -a $ENV{'NiNaC_PATH'}\n\n"
+        . "      # Load NiNaC environment module\n"
+        . "      module load NiNaC\n\n"
+        . "    endif\n"
+        . "  endif";
+} ## end sub getPlatformSpecificNiNaCLoadCommands
 
 # //////////////////////////////////////////////////////////////////////////////
 # //////////////////////////////////////////////////////////// Initialization //
