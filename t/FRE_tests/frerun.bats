@@ -74,7 +74,7 @@ add_submit_cmd_to_last_line_good() {
     case "${default_platform%%.*}" in
         ncrc? )
             platform="ncrc"
-            root_stem="/lustre/f1"
+            root_stem="/lustre/f2/scratch"
             submit_cmd="sleep 1; msub"
             ;;
         theia ) platform="theia"
@@ -131,7 +131,7 @@ add_submit_cmd_to_last_line_good() {
     case "${default_platform%%.*}" in
         ncrc? )
             platform="ncrc"
-            root_stem="/lustre/f1"
+            root_stem="/lustre/f2/scratch"
             submit_cmd="sleep 1; msub"
             ;;
         theia )
@@ -181,7 +181,7 @@ add_submit_cmd_to_last_line_good() {
     case "${default_platform%%.*}" in
         ncrc? )
             platform="ncrc"
-            root_stem="/lustre/f1"
+            root_stem="/lustre/f2/scratch"
             submit_cmd="sleep 1; msub"
             ;;
         theia )
@@ -221,7 +221,7 @@ add_submit_cmd_to_last_line_good() {
     case "${default_platform%%.*}" in
         ncrc? )
             platform="ncrc"
-            root_stem="/lustre/f1"
+            root_stem="/lustre/f2/scratch"
             submit_cmd="sleep 1; msub"
             ;;
         theia )
@@ -261,7 +261,7 @@ add_submit_cmd_to_last_line_good() {
     case "${default_platform%%.*}" in
         ncrc? )
             platform="ncrc"
-            root_stem="/lustre/f1"
+            root_stem="/lustre/f2/scratch"
             submit_cmd="sleep 1; msub"
             ;;
         theia )
@@ -315,7 +315,7 @@ ${lines[$((num_lines-1))]}"
     case "${default_platform%%.*}" in
         ncrc? )
             platform="ncrc"
-            root_stem="/lustre/f1"
+            root_stem="/lustre/f2/scratch"
             submit_cmd="sleep 1; msub"
             ;;
         theia )
@@ -360,7 +360,7 @@ ${lines[$((num_lines-1))]}"
     case "${default_platform%%.*}" in
         ncrc? )
             platform="ncrc"
-            root_stem="/lustre/f1"
+            root_stem="/lustre/f2/scratch"
             submit_cmd="sleep 1; msub"
             ;;
         theia )
@@ -405,7 +405,7 @@ ${lines[$((num_lines-1))]}"
     case "${default_platform%%.*}" in
         ncrc? )
             platform="ncrc"
-            root_stem="/lustre/f1"
+            root_stem="/lustre/f2/scratch"
             submit_cmd="sleep 1; msub"
             ;;
         theia )

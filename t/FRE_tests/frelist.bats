@@ -160,7 +160,7 @@ CM2.1U_Control-1990_E1.M_3B_snowmelt_static_ocn6x5"
 @test "Get stdout directory for --platform=${default_platform}" {
     case ${FRE_SYSTEM_SITE} in
         ncrc )
-            stdoutRoot="/lustre/f1"
+            stdoutRoot="/lustre/f2/scratch"
             ;;
         gfdl-ws )
             stdoutRoot="/home"
@@ -220,7 +220,7 @@ analysis: /archive/$userStr/.*/CM2.1U_Control-1990_E1.M_3A/${platform}-prod/anal
 @test "Get the executable --platform=${default_platform}" {
     case ${FRE_SYSTEM_SITE} in
         ncrc )
-            execRoot="/lustre/f1/unswept"
+            execRoot="/lustre/f2/dev"
             ;;
         gfdl-ws )
             execRoot="/home"
@@ -247,7 +247,7 @@ analysis: /archive/$userStr/.*/CM2.1U_Control-1990_E1.M_3A/${platform}-prod/anal
 @test "Get the executable from inherited experiment --platform=${default_platform}" {
     case ${FRE_SYSTEM_SITE} in
         ncrc )
-            execRoot="/lustre/f1/unswept"
+            execRoot="/lustre/f2/dev"
             ;;
         gfdl-ws )
             execRoot="/home"
@@ -292,7 +292,7 @@ analysis: /archive/$userStr/.*/CM2.1U_Control-1990_E1.M_3A/${platform}-prod/anal
     esac
     case $REMOTE_SITE in
         ncrc4.intel )
-            execRoot="/lustre/f1/unswept"
+            execRoot="/lustre/f2/dev"
             ;;
         gfdl-ws.intel )
             execRoot="/home"
@@ -316,7 +316,7 @@ analysis: /archive/$userStr/.*/CM2.1U_Control-1990_E1.M_3A/${platform}-prod/anal
 @test "Get the executable for all experiments with --target=openmp,repro" {
     case ${FRE_SYSTEM_SITE} in
         ncrc )
-            execRoot="/lustre/f1/unswept"
+            execRoot="/lustre/f2/dev"
             ;;
         gfdl-ws )
             execRoot="/home"
