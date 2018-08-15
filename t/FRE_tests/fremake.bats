@@ -66,7 +66,7 @@ setup() {
     case "${default_platform%%.*}" in
         ncrc? )
             platform="ncrc"
-            root_stem="/lustre/f1"
+            root_stem="/lustre/f2"
             submit_cmd="sleep 1; msub"
             ;;
         theia )
@@ -133,7 +133,7 @@ setup() {
     case "${default_platform%%.*}" in
         ncrc? )
             platform="ncrc"
-            root_stem="/lustre/f1"
+            root_stem="/lustre/f2"
             submit_cmd="sleep 1; msub"
             ;;
         theia )
@@ -187,7 +187,7 @@ setup() {
     case "${default_platform%%.*}" in
         ncrc? )
             platform="ncrc"
-            root_stem="/lustre/f1"
+            root_stem="/lustre/f2"
             submit_cmd="sleep 1; msub"
             ;;
         theia )
@@ -231,7 +231,7 @@ setup() {
     case "${default_platform%%.*}" in
         ncrc? )
             platform="ncrc"
-            root_stem="/lustre/f1"
+            root_stem="/lustre/f2"
             submit_cmd="sleep 1; msub"
             ;;
         theia )
@@ -275,7 +275,7 @@ setup() {
     case "${default_platform%%.*}" in
         ncrc? )
             platform="ncrc"
-            root_stem="/lustre/f1"
+            root_stem="/lustre/f2"
             submit_cmd="sleep 1; msub"
             ;;
         theia )
@@ -321,7 +321,7 @@ ${last_line_good}"
     case "${default_platform%%.*}" in
         ncrc? )
             platform="ncrc"
-            root_stem="/lustre/f1"
+            root_stem="/lustre/f2"
             submit_cmd="sleep 1; msub"
             ;;
         theia )
@@ -366,7 +366,7 @@ ${last_line_good}"
     case "${default_platform%%.*}" in
         ncrc? )
             platform="ncrc"
-            root_stem="/lustre/f1"
+            root_stem="/lustre/f2"
             submit_cmd="sleep 1; msub"
             ;;
         theia )
