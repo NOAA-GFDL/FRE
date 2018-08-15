@@ -160,7 +160,7 @@ CM2.1U_Control-1990_E1.M_3B_snowmelt_static_ocn6x5"
 @test "Get stdout directory for --platform=${default_platform}" {
     case ${FRE_SYSTEM_SITE} in
         ncrc )
-            stdoutRoot="/lustre/f2"
+            stdoutRoot="/lustre/f2/scratch"
             ;;
         gfdl-ws )
             stdoutRoot="/home"
