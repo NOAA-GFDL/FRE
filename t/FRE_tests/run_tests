@@ -40,17 +40,13 @@ do_tests () {
     theia )
       PATH=${PATH}:/home/Seth.Underwood/opt/bats/0.4.0/bin
       ;;
-    ncrc3 )
-      PATH=$PATH:/ncrc/home2/Seth.Underwood/opt/bats/0.4.0/bin
-      ;;
-    ncrc4 )
+    ncrc )
       PATH=$PATH:/ncrc/home2/Seth.Underwood/opt/bats/0.4.0/bin
       ;;
   esac
 
   export PATH
 
-  # Run tests that require an XML
   pushd xml
 
   local command="bats -t ../frelist.bats"
@@ -77,17 +73,7 @@ do_tests () {
 
   popd
 
-  # Other tests that don't require an XML
-  local other_exit=0
-  for t in $( ls [0-9][0-9]-*.bats )
-  do
-     command="bats -t ${t}"
-     echo $command
-     $command | tee ${t}.tap 2>&1
-     other_exit=$(expr $other_exit + $(evalTAP ${t}.tap))
-  done
-
-  local myExit=$(expr $frelist_exit + $fremake_exit + $frerun_exit + $other_exit)
+  local myExit=$(expr $frelist_exit + $fremake_exit + $frerun_exit)
 
   return $myExit
 }

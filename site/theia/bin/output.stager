@@ -883,7 +883,7 @@ if ( $xferToolToLoad ) then
          module load gcp/$xferToolVersion
          set -r xferSrcPrefix = ""
          set -r xferDstPrefix = "gfdl:"
-         alias xferTool `which gcp` --create-dirs --verbose
+         alias gcp `which gcp`
          if ( $actionPPStartToDo ) then
             set gfdlSubmit = 'external-ppan-submit.princeton.rdhpcs.noaa.gov'
             alias callTool `which gsissh` $gfdlSubmit
@@ -938,7 +938,7 @@ if ( $actionCombineToDo ) then
    endif
 
    set -r patternGrepTail = '\.[0-9]{4,}$'
-   set -r patternGrepRestart = '\<res\>|\<nc\>'
+   set -r patternGrepRestart = '\<nc\>'
    set -r patternGrepHistory = '\<nc\>'
 
    set -r tagFail = 'fail'
@@ -998,7 +998,7 @@ if ( $actionCombineToDo ) then
             wait
             unset counter
          endif
-         unset singleResFile
+         unset singleResFiles
          # Also, non-distributed compressed history files should
          # be run through combine-ncc due to decompress-ncc mysteriously
          # failing on some fields that are all zeros.
@@ -1155,7 +1155,7 @@ if ( $actionCombineToDo ) then
          foreach file ( $filesToDecompress )
             slmnccompressed $file
             if ( $status == 0 ) then
-               set tmpFile = `mktemp $file.XXXXX`
+               set tmpFile = `mktemp -u $file.XXXXX`
                # Use a temporary file to hold the decompressed output
                # If the decompress is successful, the tmpFile will be moved
                # on top of the original name
@@ -1258,7 +1258,7 @@ if ( $actionFillGridToDo ) then
 
       # use ocean_static.nc in gridSpec tarfile otherwise
       if ( $#ref_ocean_static == 0 ) then
-         tar -xf $gridSpec ./ocean_static.nc
+         tar --wildcards -xf $gridSpec '*ocean_static.nc'
          if ( $status ) then
             if ( $echoOn ) unset echo
             echo "*ERROR*: $error_intro Unfortunately, we couldn't extract ocean_static.nc from $gridSpec. Please add ocean_static.nc containing unmasked grid info fields to $gridSpec. $error_ending"
@@ -1269,7 +1269,7 @@ if ( $actionFillGridToDo ) then
       endif
 
       # do the swap
-      ncks -A $ref_ocean_static $masked_ocean_static
+      ncks -A -m $ref_ocean_static $masked_ocean_static
       if ( $status == 0 ) then
          if ( $echoOn ) unset echo
          echo "<NOTE> : Reference ocean static $ref_ocean_static has been appended to $masked_ocean_static"
@@ -1586,7 +1586,7 @@ if ( $actionXferToConsider ) then
    if ( $actionXferToPerform ) then
       if ( $hostType == 'login' ) then
          if ( -f $archDir.$archExt && -r $archDir.$archExt ) then
-            xferTool $xferSrcPrefix$archDir.$archExt $xferDstPrefix$outputDirRemote:h/
+            gcp --create-dirs --verbose $xferSrcPrefix$archDir.$archExt $xferDstPrefix$outputDirRemote:h/
 
             if ( $status == 0 ) then
                if ( $echoOn ) unset echo
@@ -1601,7 +1601,7 @@ if ( $actionXferToConsider ) then
             endif
 
             if ( -f $archDir.$archExt.ok && -r $archDir.$archExt.ok && -s $archDir.$archExt.ok ) then
-               xferTool $xferSrcPrefix$archDir.$archExt.ok $xferDstPrefix$outputDirRemote:h/
+               gcp --create-dirs --verbose $xferSrcPrefix$archDir.$archExt.ok $xferDstPrefix$outputDirRemote:h/
 
                if ( $status == 0 ) then
                   if ( $echoOn ) unset echo
@@ -1655,7 +1655,7 @@ if ( $actionPPStartToConsider ) then
                set xmlFileRemote = $xmlFilesRemote[$inx]
 
                if ( -f "$xmlFile" && -r "$xmlFile" ) then
-                  xferTool --sync $xferSrcPrefix$xmlFile $xferDstPrefix$xmlFileRemote:h/
+                  gcp --create-dirs --verbose --sync $xferSrcPrefix$xmlFile $xferDstPrefix$xmlFileRemote:h/
                   if ( $status == 0 ) then
                      if ( $echoOn ) unset echo
                      echo "<NOTE> : The XML file '$xmlFile' has been copied to the remote XML file '$xmlFileRemote' successfully"
@@ -1693,7 +1693,7 @@ if ( $actionPPStartToConsider ) then
 
          if ( $includeDir != "" && $includeDirRemote != "" ) then
             if ( -d $includeDir && -r $includeDir ) then
-               xferTool -r -cd --sync $xferSrcPrefix$includeDir $xferDstPrefix$includeDirRemote:h/
+               gcp --verbose --recursive --sync $xferSrcPrefix$includeDir $xferDstPrefix$includeDirRemote/
                if ( $status == 0 ) then
                   echo "<NOTE> : The include directory $includeDir has been copied to the remote location $includeDirRemote successfully"
                else

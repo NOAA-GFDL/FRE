@@ -1,4 +1,4 @@
-#!/usr/bin/perl
+#!/usr/bin/env perl
 # -*- cperl -*-
 #
 # $Id: find_xincludes,v 1.1.2.3 2011/10/19 18:55:35 afy Exp $
@@ -83,15 +83,16 @@ use XML::LibXML();
                 push @{$r}, $filename;
                 my $document = $p->parse_file($filename);
                 my $root     = $document->documentElement();
-                my $ok = 1;
+                my $ok       = 1;
                 foreach my $xincludeNode ( $root->getElementsByLocalName('include') ) {
                     my $href = $xincludeNode->getAttribute('href');
                     next unless $href;
-                    my $xincludeFilename = File::Spec->rel2abs($href, File::Basename::dirname($filename));
+                    my $xincludeFilename
+                        = File::Spec->rel2abs( $href, File::Basename::dirname($filename) );
                     $ok &&= Process( $p, $r, $xincludeFilename, $v );
                 }
                 return $ok;
-            } ## end if ( scalar( grep( $_ ...)))
+            }
             else {
                 print STDERR "Skipping the file '$filename', already processed...\n" if $v;
                 return 1;
@@ -99,9 +100,9 @@ use XML::LibXML();
         } ## end if ( -f $filename and ...)
         else {
             print STDERR "The file '$filename' isn't found or not readable\n" if $v;
-            return 1;
+            return 1;    # just a measly warning ....
         }
-    } ## end sub Process($$$$$)
+    } ## end sub Process($$$$)
 
 }
 
@@ -119,15 +120,14 @@ use XML::LibXML();
     if ( $opt{help} ) { print STDERR find_xincludes::Help() and exit 0; }
 
     if ( scalar(@ARGV) == 1 ) {
+        if ( !-r $ARGV[0] ) {
+            print STDERR "File $ARGV[0] unreadable\n";
+            exit 1;
+        }
         my @list     = ();
         my $parser   = XML::LibXML->new();
         my $filename = File::Spec->rel2abs( $ARGV[0] );
-        if (find_xincludes::Process(
-                $parser, \@list,
-                $filename,
-                $opt{verbose}
-            )
-            ) {
+        if ( find_xincludes::Process( $parser, \@list, $filename, $opt{verbose} ) ) {
             my $list = join( "\n", @list );
             print $list, "\n";
             exit 0;

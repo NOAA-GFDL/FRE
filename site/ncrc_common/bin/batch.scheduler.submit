@@ -1,4 +1,4 @@
-#!/usr/bin/perl
+#!/usr/bin/env perl
 # -*- cperl -*-
 
 # $Id: batch.scheduler.submit,v 1.1.2.13 2012/11/15 18:09:15 afy Exp $
@@ -52,192 +52,177 @@ use strict;
 
 use File::Basename();
 use File::Spec();
-use Getopt::Long(':config', 'no_ignore_case', 'no_auto_abbrev');
+use Getopt::Long( ':config', 'no_ignore_case', 'no_auto_abbrev' );
 
 {
 
-  package batch_scheduler_submit;
+    package batch_scheduler_submit;
 
-  use constant VERSION => '$Id: batch.scheduler.submit,v 1.1.2.13 2012/11/15 18:09:15 afy Exp $';
+    use constant VERSION => '$Id: batch.scheduler.submit,v 1.1.2.13 2012/11/15 18:09:15 afy Exp $';
 
-  use constant OPTLIST =>
-  (
-    'help|h',
-    'fail-init-delay|F=i',
-    'fail-retries-number|X=i',
-    'fail-retry-delay|Y=i',
-    'fail-range|R=i',
-    'list-retries-number|n=i',
-    'list-retry-delay|d=i',
-    'options|O=s',
-    'retries-number|N=i',
-    'retry-delay|D=i',
-    'verbose|v+',
-    'version|V'
-  );
-  
-  use constant FAIL_INIT_DELAY => 120;
-  use constant FAIL_RETRIES_NUMBER => 8;
-  use constant FAIL_RETRY_DELAY => 120;
-  use constant FAIL_RANGE => 1800;
-  use constant LIST_RETRIES_NUMBER => 60;
-  use constant LIST_RETRY_DELAY => 30;
-  use constant RETRIES_NUMBER => 8;
-  use constant RETRY_DELAY => 30;
-  
-  my $self = File::Basename::basename($0);
-
-  sub Usage()
-  # ------ arguments: none
-  {
-    my $fid = FAIL_INIT_DELAY;
-    my $frn = FAIL_RETRIES_NUMBER;
-    my $frd = FAIL_RETRY_DELAY;
-    my $flr = FAIL_RANGE;
-    my $lrn = LIST_RETRIES_NUMBER;
-    my $lrd = LIST_RETRY_DELAY;
-    my $rtn = RETRIES_NUMBER;
-    my $rtd = RETRY_DELAY;
-    return
-    (
-      "\n",
-      "  Usage: $self [option]... filename\n\n",
-      "  Options:\n\n",
-      "   -O STRING, --options=STRING           all the 'msub' options STRING\n",
-      "   -I NUM,    --fail-init-delay=NUM      an initial delay NUM before looking for a job after its submission fails (default is '$fid'), in seconds\n",
-      "   -X NUM,    --fail-retries-number=NUM  a number NUM of 'batch.scheduler.list' retries (default is '$frn')\n", 
-      "   -Y NUM,    --fail-retry-delay=NUM     a delay NUM between 'batch.scheduler.list' retries (default is '$frd'), in seconds\n", 
-      "   -R NUM,    --fail-range=NUM           a maximum deviation NUM between the 'msub' timestamp and the job timestamp (default is '$flr'), in seconds\n",
-      "   -n NUM,    --list-retries-number=NUM  a number NUM of 'showq' retries (default is '$lrn')\n",
-      "   -d NUM,    --list-retry-delay=NUM     a delay NUM between 'showq' retries (default is '$lrd'), in seconds\n",
-      "   -N NUM,    --retries-number=NUM       a number NUM of 'msub' retries (default is '$rtn')\n", 
-      "   -D NUM,    --retry-delay=NUM          a delay NUM between 'msub' retries (default is '$rtd'), in seconds\n\n",
-      "   -h,        --help                     print the help message and exit\n",
-      "   -V,        --version                  print the tool version and exit\n",
-      "   -v         --verbose                  increase verbosity\n\n"
+    use constant OPTLIST => (
+        'help|h',                  'fail-init-delay|F=i',
+        'fail-retries-number|X=i', 'fail-retry-delay|Y=i',
+        'fail-range|R=i',          'list-retries-number|n=i',
+        'list-retry-delay|d=i',    'options|O=s',
+        'retries-number|N=i',      'retry-delay|D=i',
+        'verbose|v+',              'version|V'
     );
-  }
-  
-  sub Help()
-  # ------ arguments: none
-  {
-    my @usage = Usage();
-    return
-    (
-      "\n",
-      "   Synopsis: The '$self' submits a batch job with additional controls\n",
-      "@usage"
-    );
-  }
-  
-  sub FindOptionValue($$$)
-  # ------ arguments: absolute filename, options string, option marker
-  {
-    my ($f, $o, $x) = @_;
-    my @values = ($o =~ m/$x\s+(\S+)/g);
-    if (scalar(@values) > 0)
+
+    use constant FAIL_INIT_DELAY     => 120;
+    use constant FAIL_RETRIES_NUMBER => 8;
+    use constant FAIL_RETRY_DELAY    => 120;
+    use constant FAIL_RANGE          => 1800;
+    use constant LIST_RETRIES_NUMBER => 60;
+    use constant LIST_RETRY_DELAY    => 30;
+    use constant RETRIES_NUMBER      => 8;
+    use constant RETRY_DELAY         => 30;
+
+    my $self = File::Basename::basename($0);
+
+    sub Usage()
+
+        # ------ arguments: none
     {
-      return $values[$#values];
-    }
-    else
+        my $fid = FAIL_INIT_DELAY;
+        my $frn = FAIL_RETRIES_NUMBER;
+        my $frd = FAIL_RETRY_DELAY;
+        my $flr = FAIL_RANGE;
+        my $lrn = LIST_RETRIES_NUMBER;
+        my $lrd = LIST_RETRY_DELAY;
+        my $rtn = RETRIES_NUMBER;
+        my $rtd = RETRY_DELAY;
+        return (
+            "\n",
+            "  Usage: $self [option]... filename\n\n",
+            "  Options:\n\n",
+            "   -O STRING, --options=STRING           all the 'msub' options STRING\n",
+            "   -I NUM,    --fail-init-delay=NUM      an initial delay NUM before looking for a job after its submission fails (default is '$fid'), in seconds\n",
+            "   -X NUM,    --fail-retries-number=NUM  a number NUM of 'batch.scheduler.list' retries (default is '$frn')\n",
+            "   -Y NUM,    --fail-retry-delay=NUM     a delay NUM between 'batch.scheduler.list' retries (default is '$frd'), in seconds\n",
+            "   -R NUM,    --fail-range=NUM           a maximum deviation NUM between the 'msub' timestamp and the job timestamp (default is '$flr'), in seconds\n",
+            "   -n NUM,    --list-retries-number=NUM  a number NUM of 'showq' retries (default is '$lrn')\n",
+            "   -d NUM,    --list-retry-delay=NUM     a delay NUM between 'showq' retries (default is '$lrd'), in seconds\n",
+            "   -N NUM,    --retries-number=NUM       a number NUM of 'msub' retries (default is '$rtn')\n",
+            "   -D NUM,    --retry-delay=NUM          a delay NUM between 'msub' retries (default is '$rtd'), in seconds\n\n",
+            "   -h,        --help                     print the help message and exit\n",
+            "   -V,        --version                  print the tool version and exit\n",
+            "   -v         --verbose                  increase verbosity\n\n"
+        );
+    } ## end sub Usage
+
+    sub Help()
+
+        # ------ arguments: none
     {
-      chomp(my $value = qx(grep --extended-regexp "^#PBS +$x" $f | tail -1 | cut --delimiter=' ' --fields=3));
-      return ($? == 0) ? $value : '';
+        my @usage = Usage();
+        return ( "\n", "   Synopsis: The '$self' submits a batch job with additional controls\n",
+            "@usage" );
     }
-  }
-  
-  sub FindJob($$%)
-  # ------ arguments: job name, job queue, options hash
-  {
-    my ($n, $q, %o) = @_;
-    my $binDir = File::Basename::dirname($0);
-    my $listCommand = "$binDir/batch.scheduler.list --user=$ENV{USER}";
-    $listCommand .= " --name=$n" if $n;
-    $listCommand .= " --queue=$q" if $q;
-    $listCommand .= " --retries-number=$o{'list-retries-number'}" if exists($o{'list-retries-number'});
-    $listCommand .= " --retry-delay=$o{'list-retry-delay'}" if exists($o{'list-retry-delay'});
-    $listCommand .= " --verbose" if $o{verbose};
-    $listCommand .= " --verbose" if $o{verbose} > 1;
-    print STDERR "$listCommand\n" if $o{verbose};
-    my ($myJobID, $retry) = ($ENV{MOAB_JOBID} || '', 0);
-    while (1)
+
+    sub FindOptionValue($$$)
+
+        # ------ arguments: absolute filename, options string, option marker
     {
-      chomp(my $lines = qx($listCommand));
-      if ($? == 0)
-      {
-	my @lines = grep((split(/,/, $_))[0] ne $myJobID, split(/\n/, $lines));
-	if (scalar(@lines) > 0)
-	{
-	  my @linesSorted = sort {(split(/,/, $b))[4] <=> (split(/,/, $a))[4]} @lines;
-	  print STDERR join("\n", @linesSorted), "\n";
-	  my @fields = split(/,/, $linesSorted[0]);
-	  return ($fields[0], $fields[4], 1);
-	}
-	elsif ($retry < $o{'fail-retries-number'})
-	{
-	  print STDERR "<NOTE> : The 'batch.scheduler.list' didn't find any jobs - retrying ($retry)...\n";
-	  sleep $o{'fail-retry-delay'};
-	  $retry++;
-	}
-	else
-	{
-          print STDERR "WARNING: The 'batch.scheduler.list' didn't find any jobs\n";
-	  return ('', '', 0);
-	}
-      }
-      elsif ($retry < $o{'fail-retries-number'})
-      {
-	print STDERR "<NOTE> : The 'batch.scheduler.list' failed - retrying ($retry)...\n";
-	sleep $o{'fail-retry-delay'};
-	$retry++;
-      }
-      else
-      {
-	print STDERR "WARNING: The 'batch.scheduler.list' failed\n";
-	return ('', '', 0);
-      }
+        my ( $f, $o, $x ) = @_;
+        my @values = ( $o =~ m/$x\s+(\S+)/g );
+        if ( scalar(@values) > 0 ) {
+            return $values[$#values];
+        }
+        else {
+            chomp( my $value
+                    = qx(grep --extended-regexp "^#PBS +$x" $f | tail -1 | cut --delimiter=' ' --fields=3)
+            );
+            return ( $? == 0 ) ? $value : '';
+        }
     }
-  }
-  
-  sub SubmitAndCheck($$$%)
-  # ------ arguments: absolute filename, job name, job queue, options hash
-  {
-    my ($f, $n, $q, %o) = @_;
-    my $msubCommand = "msub $o{options} $f";
-    print STDERR "$msubCommand\n" if $o{verbose};
-    chomp(my $baseTimestamp = qx(date +%s));
-    chomp(my $res = qx($msubCommand));
-    if ($? == 0)
+
+    sub FindJob($$%)
+
+        # ------ arguments: job name, job queue, options hash
     {
-      $res =~ s/^\n//s;
-      return ($res, 1);
-    }
-    else
+        my ( $n, $q, %o ) = @_;
+        my $binDir      = File::Basename::dirname($0);
+        my $listCommand = "$binDir/batch.scheduler.list --user=$ENV{USER}";
+        $listCommand .= " --name=$n"  if $n;
+        $listCommand .= " --queue=$q" if $q;
+        $listCommand .= " --retries-number=$o{'list-retries-number'}"
+            if exists( $o{'list-retries-number'} );
+        $listCommand .= " --retry-delay=$o{'list-retry-delay'}" if exists( $o{'list-retry-delay'} );
+        $listCommand .= " --verbose"                            if $o{verbose};
+        $listCommand .= " --verbose"                            if $o{verbose} > 1;
+        print STDERR "$listCommand\n" if $o{verbose};
+        my ( $myJobID, $retry ) = ( $ENV{MOAB_JOBID} || '', 0 );
+
+        while (1) {
+            chomp( my $lines = qx($listCommand) );
+            if ( $? == 0 ) {
+                my @lines = grep( ( split( /,/, $_ ) )[0] ne $myJobID, split( /\n/, $lines ) );
+                if ( scalar(@lines) > 0 ) {
+                    my @linesSorted
+                        = sort { ( split( /,/, $b ) )[4] <=> ( split( /,/, $a ) )[4] } @lines;
+                    print STDERR join( "\n", @linesSorted ), "\n";
+                    my @fields = split( /,/, $linesSorted[0] );
+                    return ( $fields[0], $fields[4], 1 );
+                }
+                elsif ( $retry < $o{'fail-retries-number'} ) {
+                    print STDERR
+                        "<NOTE> : The 'batch.scheduler.list' didn't find any jobs - retrying ($retry)...\n";
+                    sleep $o{'fail-retry-delay'};
+                    $retry++;
+                }
+                else {
+                    print STDERR "WARNING: The 'batch.scheduler.list' didn't find any jobs\n";
+                    return ( '', '', 0 );
+                }
+            } ## end if ( $? == 0 )
+            elsif ( $retry < $o{'fail-retries-number'} ) {
+                print STDERR "<NOTE> : The 'batch.scheduler.list' failed - retrying ($retry)...\n";
+                sleep $o{'fail-retry-delay'};
+                $retry++;
+            }
+            else {
+                print STDERR "WARNING: The 'batch.scheduler.list' failed\n";
+                return ( '', '', 0 );
+            }
+        } ## end while (1)
+    } ## end sub FindJob($$%)
+
+    sub SubmitAndCheck($$$%)
+
+        # ------ arguments: absolute filename, job name, job queue, options hash
     {
-      sleep $o{'fail-init-delay'};
-      my ($jobId, $jobTimestamp, $status) = FindJob($n, $q, %o);
-      if ($status)
-      {
-	if (abs($jobTimestamp - $baseTimestamp) <= $o{'fail-range'})
-	{
-          print STDERR "WARNING: Moab false alarm has been detected!!!\n";
-	  return ($jobId, 1);
-	}
-	else
-	{
-	  my $range = $o{'fail-range'};
-	  print STDERR "WARNING: Base timestamp = '$baseTimestamp', range = '$range'\n";
-	  print STDERR "WARNING: A candidate job with timestamp '$jobTimestamp' has been found - ignored...\n";
-          return ('', 0);
-	}
-      }
-      else
-      {
-        return ('', 0);
-      }
-    }
-  }
-  
+        my ( $f, $n, $q, %o ) = @_;
+        my $msubCommand = "msub $o{options} $f";
+        print STDERR "$msubCommand\n" if $o{verbose};
+        chomp( my $baseTimestamp = qx(date +%s) );
+        chomp( my $res           = qx($msubCommand) );
+        if ( $? == 0 ) {
+            $res =~ s/^\n//s;
+            return ( $res, 1 );
+        }
+        else {
+            sleep $o{'fail-init-delay'};
+            my ( $jobId, $jobTimestamp, $status ) = FindJob( $n, $q, %o );
+            if ($status) {
+                if ( abs( $jobTimestamp - $baseTimestamp ) <= $o{'fail-range'} ) {
+                    print STDERR "WARNING: Moab false alarm has been detected!!!\n";
+                    return ( $jobId, 1 );
+                }
+                else {
+                    my $range = $o{'fail-range'};
+                    print STDERR "WARNING: Base timestamp = '$baseTimestamp', range = '$range'\n";
+                    print STDERR
+                        "WARNING: A candidate job with timestamp '$jobTimestamp' has been found - ignored...\n";
+                    return ( '', 0 );
+                }
+            }
+            else {
+                return ( '', 0 );
+            }
+        } ## end else [ if ( $? == 0 ) ]
+    } ## end sub SubmitAndCheck($$$%)
+
 }
 
 # //////////////////////////////////////////////////////////////////////////////
@@ -246,83 +231,81 @@ use Getopt::Long(':config', 'no_ignore_case', 'no_auto_abbrev');
 
 {
 
-  my %opt =
-  (
-    'fail-init-delay'		=> batch_scheduler_submit::FAIL_INIT_DELAY,
-    'fail-retries-number'	=> batch_scheduler_submit::FAIL_RETRIES_NUMBER,
-    'fail-retry-delay'		=> batch_scheduler_submit::FAIL_RETRY_DELAY,
-    'fail-range'		=> batch_scheduler_submit::FAIL_RANGE,
-    'list-retries-number'	=> batch_scheduler_submit::LIST_RETRIES_NUMBER,
-    'list-retry-delay'		=> batch_scheduler_submit::LIST_RETRY_DELAY,
-    'retries-number'		=> batch_scheduler_submit::RETRIES_NUMBER,
-    'retry-delay'		=> batch_scheduler_submit::RETRY_DELAY
-  );
-  
-  Getopt::Long::GetOptions(\%opt, batch_scheduler_submit::OPTLIST) or (print STDERR batch_scheduler_submit::Usage() and exit 1);
-  if ($opt{version}) {print STDERR batch_scheduler_submit::VERSION,"\n" and exit 0;}
-  if ($opt{help}) {print STDERR batch_scheduler_submit::Help() and exit 0;}
-  
-  $opt{verbose}++;
-  
-  if (scalar(@ARGV) == 1)
-  {
-    my $absFileName = File::Spec->rel2abs($ARGV[0]);
-    if (-f $absFileName)
-    {
-      if (-r $absFileName)
-      {
-        if (my $name = batch_scheduler_submit::FindOptionValue($absFileName, $opt{options}, '-N'))
-	{
-	  my ($queue, $retry) = (batch_scheduler_submit::FindOptionValue($absFileName, $opt{options}, '-q'), 0);
-	  while (1)
-	  {
-	    my ($jobId, $status) = batch_scheduler_submit::SubmitAndCheck($absFileName, $name, $queue, %opt);
-	    if ($status)
-	    {
-	      print "$jobId\n";
-	      exit 0;
-	    }
-	    elsif ($retry < $opt{'retries-number'})
-	    {
-	      print STDERR "<NOTE> : Retrying msub ($retry)...\n";
-	      sleep $opt{'retry-delay'};
-	      $retry++;
-	    }
-	    else
-	    {
-	      print STDERR "*ERROR*: No more msub retries\n";
-	      exit 1;
-	    }
-          }	  
-	}
-	else
-	{
-	  print STDERR "*ERROR*: Job name is not defined in options nor in the script header\n";
-	  exit 1;
-	}
-      }
-      else
-      {
-	print STDERR "*ERROR*: The job file '$absFileName' isn't readable\n";
-	exit 1;
-      }
+    my %opt = (
+        'fail-init-delay'     => batch_scheduler_submit::FAIL_INIT_DELAY,
+        'fail-retries-number' => batch_scheduler_submit::FAIL_RETRIES_NUMBER,
+        'fail-retry-delay'    => batch_scheduler_submit::FAIL_RETRY_DELAY,
+        'fail-range'          => batch_scheduler_submit::FAIL_RANGE,
+        'list-retries-number' => batch_scheduler_submit::LIST_RETRIES_NUMBER,
+        'list-retry-delay'    => batch_scheduler_submit::LIST_RETRY_DELAY,
+        'retries-number'      => batch_scheduler_submit::RETRIES_NUMBER,
+        'retry-delay'         => batch_scheduler_submit::RETRY_DELAY
+    );
+
+    Getopt::Long::GetOptions( \%opt, batch_scheduler_submit::OPTLIST )
+        or ( print STDERR batch_scheduler_submit::Usage() and exit 1 );
+    if ( $opt{version} ) { print STDERR batch_scheduler_submit::VERSION, "\n" and exit 0; }
+    if ( $opt{help} ) { print STDERR batch_scheduler_submit::Help() and exit 0; }
+
+    $opt{verbose}++;
+
+    if ( scalar(@ARGV) == 1 ) {
+        my $absFileName = File::Spec->rel2abs( $ARGV[0] );
+        if ( -f $absFileName ) {
+            if ( -r $absFileName ) {
+                if ( my $name
+                    = batch_scheduler_submit::FindOptionValue( $absFileName, $opt{options}, '-N' ) )
+                {
+                    my ( $queue, $retry ) = (
+                        batch_scheduler_submit::FindOptionValue(
+                            $absFileName, $opt{options}, '-q'
+                        ),
+                        0
+                    );
+                    while (1) {
+                        my ( $jobId, $status )
+                            = batch_scheduler_submit::SubmitAndCheck( $absFileName, $name, $queue,
+                            %opt );
+                        if ($status) {
+                            print "$jobId\n";
+                            exit 0;
+                        }
+                        elsif ( $retry < $opt{'retries-number'} ) {
+                            print STDERR "<NOTE> : Retrying msub ($retry)...\n";
+                            sleep $opt{'retry-delay'};
+                            $retry++;
+                        }
+                        else {
+                            print STDERR "*ERROR*: No more msub retries\n";
+                            exit 1;
+                        }
+                    }
+                } ## end if ( my $name = batch_scheduler_submit::FindOptionValue...)
+                else {
+                    print STDERR
+                        "*ERROR*: Job name is not defined in options nor in the script header\n";
+                    exit 1;
+                }
+            } ## end if ( -r $absFileName )
+            else {
+                print STDERR "*ERROR*: The job file '$absFileName' isn't readable\n";
+                exit 1;
+            }
+        } ## end if ( -f $absFileName )
+        else {
+            print STDERR "*ERROR*: The job file '$absFileName' doesn't exist\n";
+            exit 1;
+        }
+    } ## end if ( scalar(@ARGV) == ...)
+    elsif ( scalar(@ARGV) > 1 ) {
+        my $n = scalar(@ARGV);
+        print STDERR
+            "*ERROR*: The program can submit a single job only - you have entered '$n' of them\n";
+        exit 1;
     }
-    else
-    {
-      print STDERR "*ERROR*: The job file '$absFileName' doesn't exist\n";
-      exit 1;
+    else {
+        print STDERR "*ERROR*: No job files defined\n";
+        exit 1;
     }
-  }
-  elsif (scalar(@ARGV) > 1)
-  {
-    my $n = scalar(@ARGV);
-    print STDERR "*ERROR*: The program can submit a single job only - you have entered '$n' of them\n";
-    exit 1;
-  }
-  else
-  {
-    print STDERR "*ERROR*: No job files defined\n";
-    exit 1;
-  }
 
 }

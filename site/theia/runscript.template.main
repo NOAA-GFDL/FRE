@@ -58,7 +58,7 @@ banner $FRE_JOBID
 #FRE const(freCommandsModuleFilesDir)
 #FRE const(freCommandsVersion)
 
-#FRE const(projectInit)
+#FRE const(project)
 
 #FRE const(platform)
 #FRE const(target)
@@ -248,9 +248,9 @@ set -r archExt = 'tar'
 # ---------------- batch scheduler output staging options
 
 set -r submitOptionsCommon = ( -m $mailMode -j oe -r y -W umask=022 -S /bin/tcsh )
-set -r submitOptionsOutputStagerSave = ( $submitOptionsCommon -d $stdoutDir -o $stdoutDir/ -q $outputStagerSaveQueue -A $projectInit )
-set -r submitOptionsOutputStagerXfer = ( $submitOptionsCommon -d $stdoutDir -o $stdoutDir/ -q $outputStagerXferQueue -A $projectInit )
-set -r submitOptionsWorkDirCleaner = ( $submitOptionsCommon -d $stdoutDir -o $stdoutDir/ -q $workDirCleanerQueue -A $projectInit )
+set -r submitOptionsOutputStagerSave = ( $submitOptionsCommon -d $stdoutDir -o $stdoutDir/ -q $outputStagerSaveQueue )
+set -r submitOptionsOutputStagerXfer = ( $submitOptionsCommon -d $stdoutDir -o $stdoutDir/ -q $outputStagerXferQueue )
+set -r submitOptionsWorkDirCleaner = ( $submitOptionsCommon -d $stdoutDir -o $stdoutDir/ -q $workDirCleanerQueue )
 set -r submitOptionsPPStarter = ( $submitOptionsCommon )
 
 # ---------------- output staging type as a string
@@ -397,8 +397,7 @@ endif
 
 set continueFlag = 1
 
-set submitOptionsProject = ( )
-set submitOptionsQueue = ( )
+set submitOptionsProject = ( -A $project )
 
 set combineList = ( )
 set saveJobIds = ( )
@@ -478,17 +477,6 @@ if ( $?flagRunTypeProduction ) then
       exit 0
    endif
 
-   if ( $?project ) then
-      if ( "$project" != "" ) then
-         set submitOptionsProject = ( -A $project )
-      endif
-   endif
-
-   if ( $?queue ) then
-      if ( "$queue" != "" ) then
-         set submitOptionsQueue = ( -q $queue )
-      endif
-   endif
 endif
 
 if ( $?fyear ) then
@@ -647,7 +635,6 @@ cd $workDir
 if ( $echoOn ) unset echo
 ls -l INPUT/*
 if ( $echoOn ) set echo
-set adjust_dry_mass = `adjust_dry_mass_tool`
 
 # ---------------- executable and tables loading
 
@@ -680,6 +667,7 @@ touch data_table
 set months = $monthslist[1]
 set days = $dayslist[1]
 set hours = $hourslist[1]
+set adjust_dry_mass = `adjust_dry_mass_tool`
 
 set | sort > $envFile
 sleep $envFileDelay
@@ -769,25 +757,6 @@ while ( $irun <= $segmentsPerJob && $currentSeg <= $segmentsPerSimulation )
          exit 0
       endif
 
-      if ( $?project ) then
-         if ( "$project" != "" ) then
-            set submitOptionsProject = ( -A $project )
-         else
-            set submitOptionsProject = ( )
-         endif
-      else
-         set submitOptionsProject = ( )
-      endif
-
-      if ( $?queue ) then
-         if ( "$queue" != "" ) then
-            set submitOptionsQueue = ( -q $queue )
-         else
-            set submitOptionsQueue = ( )
-         endif
-      else
-         set submitOptionsQueue = ( )
-      endif
    endif
 
    # ---------------- commands, copied from XML (experiment/input/csh[@type="always" or @type="postInit"])
@@ -801,6 +770,7 @@ while ( $irun <= $segmentsPerJob && $currentSeg <= $segmentsPerSimulation )
    set months = $monthslist[$irun]
    set days = $dayslist[$irun]
    set hours = $hourslist[$irun]
+   set adjust_dry_mass = `adjust_dry_mass_tool`
 
    set | sort > $envFile
    sleep $envFileDelay
@@ -1933,29 +1903,9 @@ if ( $?flagRunTypeProduction ) then
          exit 0
       endif
 
-      if ( $?project ) then
-         if ( "$project" != "" ) then
-            set submitOptionsProject = ( -A $project )
-         else
-            set submitOptionsProject = ( )
-         endif
-      else
-         set submitOptionsProject = ( )
-      endif
-
-      if ( $?queue ) then
-         if ( "$queue" != "" ) then
-            set submitOptionsQueue = ( -q $queue )
-         else
-            set submitOptionsQueue = ( )
-         endif
-      else
-         set submitOptionsQueue = ( )
-      endif
-
       if ( -f $scriptName ) then
          if ( -r $scriptName ) then
-            set nextOptions = ( $submitOptionsProject $submitOptionsQueue )
+            set nextOptions = ( $submitOptionsProject )
             set result = `submit $nextOptions $scriptName`
             if ( $status == 0 ) then
                if ( $echoOn ) unset echo

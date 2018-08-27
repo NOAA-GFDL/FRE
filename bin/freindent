@@ -1,4 +1,4 @@
-#!/usr/bin/perl
+#!/usr/bin/env perl
 # -*- cperl -*-
 #simple utility to write indented XML to stdout
 #usage: freindent -x xmlfile > outfile
@@ -6,15 +6,15 @@ use Getopt::Std;
 use strict;
 
 use vars qw( $opt_h $opt_x );
-getopts( 'hx:' ) || die "\aSyntax: $0 [-hx:]\n";
-if( ! -f $opt_x ) {
-    "ERROR: XML file does not exist: $opt_x\n"; 
-     $opt_h=1;
+getopts('hx:') || die "\aSyntax: $0 [-hx:]\n";
+if ( !-f $opt_x ) {
+    "ERROR: XML file does not exist: $opt_x\n";
+    $opt_h = 1;
 }
 
 #help message
-if( $opt_h ) {
-   print <<EOF;
+if ($opt_h) {
+    print <<EOF;
 
 Synopsis: freindent will indent and align the tags in your xml file.
 
@@ -28,48 +28,53 @@ Usage:    freindent -x xmlfile > out.xml
           -h         = show this help message, then exit
           -x xmlfile = use alternative xml file (required)
 EOF
-   exit 1;
+    exit 1;
 }
 
 my $out = $opt_x;
 $out =~ s/\.xml$/-FREINDENT-TMP.xml/;
 
 my $freroot = $ENV{FRE_COMMANDS_HOME};
-die "ERROR: Your FRE_COMMANDS_HOME is not set or the directory does not exist. Is FRE loaded?\n" if ! -d $freroot;
+die "ERROR: Your FRE_COMMANDS_HOME is not set or the directory does not exist. Is FRE loaded?\n"
+    if !-d $freroot;
 
 system("xsltproc $freroot/etc/xsl/indent.xsl $opt_x > $out");
 
-open(FILE, "$out") or die("Unable to open intermediate file $out");
+open( FILE, "$out" ) or die("Unable to open intermediate file $out");
 my @lines = <FILE>;
 close(FILE);
 unlink $out;
 
-for (my $i = 0; $i <= $#lines; $i++) {
+for ( my $i = 0; $i <= $#lines; $i++ ) {
 
-   if ( "$lines[$i]" =~ /^\s*\<\/(\S*)\>\s*$/ ) {
-      #print "NOTE found closetag: $lines[$i]\n";
-      my $j = $i-1;
-      my $tagname = $1;
-      while ( $lines[$j] !~ /^(\s*)\<$tagname/ and $j > 0) { $j--; }
-      if ( $j == 0 ) {
-         print STDERR "ERROR: opentag was never found for $tagname\n";
-         print $lines[$i];
-      } else {
-         #print "NOTE found opentag: $lines[$j]\n";
-         $lines[$j] =~ /^(\s*)\<$tagname/ ;
-         my $spaces = $1;
-         print "$spaces</$tagname>\n";
-      }
-   } elsif ("$lines[$i]" =~ /^(\s*\<experiment .*)/) {
-      print "\n$1\n";
-   } elsif ("$lines[$i]" =~ /(.*?)(<!--.*)/) {
-      my $tmp = $lines[$i];
-      $tmp =~ s/<!--/\n<!--/g;
-      print "$tmp";
-   } else {
-      print $lines[$i];
-   }
-}
+    if ( "$lines[$i]" =~ /^\s*\<\/(\S*)\>\s*$/ ) {
 
+        #print "NOTE found closetag: $lines[$i]\n";
+        my $j       = $i - 1;
+        my $tagname = $1;
+        while ( $lines[$j] !~ /^(\s*)\<$tagname/ and $j > 0 ) { $j--; }
+        if ( $j == 0 ) {
+            print STDERR "ERROR: opentag was never found for $tagname\n";
+            print $lines[$i];
+        }
+        else {
 
+            #print "NOTE found opentag: $lines[$j]\n";
+            $lines[$j] =~ /^(\s*)\<$tagname/;
+            my $spaces = $1;
+            print "$spaces</$tagname>\n";
+        }
+    }
+    elsif ( "$lines[$i]" =~ /^(\s*\<experiment .*)/ ) {
+        print "\n$1\n";
+    }
+    elsif ( "$lines[$i]" =~ /(.*?)(<!--.*)/ ) {
+        my $tmp = $lines[$i];
+        $tmp =~ s/<!--/\n<!--/g;
+        print "$tmp";
+    }
+    else {
+        print $lines[$i];
+    }
+} ## end for ( my $i = 0; $i <= ...)
 

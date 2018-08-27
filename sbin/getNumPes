@@ -1,4 +1,4 @@
-#! /usr/bin/perl
+#! /usr/bin/env perl
 
 # =========================================================================
 # Copyright (C) 2010-2012 Seth Underwood
@@ -26,266 +26,295 @@ use Sys::Hostname;
 use POSIX qw(ceil floor);
 
 sub displayVersion {
-  # Print the version to STDOUT.
 
-  # Version and Date
-  my $Version = '2.1';
-  my $Date = '04 Jan 2012';
+    # Print the version to STDOUT.
 
-  print "getNumPes $Version ($Date)\n";
+    # Version and Date
+    my $Version = '2.1';
+    my $Date    = '04 Jan 2012';
+
+    print "getNumPes $Version ($Date)\n";
 }
 
 sub getCoresPerNode {
-  my $host = shift @_;
-  my $coresPerNode = 0;
+    my $host         = shift @_;
+    my $coresPerNode = 0;
 
-  if ( $host =~ /gaea[1-4].*/ or $host =~ /c1ms.*/ or $host =~ /ncrc1/ ) {
-    $coresPerNode = 24;
-  } elsif ( $host =~ /gaea[5-8].*/ or $host =~ /t1.*/ or $host =~ /c2.*/ or $host =~ /ncrc2/ ) {
-    $coresPerNode = 32;
-  }
+    if ( $host =~ /gaea[1-4].*/ or $host =~ /c1ms.*/ or $host =~ /ncrc1/ ) {
+        $coresPerNode = 24;
+    }
+    elsif ( $host =~ /gaea[5-8].*/ or $host =~ /t1.*/ or $host =~ /c2.*/ or $host =~ /ncrc2/ ) {
+        $coresPerNode = 32;
+    }
 
-  return $coresPerNode;
+    return $coresPerNode;
 }
 
 sub fixPeCounts {
-  my ($totPes, $atmPes, $do_atm, $ocnPes, $do_ocn, $omp, $cpn) = @_;
-  my $error;
-  our $debug;
+    my ( $totPes, $atmPes, $do_atm, $ocnPes, $do_ocn, $omp, $cpn ) = @_;
+    my $error;
+    our $debug;
 
-  if ( $debug ) {
-    print STDERR "Tot = $totPes, Atm = $$atmPes, OMP = $omp, Ocn = $$ocnPes, CPN = $cpn\n";
-    print STDERR "do_atmos = ";
-    if ( $do_atm ) {
-      print STDERR "true\n";
-    } else {
-      print STDERR "false\n";
+    if ($debug) {
+        print STDERR "Tot = $totPes, Atm = $$atmPes, OMP = $omp, Ocn = $$ocnPes, CPN = $cpn\n";
+        print STDERR "do_atmos = ";
+        if ($do_atm) {
+            print STDERR "true\n";
+        }
+        else {
+            print STDERR "false\n";
+        }
+        print STDERR "do_ocean = ";
+        if ($do_ocn) {
+            print STDERR "true\n";
+        }
+        else {
+            print STDERR "false\n";
+        }
     }
-    print STDERR "do_ocean = ";
-    if ( $do_ocn ) {
-      print STDERR "true\n";
-    } else {
-      print STDERR "false\n";
+
+    if ( $$atmPes == 0 and $$ocnPes != 0 ) {
+        $$atmPes = ( $totPes - $$ocnPes ) / $omp;
+        $error   = 0;
     }
-  }
+    elsif ( $$atmPes != 0 and $$ocnPes == 0 ) {
+        $$ocnPes = $totPes - $$atmPes * $omp;
+        $error   = 0;
+    }
 
-  if ( $$atmPes == 0 and $$ocnPes != 0 ) {
-    $$atmPes = ($totPes - $$ocnPes)/$omp;
-    $error = 0;
-  } elsif ( $$atmPes != 0 and $$ocnPes == 0 ) {
-    $$ocnPes = $totPes - $$atmPes*$omp;
-    $error = 0;
-  }
-  # Reset number of atmos/ocean pe's if not doing atmos/ocean
-  $$ocnPes = 0 if ( !$do_ocn );
-  $$atmPes = 0 if ( !$do_atm );
-  if ( $$atmPes*$omp + $$ocnPes == $totPes ) {
-    $error = 0;
-  } elsif ( (ceil($$atmPes*$omp/($cpn-$cpn%$omp))+ceil($$ocnPes/$cpn))*$cpn == $totPes ) {
-    $error = 0;
-  } else {
-    $error = 1;
-  }
+    # Reset number of atmos/ocean pe's if not doing atmos/ocean
+    $$ocnPes = 0 if ( !$do_ocn );
+    $$atmPes = 0 if ( !$do_atm );
+    if ( $$atmPes * $omp + $$ocnPes == $totPes ) {
+        $error = 0;
+    }
+    elsif ( ( ceil( $$atmPes * $omp / ( $cpn - $cpn % $omp ) ) + ceil( $$ocnPes / $cpn ) ) * $cpn
+        == $totPes ) {
+        $error = 0;
+    }
+    else {
+        $error = 1;
+    }
 
-  # One last sanity check
-  if ( !$error ) {
-    $error = 2 if ( !($$atmPes and $do_atm) );
-    $error = 3 if ( !($$ocnPes and $do_ocn) );
-  }
-  return $error;
-}
+    # One last sanity check
+    if ( !$error ) {
+        $error = 2 if ( !( $$atmPes and $do_atm ) );
+        $error = 3 if ( !( $$ocnPes and $do_ocn ) );
+    }
+    return $error;
+} ## end sub fixPeCounts
 
 sub fixLayout {
-  my ($npes, $ntiles, $layout) = @_;
-  my $error;
+    my ( $npes, $ntiles, $layout ) = @_;
+    my $error;
 
-  # Is one of the layout numbers a zero?
-  if ( $ntiles != 0 ) {
-    if ( $$layout[0] == 0 and $$layout[1] != 0 ) {
-      $$layout[0] = $npes / ($ntiles * $$layout[1]);
-      $error = 0;
-    } elsif ( $$layout[0] != 0 and $$layout[1] == 0 ) {
-      $$layout[1] = $npes / ($ntiles * $$layout[0]);
-      $error = 0;
-    } elsif ( $$layout[0] != 0 and $$layout[1] != 0 ) {
-      if ( $$layout[0] * $$layout[1] * $ntiles == $npes ) {
-	$error = 0;
-      } else {
-	$error = 1;
-      }
+    # Is one of the layout numbers a zero?
+    if ( $ntiles != 0 ) {
+        if ( $$layout[0] == 0 and $$layout[1] != 0 ) {
+            $$layout[0] = $npes / ( $ntiles * $$layout[1] );
+            $error = 0;
+        }
+        elsif ( $$layout[0] != 0 and $$layout[1] == 0 ) {
+            $$layout[1] = $npes / ( $ntiles * $$layout[0] );
+            $error = 0;
+        }
+        elsif ( $$layout[0] != 0 and $$layout[1] != 0 ) {
+            if ( $$layout[0] * $$layout[1] * $ntiles == $npes ) {
+                $error = 0;
+            }
+            else {
+                $error = 1;
+            }
+        }
     }
-  } else {
-    $error = 2;
-  }
+    else {
+        $error = 2;
+    }
 
-  return $error;
-}
+    return $error;
+} ## end sub fixLayout
 
 sub getTotNumPes {
-  my $script = shift;
-  open (SCRPT, '<', $script) or die $!;
-  local $/;
-  my $allscript = <SCRPT>;
-  close(SCRPT);
+    my $script = shift;
+    open( SCRPT, '<', $script ) or die $!;
+    local $/;
+    my $allscript = <SCRPT>;
+    close(SCRPT);
 
-  my $npes;
-  if ( $allscript =~ m/set npes = (\d+)/ ) {
-    $npes = $1;
-  }
+    my $npes;
+    if ( $allscript =~ m/set npes = (\d+)/ ) {
+        $npes = $1;
+    }
 
-  return $npes;
+    return $npes;
 }
 
 sub getNMLfile {
-  my $script = shift;
-  open (NML, '<', $script) or die $!;
-  local $/;
-  my $allnml = <NML>;
-  close(NML);
+    my $script = shift;
+    open( NML, '<', $script ) or die $!;
+    local $/;
+    my $allnml = <NML>;
+    close(NML);
 
-  my $nml;
-  if ( $allnml =~ m/cat > input.nml.*? <<\\*?EOF\s*\n(.*?EOF)/s ) {
-    $nml = $1;
-  }
+    my $nml;
+    if ( $allnml =~ m/cat > input.nml.*? <<\\*?EOF\s*\n(.*?EOF)/s ) {
+        $nml = $1;
+    }
 
-  return $nml;
+    return $nml;
 }
 
 {
-  # Check for usage options (help/version)
-  my $help;
-  our $debug;
-  my $version;
-  my $host = hostname;
-  GetOptions(
-	     "host=s" => \$host,
-	     "help|h" => \$help,
-	     "debug|d+" => \$debug,
-	     "version|v" => \$version,
-	    ) or pod2usage(2);
-  pod2usage(1) if $help;
-  displayVersion() and exit(0) if ( $version );
 
-  # Get the number of cores / node
-  my $cpn = getCoresPerNode($host);
-  die "getNumPes: Unknown host '$host'.  Try a valid host (ncrc1, ncrc2, c1ms, t1, c2).\n" unless ( $cpn );
+    # Check for usage options (help/version)
+    my $help;
+    our $debug;
+    my $version;
+    my $host = hostname;
+    GetOptions(
+        "host=s"    => \$host,
+        "help|h"    => \$help,
+        "debug|d+"  => \$debug,
+        "version|v" => \$version,
+    ) or pod2usage(2);
+    pod2usage(1) if $help;
+    displayVersion() and exit(0) if ($version);
 
-  die "getNumPes: No file given.\n" unless ( @ARGV );
-  die "getNumPes: file '$ARGV[0]' does not exist or is not readable.  $!\n" unless ( -r -f -e $ARGV[0] );
-  my $nmlFile = &getNMLfile($ARGV[0]);
-  my $npes = &getTotNumPes($ARGV[0]);
-  die "getNumPes: No Fortran namelists found in file '$ARGV[0]'.\n" unless ( $nmlFile );
+    # Get the number of cores / node
+    my $cpn = getCoresPerNode($host);
+    die "getNumPes: Unknown host '$host'.  Try a valid host (ncrc1, ncrc2, c1ms, t1, c2).\n"
+        unless ($cpn);
 
-  my $coupler;
-  my $fv_core;
-  my $ocean_model;
+    die "getNumPes: No file given.\n" unless (@ARGV);
+    die "getNumPes: file '$ARGV[0]' does not exist or is not readable.  $!\n"
+        unless ( -r -f -e $ARGV[0] );
+    my $nmlFile = &getNMLfile( $ARGV[0] );
+    my $npes    = &getTotNumPes( $ARGV[0] );
+    die "getNumPes: No Fortran namelists found in file '$ARGV[0]'.\n" unless ($nmlFile);
 
-  # Get the three required namelists.
-  if ( $nmlFile =~ m/(&coupler_nml\s*\n.*?\/)/s ) {
-    $coupler = $1;
-  }
-  if ( $nmlFile =~ m/(&fv_core_nml\s*\n.*?\/)/s ) {
-    $fv_core = $1;
-  }
-  if ( $nmlFile =~ m/(&ocean_model_nml\s*\n.*?\/)/s ) {
-    $ocean_model = $1;
-  }
+    my $coupler;
+    my $fv_core;
+    my $ocean_model;
 
-  # coupler_nml is required, die if not found.
-  die "coupler_nml not found\n" unless ( $coupler );
-
-  # Get the number of PEs from the coupler_nml
-  my $atm_pes = 0;
-  my $ocn_pes = 0;
-  my $atm_omp = 1;
-  my $do_ocn = 1;
-  my $do_atm = 1;
-  my $do_concurrent = 0;
-  if ( $coupler =~ /\batmos_npes\b\s*=\s*(\d+)/ ) {
-    $atm_pes = $1;
-  }
-  if ( $coupler =~ /\bocean_npes\b\s*=\s*(\d+)/ ) {
-    $ocn_pes = $1;
-  }
-  if ( $coupler =~ /\batmos_nthreads\b\s*=\s*(\d+)/ ) {
-    $atm_omp = $1;
-  }
-  if ( $coupler =~ /\bconcurrent\b\s*=\s*\.true\./i ) {
-    $do_concurrent = 1;
-  }
-  if ( $coupler =~ /\bdo_ocean\b\s*=\s*\.false\./i ) {
-    $do_ocn = 0;
-  }
-  if ( $coupler =~ /\bdo_atmos\b\s*=\s*\.false\./i ) {
-    $do_atm = 0;
-  }
-  # Non-concurrent runs can have both atm_pes and ocn_pes zero.  
-  # If one is zero, then equal to totPes
-  if ( ! $do_concurrent ) {
-    if ( $do_ocn and $do_atm ) {
-      $atm_pes = $npes if ( $atm_pes == 0 );
-      $ocn_pes = $npes if ( $ocn_pes == 0 );
-    } elsif ( $do_ocn and !$do_atm ) {
-      $atm_pes = 0;
-      $ocn_pes = $npes if ( $ocn_pes == 0 );
-    } elsif ( !$do_ocn and $do_atm ) {
-      $atm_pes = $npes if ( $atm_pes == 0 );
-      $ocn_pes = 0;
+    # Get the three required namelists.
+    if ( $nmlFile =~ m/(&coupler_nml\s*\n.*?\/)/s ) {
+        $coupler = $1;
     }
-  }
-  # do_ocean and do_atmos cannot both be false.
-  die "do_ocean and do_atmos in coupler_nml both cannot be .FALSE.\n" if ( !$do_ocn and !$do_atm );
-  # Make sure both atmos_npes and ocean_npes are not zero.
-  die "Both atmos_npes and ocean_npes cannot be zero.\n" if ( $atm_pes + $ocn_pes == 0 );
-  my $err = &fixPeCounts($npes, \$atm_pes, $do_atm, \$ocn_pes, $do_ocn, $atm_omp, $cpn);
-  die "Number of atmosphere pes and ocean PEs does not correspond to the total number of PEs requested\n" if ($err);
-
-  # Only do this if fv_core_nml found
-  my @atm_layout;
-  my $atm_ntiles = 1;
-
-  if ( $fv_core && $atm_pes ) {
-    # Get the number of atmos PEs from the fv_core_nml
-    if ( $fv_core =~ /\blayout\b\s*=\s*(\d+)\s*,\s*(\d+)/ ) {
-      @atm_layout = ($1, $2);
+    if ( $nmlFile =~ m/(&fv_core_nml\s*\n.*?\/)/s ) {
+        $fv_core = $1;
+    }
+    if ( $nmlFile =~ m/(&ocean_model_nml\s*\n.*?\/)/s ) {
+        $ocean_model = $1;
     }
 
-    # Get the number of tiles for the atmosphere
-    if ( $fv_core =~ /\bntiles\b\s*=\s*(\d+)/ ) {
-      $atm_ntiles = $1;
+    # coupler_nml is required, die if not found.
+    die "coupler_nml not found\n" unless ($coupler);
+
+    # Get the number of PEs from the coupler_nml
+    my $atm_pes       = 0;
+    my $ocn_pes       = 0;
+    my $atm_omp       = 1;
+    my $do_ocn        = 1;
+    my $do_atm        = 1;
+    my $do_concurrent = 0;
+    if ( $coupler =~ /\batmos_npes\b\s*=\s*(\d+)/ ) {
+        $atm_pes = $1;
+    }
+    if ( $coupler =~ /\bocean_npes\b\s*=\s*(\d+)/ ) {
+        $ocn_pes = $1;
+    }
+    if ( $coupler =~ /\batmos_nthreads\b\s*=\s*(\d+)/ ) {
+        $atm_omp = $1;
+    }
+    if ( $coupler =~ /\bconcurrent\b\s*=\s*\.true\./i ) {
+        $do_concurrent = 1;
+    }
+    if ( $coupler =~ /\bdo_ocean\b\s*=\s*\.false\./i ) {
+        $do_ocn = 0;
+    }
+    if ( $coupler =~ /\bdo_atmos\b\s*=\s*\.false\./i ) {
+        $do_atm = 0;
     }
 
-    # Fix any 0's in the layout
-    die "Error found in atmosphere layout\n" if ( fixLayout($atm_pes, $atm_ntiles, \@atm_layout) );
-  } elsif ( $atm_pes ) {
-    die "atmosphere processors requested, but no layout found.\n";
-  }
-
-  # Only do this if ocean_model_nml found
-  my @ocn_layout;
-
-  if ( $ocean_model && $ocn_pes ) {
-    # Get the number of ocean PEs from the ocean_model_nl
-    if ( $ocean_model =~ /\blayout\b\s*=\s*(\d+)\s*,\s*(\d+)/ ) {
-      @ocn_layout = ($1,$2);
+    # Non-concurrent runs can have both atm_pes and ocn_pes zero.
+    # If one is zero, then equal to totPes
+    if ( !$do_concurrent ) {
+        if ( $do_ocn and $do_atm ) {
+            $atm_pes = $npes if ( $atm_pes == 0 );
+            $ocn_pes = $npes if ( $ocn_pes == 0 );
+        }
+        elsif ( $do_ocn and !$do_atm ) {
+            $atm_pes = 0;
+            $ocn_pes = $npes if ( $ocn_pes == 0 );
+        }
+        elsif ( !$do_ocn and $do_atm ) {
+            $atm_pes = $npes if ( $atm_pes == 0 );
+            $ocn_pes = 0;
+        }
     }
 
-    # Fix any 0's in the layout
-    die "Error found in ocean layout\n" if ( fixLayout($ocn_pes, 1, \@ocn_layout) );
-  } elsif ( $ocn_pes ) {
-    die "ocean processors requested, but no layout found.\n";
-  }
+    # do_ocean and do_atmos cannot both be false.
+    die "do_ocean and do_atmos in coupler_nml both cannot be .FALSE.\n"
+        if ( !$do_ocn and !$do_atm );
 
-  # Print the csh code to for the layout and npes
-  if ( $atm_pes and @atm_layout ) {
-    print "set atm_pes = $atm_pes\n";
-    print "set atm_layout = ",join(',',@atm_layout),"\n";
-    print "set atm_omp = $atm_omp\n";
-  }
-  if ( $ocn_pes and @ocn_layout ) {
-    print "set ocn_pes = $ocn_pes\n";
-    print "set ocn_layout = ",join(',',@ocn_layout),"\n";
-  }
+    # Make sure both atmos_npes and ocean_npes are not zero.
+    die "Both atmos_npes and ocean_npes cannot be zero.\n" if ( $atm_pes + $ocn_pes == 0 );
+    my $err = &fixPeCounts( $npes, \$atm_pes, $do_atm, \$ocn_pes, $do_ocn, $atm_omp, $cpn );
+    die
+        "Number of atmosphere pes and ocean PEs does not correspond to the total number of PEs requested\n"
+        if ($err);
+
+    # Only do this if fv_core_nml found
+    my @atm_layout;
+    my $atm_ntiles = 1;
+
+    if ( $fv_core && $atm_pes ) {
+
+        # Get the number of atmos PEs from the fv_core_nml
+        if ( $fv_core =~ /\blayout\b\s*=\s*(\d+)\s*,\s*(\d+)/ ) {
+            @atm_layout = ( $1, $2 );
+        }
+
+        # Get the number of tiles for the atmosphere
+        if ( $fv_core =~ /\bntiles\b\s*=\s*(\d+)/ ) {
+            $atm_ntiles = $1;
+        }
+
+        # Fix any 0's in the layout
+        die "Error found in atmosphere layout\n"
+            if ( fixLayout( $atm_pes, $atm_ntiles, \@atm_layout ) );
+    }
+    elsif ($atm_pes) {
+        die "atmosphere processors requested, but no layout found.\n";
+    }
+
+    # Only do this if ocean_model_nml found
+    my @ocn_layout;
+
+    if ( $ocean_model && $ocn_pes ) {
+
+        # Get the number of ocean PEs from the ocean_model_nl
+        if ( $ocean_model =~ /\blayout\b\s*=\s*(\d+)\s*,\s*(\d+)/ ) {
+            @ocn_layout = ( $1, $2 );
+        }
+
+        # Fix any 0's in the layout
+        die "Error found in ocean layout\n" if ( fixLayout( $ocn_pes, 1, \@ocn_layout ) );
+    }
+    elsif ($ocn_pes) {
+        die "ocean processors requested, but no layout found.\n";
+    }
+
+    # Print the csh code to for the layout and npes
+    if ( $atm_pes and @atm_layout ) {
+        print "set atm_pes = $atm_pes\n";
+        print "set atm_layout = ", join( ',', @atm_layout ), "\n";
+        print "set atm_omp = $atm_omp\n";
+    }
+    if ( $ocn_pes and @ocn_layout ) {
+        print "set ocn_pes = $ocn_pes\n";
+        print "set ocn_layout = ", join( ',', @ocn_layout ), "\n";
+    }
 }
 
 __END__

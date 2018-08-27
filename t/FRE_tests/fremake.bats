@@ -12,27 +12,24 @@ setup() {
 
 @test "fremake is in PATH" {
     run which fremake
-    echo "Got: \"$output\""
-    echo "Exit status: $status"
+    print_output_and_status
     [ "$status" -eq 0 ]
 }
 
 @test "fremake print help message" {
     run fremake -h
-    echo "Got: \"$output\""
-    echo "Exit status: $status"
+    print_output_and_status
     [ "$status" -eq 0 ]
 }
 
 @test "fremake print version" {
     run fremake -V
-    echo "Got: \"$output\""
-    echo "Exit status: $status"
+    print_output_and_status
     [ "$status" -eq 0 ]
 }
 
 @test "No experiment listed on fremake command line and no rts.xml file" {
-    case "$FRE_SYSTEM_SITE" in
+    case "${default_platform%%.*}" in
         an??? )
             skip "Don't test fremake on Analysis"
             ;;
@@ -43,9 +40,7 @@ setup() {
     esac
 
     run fremake
-    echo "Expected: \"$output_good\""
-    echo "Got:      \"$output\""
-    echo "Exit status: $status"
+    print_output_status_and_diff_expected
     [ "$status" -eq 11 ]
     [ "$output" = "$output_good" ]
 }
@@ -62,18 +57,16 @@ setup() {
 
     rm -f rts.xml
     run fremake -p ${default_platform} CM2.1U_Control-1990_E1.M_3A
-    echo "Expected: \"$output_good\""
-    echo "Got:      \"$output\""
-    echo "Exit status: $status"
+    print_output_status_and_diff_expected
     [ "$status" -eq 30 ]
     [ "$output" = "$output_good" ]
 }
 
 @test "Create compile script when experiment listed on fremake command line, and rts.xml exists" {
-    case "$FRE_SYSTEM_SITE" in
+    case "${default_platform%%.*}" in
         ncrc? )
             platform="ncrc"
-            root_stem="/lustre/f1"
+            root_stem="/lustre/f2/scratch"
             submit_cmd="sleep 1; msub"
             ;;
         theia )
@@ -99,6 +92,11 @@ setup() {
         last_line_good="The compile script '${last_line_good}' is ready"
     fi
 
+    if [ -e rts.xml ]
+    then
+       rm -f rts.xml
+    fi
+
     unique_stdout_xml CM2.1U.xml >rts.xml
     run fremake -p ${default_platform} CM2.1U_Control-1990_E1.M_3A
 
@@ -106,10 +104,7 @@ setup() {
     num_lines=${#lines[@]}
     last_line="${lines[$((num_lines-1))]}"
 
-    echo "Output:   \"$output\""
-    echo "Expected: \"$last_line_good\""
-    echo "Got:      \"$last_line\""
-    echo "Exit status: $status"
+    print_output_status_and_diff_expected_long "$last_line" "$last_line_good"
     [ "$status" -eq 0 ]
     string_matches_pattern "$last_line" "$last_line_good"
     rm -rf "${root_stem}/${USER}/FRE_tests-${unique_string}-temp"
@@ -129,18 +124,16 @@ setup() {
 
     [ ! -f nonexistent_file.xml ] # Assert file doesn't exist
     run fremake -x nonexistent_file.xml -p ${default_platform} CM2.1U_Control-1990_E1.M_3A
-    echo "Expected: \"$output_good\""
-    echo "Got:      \"$output\""
-    echo "Exit status: $status"
+    print_output_status_and_diff_expected
     [ "$status" -eq 30 ]
     [ "$output" = "$output_good" ]
 }
 
 @test "Create compile script when XML listed on fremake command line and XML file exists" {
-    case "$FRE_SYSTEM_SITE" in
+    case "${default_platform%%.*}" in
         ncrc? )
             platform="ncrc"
-            root_stem="/lustre/f1"
+            root_stem="/lustre/f2/scratch"
             submit_cmd="sleep 1; msub"
             ;;
         theia )
@@ -174,10 +167,7 @@ setup() {
     num_lines=${#lines[@]}
     last_line="${lines[$((num_lines-1))]}"
 
-    echo "Output:   \"$output\""
-    echo "Expected: \"$last_line_good\""
-    echo "Got:      \"$last_line\""
-    echo "Exit status: $status"
+    print_output_status_and_diff_expected_long "$last_line" "$last_line_good"
     [ "$status" -eq 0 ]
     string_matches_pattern "$last_line" "$last_line_good"
     rm -rf "${root_stem}/${USER}/FRE_tests-${unique_string}-temp"
@@ -188,18 +178,16 @@ setup() {
     output_good="*FATAL*: The --platform option value 'nonexistent_platform.intel' is not valid"
 
     run fremake -x CM2.1U.xml -p nonexistent_platform.intel CM2.1U_Control-1990_E1.M_3A
-    echo "Expected: \"$output_good\""
-    echo "Got:      \"$output\""
-    echo "Exit status: $status"
+    print_output_status_and_diff_expected
     [ "$status" -eq 30 ]
     [ "$output" = "$output_good" ]
 }
 
 @test "Create compile script when --platform=${default_platform}" {
-    case "$FRE_SYSTEM_SITE" in
+    case "${default_platform%%.*}" in
         ncrc? )
             platform="ncrc"
-            root_stem="/lustre/f1"
+            root_stem="/lustre/f2/scratch"
             submit_cmd="sleep 1; msub"
             ;;
         theia )
@@ -217,7 +205,7 @@ setup() {
             ;;
     esac
 
-    last_line_good="${root_stem}/${USER}/FRE_tests-${unique_string}-temp/.*/CM2.1U_Control-1990_E1.M_3A/${FRE_SYSTEM_SITE}.intel-prod/exec/compile_CM2.1U_Control-1990_E1.M_3A.csh"
+    last_line_good="${root_stem}/${USER}/FRE_tests-${unique_string}-temp/.*/CM2.1U_Control-1990_E1.M_3A/${default_platform}-prod/exec/compile_CM2.1U_Control-1990_E1.M_3A.csh"
 
     if [ -n "${submit_cmd}" ]; then
         last_line_good="TO SUBMIT => ${submit_cmd} ${last_line_good}"
@@ -232,10 +220,7 @@ setup() {
     num_lines=${#lines[@]}
     last_line="${lines[$((num_lines-1))]}"
 
-    echo "Output:   \"$output\""
-    echo "Expected: \"$last_line_good\""
-    echo "Got:      \"$last_line\""
-    echo "Exit status: $status"
+    print_output_status_and_diff_expected_long "$last_line" "$last_line_good"
     [ "$status" -eq 0 ]
     string_matches_pattern "$last_line" "$last_line_good"
     rm -rf "${root_stem}/${USER}/FRE_tests-${unique_string}-temp"
@@ -243,10 +228,10 @@ setup() {
 }
 
 @test "Create compile script when --target=prod" {
-    case "$FRE_SYSTEM_SITE" in
+    case "${default_platform%%.*}" in
         ncrc? )
             platform="ncrc"
-            root_stem="/lustre/f1"
+            root_stem="/lustre/f2/scratch"
             submit_cmd="sleep 1; msub"
             ;;
         theia )
@@ -264,7 +249,7 @@ setup() {
             ;;
     esac
 
-    last_line_good="${root_stem}/${USER}/FRE_tests-${unique_string}-temp/.*/CM2.1U_Control-1990_E1.M_3A/${FRE_SYSTEM_SITE}.intel-prod/exec/compile_CM2.1U_Control-1990_E1.M_3A.csh"
+    last_line_good="${root_stem}/${USER}/FRE_tests-${unique_string}-temp/.*/CM2.1U_Control-1990_E1.M_3A/${default_platform}-prod/exec/compile_CM2.1U_Control-1990_E1.M_3A.csh"
 
     if [ -n "${submit_cmd}" ]; then
         last_line_good="TO SUBMIT => ${submit_cmd} ${last_line_good}"
@@ -279,10 +264,7 @@ setup() {
     num_lines=${#lines[@]}
     last_line="${lines[$((num_lines-1))]}"
 
-    echo "Output:   \"$output\""
-    echo "Expected: \"$last_line_good\""
-    echo "Got:      \"$last_line\""
-    echo "Exit status: $status"
+    print_output_status_and_diff_expected_long "$last_line" "$last_line_good"
     [ "$status" -eq 0 ]
     string_matches_pattern "$last_line" "$last_line_good"
     rm -rf "${root_stem}/${USER}/FRE_tests-${unique_string}-temp"
@@ -290,10 +272,10 @@ setup() {
 }
 
 @test "Source and executable directories exist but --force-checkout and --force-compile not specified" {
-    case "$FRE_SYSTEM_SITE" in
+    case "${default_platform%%.*}" in
         ncrc? )
             platform="ncrc"
-            root_stem="/lustre/f1"
+            root_stem="/lustre/f2/scratch"
             submit_cmd="sleep 1; msub"
             ;;
         theia )
@@ -311,7 +293,7 @@ setup() {
             ;;
     esac
 
-    last_line_good="${root_stem}/${USER}/FRE_tests-${unique_string}-temp/.*/CM2.1U_Control-1990_E1.M_3A/${FRE_SYSTEM_SITE}.intel-prod/exec/compile_CM2.1U_Control-1990_E1.M_3A.csh"
+    last_line_good="${root_stem}/${USER}/FRE_tests-${unique_string}-temp/.*/CM2.1U_Control-1990_E1.M_3A/${default_platform}-prod/exec/compile_CM2.1U_Control-1990_E1.M_3A.csh"
 
     if [ -n "${submit_cmd}" ]; then
         last_line_good="TO SUBMIT => ${submit_cmd} ${last_line_good}"
@@ -320,7 +302,7 @@ setup() {
     fi
 
     output_good="WARNING: The checkout script '${root_stem}/${USER}/FRE_tests-${unique_string}-temp/.*/CM2.1U_Control-1990_E1.M_3A/src/checkout.csh' already exists and matches checkout instructions in the XML file, so checkout is skipped
-WARNING: The compile script '${root_stem}/${USER}/FRE_tests-${unique_string}-temp/.*/CM2.1U_Control-1990_E1.M_3A/${FRE_SYSTEM_SITE}.intel-prod/exec/compile_CM2.1U_Control-1990_E1.M_3A.csh' already exists and matches compile instructions in the XML file
+WARNING: The compile script '${root_stem}/${USER}/FRE_tests-${unique_string}-temp/.*/CM2.1U_Control-1990_E1.M_3A/${default_platform}-prod/exec/compile_CM2.1U_Control-1990_E1.M_3A.csh' already exists and matches compile instructions in the XML file
 ${last_line_good}"
 
     unique_stdout_xml CM2.1U.xml >"${unique_string}-temp.xml"
@@ -328,9 +310,7 @@ ${last_line_good}"
     run fremake -x "${unique_string}-temp.xml" -p ${default_platform} -t prod CM2.1U_Control-1990_E1.M_3A
     remove_ninac_from_output_and_lines
 
-    echo "Expected: \"$output_good\""
-    echo "Got:      \"$output\""
-    echo "Exit status: $status"
+    print_output_status_and_diff_expected
     [ "$status" -eq 0 ]
     string_matches_pattern "$output" "$output_good"
     rm -rf "${root_stem}/${USER}/FRE_tests-${unique_string}-temp"
@@ -338,10 +318,10 @@ ${last_line_good}"
 }
 
 @test "Create compile script when source directory exists and --force-checkout specified" {
-    case "$FRE_SYSTEM_SITE" in
+    case "${default_platform%%.*}" in
         ncrc? )
             platform="ncrc"
-            root_stem="/lustre/f1"
+            root_stem="/lustre/f2/scratch"
             submit_cmd="sleep 1; msub"
             ;;
         theia )
@@ -359,7 +339,7 @@ ${last_line_good}"
             ;;
     esac
 
-    last_line_good="${root_stem}/${USER}/FRE_tests-${unique_string}-temp/.*/CM2.1U_Control-1990_E1.M_3A/${FRE_SYSTEM_SITE}.intel-prod/exec/compile_CM2.1U_Control-1990_E1.M_3A.csh"
+    last_line_good="${root_stem}/${USER}/FRE_tests-${unique_string}-temp/.*/CM2.1U_Control-1990_E1.M_3A/${default_platform}-prod/exec/compile_CM2.1U_Control-1990_E1.M_3A.csh"
 
     if [ -n "${submit_cmd}" ]; then
         last_line_good="TO SUBMIT => ${submit_cmd} ${last_line_good}"
@@ -375,10 +355,7 @@ ${last_line_good}"
     num_lines=${#lines[@]}
     last_line="${lines[$((num_lines-1))]}"
 
-    echo "Output:   \"$output\""
-    echo "Expected: \"$last_line_good\""
-    echo "Got:      \"$last_line\""
-    echo "Exit status: $status"
+    print_output_status_and_diff_expected_long "$last_line" "$last_line_good"
     [ "$status" -eq 0 ]
     string_matches_pattern "$last_line" "$last_line_good"
     rm -rf "${root_stem}/${USER}/FRE_tests-${unique_string}-temp"
@@ -386,10 +363,10 @@ ${last_line_good}"
 }
 
 @test "Create compile script when executable directory exists and --force-compile specified" {
-    case "$FRE_SYSTEM_SITE" in
+    case "${default_platform%%.*}" in
         ncrc? )
             platform="ncrc"
-            root_stem="/lustre/f1"
+            root_stem="/lustre/f2/scratch"
             submit_cmd="sleep 1; msub"
             ;;
         theia )
@@ -407,7 +384,7 @@ ${last_line_good}"
             ;;
     esac
 
-    last_line_good="${root_stem}/${USER}/FRE_tests-${unique_string}-temp/.*/CM2.1U_Control-1990_E1.M_3A/${FRE_SYSTEM_SITE}.intel-prod/exec/compile_CM2.1U_Control-1990_E1.M_3A.csh"
+    last_line_good="${root_stem}/${USER}/FRE_tests-${unique_string}-temp/.*/CM2.1U_Control-1990_E1.M_3A/${default_platform}-prod/exec/compile_CM2.1U_Control-1990_E1.M_3A.csh"
 
     if [ -n "${submit_cmd}" ]; then
         last_line_good="TO SUBMIT => ${submit_cmd} ${last_line_good}"
@@ -423,10 +400,7 @@ ${last_line_good}"
     num_lines=${#lines[@]}
     last_line="${lines[$((num_lines-1))]}"
 
-    echo "Output:   \"$output\""
-    echo "Expected: \"$last_line_good\""
-    echo "Got:      \"$last_line\""
-    echo "Exit status: $status"
+    print_output_status_and_diff_expected_long "$last_line" "$last_line_good"
     [ "$status" -eq 0 ]
     string_matches_pattern "$last_line" "$last_line_good"
     rm -rf "${root_stem}/${USER}/FRE_tests-${unique_string}-temp"

@@ -822,7 +822,7 @@ if ( $xferToolToLoad ) then
          module load gcp/$xferToolVersion
          set -r xferSrcPrefix = ""
          set -r xferDstPrefix = "gfdl:"
-         alias xferTool `which gcp` --create-dirs --verbose
+         alias gcp `which gcp`
       else
          if ( $echoOn ) unset echo
          echo "*ERROR*: The 'gcp' modulefile '$xferToolModuleFile' doesn't exist or not readable"
@@ -869,7 +869,7 @@ alias retry `which output.retry`
 
 if ( $actionCombineToDo ) then
    set -r patternGrepTail = '\.[0-9]{4,}$'
-   set -r patternGrepRestart = '\<res\>|\<nc\>'
+   set -r patternGrepRestart = '\<nc\>'
    set -r patternGrepHistory = '\<nc\>'
 
    set -r tagFail = 'fail'
@@ -937,7 +937,7 @@ if ( $actionCombineToDo ) then
             wait
             unset counter
          endif
-         unset singleResFile
+         unset singleResFiles
          # Also, non-distributed compressed history files should
          # be run through combine-ncc due to decompress-ncc mysteriously
          # failing on some fields that are all zeros.
@@ -1094,7 +1094,7 @@ if ( $actionCombineToDo ) then
          foreach file ( $filesToDecompress )
             slmnccompressed $file
             if ( $status == 0 ) then
-               set tmpFile = `mktemp $file.XXXXX`
+               set tmpFile = `mktemp -u $file.XXXXX`
                # Use a temporary file to hold the decompressed output
                # If the decompress is successful, the tmpFile will be moved
                # on top of the original name
@@ -1173,10 +1173,8 @@ if ( $actionFillGridToDo ) then
       set masked_ocean_static = ( `ls -1 | egrep "\.ocean_static\.nc"` )
       if ( $#masked_ocean_static == 0 ) then
          if ( $echoOn ) unset echo
-         echo "*ERROR*: $error_intro However, ocean_static.nc doesn't exist. Please add ocean_static to your diag table. $error_ending"
+         echo "*WARNING*: $error_intro However, ocean_static.nc doesn't exist. Please add ocean_static to your diag table."
          if ( $echoOn ) set echo
-         set exitStatus = 2
-         goto END
       else if ( $#masked_ocean_static > 1 ) then
          if ( $echoOn ) unset echo
          echo "*ERROR*: $error_intro Unfortunately, there were multiple *.ocean_static.nc targets for unmasked lat/lon swap, but there should be just one. This shouldn't happen, so please open a help desk ticket. $error_ending"
@@ -1197,29 +1195,31 @@ if ( $actionFillGridToDo ) then
 
       # use ocean_static.nc in gridSpec tarfile otherwise
       if ( $#ref_ocean_static == 0 ) then
-         tar -xf $gridSpec ./ocean_static.nc
+         tar --wildcards -xf $gridSpec '*ocean_static.nc'
          if ( $status ) then
             if ( $echoOn ) unset echo
-            echo "*ERROR*: $error_intro Unfortunately, we couldn't extract ocean_static.nc from $gridSpec. Please add ocean_static.nc containing unmasked grid info fields to $gridSpec. $error_ending"
+            echo "*WARNING*: $error_intro Unfortunately, we couldn't extract ocean_static.nc from $gridSpec. Please add ocean_static.nc containing unmasked grid info fields to $gridSpec."
             if ( $echoOn ) set echo
-            set exitStatus = 2
-            goto END
+         else
+            set ref_ocean_static = "ocean_static.nc"
          endif
       endif
 
       # do the swap
-      ncks -A $ref_ocean_static $masked_ocean_static
-      if ( $status == 0 ) then
-         if ( $echoOn ) unset echo
-         echo "<NOTE> : Reference ocean static $ref_ocean_static has been appended to $masked_ocean_static"
-         if ( $echoOn ) set echo
-      else
-         if ( $echoOn ) unset echo
-            echo "*ERROR*: $error_intro Unfortunately, we couldn't append $ref_ocean_static into $masked_ocean_static. This shouldn't happen, so please open a help desk ticket. $error_ending"
-         if ( $echoOn ) set echo
+      if ( $#masked_ocean_static == 1 && $#ref_ocean_static == 1 ) then
+         ncks -A -m $ref_ocean_static $masked_ocean_static
+         if ( $status == 0 ) then
+            if ( $echoOn ) unset echo
+            echo "<NOTE> : Reference ocean static $ref_ocean_static has been appended to $masked_ocean_static"
+            if ( $echoOn ) set echo
+         else
+            if ( $echoOn ) unset echo
+               echo "*ERROR*: $error_intro Unfortunately, we couldn't append $ref_ocean_static into $masked_ocean_static. This shouldn't happen, so please open a help desk ticket. $error_ending"
+            if ( $echoOn ) set echo
+         endif
       endif
-      popd
 
+      popd
       set actionFillGridOk = 1
       echo "set actionFillGridOk = 1" >> $argFile
 
@@ -1525,7 +1525,7 @@ if ( $actionXferToConsider ) then
    if ( $actionXferToPerform ) then
       if ( $hostType == 'login' || $hostType == 'rdtn' ) then
          if ( -f $archDir.$archExt && -r $archDir.$archExt ) then
-            xferTool $xferSrcPrefix$archDir.$archExt $xferDstPrefix$outputDirRemote:h/
+            gcp --create-dirs --verbose $xferSrcPrefix$archDir.$archExt $xferDstPrefix$outputDirRemote:h/
 
             if ( $status == 0 ) then
                if ( $echoOn ) unset echo
@@ -1540,7 +1540,7 @@ if ( $actionXferToConsider ) then
             endif
 
             if ( -f $archDir.$archExt.ok && -r $archDir.$archExt.ok && -s $archDir.$archExt.ok ) then
-               xferTool $xferSrcPrefix$archDir.$archExt.ok $xferDstPrefix$outputDirRemote:h/
+               gcp --create-dirs --verbose $xferSrcPrefix$archDir.$archExt.ok $xferDstPrefix$outputDirRemote:h/
 
                if ( $status == 0 ) then
                   if ( $echoOn ) unset echo
@@ -1594,7 +1594,7 @@ if ( $actionPPStartToConsider ) then
                set xmlFileRemote = $xmlFilesRemote[$inx]
 
                if ( -f "$xmlFile" && -r "$xmlFile" ) then
-                  xferTool --sync $xferSrcPrefix$xmlFile $xferDstPrefix$xmlFileRemote:h/
+                  gcp --create-dirs --verbose --sync $xferSrcPrefix$xmlFile $xferDstPrefix$xmlFileRemote:h/
                   if ( $status == 0 ) then
                      if ( $echoOn ) unset echo
                      echo "<NOTE> : The XML file '$xmlFile' has been copied to the remote XML file '$xmlFileRemote' successfully"
@@ -1632,7 +1632,7 @@ if ( $actionPPStartToConsider ) then
 
          if ( $includeDir != "" && $includeDirRemote != "" ) then
             if ( -d $includeDir && -r $includeDir ) then
-               xferTool -r -cd --sync $xferSrcPrefix$includeDir $xferDstPrefix$includeDirRemote:h/
+               gcp --verbose --recursive --sync $xferSrcPrefix$includeDir $xferDstPrefix$includeDirRemote/
                if ( $status == 0 ) then
                   echo "<NOTE> : The include directory $includeDir has been copied to the remote location $includeDirRemote successfully"
                else
@@ -1657,7 +1657,7 @@ if ( $actionPPStartToConsider ) then
          echo "dummy" >> $dummyFile
 
          if ( $status == 0 ) then
-            xferTool $xferSrcPrefix$dummyFile $xferDstPrefix$stdoutDirRemotePP/
+            gcp --create-dirs --verbose $xferSrcPrefix$dummyFile $xferDstPrefix$stdoutDirRemotePP/
             if ( $status == 0 ) then
                if ( $echoOn ) unset echo
                echo "<NOTE> : The remote directory '$stdoutDirRemotePP' has been created successfully"
