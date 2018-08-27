@@ -26,3 +26,8 @@ teardown() {
     run bash -c "ls --color=always -1 tar1.tar tar2.tar | ardiff -c cp"
     [ "$status" -eq 0 ]
 }
+
+@test "Dealing with no color from ls" {
+    run bash -c "ls --color=none -1 tar1.tar tar2.tar | ardiff -c cp"
+    [ "$status" -eq 0 ]
+}
