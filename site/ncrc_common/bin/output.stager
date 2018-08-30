@@ -1207,16 +1207,43 @@ if ( $actionFillGridToDo ) then
 
       # do the swap
       if ( $#masked_ocean_static == 1 && $#ref_ocean_static == 1 ) then
-         ncks -A -m $ref_ocean_static $masked_ocean_static
-         if ( $status == 0 ) then
-            if ( $echoOn ) unset echo
-            echo "<NOTE> : Reference ocean static $ref_ocean_static has been appended to $masked_ocean_static"
-            if ( $echoOn ) set echo
+         # We want to append the data from the reference file fields
+         # to the history file, but only for fields that are
+         # in the history file already. Otherwise, we'll append data fields
+         # from reference files that aren't in the history file,
+         # and end up with fields in the history file with no metadata (which isn't desired).
+         # The first ncks gets the fields in the (masked) history file,
+         # the 2nd ncks gets the fields in the reference file,
+         # and the comm -12 gets the set that are in both.
+         # I couldn't figure out how to do this without temporary files using c-shell,
+         # but could with bash
+         set common_vars = `bash -c "comm -12 \
+            <(ncks -m $masked_ocean_static | grep -E ': type' | cut -f 1 -d ' ' | sed 's/://' | sort -u) \
+            <(ncks -m $ref_ocean_static | grep -E ': type' | cut -f 1 -d ' ' | sed 's/://' | sort -u)"`
+         if ($status == 0) then
+            set common_vars = `echo $common_vars | sed 's/ /,/g'`
+            if ( $common_vars != "" ) then
+               ncks -A -m -v $common_vars $ref_ocean_static $masked_ocean_static
+               if ( $status == 0 ) then
+                  if ( $echoOn ) unset echo
+                  echo "<NOTE> : Reference ocean static $ref_ocean_static has been appended to $masked_ocean_static"
+                  if ( $echoOn ) set echo
+               else
+                  if ( $echoOn ) unset echo
+                     echo "*ERROR*: $error_intro Unfortunately, we couldn't append $ref_ocean_static into $masked_ocean_static. This shouldn't happen, so please open a help desk ticket. $error_ending"
+                  if ( $echoOn ) set echo
+               endif
+            else
+               if ( $echoOn ) unset echo
+               echo "*ERROR*: $error_intro Unfortunately the variable intersection of $masked_ocean_static and $ref_ocean_static seems to be empty. This is probably a bug, so please submit a help desk ticket. $error_ending"
+               if ( $echoOn ) set echo
+            endif
          else
             if ( $echoOn ) unset echo
-               echo "*ERROR*: $error_intro Unfortunately, we couldn't append $ref_ocean_static into $masked_ocean_static. This shouldn't happen, so please open a help desk ticket. $error_ending"
+            echo "*ERROR*: $error_intro Unfortunately the variable intersection of $masked_ocean_static and $ref_ocean_static couldn't be determined. Please submit a help desk ticket. $error_ending"
             if ( $echoOn ) set echo
          endif
+         unset common_vars
       endif
 
       popd
