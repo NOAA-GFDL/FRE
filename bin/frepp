@@ -409,8 +409,8 @@ EOF
     # use expanded platform (e.g. gfdl.ncrc-intel rather than ncrc-intel)
     $opt_P = $fre->platform;
 
-    #set default platform to ia64 for hpcs.*, x86_64 for gfdl.*
-    $platform = 'ia64';
+    # set default platform to "unknown", to catch error with unsupported platforms
+    $platform = 'unknown';
     if ( $opt_P =~ /^gfdl\./ ) { $platform = 'x86_64'; }
     chomp $platform;
     my $platformcsh;
@@ -535,76 +535,25 @@ EOF
         my $agg = FREUtil::getxpathval('postProcess/@archiveTimeSeries');
         if ( "$agg" eq 'byVariable' ) { $aggregateTS = 0; }
 
-        #may need to change platform here
-        my $freppplatform = FREUtil::getxpathval('postProcess/@platform');
-        if ( "$freppplatform" ne "" and "$freppplatform" ne "$platform" ) {
-            $platform = $freppplatform;
-        }
-
         #set platform specific variables
+        # This really should be done using the fre.properties file
         print STDERR "Using platform $platform\n" if $opt_v;
-        $batchSubmit = "msub -d /home/$username/ ";
-        if ( "$platform" eq 'sgi' ) {
-            $cpio        = 'cpio -C 524288';
-            $cp          = 'cp -b 2097152';
-            $mv          = 'mv -b 2097152';
-            $mvfile      = '/lopt/bin/mvfile';
-            $timecmd     = '/bin/time';
-            $maxruntime  = '18:00:00';
-            $systimecmd  = '/usr/etc/amtime1970';
-            $timereal    = 'E';
-            $platformcsh = <<'EOF';
-set path = (/usr/local/nco-3.0.1/bin/ /usr/local/netcdf-3.6.0-p1/bin $path)
-setenv NETCDF_FFIOSPEC "cache:256:2"
-set ncks = /usr/local/bin/ncks
-
-#sanity check
-which ncatted
-EOF
-        }
-        elsif ( "$platform" eq 'ia64' ) {
-            $batchSubmit = 'qsub';
-            $cp          = '/usr/cluster/bin/cxfscp';
-            $cpio        = 'cpio -C 524288';
-            $uncpio      = 'cpio -C 2097152';
-            $mvfile      = '/usr/cluster/bin/cxfscp';
-            $platformcsh = $exp->fre->default_platform_csh . $exp->fre->platformValue('csh');
-            $platformcsh .= <<'EOF';
-
-setenv NC_BLKSZ 64K
-set ncksopt = "-a -h -F --header_pad 16384"
-set ncrcatopt = "-h -O -t 2 --header_pad 16384"
-EOF
-        }
-        elsif ( "$platform" eq 'x86_64' ) {
+        if ( "$platform" eq 'x86_64' ) {
+            $batchSubmit = "msub -d /home/$username/ ";
             $cp          = 'gcp -v';
             $cpio        = 'cpio -C 524288';
             $uncpio      = 'cpio -C 2097152';
             $mvfile      = 'gcp -v';
             $platformcsh = $exp->fre->default_platform_csh . $exp->fre()->platformValue('csh');
-            $platformcsh .= <<'EOF';
-
-setenv NC_BLKSZ 64K
-set ncksopt = "-a -h -F --header_pad 16384"
-set ncrcatopt = "-h -O -t 2 --header_pad 16384"
-EOF
-
-        }
-        elsif ( "$platform" eq 'ifc' ) {
         }
         else {
             mailuser("platform $platform not supported for postprocessing");
             print STDERR
-                "ERROR: You specified '$freppplatform' for the post-processing platform in the <postProcess> tag.\nPlatform must be either 'ia64' or 'sgi' (for the Origins)\n";
+                "ERROR: Platform '$platform' is unsupported.\n";
         }
 
         if ( "$opt_w" ne '' ) {
-            if ( "$platform" eq 'ia64' ) {
-                $opt_w = " -hold_jid $opt_w";
-            }
-            else {
-                $opt_w = " -l depend=afterok:$opt_w";
-            }
+            if ("$platform" eq "x86_64") {$opt_w = " -l depend=afterok:$opt_w";}
         }
 
         # Job schooling is only available if queue is not stage
@@ -881,11 +830,7 @@ EOF
             }
         } ## end if ( "$platformcsh" ne...)
         $cshscripttmpl =~ s/#platform_csh_from_xml/$platformcsh/;
-        if ( "$platform" eq 'ia64' ) {
-            $cshscripttmpl =~ s/#\$ -l h_cpu/#\$ -l h_cpu=$maxruntime/;
-            $cshscripttmpl =~ s/#\$ -o/#\$ -o $stdoutdir\/postProcess/;
-        }
-        else {
+        if ( "$platform" eq 'x86_64' ) {
             $cshscripttmpl =~ s/#PBS -N/#PBS -N $pbs_job_name/;
             $cshscripttmpl =~ s/#PBS -l walltime/#PBS -l walltime=$maxruntime/;
             $cshscripttmpl =~ s/#PBS -o/#PBS -o $stdoutdir\/postProcess\//;
@@ -921,10 +866,7 @@ EOF
         my $ppNode = FREUtil::getppNode($expt);
         unless ($opt_f) {
             unless ($ppNode) {    #if no pp node, no further postprocessing
-                if ( "$platform" eq 'ia64' ) {
-                    $cshscripttmpl =~ s/#\$ -l h_cpu.*/#\$ -l h_cpu=01:00:00/;
-                }
-                else {
+                if ( "$platform" eq 'x86_64' ) {
                     $cshscripttmpl =~ s/#PBS -l walltime.*/#PBS -l walltime=01:00:00/;
                 }
                 $cshscripttmpl =~ s/(-soft -l fre_info=)/$1ppYears\@$maxyrs+/;
@@ -959,9 +901,6 @@ EOF
             chomp( $basedate = $diagtablecontent[1] );
             $basedate =~ s/^\s*//g;
             if ( "$basedate" eq "\$baseDate" ) {
-
-   #$basedate = $nml->namelistSingleQuotedStringGet("coupler_nml", "current_date") || "0 0 0 0 0 0";
-
                 $basedate = $nml->namelistGet("coupler_nml");
                 if ( "$basedate" eq "" ) {
                     $basedate = "0 0 0 0 0 0";
@@ -1048,10 +987,7 @@ EOF
             }
 
             $cshscripttmpl .= mailerrors($outscript);
-            if ( "$platform" eq 'ia64' ) {
-                $cshscripttmpl =~ s/#\$ -l h_cpu.*/#\$ -l h_cpu=$maxruntime/;
-            }
-            else {
+            if ( "$platform" eq 'x86_64' ) {
                 $cshscripttmpl =~ s/#PBS -l walltime.*/#PBS -l walltime=$maxruntime/;
             }
             $cshscripttmpl =~ s/(-soft -l fre_info=)/$1ppYears\@$maxyrs+/;
@@ -2553,25 +2489,16 @@ EOF
                     $cshscript =~ s/#check_history_files/$check_history/;
                 }
                 $cshscript .= call_frepp( $abs_xml_path, $outscript, $component, "" );
-                if ( "$platform" eq 'ia64' ) {
-                    $cshscript .= "qstat -j \$PBS_JOBID | grep ^usage\n";
-                }
                 $cshscript .= "echo END-OF-SCRIPT for postprocessing job $t0-$tEND for $expt\n";
 
                 # if the user sets -W, don't override the wallclock even for 1-year postprocessing
                 if ( $maxyrs < 2 and !$opt{Walltime} ) {
-                    if ( "$platform" eq 'ia64' ) {
-                        $cshscript =~ s/#\$ -l h_cpu.*/#\$ -l h_cpu=20:00:00/;
-                    }
-                    else {
+                    if ( "$platform" eq 'x86_64' ) {
                         $cshscript =~ s/#PBS -l walltime.*/#PBS -l walltime=20:00:00/;
                     }
                 }
                 if ( $maxyrs >= 20 ) {
-                    if ( "$platform" eq 'ia64' ) {
-                        $cshscript =~ s/#\$ -l h_cpu.*/#\$ -l h_cpu=$maxruntime/;
-                    }
-                    else {
+                    if ( "$platform" eq 'x86_64' ) {
                         $cshscript =~ s/#PBS -l walltime.*/#PBS -l walltime=$maxruntime/;
                     }
                     my $npes = $basenpes;
@@ -3592,20 +3519,7 @@ EOF
                     print STDERR "NOTE: will interpolate $count variables to zgrid for $infile\n";
                 }
             }
-            if ( "$platform" eq "ia64" ) {
-                $csh .= <<EOF;
-    set taxis = `ncdump -h $infile | grep -i '.*=.*unlimited.*currently' | awk '{print \$1}'`
-    #set hasclimbounds = `ncdump -h $infile | grep 'climatology_bounds' | wc -l`
-    if ( `ncdump -h $infile | grep -c " climatology_bounds("` == 1 ) then
-      $time_zgrid /home/fms/local/ia64/v11/Resample_on_Z_new -d/home/rwh/data/regrid_MESO/OM3_zgrid.nc -V:$variables -T:average_T1,average_T2,average_DT,climatology_bounds -ee -o$outfile $infile
-      $check_zgrid
-    else
-      $time_zgrid /home/fms/local/ia64/v11/Resample_on_Z_new -d/home/rwh/data/regrid_MESO/OM3_zgrid.nc -V:$variables -T:average_T1,average_T2,average_DT,\${taxis}_bounds -ee -o$outfile $infile
-      $check_zgrid
-    endif
-EOF
-            }
-            else {
+            if ( "$platform" eq "x86_64" ) {
                 $csh .= <<EOF;
     set taxis = `ncdump -h $infile | grep -i '.*=.*unlimited.*currently' | awk '{print \$1}'`
     #set hasclimbounds = `ncdump -h $infile | grep 'climatology_bounds' | wc -l`
@@ -4855,7 +4769,7 @@ EOF
    end
 
 if ( "$variables" != '' ) then
-    set static_vars = (`\$NCVARS -s0123 \$sourcefile`) 
+    set static_vars = (`\$NCVARS -s0123 \$sourcefile`)
     set static_vars = `echo \$static_vars |sed 's/ /,/g'`
     set avg_vars = (average_T1,average_T2,average_DT,time_bnds)
     set vars = ("$variables","\$static_vars","\$avg_vars")
@@ -4868,7 +4782,7 @@ while ( \$i <= 6 )
 
    set monthf = `echo \$month | sed 's/.*/0&/;s/.\\(..\\)/\\1/'`
    set histmonth = "\$monthf"
-   
+
    if ( "$variables" != '' ) then
       $time_ncrcat ncrcat \$ncrcatopt -v \$vars *\${histmonth}01.$diag_source$tile.nc month.nc
    else
@@ -4987,7 +4901,7 @@ foreach hDate ( @hDates )
    $convertSeg
 end
 if ( "$variables" != '' ) then
-    set static_vars = (`\$NCVARS -s0123 \$file`) 
+    set static_vars = (`\$NCVARS -s0123 \$file`)
     set static_vars = `echo \$static_vars |sed 's/ /,/g'`
     set avg_vars = (average_T1,average_T2,average_DT,time_bnds)
     set vars = ("$variables","\$static_vars","\$avg_vars")
@@ -5176,7 +5090,7 @@ end
 set i = 1
 while ( \$i <= 6 )
 if ( "$variables" != '' ) then
-   set static_vars = (`\$NCVARS -s0123 \$sourcefile`) 
+   set static_vars = (`\$NCVARS -s0123 \$sourcefile`)
    set static_vars = `echo \$static_vars |sed 's/ /,/g'`
    set avg_vars = (average_T1,average_T2,average_DT,time_bnds)
    set vars = ("$variables","\$static_vars","\$avg_vars")
@@ -5295,7 +5209,7 @@ foreach file ( `ls \$histDir/$hDateyr*/*.$diag_source.nc`)
 end
 if ( -e annual.nc ) rm -f annual.nc
 if ( "$variables" != '' ) then
-   set static_vars = (`\$NCVARS -s0123 \$file`) 
+   set static_vars = (`\$NCVARS -s0123 \$file`)
    set static_vars = `echo \$static_vars |sed 's/ /,/g'`
    set avg_vars = (average_T1,average_T2,average_DT,time_bnds)
    set vars = ("$variables","\$static_vars","\$avg_vars")
@@ -5516,7 +5430,7 @@ while ( \$i <= 6 )
       if (\$file =~ \*$tile\*) set filelist = ( \$filelist \$file )
    end
    if ( "$variables" != '' ) then
-      set static_vars = (`\$NCVARS -s0123 \$file`) 
+      set static_vars = (`\$NCVARS -s0123 \$file`)
       set static_vars = `echo \$static_vars |sed 's/ /,/g'`
       set avg_vars = (average_T1,average_T2,average_DT,time_bnds)
       set vars = ("$variables","\$static_vars","\$avg_vars")
@@ -6435,7 +6349,7 @@ end
 
 if ( -e xyears.nc ) rm -f xyears.nc
 if ( "$variables" != '' ) then
-   set static_vars = (`\$NCVARS -s0123 \$file`) 
+   set static_vars = (`\$NCVARS -s0123 \$file`)
    set static_vars = `echo \$static_vars |sed 's/ /,/g'`
    set avg_vars = (average_T1,average_T2,average_DT,time_bnds)
    set vars = ("$variables","\$static_vars","\$avg_vars")
@@ -8083,17 +7997,7 @@ EOF
         my $platform = $_[0];
 
         my $cshscripttmpl = '';
-        if ( "$platform" eq 'ia64' ) {
-            $cshscripttmpl = <<'EOF';
-#!/bin/csh -f
-#$ -l h_cpu
-#$ -pe ic.postp 1
-#$ -o
-#$ -r y
-#$ -soft -l fre_info=
-EOF
-        }
-        else {
+        if ( "$platform" eq 'x86_64' ) {
             $cshscripttmpl = <<'EOF';
 #!/bin/csh -f
 #PBS -N
@@ -8123,7 +8027,7 @@ if ( -d "$workdir" ) then
 endif
 mkdir -p $workdir
 EOF
-        } ## end else [ if ( "$platform" eq 'ia64')]
+        }
 
         $cshscripttmpl .= <<'EOF';
 #=======================================================================

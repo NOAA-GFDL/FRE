@@ -490,6 +490,10 @@ module load fre/$FRE_COMMANDS_VERSION
 module load fre-analysis
 module load git
 
+setenv NC_BLKSZ 64K
+set ncksopt = \"-a -h -F --header_pad 16384\"
+set ncrcatopt = \"-h -O -t 2 --header_pad 16384\"
+
 # Platform environment overrides from XML"
 
     sed -e "s/\(^ *<property *name=\"FRE_VERSION\" *value=\"\).*\(\"\)/\1${FRE_COMMANDS_VERSION}\2/" CM2.1U.xml > ${unique_string}-temp.xml
@@ -523,14 +527,14 @@ module load git
     output_good="
 /// CM2.1U_Control-1990_E1.M_3A
 /////////////////////////////////////////////////////////////////////////////////////////////////////
-LABEL      RUN#  DUPE  POSTFIX                                                                       
+LABEL      RUN#  DUPE  POSTFIX
 -----------------------------------------------------------------------------------------------------
-basic         0        1x0m8d_30x1a_20x1o              
-restarts      0        2x0m4d_30x1a_20x1o              
-scaling       0        1x0m8d_30x1a_12x1o              
-scaling       1        1x0m8d_30x1a_30x1o              
-scaling       2        1x0m8d_30x1a_42x1o              
-scaling       3        1x0m8d_30x2a_120x1o             
+basic         0        1x0m8d_30x1a_20x1o
+restarts      0        2x0m4d_30x1a_20x1o
+scaling       0        1x0m8d_30x1a_12x1o
+scaling       1        1x0m8d_30x1a_30x1o
+scaling       2        1x0m8d_30x1a_42x1o
+scaling       3        1x0m8d_30x2a_120x1o
 -----------------------------------------------------------------------------------------------------"
 
     # This test requires the platform to be able to run, which gfdl cannot.  Skip on gfdl
@@ -543,7 +547,7 @@ scaling       3        1x0m8d_30x2a_120x1o
     run frelist -x CM2.1U.xml -p ${default_platform} -t openmp -r suite --postfix CM2.1U_Control-1990_E1.M_3A
     print_output_status_and_diff_expected
     [ "$status" -eq 0 ]
-    [[ "$output_good" =~ "$output" ]]
+    [[ X"$(diff -b  <(printf '%s\n' "$output_good") <(printf '%s\n' "$output"))" = X ]]
 }
 
 @test "Use --evaluate to extract data from XML" {
@@ -603,6 +607,10 @@ module load fre/bronx-12
 module load fre-analysis
 module load git
 
+setenv NC_BLKSZ 64K
+set ncksopt = "-a -h -F --header_pad 16384"
+set ncrcatopt = "-h -O -t 2 --header_pad 16384"
+
 # Platform environment overrides from XML
 
            source $MODULESHOME/init/csh
@@ -611,7 +619,7 @@ module load git
 
            module use -a /home/John.Krasting/local/modulefiles
            module load jpk-analysis/0.0.4
-           #Some tricks to use the refineDiag and analysis scripts from a checkout of MOM6 at gfdl 
+           #Some tricks to use the refineDiag and analysis scripts from a checkout of MOM6 at gfdl
            setenv FREVERSION fre/bronx-12
            setenv NBROOT /nbhome/'"$USER"'/fms/AM3/bronx-12/warsaw_201803/$(name)/gfdl.ncrc3-intel15-prod
            mkdir -p $NBROOT
