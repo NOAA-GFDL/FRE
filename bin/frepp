@@ -22,21 +22,13 @@ use FREAnalysis qw(analysis);
 use FREUtil;
 use FRETargets qw(standardize);
 
-use Config;
-use lib "/app/perl/lib/perl5/$Config{version}";
-use lib "/app/perl/lib/perl5/site_perl/$Config{version}";
-use lib "/app/perl/lib64/perl5/$Config{version}/$Config{archname}";
-use lib "/app/perl/lib64/perl5/site_perl/$Config{version}/$Config{archname}";
-use Env::Modulecmd;
-Env::Modulecmd::load('moab');
-
 use vars qw( $expt $nml $err $username %dtvars $root);
 use vars
     qw( $mkdircommand $hDate $t0 $tEND $sim0 $ppRootDir $component $cpiomonTS $aggregateTS $historyfiles);
 use vars qw( $do_static $segTime $segUnits $caltype);
 use vars qw( $analysisdir $absfrepp $relfrepp $perlerrors );
 use vars
-    qw( $archivedir $rootdir $workdir $tempCache $rtsVersion $platform $versionId $batchSubmit );
+    qw( $archivedir $rootdir $workdir $tempCache $platform $batchSubmit );
 use vars
     qw( $maxyrs $maxdisk $cubic $nlat $nlon $interpMethod $getgridspec $basenpes $call_fregrid $fredb_timeout );
 use vars
@@ -44,11 +36,17 @@ use vars
 use vars qw( $mosaic_type $sourceGrid $xyInterp $xyInterpRegridFile );
 our @frepp_plus_calls;
 
+eval "use FREVersion";
+if ($@) {
+  # Set the version variable to some default string if the module is not available
+  our $freVersion = 'Development Version'
+} else {
+  our $freVersion = $FREVersion::VERSION;
+}
+
 {
 
     package frepp;
-
-    use constant VERSION => '$Id: frepp,v 18.0.2.52.2.1.2.89.2.74 2014/12/17 15:42:41 arl Exp $';
 
     #Usage:    $relfrepp [ -AB:C:O:RY:Z:c:d:f:hlmMp:oqr:S:st:u:vx:z ] experiment [ experiment2 ... ]
     use constant OPTLIST => (
@@ -58,7 +56,7 @@ our @frepp_plus_calls;
         'limitstatic|l',
         'dir|history|d=s',
         'unique|u=s',
-        'moab|m=s',
+        'resourceManager|m=s',
         'override|o',
         'compress',
 
@@ -116,7 +114,7 @@ our @frepp_plus_calls;
     $opt_l = $opt{limitstatic};
     $opt_o = $opt{override};
     $opt_M = $opt{MailOnComplete};
-    $opt_m = $opt{moab};
+    $opt_m = $opt{resourceManager};
     $opt_q = $opt{quiet};
     $opt_Q = $opt{debug};
     $opt_t = $opt{time};
@@ -175,8 +173,7 @@ Usage:    $relfrepp -P|--platform platform [-AB:C:O:RY:Z:c:d:f:hlmMp:oqr:S:st:u:
           -c component = component to process, or keyword 'split' to process all in parallel
           -l           = limit static variable processing to the diag source file in the xml
           -d dir       = path to history data
-          -w jobid     = place hold on current job so that it waits for jobid to complete
-                         (PP/AN cannot set holds based on job names, it is not supported by moab)
+          -w jobid     = place hold on current job so that it waits for jobID to complete
           -o           = override job dependencies
           --compress   = compress pp files using NetCDF4 compression, deflation=2 and shuffle
 
@@ -193,7 +190,7 @@ Usage:    $relfrepp -P|--platform platform [-AB:C:O:RY:Z:c:d:f:hlmMp:oqr:S:st:u:
 
           OPTIONS FOR TIMING/DEBUGGING/STATISTICS/SCHEDULING
           -M           = send mail to user when job is complete
-          -m opts      = moab scheduler options for msub command
+          -m opts      = Additional options to pass to the resource manager (e.g. msub, qsub, sbatch options)
           -W time      = change the max wallclock time for the job, ie, -W 00:20:00
           -u label     = specify unique output dir. frepp -u 2 yields .../pp_2/...
           -Q           = don't print the error checks into the script.  For evaluating csh.
@@ -245,9 +242,6 @@ EOF
 
     if ($opt_V) { $opt_v = 1; }
 
-    if   ( $opt_M and not $opt{plus} ) { $opt_M = "#\$ -m e"; }
-    else                               { $opt_M = ""; }
-
     if ($opt_O) {
         print STDERR
             "NOTE: There has been a change to the behavior of the -O option. Your scripts will be written directly to '$opt_O' and not to '$opt_O/scripts/postProcess'\n";
@@ -258,8 +252,6 @@ EOF
             "NOTE: adding '-c split'; frepp will do each component in a separate batch job\n";
         $opt_c = 'split';
     }
-
-    $versionId = ' $Id: frepp,v 18.0.2.52.2.1.2.89.2.74 2014/12/17 15:42:41 arl Exp $';
 
     $perlerrors    = "";
     $component     = "";
@@ -381,29 +373,7 @@ EOF
     #set up FRE4
     my $fre = FRE->new( 'frepp', %opt ) or exit(1);
 
-    $root       = $fre->{rootNode};
-    $rtsVersion = $fre->{version};
-    if ( "$rtsVersion" eq "" ) {
-        $rtsVersion = 1;
-        print STDERR
-            "WARNING: rtsVersion information not found in your xml file, assuming rtsVersion 1.\n";
-        print STDERR
-            "         The latest version available is version 2.  Automate conversion with\n";
-        print STDERR "            /home/fms/bin/rtsversion2 [in.xml] [out.xml]\n";
-        print STDERR
-            "         Run '/home/fms/bin/rtsversion2' with no arguments for a help message.\n";
-    }
-    elsif ( $rtsVersion == 1 ) {
-        print STDERR "NOTE: You are using rtsVersion 1.  A newer version is available.  \n";
-        print STDERR "      The latest version available is version 2.  Automate conversion with\n";
-        print STDERR "         /home/fms/bin/rtsversion2 [in.xml] [out.xml]\n";
-        print STDERR
-            "      Run '/home/fms/bin/rtsversion2' with no arguments for a help message.\n";
-    }
-    elsif ( "$rtsVersion" > "4" ) {
-        print STDERR
-            "WARNING: This frerun is designed for version 3/4 xml and your xml is version $rtsVersion.\n";
-    }
+    $root = $fre->{rootNode};
     my $project = $fre->project();
 
     # use expanded platform (e.g. gfdl.ncrc-intel rather than ncrc-intel)
@@ -749,7 +719,7 @@ EOF
         if ($opt_f)       { $version_info .= "-f "; }
         if ($opt_P)       { $version_info .= "--platform $opt_P "; }
         if ($opt_T)       { $version_info .= "-T $opt_T "; }
-        if ($opt_D)       { $version_info .= "-D $opt_D "; }
+        if ($opt_D)       { $version_info .= "-D '$opt_D' "; }
         if ($opt_t)       { $version_info .= "-t $hDate "; }          # Using corrected $opt_t value
         if ( $opt{plus} ) { $version_info .= "--plus $opt{plus} "; }
         if ($opt_c)       { $version_info .= "-c $opt_c "; }
@@ -847,7 +817,7 @@ EOF
             $cshscripttmpl
                 =~ s|(setenv FRE_STDOUT_PATH)|$1 $stdoutdir/postProcess/$pbs_job_name.o\$JOB_ID|;
         }
-        $cshscripttmpl =~ s/version_info/$versionId\n$version_info/;
+        $cshscripttmpl =~ s/version_info/$freVersion\n$version_info/;
         $cshscripttmpl =~ s/set name/set name = $expt/;
         $cshscripttmpl =~ s/set rtsxml/set rtsxml = $abs_xml_path/;
         $cshscripttmpl =~ s/set work/set work = $workdir/;
@@ -885,7 +855,7 @@ EOF
             }
         }
         if ( "$opt_M" ne "" ) {
-            $cshscripttmpl =~ s/#\$ -r y/#\$ -r y\n$opt_M/;
+            $cshscripttmpl =~ s/(#SBATCH --mail-type=)NONE/\1END/;
         }
 
         #calendar
@@ -1061,7 +1031,7 @@ EOF
         $nocommentver =~ s/#//g;
         $cshscripttmpl .= <<EOF;
    touch $statedir/frepp.log
-   echo '#$versionId' >> $statedir/frepp.log
+   echo '#$freVersion' >> $statedir/frepp.log
    cat >> $statedir/frepp.log <<END
 $nocommentver
 
