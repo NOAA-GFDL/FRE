@@ -526,61 +526,6 @@ EOF
             if ("$platform" eq "x86_64") {$opt_w = " -l depend=afterok:$opt_w";}
         }
 
-        # Job schooling is only available if queue is not stage
-        #
-        # If queue is one of the bigvftmp, the request the entire node, and tell
-        # moab to use all the physical cores
-        #
-        # May 2017 change - Only activate job schooling if ptmp is set to /vftmp
-        my $pbsqueue = '';
-        my $pbsenv   = $ENV{'PBS_ENVIRONMENT'};
-        if ( $pbsenv =~ m/^PBS_BATCH$/ ) {
-            $pbsqueue = $ENV{'PBS_O_QUEUE'};
-        }
-        else {
-            # get queue information from $opt_m
-            ($pbsqueue) = $opt_m =~ m/-q +(\S+)/;
-        }
-
-        if ( $pbsqueue =~ m/batch|bigvftmp/ and $fre->property('ptmpDir') =~ m|^/vftmp/| ) {
-
-            # Use job schooling
-            # The moab -l options control the schooling
-            my $moab_lopt = '';
-            ($moab_lopt) = $opt_m =~ m/-l *(\S+)/;
-            my @moab_lopts = split( ',', $moab_lopt );
-
-            my $hostname = $ENV{HOST};
-            if ( $hostname =~ m/^pp/ and !grep( /host=/, @moab_lopts ) ) {
-
-                # if on one of the pp nodes, then set the -lhost moab option to the current
-                # pp host, to continue the job schooling
-                push @moab_lopts, "host=$hostname.princeton.rdhpcs.noaa.gov";
-            }
-
-            if ( $pbsqueue =~ m/bigvftmp/ ) {
-                $opt_m .= " -q boost_bigvftmp" unless ( $opt_m =~ m/-q +\b.*bigvftmp\b/ );
-                push @moab_lopts, "naccesspolicy=singlejob"
-                    unless grep( /naccesspolicy=singlejob/, @moab_lopts );
-                $basenpes = $fre->property('FRE.scheduler.bigvftmp.coresPerJob.max');
-            }
-            elsif ( $pbsqueue =~ m/batch/ ) {
-                unless ( $opt_m =~ m/-q +\b.*batch\b/ ) {
-                    $opt_m .= " -q boost_batch";
-                }
-            }
-
-            # Now reset the moab -l option
-            if ( scalar(@moab_lopts) > 0 ) {
-
-                # Remove any -l options already part of opt_m
-                $opt_m =~ s/-l *\S+//;
-
-                # put -l options back in
-                $opt_m .= " -l " . join( ',', @moab_lopts );
-            }
-        } ## end if ( $pbsqueue =~ m/batch|bigvftmp/...)
-
         #variables for timing statistics
         if ($opt_z) {
             $time_ncatted
@@ -926,13 +871,6 @@ EOF
                 if ($opt_M) { $cshscripttmpl .= "-M "; }
                 if ($opt_o) { $cshscripttmpl .= "-o "; }
 
-                #add hold for prerequisite job
-                #this only works for SGE, not moab, so commenting this now
-                #if ( $opt{plus} ) {
-                #   my $prev = FREUtil::modifydate($opt_t,"- 1 years");
-                #   $prev = FREUtil::graindate($prev,"day");
-                #   $cshscripttmpl .= "-w $expt"."_$prev ";
-                #}
                 $cshscripttmpl .= "$expt\n";
                 $cshscripttmpl
                     .= errorstr( "$relfrepp had a problem creating next script $expt" . "_$hDate" );
@@ -1393,7 +1331,6 @@ EOF
                 if ( $component =~ /ocean_(annual|monthly)/ ) {
                     add_batch_directive("#SBATCH --constraint=bigmem");
                 }
-                $opt_w =~ s/( -hold_jid $expt)(.*)(_\d\d\d\d\d\d\d\d)/$1_$component$3/;
                 $statefile = "$statedir/$component." . $userstartyear;
 
                 #check status of this frepp year
@@ -2381,9 +2318,6 @@ EOF
                         $depjobid =~ s/^$//mg;
                         my @njobid = split '\n', $depjobid;
                         $depjobid = $njobid[-1];
-                        $depjobid =~ s/New jobid='(.*)'/$1/ if $depjobid =~ /New jobid/;
-                        $depjobid =~ s/Previous frepp job \((.*)\).*/$1/
-                            if $depjobid =~ /still running for /;
 
                         unless ( $depjobid =~ /has already been completed/ ) {
                             print "Dependent job for $depyear='$depjobid'\n";
@@ -7940,8 +7874,6 @@ EOF
             $qsub_msg =~ s/^$//mg;
             my @njobid = split '\n', $qsub_msg;
             my $newjobid = $njobid[-1];
-            $newjobid =~ s/New jobid='(.*)'/$1/              if $newjobid =~ /New jobid/;
-            $newjobid =~ s/Previous frepp job \((.*)\).*/$1/ if $newjobid =~ /still running for /;
 
             #print "New jobid='$newjobid'\n";
             if ( "$newjobid" eq '' ) {
@@ -8029,7 +7961,15 @@ set tripleID
 
 #platform_csh_from_xml
 
-#write_to_statefile
+# write_to_statefile
+if ( \$?MOAB_JOBID ) then
+    echo \$MOAB_JOBID > \$statefile
+else if ( \$?PBS_JOBID ) then
+    echo \$PBS_JOBID > \$statefile
+else
+    echo INTERACTIVE > \$statefile
+endif
+
 
 limit stacksize unlimited
 setenv FMS_FRE_FREPP
