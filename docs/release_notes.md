@@ -1,10 +1,22 @@
 # Bronx-12 Release Notes
 
-FRE Bronx-12 was released in April 2017. The major features were support for the Warsaw FMS release and CMIP6, along with smaller features and bug fixes. There have been 5 patches, mostly containing additional changes needed for CMIP6 runs, and more bug fixes.
+FRE Bronx-12 was released in April 2017 and was superceded by Bronx-13 in October 2018. The major features were support for the Warsaw FMS release and CMIP6, along with smaller features and bug fixes. There have been 9 patches, mostly containing additional changes needed for CMIP6 runs, and more bug fixes.
 
 ## Patches
 
-**Patch 5: 30 April 2018**
+**Patch 9: 10 September 2018**
+- Unannounced change to permit f2 paths for FRE directories
+
+**Patch 8: 10 August 2018**
+- Updates to make template formats for Intel, GNU, Cray, and PGI from the NOAA-GFDL/mkmf project / MOM development (#314)
+- Updates to the Intel make templates to support Intel-18 (-qoverride-limits/-qopenmp) (#314)
+- New post-process `<timeAverage>/<variables>` tag to allow subsetting of variables similar to existing `<timeSeries>/<variables>` tag
+- 2 fixes to the unmasked/reference ocean_static.nc appending feature. To help ocean regridding, publishing, and analysis, during output staging at gaea, if the gridSpec file is a tarfile and it contains "ocean_static.nc", that file will be appended to the ocean_static.nc history file. The fix only appends data, not metadata, to prevent a problem uncovered in testing where older/incorrect cell_methods from the gridSpec tarfile ocean_static was overwriting newer/correct cell_methods from the model output. The second fix allows the tarfile contents to be specified with "./" or not.
+
+**Patch 7: 2 July 2018**
+* output.stager and pp.starter jobs are submitted to the account used in the runscripts and configured in the XML. This corrects a long-standing bug where these output.stager/pp.starter jobs were submitted to the user's default allocation (which is often, but always, the same as the runscript/XML allocation).
+
+**Patch 5/6: 30 April 2018**
 * includeDir transfer bug-fix (Bronx-12 introduced a transfer mechanism to copy an awg_include-type directory from gaea to GFDL, which failed to work properly in some cases)
 * adjust_dry_mass bug-fix (Bronx-12 introduced a FRE runscript variable to indicate whether the model start time is equal to the current model time, which was set incorrectly for restart regression runs)
 * Updates from MOM development, which will be needed for CMIP runs that use MOM6
