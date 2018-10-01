@@ -1,11 +1,14 @@
 # Bronx-12 Release Notes
 
-FRE Bronx-12 was released in April 2017 and was superceded by Bronx-13 in October 2018. The major features were support for the Warsaw FMS release and CMIP6, along with smaller features and bug fixes. There have been 9 patches, mostly containing additional changes needed for CMIP6 runs, and more bug fixes.
+FRE Bronx-12 was released in April 2017 and was superceded by Bronx-13 in October 2018. The major features were support for the Warsaw FMS release and CMIP6, along with smaller features and bug fixes. There have been 10 patches, mostly containing additional changes needed for CMIP6 runs, and more bug fixes.
 
 ## Patches
 
-**Patch 9: 10 September 2018**
-- Unannounced change to permit f2 paths for FRE directories
+**Patch 9/10: 10 September 2018**
+- With luck the final tweak to the unmasked/reference ocean_static.nc appending feature: Only append data (not metadata)
+  from the reference file if the var already exists in the ocean_static file. Otherwise fields like "basin" which exist only
+  in the reference file will be data-only appended, resulting in metadata-less vars like basin causing problems.
+- Unannounced update to permit f2 paths for FRE directories, to allow Bronx-12 to use f2 with some work (manually setting FRE dirs)
 
 **Patch 8: 10 August 2018**
 - Updates to make template formats for Intel, GNU, Cray, and PGI from the NOAA-GFDL/mkmf project / MOM development (#314)
