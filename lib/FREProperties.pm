@@ -106,7 +106,7 @@ my $environmentVariablesExpand = sub($$)
     # ------ expand environment variables in the given $string
 {
     my ( $r, $s ) = @_;
-    foreach my $k ( 'ARCHIVE', 'HOME', 'USER', 'CTMP', 'CPERM', 'CDATA', 'CHOME' ) {
+    foreach my $k ( 'ARCHIVE', 'HOME', 'USER', 'SCRATCH', 'DEV', 'PDATA' ) {
         last if $s !~ m/\$/;
         my $v = '';
         if ( $r->{platformSiteHasLocalStorage} ) {
