@@ -677,24 +677,25 @@ EOF
         my $this_frepp_cmd = $version_info;
         $this_frepp_cmd =~ s/.*# //smg;
 
-        my $outscript    = "$outscriptdir/$expt";
-        my $pbs_job_name = "$expt";
-
-        if ( "$opt_u" ne '' ) {
-            $pbs_job_name .= "_$opt_u";
+        # Get post fix string for job and script name
+        my $name_postFix = "";
+                if ( "$opt_u" ne '' ) {
+            $name_postFix .= "_$opt_u";
         }
 
         if ($opt_r) {
-            $outscript .= "_$opt_r";
+            $name_postFix .= "_$opt_r";
             $maxruntime = "01:00:00";
-            $pbs_job_name .= "_$opt_r";
         }
         elsif ($opt_D) {
-            $outscript    .= "_refineDiag";
-            $pbs_job_name .= "_refineDiag";
+            $name_postFix .= "_refineDiag";
         }
-        $outscript    .= "_$hDate";
-        $pbs_job_name .= "_$hDate";
+        $name_postFix .= "_$hDate";
+
+        # Set the job and script name using the postfix.  $outscript is the same
+        # as the job name, but with the script directory prepended
+        my $pbs_job_name = $expt . $name_postFix;
+        my $outscript    = join("/", $outscriptdir, $pbs_job_name);
 
         my $cshscripttmpl = getTemplate($platform);
 
@@ -2324,19 +2325,13 @@ EOF
                             my $depstatefile = "$statedir/$component.$depyear";
                             if ( "$depjobid" eq '' ) {
                                 print
-                                    "No jobid resulted from the Moab job submission of $depyear.\n";
-
-                                #if ( "$depstate" eq "ERROR" ) {
-                                #   print DEPSTATEFILE "FATAL\n";
-                                #} else {
-                                #   print DEPSTATEFILE "ERROR\n";
-                                #}
+                                    "No jobid resulted from the job submission of $depyear.\n";
                                 print "ERROR: Unable to submit dependent jobs, exiting.\n";
                                 exit 1;
                             }
                             elsif ( $depjobid !~ /Submitted batch job \d+/ ) {
                                 print
-                                    "ERROR: the jobid returned has the wrong format: a batch scheduler issue occurred.\n";
+                                    "ERROR: the jobid returned has the wrong format: a frepp or batch system issue occurred.\n";
                                 exit 1;
                             }
                             else {
@@ -7877,13 +7872,13 @@ EOF
 
             #print "New jobid='$newjobid'\n";
             if ( "$newjobid" eq '' ) {
-                print "No jobid resulted from the Moab job submission of $hDate.\n";
+                print "No jobid resulted from the job submission of $hDate.\n";
                 print "ERROR: Unable to submit job, exiting.\n";
                 exit 1;
             }
             elsif ( $newjobid !~ /Submitted batch job \d+/ ) {
                 print
-                    "ERROR: the jobid returned has the wrong format: a batch scheduler issue occurred.\n";
+                    "ERROR: the jobid returned has the wrong format: a frepp or batch system issue occurred.\n";
                 exit 1;
             }
             if ( "$statefile" ne "" ) {
