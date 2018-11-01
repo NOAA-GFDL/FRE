@@ -292,7 +292,7 @@ analysis: /archive/$userStr/.*/CM2.1U_Control-1990_E1.M_3A/${platform}-prod/anal
     esac
     case $REMOTE_SITE in
         ncrc4.intel )
-            execRoot="/lustre/f2/dev"
+            execRoot='$DEV'
             ;;
         gfdl-ws.intel )
             execRoot="/home"
