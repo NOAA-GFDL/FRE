@@ -106,7 +106,7 @@ my $environmentVariablesExpand = sub($$)
     # ------ expand environment variables in the given $string
 {
     my ( $r, $s ) = @_;
-    foreach my $k ( 'ARCHIVE', 'HOME', 'USER', 'SCRATCH', 'DEV', 'PDATA' ) {
+    foreach my $k ( 'ARCHIVE', 'HOME', 'USER', 'SCRATCH', 'DEV', 'PDATA', 'CDATA' ) {
         last if $s !~ m/\$/;
         my $v = '';
         if ( $r->{platformSiteHasLocalStorage} ) {
@@ -115,6 +115,8 @@ my $environmentVariablesExpand = sub($$)
         else {
             $v = ( $k eq 'USER' ) ? $r->{remoteUser} : $r->{"FRE.expand.$k"};
         }
+        # remove trailing slash from environment variables, as the slash is readded later
+        $v =~ s@/$@@;
         $s =~ s/\$(?:$k|\{$k\})/$v/g if $v;
     }
     return $s;
