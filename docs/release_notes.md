@@ -5,7 +5,7 @@ FRE Bronx-13 was released on October 31, 2018. The major feature is support for 
 ## Features
 * Support for the Gaea /lustre/f2 filesystem
   * New default directory locations for the f2 filesystem
-  * Removed FRE-defined properties $(CTMP), $(CPERM), $(CDATA), and $(CHOME). No new FRE properties are being defined for f2; instead, please use the ORNL-defined environment variables $SCRATCH, $DEV, and $PDATA.
+  * Removed FRE-defined properties `$(CTMP)`, `$(CPERM)`, `$(CDATA)`, and `$(CHOME)`. No new FRE properties are being defined for f2; instead, please use the ORNL-defined environment variables `$SCRATCH`, `$DEV`, and `$PDATA` (or equivalently, `${SCRATCH}`, `${DEV}`, and `${PDATA}`)
 
 ## Fixes
 * Fix for ardiff to handle colored ls output ("ls --color")
