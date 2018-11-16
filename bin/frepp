@@ -539,7 +539,7 @@ EOF
         # This really should be done using the fre.properties file
         print STDERR "Using platform $platform\n" if $opt_v;
         if ( "$platform" eq 'x86_64' ) {
-            $batchSubmit = "msub -d /home/$username/ ";
+            $batchSubmit = "sbatch";
             $cp          = 'gcp -v';
             $cpio        = 'cpio -C 524288';
             $uncpio      = 'cpio -C 2097152';
@@ -840,13 +840,13 @@ EOF
         } ## end if ( "$platformcsh" ne...)
         $cshscripttmpl =~ s/#platform_csh_from_xml/$platformcsh/;
         if ( "$platform" eq 'x86_64' ) {
-            $cshscripttmpl =~ s/#PBS -N/#PBS -N $pbs_job_name/;
-            $cshscripttmpl =~ s/#PBS -l walltime/#PBS -l walltime=$maxruntime/;
-            $cshscripttmpl =~ s/#PBS -o/#PBS -o $stdoutdir\/postProcess\//;
+            $cshscripttmpl =~ s/(#SBATCH --job-name)/$1=$pbs_job_name/;
+            $cshscripttmpl =~ s/(#SBATCH --time)/$1=$maxruntime/;
+            $cshscripttmpl =~ s|(#SBATCH --output)|$1=$stdoutdir/postProcess/%x.o%j|;
+            $cshscripttmpl =~ s/(#SBATCH --chdir)/$1=$ENV{HOME}/;
             $cshscripttmpl
-                =~ s/setenv FRE_STDOUT_PATH/setenv FRE_STDOUT_PATH $stdoutdir\/postProcess\/$pbs_job_name.o\$PBS_JOBID_number/;
+                =~ s|(setenv FRE_STDOUT_PATH)|$1 $stdoutdir/postProcess/$pbs_job_name.o\$JOB_ID|;
         }
-        $cshscripttmpl =~ s/(-soft -l fre_info=)/$1ppVersion\@$relfrepp -hard/;
         $cshscripttmpl =~ s/version_info/$versionId\n$version_info/;
         $cshscripttmpl =~ s/set name/set name = $expt/;
         $cshscripttmpl =~ s/set rtsxml/set rtsxml = $abs_xml_path/;
@@ -867,7 +867,7 @@ EOF
         $cshscripttmpl =~ s/set tripleID/set tripleID = $exper_id$realiz_id$run_id/;
 
         if ($opt_r) {    #if a regression test, no further postprocessing
-            $cshscripttmpl =~ s/(-soft -l fre_info=)/$1ppYears\@$maxyrs+/;
+            $cshscripttmpl =~ s/(#INFO:max_years=)/$1$maxyrs/;
             writescript( $cshscripttmpl, $outscript, "$batchSubmit$opt_w $opt_m", $statefile );
             $opt_w = '';
             next;
@@ -878,7 +878,7 @@ EOF
                 if ( "$platform" eq 'x86_64' ) {
                     $cshscripttmpl =~ s/#PBS -l walltime.*/#PBS -l walltime=01:00:00/;
                 }
-                $cshscripttmpl =~ s/(-soft -l fre_info=)/$1ppYears\@$maxyrs+/;
+                $cshscripttmpl =~ s/(#INFO:max_years=)/$1$maxyrs/;
                 writescript( $cshscripttmpl, $outscript, "$batchSubmit$opt_w $opt_m", $statefile );
                 $opt_w = '';
                 next;
@@ -999,7 +999,7 @@ EOF
             if ( "$platform" eq 'x86_64' ) {
                 $cshscripttmpl =~ s/#PBS -l walltime.*/#PBS -l walltime=$maxruntime/;
             }
-            $cshscripttmpl =~ s/(-soft -l fre_info=)/$1ppYears\@$maxyrs+/;
+            $cshscripttmpl =~ s/(#INFO:max_years=)/$1$maxyrs/;
             writescript( $cshscripttmpl, $outscript, "$batchSubmit$opt_w $opt_m", $statefile );
             $opt_w = '';
             next;
@@ -1011,13 +1011,7 @@ EOF
         $writestate = '';
         unless ($opt_A) {
             my $writeIDorINTER = <<EOF;
-if ( \$?MOAB_JOBID ) then
-    echo \$MOAB_JOBID > \$statefile
-else if ( \$?PBS_JOBID ) then
-    echo \$PBS_JOBID > \$statefile
-else
-    echo INTERACTIVE > \$statefile
-endif
+echo \$JOB_ID > \$statefile
 EOF
             $cshscripttmpl =~ s/#write_to_statefile/$writeIDorINTER/;
 
@@ -1420,14 +1414,14 @@ EOF
                 }
                 $pbs_job_name .= "_$component" . "_$hDate";
                 $cshscript =~ s/set scriptName = .*/set scriptName = $outscript/;
-                $cshscript =~ s/#PBS -N .*/#PBS -N $pbs_job_name/;
                 $cshscript
-                    =~ s/setenv FRE_STDOUT_PATH.*/setenv FRE_STDOUT_PATH $stdoutdir\/postProcess\/$pbs_job_name.o\$PBS_JOBID_number/;
+                    =~ s|(setenv FRE_STDOUT_PATH).*|$1 $stdoutdir/postProcess/$pbs_job_name.o\$JOB_ID|;
+                $cshscript =~ s/(#SBATCH --job-name).*/$1=$pbs_job_name/;
                 $cshscript =~ s/(-w $expt)/$1_$component/;
-                $cshscript =~ s/(-soft -l fre_info=)/$1ppComponent\@$component+/;
+                $cshscript =~ s/(#INFO:component=)/$1$component/;
 
                 if ( $component =~ /ocean_(annual|monthly)/ ) {
-                    $cshscript =~ s/#PBS -q batch/#PBS -q bigmem/;
+                    add_batch_directive("#SBATCH --constraint=bigmem");
                 }
                 $opt_w =~ s/( -hold_jid $expt)(.*)(_\d\d\d\d\d\d\d\d)/$1_$component$3/;
                 $statefile = "$statedir/$component." . $userstartyear;
@@ -2436,9 +2430,9 @@ EOF
                                 print "ERROR: Unable to submit dependent jobs, exiting.\n";
                                 exit 1;
                             }
-                            elsif ( "$depjobid" !~ /gfdl.\d+/ ) {
+                            elsif ( $depjobid !~ /Submitted batch job \d+/ ) {
                                 print
-                                    "ERROR: the jobid returned has the wrong format: a frepp/moab issue occurred.\n";
+                                    "ERROR: the jobid returned has the wrong format: a batch scheduler issue occurred.\n";
                                 exit 1;
                             }
                             else {
@@ -2513,7 +2507,7 @@ EOF
                     my $npes = $basenpes;
                     $cshscript =~ s/pe ic.postp (.+)/pe ic.postp $npes/;
                 }
-                $cshscript =~ s/(-soft -l fre_info=)/$1ppYears\@$maxyrs+/;
+                $cshscript =~ s/(#INFO:max_years=)/$1$maxyrs/;
                 my $writefinalstate = <<EOF;
 
 if ( \$errors_found == 0 ) then
@@ -7985,9 +7979,9 @@ EOF
                 print "ERROR: Unable to submit job, exiting.\n";
                 exit 1;
             }
-            elsif ( "$newjobid" !~ /gfdl.\d+/ ) {
+            elsif ( $newjobid !~ /Submitted batch job \d+/ ) {
                 print
-                    "ERROR: the jobid returned has the wrong format: a frepp/moab issue occurred.\n";
+                    "ERROR: the jobid returned has the wrong format: a batch scheduler issue occurred.\n";
                 exit 1;
             }
             if ( "$statefile" ne "" ) {
@@ -8009,23 +8003,18 @@ EOF
         if ( "$platform" eq 'x86_64' ) {
             $cshscripttmpl = <<'EOF';
 #!/bin/csh -f
-#PBS -N
-#PBS -l walltime
-#PBS -l nodes=1
-#PBS -j oe
-#PBS -o
-#PBS -r y
-#PBS -S /bin/csh
-#PBS -q batch
-#$ -soft -l fre_info=
+#SBATCH --job-name
+#SBATCH --time
+#SBATCH --ntasks=1
+#SBATCH --output
+#SBATCH --chdir
+#INFO:component=
+#INFO:max_years=
 EOF
             $cshscripttmpl .= <<EOF;
 
-setenv PBS_JOBID_number `echo \$PBS_JOBID |cut -f1 -d.`
-if ( \$?MOAB_JOBID ) then
-    setenv JOB_ID \$MOAB_JOBID
-else if ( \$?PBS_JOBID ) then
-    setenv JOB_ID \$PBS_JOBID_number
+if ( \$?SLURM_JOBID ) then
+    setenv JOB_ID \$SLURM_JOBID
 else
     setenv JOB_ID `mktemp -u INT-XXXXXX`
 endif
