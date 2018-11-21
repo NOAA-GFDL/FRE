@@ -14,6 +14,7 @@ use Text::Wrap;
 use Getopt::Long( ':config', 'no_ignore_case' );
 use Date::Manip;
 use XML::LibXML;
+use File::Spec;
 
 use lib ( File::Basename::fileparse( File::Spec->rel2abs($0) ) )[1] . "../lib";
 use FRE();
@@ -681,7 +682,7 @@ EOF
 
         # Get post fix string for job and script name
         my $name_postFix = "";
-                if ( "$opt_u" ne '' ) {
+        if ( $opt_u ne '' ) {
             $name_postFix .= "_$opt_u";
         }
 
@@ -697,7 +698,7 @@ EOF
         # Set the job and script name using the postfix.  $outscript is the same
         # as the job name, but with the script directory prepended
         my $pbs_job_name = $expt . $name_postFix;
-        my $outscript    = join("/", $outscriptdir, $pbs_job_name);
+        my $outscript    = File::Spec->catfile($outscriptdir, $pbs_job_name);
 
         my $cshscripttmpl = getTemplate($platform);
 
@@ -7958,15 +7959,7 @@ set tripleID
 
 #platform_csh_from_xml
 
-# write_to_statefile
-if ( \$?MOAB_JOBID ) then
-    echo \$MOAB_JOBID > \$statefile
-else if ( \$?PBS_JOBID ) then
-    echo \$PBS_JOBID > \$statefile
-else
-    echo INTERACTIVE > \$statefile
-endif
-
+#write_to_statefile
 
 limit stacksize unlimited
 setenv FMS_FRE_FREPP
