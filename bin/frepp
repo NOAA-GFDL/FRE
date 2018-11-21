@@ -29,13 +29,12 @@ use vars
 use vars qw( $do_static $segTime $segUnits $caltype);
 use vars qw( $analysisdir $absfrepp $relfrepp $perlerrors );
 use vars
-    qw( $archivedir $rootdir $workdir $tempCache $platform $batchSubmit );
+    qw( $archivedir $rootdir $workdir $stdoutdir $tempCache $platform $freVersion $batchSubmit );
 use vars
     qw( $maxyrs $maxdisk $cubic $nlat $nlon $interpMethod $getgridspec $basenpes $call_fregrid $fredb_timeout );
 use vars
     qw( $checktransfer $statefile $state $writestate $didsomething $userstartyear $userstartmo $call_tile_fregrid );
 use vars qw( $mosaic_type $sourceGrid $xyInterp $xyInterpRegridFile );
-use vars qw ( $freVersion );
 our @frepp_plus_calls;
 
 eval "use FREVersion";
@@ -415,7 +414,7 @@ EOF
         my $postprocessdir = $exp->postProcessDir();
         my $analysisdir    = $exp->analysisDir();
         my $scriptsdir     = $exp->scriptsDir();
-        my $stdoutdir      = $exp->stdoutDir();
+        $stdoutdir         = $exp->stdoutDir();
         my $ptmpDir        = $exp->ptmpDir();
         my $tempCache      = ( split /\//, $workdir )[0] . "/tempCache";
         my $statedir       = $exp->stateDir() . "/postProcess";
@@ -512,7 +511,7 @@ EOF
         # This really should be done using the fre.properties file
         print STDERR "Using platform $platform\n" if $opt_v;
         if ( "$platform" eq 'x86_64' ) {
-            $batchSubmit = "sbatch";
+            $batchSubmit = 'sbatch';
             $cp          = 'gcp -v';
             $cpio        = 'cpio -C 524288';
             $uncpio      = 'cpio -C 2097152';
@@ -697,8 +696,8 @@ EOF
 
         # Set the job and script name using the postfix.  $outscript is the same
         # as the job name, but with the script directory prepended
-        my $pbs_job_name = $expt . $name_postFix;
-        my $outscript    = File::Spec->catfile($outscriptdir, $pbs_job_name);
+        my $batch_job_name = $expt . $name_postFix;
+        my $outscript    = File::Spec->catfile($outscriptdir, $batch_job_name);
 
         my $cshscripttmpl = getTemplate($platform);
 
@@ -759,12 +758,12 @@ EOF
         } ## end if ( "$platformcsh" ne...)
         $cshscripttmpl =~ s/#platform_csh_from_xml/$platformcsh/;
         if ( "$platform" eq 'x86_64' ) {
-            $cshscripttmpl =~ s/(#SBATCH --job-name)/$1=$pbs_job_name/;
+            $cshscripttmpl =~ s/(#SBATCH --job-name)/$1=$batch_job_name/;
             $cshscripttmpl =~ s/(#SBATCH --time)/$1=$maxruntime/;
             $cshscripttmpl =~ s|(#SBATCH --output)|$1=$stdoutdir/postProcess/%x.o%j|;
             $cshscripttmpl =~ s/(#SBATCH --chdir)/$1=$ENV{HOME}/;
             $cshscripttmpl
-                =~ s|(setenv FRE_STDOUT_PATH)|$1 $stdoutdir/postProcess/$pbs_job_name.o\$JOB_ID|;
+                =~ s|(setenv FRE_STDOUT_PATH)|$1 $stdoutdir/postProcess/$batch_job_name.o\$JOB_ID|;
         }
         $cshscripttmpl =~ s/version_info/$freVersion\n$version_info/;
         $cshscripttmpl =~ s/set name/set name = $expt/;
@@ -795,7 +794,7 @@ EOF
         unless ($opt_f) {
             unless ($ppNode) {    #if no pp node, no further postprocessing
                 if ( "$platform" eq 'x86_64' ) {
-                    $cshscripttmpl =~ s/#PBS -l walltime.*/#PBS -l walltime=01:00:00/;
+                    $cshscripttmpl =~ s/(#SBATCH --time).*/$1=01:00:00/;
                 }
                 $cshscripttmpl =~ s/(#INFO:max_years=)/$1$maxyrs/;
                 writescript( $cshscripttmpl, $outscript, "$batchSubmit$opt_w $opt_m", $statefile );
@@ -909,7 +908,7 @@ EOF
 
             $cshscripttmpl .= mailerrors($outscript);
             if ( "$platform" eq 'x86_64' ) {
-                $cshscripttmpl =~ s/#PBS -l walltime.*/#PBS -l walltime=$maxruntime/;
+                $cshscripttmpl =~ s/(#SBATCH --time).*/$1=$maxruntime/;
             }
             $cshscripttmpl =~ s/(#INFO:max_years=)/$1$maxyrs/;
             writescript( $cshscripttmpl, $outscript, "$batchSubmit$opt_w $opt_m", $statefile );
@@ -1318,17 +1317,17 @@ EOF
             if ($opt_c) {    #append component name to job and file name
                 $cshscript = $cshscripttmpl;
                 my $origoutscript     = $outscript;
-                my $orig_pbs_job_name = $pbs_job_name;
+                my $orig_batch_job_name = $batch_job_name;
                 $outscript    = "$outscriptdir/$expt" . "_$component" . "_$hDate";
-                $pbs_job_name = "$expt";
+                $batch_job_name = "$expt";
                 if ( "$opt_u" ne '' ) {
-                    $pbs_job_name .= "_$opt_u";
+                    $batch_job_name .= "_$opt_u";
                 }
-                $pbs_job_name .= "_$component" . "_$hDate";
+                $batch_job_name .= "_$component" . "_$hDate";
                 $cshscript =~ s/set scriptName = .*/set scriptName = $outscript/;
                 $cshscript
-                    =~ s|(setenv FRE_STDOUT_PATH).*|$1 $stdoutdir/postProcess/$pbs_job_name.o\$JOB_ID|;
-                $cshscript =~ s/(#SBATCH --job-name).*/$1=$pbs_job_name/;
+                    =~ s|(setenv FRE_STDOUT_PATH).*|$1 $stdoutdir/postProcess/$batch_job_name.o\$JOB_ID|;
+                $cshscript =~ s/(#SBATCH --job-name).*/$1=$batch_job_name/;
                 $cshscript =~ s/(-w $expt)/$1_$component/;
                 $cshscript =~ s/(#INFO:component=)/$1$component/;
 
@@ -2399,12 +2398,12 @@ EOF
                 # if the user sets -W, don't override the wallclock even for 1-year postprocessing
                 if ( $maxyrs < 2 and !$opt{Walltime} ) {
                     if ( "$platform" eq 'x86_64' ) {
-                        $cshscript =~ s/#PBS -l walltime.*/#PBS -l walltime=20:00:00/;
+                        $cshscript =~ s/(#SBATCH --time).*/$1=20:00:00/;
                     }
                 }
                 if ( $maxyrs >= 20 ) {
                     if ( "$platform" eq 'x86_64' ) {
-                        $cshscript =~ s/#PBS -l walltime.*/#PBS -l walltime=$maxruntime/;
+                        $cshscript =~ s/(#SBATCH --time).*/$1=$maxruntime/;
                     }
                     my $npes = $basenpes;
                     $cshscript =~ s/pe ic.postp (.+)/pe ic.postp $npes/;
@@ -2578,13 +2577,12 @@ EOF
             }
 
             #combine raw data
-            my $PBS_JOBID = "$ENV{PBS_JOBID}";
+            my $BATCH_JOBID = $ENV{SLURM_JOBID};
             my $wallTime  = 0;
-            if ( "$PBS_JOBID" ne '' ) {
+            if ( $BATCH_JOBID ) {
 
-          #chomp($wallTime = `checkjob -A $PBS_JOBID | tr ';' '\n' | grep WCLIMIT | cut -d'=' -f2`);
                 chomp( $wallTime
-                        = `$ENV{FRE_COMMANDS_HOME}/site/$ENV{FRE_SYSTEM_SITE}/bin/batch.scheduler.time -t $PBS_JOBID`
+                        = `$ENV{FRE_COMMANDS_HOME}/site/$ENV{FRE_SYSTEM_SITE}/bin/batch.scheduler.time -t $BATCH_JOBID`
                 );
                 my $shreturn = $? >> 8;
                 if ( $shreturn != 0 ) {
@@ -3217,15 +3215,9 @@ EOF
     #mail user any errors at end of perl script execution
     sub sysmailuser {
         if ( "$perlerrors" ne "" ) {
-            my $env = $ENV{'PBS_ENVIRONMENT'};
-            if ( "$env" eq "PBS_BATCH" ) {
-
-                #my $outpath = "$stdoutdir\/postProcess\/$pbs_job_name.o\$JOB_ID";
-                my $outpath = $ENV{'PBS_O_WORKDIR'};
-                my $jobname = $ENV{'PBS_JOBNAME'};
-                my $jobid   = $ENV{'PBS_JOBID'};
-                $jobid =~ s/(\d+)\..*/$1/;
-                $outpath .= "/$jobname.o$jobid";
+            my $jobid = $ENV{SLURM_JOBID};
+            if ( $jobid ) {
+                my $outpath = File::Spec->catfile($stdoutdir, 'postProcess', "$ENV{SLURM_JOB_NAME}.o$jobid");
                 my $str = <<EOF;
 Mail -s "$relfrepp PERL ERROR: $expt $hDate" $username <<END
 Error message(s) have been reported by $relfrepp while
@@ -3239,7 +3231,7 @@ END
 EOF
                 system $str;
                 sleep 30;
-            } ## end if ( "$env" eq "PBS_BATCH")
+            }
         } ## end if ( "$perlerrors" ne ...)
     } ## end sub sysmailuser
 
