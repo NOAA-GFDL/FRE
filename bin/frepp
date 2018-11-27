@@ -525,7 +525,7 @@ EOF
         }
 
         if ( "$opt_w" ne '' ) {
-            if ("$platform" eq "x86_64") {$opt_w = " -l depend=afterok:$opt_w";}
+            if ($platform eq 'x86_64') {$opt_w = " --dependency=afterok:$opt_w";}
         }
 
         #variables for timing statistics
@@ -2316,22 +2316,22 @@ EOF
                     if ($redo) {
                         my $cmd = call_frepp( $abs_xml_path, $outscript, $component, "$depyear" );
                         print "$cmd\n";
-                        my $depjobid = `$cmd`;
-                        print "$depjobid\n";
-                        $depjobid =~ s/^$//mg;
-                        my @njobid = split '\n', $depjobid;
-                        $depjobid = $njobid[-1];
+                        my $frepp_submit_output = `$cmd`;
+                        print "$frepp_submit_output\n";
+                        $frepp_submit_output =~ s/^$//mg;
+                        my $frepp_submit_output_last_line = (split '\n', $frepp_submit_output)[-1];
+                        my ($depjobid) = $frepp_submit_output_last_line =~ /Submitted batch job (\d+)/;
 
-                        unless ( $depjobid =~ /has already been completed/ ) {
+                        unless ( $frepp_submit_output_last_line =~ /has already been completed/ ) {
                             print "Dependent job for $depyear='$depjobid'\n";
                             my $depstatefile = "$statedir/$component.$depyear";
-                            if ( "$depjobid" eq '' ) {
+                            if ( ! $depjobid and ! $frepp_submit_output_last_line ) {
                                 print
                                     "No jobid resulted from the job submission of $depyear.\n";
                                 print "ERROR: Unable to submit dependent jobs, exiting.\n";
                                 exit 1;
                             }
-                            elsif ( $depjobid !~ /Submitted batch job \d+/ ) {
+                            elsif ( ! $depjobid ) {
                                 print
                                     "ERROR: the jobid returned has the wrong format: a frepp or batch system issue occurred.\n";
                                 exit 1;
@@ -2359,7 +2359,7 @@ EOF
 
             if ( "$depholds" ne "" ) {
                 chop $depholds;
-                $opt_w = " -l depend=afterok:$depholds";
+                $opt_w = " --dependency=afterok:$depholds";
                 print "Setting holds for $hDate: $opt_w\n";
             }
 
@@ -7858,20 +7858,19 @@ EOF
         if ($opt_s) {
             $batchCmd = "sleep 2;$batchCmd";
             print "\nExecuting '$batchCmd $outscript'\n" if $opt_v;
-            my $qsub_msg = `$batchCmd $outscript`;
-            print "\n$qsub_msg";
+            my $batch_submit_output = `$batchCmd $outscript`;
+            print "\n$batch_submit_output";
 
-            $qsub_msg =~ s/^$//mg;
-            my @njobid = split '\n', $qsub_msg;
-            my $newjobid = $njobid[-1];
+            $batch_submit_output =~ s/^$//mg;
+            my ($newjobid) = (split '\n', $batch_submit_output)[-1] =~ /Submitted batch job (\d+)/;
 
             #print "New jobid='$newjobid'\n";
-            if ( "$newjobid" eq '' ) {
+            if ( ! $newjobid and ! $batch_submit_output) {
                 print "No jobid resulted from the job submission of $hDate.\n";
                 print "ERROR: Unable to submit job, exiting.\n";
                 exit 1;
             }
-            elsif ( $newjobid !~ /Submitted batch job \d+/ ) {
+            elsif ( ! $newjobid  ) {
                 print
                     "ERROR: the jobid returned has the wrong format: a frepp or batch system issue occurred.\n";
                 exit 1;
