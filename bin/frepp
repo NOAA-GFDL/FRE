@@ -708,7 +708,7 @@ EOF
 EOF
         $cshscripttmpl =~ s/#get_site_config/$siteconfig/;
 
-        #platform_csh_from_xml and check for FRE version mismatch
+        #platform_csh and check for FRE version mismatch
         if ( "$platformcsh" ne "" ) {
             my $fremodule = `echo $ENV{LOADEDMODULES} | tr ':' '\n' | egrep '^fre/.+'`;
             chomp $fremodule;
@@ -737,7 +737,7 @@ EOF
                 exit 1;
             }
 $platformcsh = <<EOF;
-#platform_csh_from_xml
+#platform_csh
 $platformcsh
 if ("$xmlfremodule" == "$fremodule" && "$fremodule" == "fre/test") then
     if ( "\$FRE_COMMANDS_HOME" != "\$FRE_COMMANDS_HOME_FREPP" ) then
@@ -756,7 +756,7 @@ endif
 EOF
 
         } ## end if ( "$platformcsh" ne...)
-        $cshscripttmpl =~ s/#platform_csh_from_xml/$platformcsh/;
+        $cshscripttmpl =~ s/#platform_csh/$platformcsh/;
         if ( "$platform" eq 'x86_64' ) {
             $cshscripttmpl =~ s/(#SBATCH --job-name)/$1=$batch_job_name/;
             $cshscripttmpl =~ s/(#SBATCH --time)/$1=$maxruntime/;
@@ -765,7 +765,7 @@ EOF
             $cshscripttmpl
                 =~ s|(setenv FRE_STDOUT_PATH)|$1 $stdoutdir/postProcess/$batch_job_name.o\$JOB_ID|;
         }
-        $cshscripttmpl =~ s/version_info/$freVersion\n$version_info/;
+        $cshscripttmpl =~ s/#version_info/$freVersion\n$version_info/;
         $cshscripttmpl =~ s/set name/set name = $expt/;
         $cshscripttmpl =~ s/set rtsxml/set rtsxml = $abs_xml_path/;
         $cshscripttmpl =~ s/set work/set work = $workdir/;
@@ -2405,8 +2405,6 @@ EOF
                     if ( "$platform" eq 'x86_64' ) {
                         $cshscript =~ s/(#SBATCH --time).*/$1=$maxruntime/;
                     }
-                    my $npes = $basenpes;
-                    $cshscript =~ s/pe ic.postp (.+)/pe ic.postp $npes/;
                 }
                 $cshscript =~ s/(#INFO:max_years=)/$1$maxyrs/;
                 my $writefinalstate = <<EOF;
@@ -7927,7 +7925,7 @@ set realizID
 set runID
 set tripleID
 
-#platform_csh_from_xml
+#platform_csh
 
 #write_to_statefile
 
@@ -7969,8 +7967,6 @@ end
 shift argv
 
 EOF
-
-        $cshscripttmpl =~ s/-pe ic.postp 1/-pe ic.postp $basenpes/;
 
         return $cshscripttmpl;
     } ## end sub getTemplate
