@@ -1322,7 +1322,6 @@ EOF
             if ($opt_c) {    #append component name to job and file name
                 $cshscript = $cshscripttmpl;
                 my $origoutscript     = $outscript;
-                my $orig_batch_job_name = $batch_job_name;
                 $outscript    = "$outscriptdir/$expt" . "_$component" . "_$hDate";
                 $batch_job_name = "$expt";
                 if ( "$opt_u" ne '' ) {
@@ -1336,8 +1335,10 @@ EOF
                 $cshscript =~ s/(-w $expt)/$1_$component/;
                 $cshscript =~ s/(#INFO:component=)/$1$component/;
 
+                # special case: ocean_(annual|month) jobs can run into memory issues, so require bigmem node
                 if ( $component =~ /ocean_(annual|monthly)/ ) {
-                    add_batch_directive("#SBATCH --constraint=bigmem");
+                    print STDERR "NOTE: Requesting large-memory node for component='$component' due to the possibly large ocean files.\n" if $opt_v;
+                    $cshscript =~ s/(#SBATCH --job-name.*)/$1\n#SBATCH --constraint=bigmem/;
                 }
                 $statefile = "$statedir/$component." . $userstartyear;
 
