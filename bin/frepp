@@ -7818,38 +7818,16 @@ EOF
     } ## end sub refineDiag
 
  #write c-shell runscript, chmod, and optionally submit
- #batchCmd = "qsub -pe $defaultQueue $npes -o $stdoutPath -r y -P $project -l h_cpu=$maxRunTime"
- #writescript($cshscript,$outscript,$batchCmd,$defaultQueue,$npes,$stdoutPath,$project,$maxRunTime);
     sub writescript {
-
-        #my $script = $_[0];
-        my $outscript    = $_[1];
-        my $batchCmd     = $_[2];
-        my $statefile    = $_[3];
-        my $defaultQueue = $_[4];
-        my $npes         = $_[5];
-        my $stdoutPath   = $_[6];
-        my $project      = $_[7];
-        my $maxRunTime   = $_[8];
-
-        if   ( "$defaultQueue" ne "" ) { $batchCmd =~ s/\$defaultQueue/$defaultQueue/g; }
-        else                           { $batchCmd =~ s/\$defaultQueue//g; }
-        if   ( "$npes" ne "" ) { $batchCmd =~ s/\$npes/$npes/g; }
-        else                   { $batchCmd =~ s/\$npes//g; }
-        if   ( "$stdoutPath" ne "" ) { $batchCmd =~ s/\$stdoutPath/$stdoutPath/g; }
-        else                         { $batchCmd =~ s/\$stdoutPath//g; }
-        if   ( "$project" ne "" ) { $batchCmd =~ s/\$project/$project/g; }
-        else                      { $batchCmd =~ s/\$project//g; }
-        if   ( "$maxRunTime" ne "" ) { $batchCmd =~ s/\$maxRunTime/$maxRunTime/g; }
-        else                         { $batchCmd =~ s/\$maxRunTime//g; }
+        my ($script, $outscript, $batchCmd, $statefile) = @_;
 
         #print "Preparing '$batchCmd'\n";
 
         ( my $volume, my $directory, my $filename ) = File::Spec->splitpath($outscript);
         if ( !-e $directory ) { mkdir $directory || die "Cannot make directory $directory\n"; }
 
-        open( OUT, "> $outscript" );
-        print OUT $_[0];
+        open( OUT, '>', $outscript );
+        print OUT $script;
         close(OUT);
 
         my $status = system("chmod 755 $outscript");
