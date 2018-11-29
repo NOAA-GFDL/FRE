@@ -926,8 +926,8 @@ EOF
 
         $writestate = '';
         unless ($opt_A) {
-            my $writeIDorINTER = <<EOF;
-echo \$JOB_ID > \$statefile
+            my $writeIDorINTER = <<'EOF';
+echo $JOB_ID > $statefile
 EOF
             $cshscripttmpl =~ s/#write_to_statefile/$writeIDorINTER/;
 
@@ -1323,7 +1323,7 @@ EOF
                 $cshscript = $cshscripttmpl;
                 my $origoutscript     = $outscript;
                 $outscript    = "$outscriptdir/$expt" . "_$component" . "_$hDate";
-                $batch_job_name = "$expt";
+                $batch_job_name = $expt;
                 if ( "$opt_u" ne '' ) {
                     $batch_job_name .= "_$opt_u";
                 }
@@ -2581,12 +2581,12 @@ EOF
             }
 
             #combine raw data
-            my $BATCH_JOBID = $ENV{SLURM_JOBID};
+            my $jobid = $ENV{SLURM_JOBID};
             my $wallTime  = 0;
-            if ( $BATCH_JOBID ) {
+            if ( $jobid ) {
 
                 chomp( $wallTime
-                        = `$ENV{FRE_COMMANDS_HOME}/site/$ENV{FRE_SYSTEM_SITE}/bin/batch.scheduler.time -t $BATCH_JOBID`
+                        = `$ENV{FRE_COMMANDS_HOME}/site/$ENV{FRE_SYSTEM_SITE}/bin/batch.scheduler.time -t $jobid`
                 );
                 my $shreturn = $? >> 8;
                 if ( $shreturn != 0 ) {
@@ -3267,14 +3267,13 @@ EOF
     sub isjobrunning {
         my $jobid = $_[0];
         my $cmd   = "squeue -u $ENV{USER} -o %i";
-        my $QUERY;
         my $line;
-        open( $QUERY, "$cmd 2>&1 |" );
-        while ( $line = <$QUERY> ) {
+        open( my $handle, "$cmd 2>&1 |" );
+        while ( $line = <$handle> ) {
             chomp($line);
-            if ( $line =~ /\b$jobid\b/ ) { close($QUERY); return 1; }
+            if ( $line =~ /\b$jobid\b/ ) { close($handle); return 1; }
         }
-        close($QUERY);
+        close($handle);
         return 0;
     }
 
@@ -7830,7 +7829,7 @@ EOF
         ( my $volume, my $directory, my $filename ) = File::Spec->splitpath($outscript);
         if ( !-e $directory ) { mkdir $directory || die "Cannot make directory $directory\n"; }
 
-        open( OUT, '>', $outscript );
+        open( OUT, "> $outscript" );
         print OUT $script;
         close(OUT);
 
