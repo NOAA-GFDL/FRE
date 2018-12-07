@@ -14,6 +14,7 @@ use Text::Wrap;
 use Getopt::Long( ':config', 'no_ignore_case' );
 use Date::Manip;
 use XML::LibXML;
+use File::Spec;
 
 use lib ( File::Basename::fileparse( File::Spec->rel2abs($0) ) )[1] . "../lib";
 use FRE();
@@ -22,21 +23,13 @@ use FREAnalysis qw(analysis);
 use FREUtil;
 use FRETargets qw(standardize);
 
-use Config;
-use lib "/app/perl/lib/perl5/$Config{version}";
-use lib "/app/perl/lib/perl5/site_perl/$Config{version}";
-use lib "/app/perl/lib64/perl5/$Config{version}/$Config{archname}";
-use lib "/app/perl/lib64/perl5/site_perl/$Config{version}/$Config{archname}";
-use Env::Modulecmd;
-Env::Modulecmd::load('moab');
-
 use vars qw( $expt $nml $err $username %dtvars $root);
 use vars
     qw( $mkdircommand $hDate $t0 $tEND $sim0 $ppRootDir $component $cpiomonTS $aggregateTS $historyfiles);
 use vars qw( $do_static $segTime $segUnits $caltype);
 use vars qw( $analysisdir $absfrepp $relfrepp $perlerrors );
 use vars
-    qw( $archivedir $rootdir $workdir $tempCache $rtsVersion $platform $versionId $batchSubmit );
+    qw( $archivedir $rootdir $workdir $stdoutdir $tempCache $platform $freVersion $batchSubmit );
 use vars
     qw( $maxyrs $maxdisk $cubic $nlat $nlon $interpMethod $getgridspec $basenpes $call_fregrid $fredb_timeout );
 use vars
@@ -44,11 +37,17 @@ use vars
 use vars qw( $mosaic_type $sourceGrid $xyInterp $xyInterpRegridFile );
 our @frepp_plus_calls;
 
+eval "use FREVersion";
+if ($@) {
+  # Set the version variable to some default string if the module is not available
+  $freVersion = 'Development Version'
+} else {
+  $freVersion = $FREVersion::VERSION;
+}
+
 {
 
     package frepp;
-
-    use constant VERSION => '$Id: frepp,v 18.0.2.52.2.1.2.89.2.74 2014/12/17 15:42:41 arl Exp $';
 
     #Usage:    $relfrepp [ -AB:C:O:RY:Z:c:d:f:hlmMp:oqr:S:st:u:vx:z ] experiment [ experiment2 ... ]
     use constant OPTLIST => (
@@ -58,7 +57,7 @@ our @frepp_plus_calls;
         'limitstatic|l',
         'dir|history|d=s',
         'unique|u=s',
-        'moab|m=s',
+        'resourceManager|m=s',
         'override|o',
         'compress',
 
@@ -96,6 +95,7 @@ our @frepp_plus_calls;
         'mppnccombine-opts=s',
 
         'novalidate',
+        'version'
     );
 
 }
@@ -108,7 +108,7 @@ our @frepp_plus_calls;
     );
 
     Getopt::Long::GetOptions( \%opt, frepp::OPTLIST ) or ( print 'bad opts' and die "\n" );
-    if ( $opt{Version} ) { print frepp::VERSION, "\n" and exit(0); }
+    if ( $opt{version} ) { print $freVersion, "\n" and exit(0); }
     use vars
         qw( $opt_d $opt_D $opt_f $opt_l $opt_M $opt_m $opt_q $opt_Q $opt_t $opt_r $opt_x $opt_s $opt_v $opt_V  $opt_A $opt_B $opt_C $opt_O $opt_R $opt_S $opt_Y $opt_Z $opt_c $opt_H $opt_h $opt_o $opt_u $opt_z $opt_w $opt_P $opt_T );
     ( $opt_d = $opt{dir} ) =~ s|\/$||g;
@@ -116,7 +116,7 @@ our @frepp_plus_calls;
     $opt_l = $opt{limitstatic};
     $opt_o = $opt{override};
     $opt_M = $opt{MailOnComplete};
-    $opt_m = $opt{moab};
+    $opt_m = $opt{resourceManager};
     $opt_q = $opt{quiet};
     $opt_Q = $opt{debug};
     $opt_t = $opt{time};
@@ -175,8 +175,7 @@ Usage:    $relfrepp -P|--platform platform [-AB:C:O:RY:Z:c:d:f:hlmMp:oqr:S:st:u:
           -c component = component to process, or keyword 'split' to process all in parallel
           -l           = limit static variable processing to the diag source file in the xml
           -d dir       = path to history data
-          -w jobid     = place hold on current job so that it waits for jobid to complete
-                         (PP/AN cannot set holds based on job names, it is not supported by moab)
+          -w jobid     = place hold on current job so that it waits for jobID to complete
           -o           = override job dependencies
           --compress   = compress pp files using NetCDF4 compression, deflation=2 and shuffle
 
@@ -193,7 +192,7 @@ Usage:    $relfrepp -P|--platform platform [-AB:C:O:RY:Z:c:d:f:hlmMp:oqr:S:st:u:
 
           OPTIONS FOR TIMING/DEBUGGING/STATISTICS/SCHEDULING
           -M           = send mail to user when job is complete
-          -m opts      = moab scheduler options for msub command
+          -m opts      = Additional options to pass to the resource manager (e.g. msub, qsub, sbatch options)
           -W time      = change the max wallclock time for the job, ie, -W 00:20:00
           -u label     = specify unique output dir. frepp -u 2 yields .../pp_2/...
           -Q           = don't print the error checks into the script.  For evaluating csh.
@@ -245,8 +244,10 @@ EOF
 
     if ($opt_V) { $opt_v = 1; }
 
-    if   ( $opt_M and not $opt{plus} ) { $opt_M = "#\$ -m e"; }
-    else                               { $opt_M = ""; }
+    if ( $opt_M and $opt{plus} ) {
+        print STDERR "NOTE: You have specified -M (mail on complete) and --plus; to avoid flooding your inbox, the -M option has been turned off.\n";
+        $opt_M = "";
+    }
 
     if ($opt_O) {
         print STDERR
@@ -258,8 +259,6 @@ EOF
             "NOTE: adding '-c split'; frepp will do each component in a separate batch job\n";
         $opt_c = 'split';
     }
-
-    $versionId = ' $Id: frepp,v 18.0.2.52.2.1.2.89.2.74 2014/12/17 15:42:41 arl Exp $';
 
     $perlerrors    = "";
     $component     = "";
@@ -381,29 +380,7 @@ EOF
     #set up FRE4
     my $fre = FRE->new( 'frepp', %opt ) or exit(1);
 
-    $root       = $fre->{rootNode};
-    $rtsVersion = $fre->{version};
-    if ( "$rtsVersion" eq "" ) {
-        $rtsVersion = 1;
-        print STDERR
-            "WARNING: rtsVersion information not found in your xml file, assuming rtsVersion 1.\n";
-        print STDERR
-            "         The latest version available is version 2.  Automate conversion with\n";
-        print STDERR "            /home/fms/bin/rtsversion2 [in.xml] [out.xml]\n";
-        print STDERR
-            "         Run '/home/fms/bin/rtsversion2' with no arguments for a help message.\n";
-    }
-    elsif ( $rtsVersion == 1 ) {
-        print STDERR "NOTE: You are using rtsVersion 1.  A newer version is available.  \n";
-        print STDERR "      The latest version available is version 2.  Automate conversion with\n";
-        print STDERR "         /home/fms/bin/rtsversion2 [in.xml] [out.xml]\n";
-        print STDERR
-            "      Run '/home/fms/bin/rtsversion2' with no arguments for a help message.\n";
-    }
-    elsif ( "$rtsVersion" > "4" ) {
-        print STDERR
-            "WARNING: This frerun is designed for version 3/4 xml and your xml is version $rtsVersion.\n";
-    }
+    $root = $fre->{rootNode};
     my $project = $fre->project();
 
     # use expanded platform (e.g. gfdl.ncrc-intel rather than ncrc-intel)
@@ -442,7 +419,7 @@ EOF
         my $postprocessdir = $exp->postProcessDir();
         my $analysisdir    = $exp->analysisDir();
         my $scriptsdir     = $exp->scriptsDir();
-        my $stdoutdir      = $exp->stdoutDir();
+        $stdoutdir         = $exp->stdoutDir();
         my $ptmpDir        = $exp->ptmpDir();
         my $tempCache      = ( split /\//, $workdir )[0] . "/tempCache";
         my $statedir       = $exp->stateDir() . "/postProcess";
@@ -539,7 +516,7 @@ EOF
         # This really should be done using the fre.properties file
         print STDERR "Using platform $platform\n" if $opt_v;
         if ( "$platform" eq 'x86_64' ) {
-            $batchSubmit = "msub -d /home/$username/ ";
+            $batchSubmit = 'sbatch';
             $cp          = 'gcp -v';
             $cpio        = 'cpio -C 524288';
             $uncpio      = 'cpio -C 2097152';
@@ -553,63 +530,8 @@ EOF
         }
 
         if ( "$opt_w" ne '' ) {
-            if ("$platform" eq "x86_64") {$opt_w = " -l depend=afterok:$opt_w";}
+            if ($platform eq 'x86_64') {$opt_w = " --dependency=afterok:$opt_w";}
         }
-
-        # Job schooling is only available if queue is not stage
-        #
-        # If queue is one of the bigvftmp, the request the entire node, and tell
-        # moab to use all the physical cores
-        #
-        # May 2017 change - Only activate job schooling if ptmp is set to /vftmp
-        my $pbsqueue = '';
-        my $pbsenv   = $ENV{'PBS_ENVIRONMENT'};
-        if ( $pbsenv =~ m/^PBS_BATCH$/ ) {
-            $pbsqueue = $ENV{'PBS_O_QUEUE'};
-        }
-        else {
-            # get queue information from $opt_m
-            ($pbsqueue) = $opt_m =~ m/-q +(\S+)/;
-        }
-
-        if ( $pbsqueue =~ m/batch|bigvftmp/ and $fre->property('ptmpDir') =~ m|^/vftmp/| ) {
-
-            # Use job schooling
-            # The moab -l options control the schooling
-            my $moab_lopt = '';
-            ($moab_lopt) = $opt_m =~ m/-l *(\S+)/;
-            my @moab_lopts = split( ',', $moab_lopt );
-
-            my $hostname = $ENV{HOST};
-            if ( $hostname =~ m/^pp/ and !grep( /host=/, @moab_lopts ) ) {
-
-                # if on one of the pp nodes, then set the -lhost moab option to the current
-                # pp host, to continue the job schooling
-                push @moab_lopts, "host=$hostname.princeton.rdhpcs.noaa.gov";
-            }
-
-            if ( $pbsqueue =~ m/bigvftmp/ ) {
-                $opt_m .= " -q boost_bigvftmp" unless ( $opt_m =~ m/-q +\b.*bigvftmp\b/ );
-                push @moab_lopts, "naccesspolicy=singlejob"
-                    unless grep( /naccesspolicy=singlejob/, @moab_lopts );
-                $basenpes = $fre->property('FRE.scheduler.bigvftmp.coresPerJob.max');
-            }
-            elsif ( $pbsqueue =~ m/batch/ ) {
-                unless ( $opt_m =~ m/-q +\b.*batch\b/ ) {
-                    $opt_m .= " -q boost_batch";
-                }
-            }
-
-            # Now reset the moab -l option
-            if ( scalar(@moab_lopts) > 0 ) {
-
-                # Remove any -l options already part of opt_m
-                $opt_m =~ s/-l *\S+//;
-
-                # put -l options back in
-                $opt_m .= " -l " . join( ',', @moab_lopts );
-            }
-        } ## end if ( $pbsqueue =~ m/batch|bigvftmp/...)
 
         #variables for timing statistics
         if ($opt_z) {
@@ -749,7 +671,7 @@ EOF
         if ($opt_f)       { $version_info .= "-f "; }
         if ($opt_P)       { $version_info .= "--platform $opt_P "; }
         if ($opt_T)       { $version_info .= "-T $opt_T "; }
-        if ($opt_D)       { $version_info .= "-D $opt_D "; }
+        if ($opt_D)       { $version_info .= "-D '$opt_D' "; }
         if ($opt_t)       { $version_info .= "-t $hDate "; }          # Using corrected $opt_t value
         if ( $opt{plus} ) { $version_info .= "--plus $opt{plus} "; }
         if ($opt_c)       { $version_info .= "-c $opt_c "; }
@@ -762,24 +684,25 @@ EOF
         my $this_frepp_cmd = $version_info;
         $this_frepp_cmd =~ s/.*# //smg;
 
-        my $outscript    = "$outscriptdir/$expt";
-        my $pbs_job_name = "$expt";
-
-        if ( "$opt_u" ne '' ) {
-            $pbs_job_name .= "_$opt_u";
+        # Get post fix string for job and script name
+        my $name_postFix = "";
+        if ( $opt_u ne '' ) {
+            $name_postFix .= "_$opt_u";
         }
 
         if ($opt_r) {
-            $outscript .= "_$opt_r";
+            $name_postFix .= "_$opt_r";
             $maxruntime = "01:00:00";
-            $pbs_job_name .= "_$opt_r";
         }
         elsif ($opt_D) {
-            $outscript    .= "_refineDiag";
-            $pbs_job_name .= "_refineDiag";
+            $name_postFix .= "_refineDiag";
         }
-        $outscript    .= "_$hDate";
-        $pbs_job_name .= "_$hDate";
+        $name_postFix .= "_$hDate";
+
+        # Set the job and script name using the postfix.  $outscript is the same
+        # as the job name, but with the script directory prepended
+        my $batch_job_name = $expt . $name_postFix;
+        my $outscript    = File::Spec->catfile($outscriptdir, $batch_job_name);
 
         my $cshscripttmpl = getTemplate($platform);
 
@@ -790,7 +713,7 @@ EOF
 EOF
         $cshscripttmpl =~ s/#get_site_config/$siteconfig/;
 
-        #platform_csh_from_xml and check for FRE version mismatch
+        #platform_csh and check for FRE version mismatch
         if ( "$platformcsh" ne "" ) {
             my $fremodule = `echo $ENV{LOADEDMODULES} | tr ':' '\n' | egrep '^fre/.+'`;
             chomp $fremodule;
@@ -819,7 +742,7 @@ EOF
                 exit 1;
             }
 $platformcsh = <<EOF;
-#platform_csh_from_xml
+#platform_csh
 $platformcsh
 if ("$xmlfremodule" == "$fremodule" && "$fremodule" == "fre/test") then
     if ( "\$FRE_COMMANDS_HOME" != "\$FRE_COMMANDS_HOME_FREPP" ) then
@@ -838,16 +761,16 @@ endif
 EOF
 
         } ## end if ( "$platformcsh" ne...)
-        $cshscripttmpl =~ s/#platform_csh_from_xml/$platformcsh/;
+        $cshscripttmpl =~ s/#platform_csh/$platformcsh/;
         if ( "$platform" eq 'x86_64' ) {
-            $cshscripttmpl =~ s/#PBS -N/#PBS -N $pbs_job_name/;
-            $cshscripttmpl =~ s/#PBS -l walltime/#PBS -l walltime=$maxruntime/;
-            $cshscripttmpl =~ s/#PBS -o/#PBS -o $stdoutdir\/postProcess\//;
+            $cshscripttmpl =~ s/(#SBATCH --job-name)/$1=$batch_job_name/;
+            $cshscripttmpl =~ s/(#SBATCH --time)/$1=$maxruntime/;
+            $cshscripttmpl =~ s|(#SBATCH --output)|$1=$stdoutdir/postProcess/%x.o%j|;
+            $cshscripttmpl =~ s/(#SBATCH --chdir)/$1=$ENV{HOME}/;
             $cshscripttmpl
-                =~ s/setenv FRE_STDOUT_PATH/setenv FRE_STDOUT_PATH $stdoutdir\/postProcess\/$pbs_job_name.o\$PBS_JOBID_number/;
+                =~ s|(setenv FRE_STDOUT_PATH)|$1 $stdoutdir/postProcess/$batch_job_name.o\$JOB_ID|;
         }
-        $cshscripttmpl =~ s/(-soft -l fre_info=)/$1ppVersion\@$relfrepp -hard/;
-        $cshscripttmpl =~ s/version_info/$versionId\n$version_info/;
+        $cshscripttmpl =~ s/#version_info/$freVersion\n$version_info/;
         $cshscripttmpl =~ s/set name/set name = $expt/;
         $cshscripttmpl =~ s/set rtsxml/set rtsxml = $abs_xml_path/;
         $cshscripttmpl =~ s/set work/set work = $workdir/;
@@ -867,7 +790,7 @@ EOF
         $cshscripttmpl =~ s/set tripleID/set tripleID = $exper_id$realiz_id$run_id/;
 
         if ($opt_r) {    #if a regression test, no further postprocessing
-            $cshscripttmpl =~ s/(-soft -l fre_info=)/$1ppYears\@$maxyrs+/;
+            $cshscripttmpl =~ s/(#INFO:max_years=)/$1$maxyrs/;
             writescript( $cshscripttmpl, $outscript, "$batchSubmit$opt_w $opt_m", $statefile );
             $opt_w = '';
             next;
@@ -876,16 +799,16 @@ EOF
         unless ($opt_f) {
             unless ($ppNode) {    #if no pp node, no further postprocessing
                 if ( "$platform" eq 'x86_64' ) {
-                    $cshscripttmpl =~ s/#PBS -l walltime.*/#PBS -l walltime=01:00:00/;
+                    $cshscripttmpl =~ s/(#SBATCH --time).*/$1=01:00:00/;
                 }
-                $cshscripttmpl =~ s/(-soft -l fre_info=)/$1ppYears\@$maxyrs+/;
+                $cshscripttmpl =~ s/(#INFO:max_years=)/$1$maxyrs/;
                 writescript( $cshscripttmpl, $outscript, "$batchSubmit$opt_w $opt_m", $statefile );
                 $opt_w = '';
                 next;
             }
         }
         if ( "$opt_M" ne "" ) {
-            $cshscripttmpl =~ s/#\$ -r y/#\$ -r y\n$opt_M/;
+            $cshscripttmpl =~ s/(#SBATCH --mail-type=)NONE/$1END/;
         }
 
         #calendar
@@ -956,13 +879,6 @@ EOF
                 if ($opt_M) { $cshscripttmpl .= "-M "; }
                 if ($opt_o) { $cshscripttmpl .= "-o "; }
 
-                #add hold for prerequisite job
-                #this only works for SGE, not moab, so commenting this now
-                #if ( $opt{plus} ) {
-                #   my $prev = FREUtil::modifydate($opt_t,"- 1 years");
-                #   $prev = FREUtil::graindate($prev,"day");
-                #   $cshscripttmpl .= "-w $expt"."_$prev ";
-                #}
                 $cshscripttmpl .= "$expt\n";
                 $cshscripttmpl
                     .= errorstr( "$relfrepp had a problem creating next script $expt" . "_$hDate" );
@@ -997,9 +913,9 @@ EOF
 
             $cshscripttmpl .= mailerrors($outscript);
             if ( "$platform" eq 'x86_64' ) {
-                $cshscripttmpl =~ s/#PBS -l walltime.*/#PBS -l walltime=$maxruntime/;
+                $cshscripttmpl =~ s/(#SBATCH --time).*/$1=$maxruntime/;
             }
-            $cshscripttmpl =~ s/(-soft -l fre_info=)/$1ppYears\@$maxyrs+/;
+            $cshscripttmpl =~ s/(#INFO:max_years=)/$1$maxyrs/;
             writescript( $cshscripttmpl, $outscript, "$batchSubmit$opt_w $opt_m", $statefile );
             $opt_w = '';
             next;
@@ -1010,14 +926,8 @@ EOF
 
         $writestate = '';
         unless ($opt_A) {
-            my $writeIDorINTER = <<EOF;
-if ( \$?MOAB_JOBID ) then
-    echo \$MOAB_JOBID > \$statefile
-else if ( \$?PBS_JOBID ) then
-    echo \$PBS_JOBID > \$statefile
-else
-    echo INTERACTIVE > \$statefile
-endif
+            my $writeIDorINTER = <<'EOF';
+echo $JOB_ID > $statefile
 EOF
             $cshscripttmpl =~ s/#write_to_statefile/$writeIDorINTER/;
 
@@ -1067,7 +977,7 @@ EOF
         $nocommentver =~ s/#//g;
         $cshscripttmpl .= <<EOF;
    touch $statedir/frepp.log
-   echo '#$versionId' >> $statedir/frepp.log
+   echo '#$freVersion' >> $statedir/frepp.log
    cat >> $statedir/frepp.log <<END
 $nocommentver
 
@@ -1412,24 +1322,24 @@ EOF
             if ($opt_c) {    #append component name to job and file name
                 $cshscript = $cshscripttmpl;
                 my $origoutscript     = $outscript;
-                my $orig_pbs_job_name = $pbs_job_name;
                 $outscript    = "$outscriptdir/$expt" . "_$component" . "_$hDate";
-                $pbs_job_name = "$expt";
+                $batch_job_name = $expt;
                 if ( "$opt_u" ne '' ) {
-                    $pbs_job_name .= "_$opt_u";
+                    $batch_job_name .= "_$opt_u";
                 }
-                $pbs_job_name .= "_$component" . "_$hDate";
+                $batch_job_name .= "_$component" . "_$hDate";
                 $cshscript =~ s/set scriptName = .*/set scriptName = $outscript/;
-                $cshscript =~ s/#PBS -N .*/#PBS -N $pbs_job_name/;
                 $cshscript
-                    =~ s/setenv FRE_STDOUT_PATH.*/setenv FRE_STDOUT_PATH $stdoutdir\/postProcess\/$pbs_job_name.o\$PBS_JOBID_number/;
+                    =~ s|(setenv FRE_STDOUT_PATH).*|$1 $stdoutdir/postProcess/$batch_job_name.o\$JOB_ID|;
+                $cshscript =~ s/(#SBATCH --job-name).*/$1=$batch_job_name/;
                 $cshscript =~ s/(-w $expt)/$1_$component/;
-                $cshscript =~ s/(-soft -l fre_info=)/$1ppComponent\@$component+/;
+                $cshscript =~ s/(#INFO:component=)/$1$component/;
 
+                # special case: ocean_(annual|month) jobs can run into memory issues, so require bigmem node
                 if ( $component =~ /ocean_(annual|monthly)/ ) {
-                    $cshscript =~ s/#PBS -q batch/#PBS -q bigmem/;
+                    print STDERR "NOTE: Requesting large-memory node for component='$component' due to the possibly large ocean files.\n" if $opt_v;
+                    $cshscript =~ s/(#SBATCH --job-name.*)/$1\n#SBATCH --constraint=bigmem/;
                 }
-                $opt_w =~ s/( -hold_jid $expt)(.*)(_\d\d\d\d\d\d\d\d)/$1_$component$3/;
                 $statefile = "$statedir/$component." . $userstartyear;
 
                 #check status of this frepp year
@@ -2412,33 +2322,24 @@ EOF
                     if ($redo) {
                         my $cmd = call_frepp( $abs_xml_path, $outscript, $component, "$depyear" );
                         print "$cmd\n";
-                        my $depjobid = `$cmd`;
-                        print "$depjobid\n";
-                        $depjobid =~ s/^$//mg;
-                        my @njobid = split '\n', $depjobid;
-                        $depjobid = $njobid[-1];
-                        $depjobid =~ s/New jobid='(.*)'/$1/ if $depjobid =~ /New jobid/;
-                        $depjobid =~ s/Previous frepp job \((.*)\).*/$1/
-                            if $depjobid =~ /still running for /;
+                        my $frepp_submit_output = `$cmd`;
+                        print "$frepp_submit_output\n";
+                        $frepp_submit_output =~ s/^$//mg;
+                        my $frepp_submit_output_last_line = (split '\n', $frepp_submit_output)[-1];
+                        my ($depjobid) = $frepp_submit_output_last_line =~ /Submitted batch job (\d+)/;
 
-                        unless ( $depjobid =~ /has already been completed/ ) {
+                        unless ( $frepp_submit_output_last_line =~ /has already been completed/ ) {
                             print "Dependent job for $depyear='$depjobid'\n";
                             my $depstatefile = "$statedir/$component.$depyear";
-                            if ( "$depjobid" eq '' ) {
+                            if ( ! $depjobid and ! $frepp_submit_output_last_line ) {
                                 print
-                                    "No jobid resulted from the Moab job submission of $depyear.\n";
-
-                                #if ( "$depstate" eq "ERROR" ) {
-                                #   print DEPSTATEFILE "FATAL\n";
-                                #} else {
-                                #   print DEPSTATEFILE "ERROR\n";
-                                #}
+                                    "No jobid resulted from the job submission of $depyear.\n";
                                 print "ERROR: Unable to submit dependent jobs, exiting.\n";
                                 exit 1;
                             }
-                            elsif ( "$depjobid" !~ /gfdl.\d+/ ) {
+                            elsif ( ! $depjobid ) {
                                 print
-                                    "ERROR: the jobid returned has the wrong format: a frepp/moab issue occurred.\n";
+                                    "ERROR: the jobid returned has the wrong format: a frepp or batch system issue occurred.\n";
                                 exit 1;
                             }
                             else {
@@ -2464,7 +2365,7 @@ EOF
 
             if ( "$depholds" ne "" ) {
                 chop $depholds;
-                $opt_w = " -l depend=afterok:$depholds";
+                $opt_w = " --dependency=afterok:$depholds";
                 print "Setting holds for $hDate: $opt_w\n";
             }
 
@@ -2503,17 +2404,15 @@ EOF
                 # if the user sets -W, don't override the wallclock even for 1-year postprocessing
                 if ( $maxyrs < 2 and !$opt{Walltime} ) {
                     if ( "$platform" eq 'x86_64' ) {
-                        $cshscript =~ s/#PBS -l walltime.*/#PBS -l walltime=20:00:00/;
+                        $cshscript =~ s/(#SBATCH --time).*/$1=20:00:00/;
                     }
                 }
                 if ( $maxyrs >= 20 ) {
                     if ( "$platform" eq 'x86_64' ) {
-                        $cshscript =~ s/#PBS -l walltime.*/#PBS -l walltime=$maxruntime/;
+                        $cshscript =~ s/(#SBATCH --time).*/$1=$maxruntime/;
                     }
-                    my $npes = $basenpes;
-                    $cshscript =~ s/pe ic.postp (.+)/pe ic.postp $npes/;
                 }
-                $cshscript =~ s/(-soft -l fre_info=)/$1ppYears\@$maxyrs+/;
+                $cshscript =~ s/(#INFO:max_years=)/$1$maxyrs/;
                 my $writefinalstate = <<EOF;
 
 if ( \$errors_found == 0 ) then
@@ -2682,13 +2581,12 @@ EOF
             }
 
             #combine raw data
-            my $PBS_JOBID = "$ENV{PBS_JOBID}";
+            my $jobid = $ENV{SLURM_JOBID};
             my $wallTime  = 0;
-            if ( "$PBS_JOBID" ne '' ) {
+            if ( $jobid ) {
 
-          #chomp($wallTime = `checkjob -A $PBS_JOBID | tr ';' '\n' | grep WCLIMIT | cut -d'=' -f2`);
                 chomp( $wallTime
-                        = `$ENV{FRE_COMMANDS_HOME}/site/$ENV{FRE_SYSTEM_SITE}/bin/batch.scheduler.time -t $PBS_JOBID`
+                        = `$ENV{FRE_COMMANDS_HOME}/site/$ENV{FRE_SYSTEM_SITE}/bin/batch.scheduler.time -t $jobid`
                 );
                 my $shreturn = $? >> 8;
                 if ( $shreturn != 0 ) {
@@ -3321,15 +3219,9 @@ EOF
     #mail user any errors at end of perl script execution
     sub sysmailuser {
         if ( "$perlerrors" ne "" ) {
-            my $env = $ENV{'PBS_ENVIRONMENT'};
-            if ( "$env" eq "PBS_BATCH" ) {
-
-                #my $outpath = "$stdoutdir\/postProcess\/$pbs_job_name.o\$JOB_ID";
-                my $outpath = $ENV{'PBS_O_WORKDIR'};
-                my $jobname = $ENV{'PBS_JOBNAME'};
-                my $jobid   = $ENV{'PBS_JOBID'};
-                $jobid =~ s/(\d+)\..*/$1/;
-                $outpath .= "/$jobname.o$jobid";
+            my $jobid = $ENV{SLURM_JOBID};
+            if ( $jobid ) {
+                my $outpath = File::Spec->catfile($stdoutdir, 'postProcess', "$ENV{SLURM_JOB_NAME}.o$jobid");
                 my $str = <<EOF;
 Mail -s "$relfrepp PERL ERROR: $expt $hDate" $username <<END
 Error message(s) have been reported by $relfrepp while
@@ -3343,7 +3235,7 @@ END
 EOF
                 system $str;
                 sleep 30;
-            } ## end if ( "$env" eq "PBS_BATCH")
+            }
         } ## end if ( "$perlerrors" ne ...)
     } ## end sub sysmailuser
 
@@ -3374,15 +3266,14 @@ EOF
     #check whether a job is running
     sub isjobrunning {
         my $jobid = $_[0];
-        my $cmd   = "showq -u $ENV{'USER'} -v";
-        my $SHOWQ;
+        my $cmd   = "squeue -u $ENV{USER} -o %i";
         my $line;
-        open( $SHOWQ, "$cmd 2>&1 |" );
-        while ( $line = <$SHOWQ> ) {
+        open( my $handle, "$cmd 2>&1 |" );
+        while ( $line = <$handle> ) {
             chomp($line);
-            if ( $line =~ /$jobid/ ) { close($SHOWQ); return 1; }
+            if ( $line =~ /\b$jobid\b/ ) { close($handle); return 1; }
         }
-        close($SHOWQ);
+        close($handle);
         return 0;
     }
 
@@ -7930,30 +7821,8 @@ EOF
     } ## end sub refineDiag
 
  #write c-shell runscript, chmod, and optionally submit
- #batchCmd = "qsub -pe $defaultQueue $npes -o $stdoutPath -r y -P $project -l h_cpu=$maxRunTime"
- #writescript($cshscript,$outscript,$batchCmd,$defaultQueue,$npes,$stdoutPath,$project,$maxRunTime);
     sub writescript {
-
-        #my $script = $_[0];
-        my $outscript    = $_[1];
-        my $batchCmd     = $_[2];
-        my $statefile    = $_[3];
-        my $defaultQueue = $_[4];
-        my $npes         = $_[5];
-        my $stdoutPath   = $_[6];
-        my $project      = $_[7];
-        my $maxRunTime   = $_[8];
-
-        if   ( "$defaultQueue" ne "" ) { $batchCmd =~ s/\$defaultQueue/$defaultQueue/g; }
-        else                           { $batchCmd =~ s/\$defaultQueue//g; }
-        if   ( "$npes" ne "" ) { $batchCmd =~ s/\$npes/$npes/g; }
-        else                   { $batchCmd =~ s/\$npes//g; }
-        if   ( "$stdoutPath" ne "" ) { $batchCmd =~ s/\$stdoutPath/$stdoutPath/g; }
-        else                         { $batchCmd =~ s/\$stdoutPath//g; }
-        if   ( "$project" ne "" ) { $batchCmd =~ s/\$project/$project/g; }
-        else                      { $batchCmd =~ s/\$project//g; }
-        if   ( "$maxRunTime" ne "" ) { $batchCmd =~ s/\$maxRunTime/$maxRunTime/g; }
-        else                         { $batchCmd =~ s/\$maxRunTime//g; }
+        my ($script, $outscript, $batchCmd, $statefile) = @_;
 
         #print "Preparing '$batchCmd'\n";
 
@@ -7961,7 +7830,7 @@ EOF
         if ( !-e $directory ) { mkdir $directory || die "Cannot make directory $directory\n"; }
 
         open( OUT, "> $outscript" );
-        print OUT $_[0];
+        print OUT $script;
         close(OUT);
 
         my $status = system("chmod 755 $outscript");
@@ -7970,24 +7839,21 @@ EOF
         if ($opt_s) {
             $batchCmd = "sleep 2;$batchCmd";
             print "\nExecuting '$batchCmd $outscript'\n" if $opt_v;
-            my $qsub_msg = `$batchCmd $outscript`;
-            print "\n$qsub_msg";
+            my $batch_submit_output = `$batchCmd $outscript`;
+            print "\n$batch_submit_output";
 
-            $qsub_msg =~ s/^$//mg;
-            my @njobid = split '\n', $qsub_msg;
-            my $newjobid = $njobid[-1];
-            $newjobid =~ s/New jobid='(.*)'/$1/              if $newjobid =~ /New jobid/;
-            $newjobid =~ s/Previous frepp job \((.*)\).*/$1/ if $newjobid =~ /still running for /;
+            $batch_submit_output =~ s/^$//mg;
+            my ($newjobid) = (split '\n', $batch_submit_output)[-1] =~ /Submitted batch job (\d+)/;
 
             #print "New jobid='$newjobid'\n";
-            if ( "$newjobid" eq '' ) {
-                print "No jobid resulted from the Moab job submission of $hDate.\n";
+            if ( ! $newjobid and ! $batch_submit_output) {
+                print "No jobid resulted from the job submission of $hDate.\n";
                 print "ERROR: Unable to submit job, exiting.\n";
                 exit 1;
             }
-            elsif ( "$newjobid" !~ /gfdl.\d+/ ) {
+            elsif ( ! $newjobid  ) {
                 print
-                    "ERROR: the jobid returned has the wrong format: a frepp/moab issue occurred.\n";
+                    "ERROR: the jobid returned has the wrong format: a frepp or batch system issue occurred.\n";
                 exit 1;
             }
             if ( "$statefile" ne "" ) {
@@ -8009,23 +7875,19 @@ EOF
         if ( "$platform" eq 'x86_64' ) {
             $cshscripttmpl = <<'EOF';
 #!/bin/csh -f
-#PBS -N
-#PBS -l walltime
-#PBS -l nodes=1
-#PBS -j oe
-#PBS -o
-#PBS -r y
-#PBS -S /bin/csh
-#PBS -q batch
-#$ -soft -l fre_info=
+#SBATCH --job-name
+#SBATCH --time
+#SBATCH --ntasks=1
+#SBATCH --output
+#SBATCH --chdir
+#SBATCH --mail-type=NONE
+#INFO:component=
+#INFO:max_years=
 EOF
             $cshscripttmpl .= <<EOF;
 
-setenv PBS_JOBID_number `echo \$PBS_JOBID |cut -f1 -d.`
-if ( \$?MOAB_JOBID ) then
-    setenv JOB_ID \$MOAB_JOBID
-else if ( \$?PBS_JOBID ) then
-    setenv JOB_ID \$PBS_JOBID_number
+if ( \$?SLURM_JOBID ) then
+    setenv JOB_ID \$SLURM_JOBID
 else
     setenv JOB_ID `mktemp -u INT-XXXXXX`
 endif
@@ -8068,7 +7930,7 @@ set realizID
 set runID
 set tripleID
 
-#platform_csh_from_xml
+#platform_csh
 
 #write_to_statefile
 
@@ -8110,8 +7972,6 @@ end
 shift argv
 
 EOF
-
-        $cshscripttmpl =~ s/-pe ic.postp 1/-pe ic.postp $basenpes/;
 
         return $cshscripttmpl;
     } ## end sub getTemplate

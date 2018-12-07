@@ -671,6 +671,11 @@ sub writescript {
     my $status = system("chmod 755 $outscript");
     if ($status) { die "Sorry, I couldn't chmod $outscript"; }
 
+    # once MOAB is turned off, set this to always send to Slurm
+    my $batch_command = grep(/#SBATCH/, $out)
+        ? 'sbatch --chdir $HOME $outscript'
+        : 'msub -d $HOME $outscript';
+
     if ( substr( $mode, 0, 1 ) eq "i" ) {
         ####### The graphical analysis is specified in interactive mode #####
         print STDERR "ANALYSIS: Interactive analysis mode specified.\n";
@@ -685,17 +690,15 @@ sub writescript {
     elsif ( !$opt_s ) {
         print STDERR "ANALYSIS: Batch mode specified.\n";
 
-        #print STDERR "TO SUBMIT: msub $outscript @$aargu\n\n";
-        print STDERR "TO SUBMIT: msub -d \$HOME $outscript\n\n";
+        print STDERR "TO SUBMIT: $batch_command\n\n";
     }
     else {
         ####### The graphical analysis is specified in batch mode ######
         sleep 3;
-        print STDERR "Submitting 'msub -d \$HOME $outscript'";
+        print STDERR "Submitting '$batch_command'";
 
-        #my $qsub_msg = `msub $outscript @$argu`;
-        my $qsub_msg = `msub -d \$HOME $outscript`;
-        print "$qsub_msg";
+        my $message = `$batch_command`;
+        print $message;
     }
 
 } ## end sub writescript
@@ -840,9 +843,9 @@ sub filltemplate {
     my $freanalysismodule = `echo \$LOADEDMODULES | tr ':' '\n' | egrep '^fre-analysis/.+'`;
 
     #
-    $tmpsch =~ s/#\$ -o.*/#\$ -o $printout/;
     $tmpsch =~ s/#PBS -o.*/#PBS -o $printout/;
-    $tmpsch =~ s/#\$ -P.*//;
+    $tmpsch =~ s/(#SBATCH --output).*/$1=$printout/;
+    $tmpsch =~ s/(#SBATCH -o).*/$1 $printout/;
     $tmpsch =~ s/set WORKDIR\s*$/set WORKDIR = $workdir/m;
 
     # a1r edit ln below
@@ -982,6 +985,18 @@ sub filltemplate {
             $tmpsch =~ s/set nlat_$ii\s*$/set nlat_$ii = $arrayofExptsH_ref->[$i]->{nlat}/m;
         } ## end for my $i ( 1 .. $iExpt)
     } ## end if ( $iExpt >= 1 )
+
+    if (! grep /#SBATCH/, $tmpsch) {
+        print STDERR <<EOF
+
+WARNING: MOAB will be turned off in June 2019!
+WARNING: Analysis script $aScript
+         doesn't have Slurm headers, so it be will be submitted to MOAB.
+WARNING: This analysis script will stop working once MOAB is turned off in June 2019.
+WARNING: For help adding Slurm headers, please see the Moab-to-Slurm wiki:
+         http://wiki.gfdl.noaa.gov/index.php/Moab-to-Slurm_Conversion\n\n
+EOF
+    }
 
     writescript( $tmpsch, $mode, $aScriptout, $aargu, $opt_s );
 } ## end sub filltemplate
