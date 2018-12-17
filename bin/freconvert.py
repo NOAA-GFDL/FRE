@@ -1,23 +1,109 @@
 #!/usr/bin/python
 
-### INITIALIZE XML TREE ###
-
 import xml.etree.ElementTree as ET
 import os
+import re
+import time
 
-#os.chdir('/home/Kristopher.Rand/xml') # -- GFDL workstation location
-#os.chdir("C:\\Users\\Owner\\Documents\\Engility\\GFDL")# Windows Location
-#print(os.getcwd())
-#print("Hello world")
-tree = ET.parse('CM2.5-bronx10.xml')
+os.chdir('/home/Kristopher.Rand/xml') # -- GFDL workstation location
+
+#os.chdir("C:\\Users\\Owner\\Documents\\Engility\\GFDL") # -- Windows Location
+
+
+## --------------- Parse the XML as a Text file first ------------- ##
+
+#Rewrite comment and 'CDATA' blocks as their own temporary tags#
+
+replacement_char = '&lt;'
+
+
+def rreplace(string, old, new, occurrence=1):
+    
+    str_list = string.rsplit(old, occurrence)
+    return new.join(str_list)
+
+
+def strip_char(list_of_strings, char_to_strip='<', char_to_replace='&lt;'):
+    
+    replacement_count_list = []
+    for i in range(len(list_of_strings)):
+        
+        if char_to_strip in list_of_strings[i]:
+            list_of_strings[i] = list_of_strings[i].replace(char_to_strip, replacement_char)
+            replacement_count_list.append(list_of_strings[i].count(replacement_char))
+        else:
+            replacement_count_list.append(0)
+            
+    return list_of_strings, replacement_count_list
+
+
+def write_parsable_xml(xml_string):
+    
+    xml_declaration = '<?xml version="1.0"?>'
+    xml_string = xml_declaration + "\n" + '<root>' + "\n" + xml_string
+    
+    if xml_string.count(xml_declaration) > 1:
+        xml_string = rreplace(xml_string, xml_declaration, '')
+        
+    xml_string = xml_string.replace('&', '&amp;')
+    
+    comment_regex = '<!--(.*?)-->'
+    cdata_regex = '<!\[CDATA\[(.*?)\]\]>'
+    
+    comment_strings, comment_replacements = strip_char(re.findall(comment_regex, xml_string, re.DOTALL), \
+                                                      char_to_replace=replacement_char)
+    cdata_strings, cdata_replacements = strip_char(re.findall(cdata_regex, xml_string, re.DOTALL), \
+                                                  char_to_replace=replacement_char)
+    
+    xml_string = xml_string.replace('<!--', '<xml_comment>')
+    xml_string = xml_string.replace('-->', '</xml_comment>')
+    xml_string = xml_string.replace('<![CDATA[', '<cdata>')
+    xml_string = xml_string.replace(']]>', '</cdata>')
+    
+    comment_opens = [m.start() + 13 for m in re.finditer('<xml_comment>', xml_string)]
+    comment_ends = [m.start() for m in re.finditer('</xml_comment>', xml_string)]
+    
+    diff = 0
+    for i, start in enumerate(comment_opens):
+        
+        xml_string = xml_string.replace(xml_string[start + diff:comment_ends[i] + diff], comment_strings[i])
+        diff += ((len(replacement_char) - 1) * comment_replacements[i])
+        
+    cdata_opens = [m.start() + 7 for m in re.finditer('<cdata>', xml_string)]
+    cdata_ends = [m.start() for m in re.finditer('</cdata>', xml_string)]
+    
+    diff = 0
+    for i, start in enumerate(cdata_opens):
+        
+        xml_string = xml_string.replace(xml_string[start + diff:cdata_ends[i] + diff], cdata_strings[i])
+        diff += (len(replacement_char) - 1) * cdata_replacements[i]
+    
+    xml_string = xml_string + "\n</root>"
+    
+    return xml_string
+    
+    
+with open('CM2.5-bronx10.xml', 'r') as f:
+    input_xml = f.read()
+
+pre_parsed_xml = write_parsable_xml(input_xml)
+
+#with open('pre-parsed_CM2-5.xml', 'w') as g:
+    #g.write(pre_parsed_xml)
+
+
+
+## ----------------------------- END PRE-XML PARSER ----------------------------##
+
+
+## ----------------------------- BEGIN XML PARSING  ----------------------------##
+
+#tree = ET.parse('pre-parsed_CM2-5.xml')
+tree = ET.ElementTree(ET.fromstring(pre_parsed_xml))
 root = tree.getroot()
-#print(tree)
+ET.dump(root)
 
-
-### CHANGE 'cubicToLatLon' TO 'xyInterp' ###
-
-#tree = ET.parse('CM2.5-bronx10.xml')
-#root = tree.getroot()
+""" #1 ON CHANGE FOR XML CONVERTER """
 
 for elem in root.iter('postProcess'):
 
@@ -30,11 +116,12 @@ for elem in root.iter('postProcess'):
             i.set('xyInterp', temp)
             print(i.items())
 
+            
+""" #2 ON CHANGE FOR XML CONVERTER """
+# Also, test for case where <freVersion> tag doesn't exist
 
-### CHANGE THE ATTRIBUTE OF 'freVersion' TO 'Bronx-13' ###
-
-#tree = ET.parse('CM2.5-bronx10.xml')
-#root = tree.getroot()
+tree = ET.parse('CM2.5-bronx10.xml')
+root = tree.getroot()
 
 for prop in root.iter('property'):
     #print(prop)
@@ -44,23 +131,14 @@ for prop in root.iter('property'):
     else:
         pass
 
-
-### INSERT 'freVersion' TAG IF NONE EXIST ###
-
-#tree = ET.parse('CM2.5-bronx10.xml')
-#root = tree.getroot()
-
+#Check platform tags for <freVersion> tag
 for platform in root.iter('platform'):
     if platform.find('freVersion') is None:
         freVersion_elem = ET.SubElement(platform, 'freVersion')
         freVersion_elem.text = '$(FRE_VERSION)'
+    
 
-
-### DELETE 'default' PLATFORMS IF THEY EXIST ###
-
-#tree = ET.parse('CM2.5-bronx10.xml')
-#root = tree.getroot()
-
+#Delete Default Platforms if they exist -- Work in progress
 setup_element = root.find('setup')
 platform_list = root.find('setup').findall('platform')
 
@@ -68,18 +146,14 @@ for platform in platform_list:
     if 'default' in platform.get('name'):
         setup_element.remove(platform)
         
-#platform_list_updated = root.find('setup').findall('platform')
-#for platform in platform_list_updated:
-    #print(platform)
-    #print(platform.get('name'))
-
-"""
-### INSERT RESOURCE TAGS ###
-
-#tree = ET.parse('CM2.5-bronx10.xml')
-#root = tree.getroot()
+platform_list_updated = root.find('setup').findall('platform')
+for platform in platform_list_updated:
+    print(platform)
+    print(platform.get('name'))
 
 
+
+#Insert Resource Tags
 ### This is a longer code element. There will be multiple scenarios that have to be checked.
 ### First, check for the existence of resources tags in the XML.
 ###     If none exist
@@ -390,12 +464,7 @@ for exp in root.iter('experiment'):
 
 #END MAIN 3.3#
 
-
-### INSERT 'publicMetadata' TAGS ###
-
-#tree = ET.parse('CM2.5-bronx10.xml')
-#root = tree.getroot()
-
+#Insert/Modify PublicMetadata Tags
 ### We will ignore any community tags or attributes in the build experiment
 ### Primary attributes seen in many bronx-10 XMLs are for database insertion. These
 ### include the following attributes: "communityProject", "communityModel", "communityModelID",
@@ -637,61 +706,4 @@ for exp in root.iter('experiment'):
 
 
 # END publicMetadata Tags
-
-
-### ADD 'sourceGrid' ATTRIBUTE TO 'postProcess' TAGS WHEN 'xyInterp' ATTRIBUTE IS USED ###
-
-#Choices for sourceGrid#
-# atmos-latlon
-# atmos-cubedsphere
-# land-cubedsphere
-# ocean-tripolar
-"""
-### Output final XML ###
-
-#tree.write('test_converter.xml')
-
-### IMPORTANT ### 
-
-#I need to be able to capture the CDATA tags within the XML and output them
-#back into CDATA tags. ElementTree does not support this. Will need to hack around
-#csh_text = []
-
-tree = ET.parse('CM2.5-bronx10.xml')
-root = tree.getroot()
-
-for csh_block in root.iter('csh'):
-    print(csh_block)
-    csh_text = csh_block.text
-    #new_text = ET.tostring(csh_block)
-    #print(new_text)
-    new_text = "<![CDATA[\n" + csh_text + "\n]]>"
-    csh_block.text = new_text
-    #print(csh_block.text)
-    ET.dump(csh_block)
-    #csh_text.append(csh_block.text)
-
-tree.write('temp.xml')
-
-    
-
-#print(csh_text)
-
-
-with open('temp.xml', 'r') as f:
-    data = f.read()
-    if '&gt;' in data:
-        data = data.replace('&gt;', '>')
-    if '&lt;' in data:
-        data = data.replace('&lt;', '<')
-    if '&amp;' in data:
-        data = data.replace('&amp;', '&')
-    if 'ns0:' in data:
-        data = data.replace('ns0:', 'xi:')
-    if ':ns0' in data:
-        data = data.replace(':ns0', ':xi')
-
-print(data)
-with open('newCM2-5.xml', 'w') as f:
-    f.write(data)
 
