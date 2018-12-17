@@ -4,15 +4,15 @@ import xml.etree.ElementTree as ET
 import os
 import re
 import time
+import argparse
 
-os.chdir('/home/Kristopher.Rand/xml') # -- GFDL workstation location
-
+#os.chdir('/home/Kristopher.Rand/xml') # -- GFDL workstation location
 #os.chdir("C:\\Users\\Owner\\Documents\\Engility\\GFDL") # -- Windows Location
 
 
 ## --------------- Parse the XML as a Text file first ------------- ##
 
-#Rewrite comment and 'CDATA' blocks as their own temporary tags#
+# Rewrite comment and 'CDATA' blocks as their own temporary tags #
 
 replacement_char = '&lt;'
 
@@ -83,10 +83,10 @@ def write_parsable_xml(xml_string):
     return xml_string
     
     
-with open('CM2.5-bronx10.xml', 'r') as f:
-    input_xml = f.read()
+#with open('CM2.5-bronx10.xml', 'r') as f:
+#    input_xml = f.read()
 
-pre_parsed_xml = write_parsable_xml(input_xml)
+#pre_parsed_xml = write_parsable_xml(input_xml)
 
 #with open('pre-parsed_CM2-5.xml', 'w') as g:
     #g.write(pre_parsed_xml)
@@ -99,12 +99,13 @@ pre_parsed_xml = write_parsable_xml(input_xml)
 ## ----------------------------- BEGIN XML PARSING  ----------------------------##
 
 #tree = ET.parse('pre-parsed_CM2-5.xml')
-tree = ET.ElementTree(ET.fromstring(pre_parsed_xml))
-root = tree.getroot()
-ET.dump(root)
+#tree = ET.ElementTree(ET.fromstring(pre_parsed_xml))
+#root = tree.getroot()
+#ET.dump(root)
 
 """ #1 ON CHANGE FOR XML CONVERTER """
 
+"""
 for elem in root.iter('postProcess'):
 
     mylist = elem.findall('component')
@@ -117,9 +118,11 @@ for elem in root.iter('postProcess'):
             print(i.items())
 
             
+
+"""
 """ #2 ON CHANGE FOR XML CONVERTER """
 # Also, test for case where <freVersion> tag doesn't exist
-
+"""
 tree = ET.parse('CM2.5-bronx10.xml')
 root = tree.getroot()
 
@@ -706,4 +709,32 @@ for exp in root.iter('experiment'):
 
 
 # END publicMetadata Tags
+"""
+
+if __name__ == '__main__':
+
+    parser = argparse.ArgumentParser(prog='freconvert', description="A script that \
+                                 converts a user's XML to Bronx-13")
+    parser.add_argument('-o', '--output', help='Destination path of converted XML')
+    parser.add_argument('-v', '--verbosity', help='Increase output verbosity.')
+    parser.add_argument('input_xml', type=str, help='XML to be converted.')
+    args = parser.parse_args()
+
+    input_xml = args.input_xml
+    file_dest = args.output
+
+    with open(input_xml, 'r') as f:
+        input_content = f.read()
+
+    pre_parsed_xml = write_parsable_xml(input_content)
+
+    if file_dest is not None:
+        with open(file_dest, 'w') as g:
+            g.write(pre_parsed_xml)
+    else:
+        input_xml = input_xml.replace('.xml', '')
+        file_dest = os.getcwd() + '/' + input_xml + '_converted.xml'
+        with open(file_dest, 'w') as g:
+            g.write(pre_parsed_xml)
+
 
