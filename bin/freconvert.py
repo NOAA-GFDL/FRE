@@ -607,7 +607,7 @@ class Metadata(object):
 
 def do_metadata_main(etree_root):
 
-    for exp in root.iter('experiment'):
+    for exp in etree_root.iter('experiment'):
 
         if exp.get('name') == 'CM2.5_FLOR_A06_p1_ECDA_2.1Rv3.1_01_MON__YEAR_':
             test = Metadata()
