@@ -1,13 +1,11 @@
 #!/usr/bin/python
 
-import xml.etree.ElementTree as ET
 import os
+import sys
 import re
 import time
 import argparse
-
-#os.chdir('/home/Kristopher.Rand/xml') # -- GFDL workstation location
-#os.chdir("C:\\Users\\Owner\\Documents\\Engility\\GFDL") # -- Windows Location
+import xml.etree.ElementTree as ET
 
 
 ## --------------- Parse the XML as a Text file first ------------- ##
@@ -83,64 +81,51 @@ def write_parsable_xml(xml_string):
     return xml_string
     
     
-#with open('CM2.5-bronx10.xml', 'r') as f:
-#    input_xml = f.read()
-
-#pre_parsed_xml = write_parsable_xml(input_xml)
-
-#with open('pre-parsed_CM2-5.xml', 'w') as g:
-    #g.write(pre_parsed_xml)
-
-
 
 ## ----------------------------- END PRE-XML PARSER ----------------------------##
 
 
 ## ----------------------------- BEGIN XML PARSING  ----------------------------##
 
-#tree = ET.parse('pre-parsed_CM2-5.xml')
-#tree = ET.ElementTree(ET.fromstring(pre_parsed_xml))
-#root = tree.getroot()
-#ET.dump(root)
 
-""" #1 ON CHANGE FOR XML CONVERTER """
+#1 ON CHANGE FOR XML CONVERTER
 
-"""
-for elem in root.iter('postProcess'):
+def modify_components(etree_root):
 
-    mylist = elem.findall('component')
-    #print(mylist)
-    for i in mylist:
-        if 'cubicToLatLon' in i.keys():
-            temp = i.attrib['cubicToLatLon']
-            i.attrib.pop('cubicToLatLon')
-            i.set('xyInterp', temp)
-            print(i.items())
+    for elem in etree_root.iter('postProcess'):
+
+        component_list = elem.findall('component')
+        #print(mylist)
+        for component in component_list:
+            if 'cubicToLatLon' in component.keys():
+                temp = component.attrib['cubicToLatLon']
+                component.attrib.pop('cubicToLatLon')
+                component.set('xyInterp', temp)
 
             
 
-"""
-""" #2 ON CHANGE FOR XML CONVERTER """
+#2 ON CHANGE FOR XML CONVERTER
 # Also, test for case where <freVersion> tag doesn't exist
-"""
-tree = ET.parse('CM2.5-bronx10.xml')
-root = tree.getroot()
 
-for prop in root.iter('property'):
-    #print(prop)
-    if prop.get("name") == "FRE_VERSION" and prop.get("value") != "bronx-13":
-        prop.set("value", "bronx-13")
-        break
-    else:
-        pass
+def do_fre_version(etree_root):
 
-#Check platform tags for <freVersion> tag
-for platform in root.iter('platform'):
-    if platform.find('freVersion') is None:
-        freVersion_elem = ET.SubElement(platform, 'freVersion')
-        freVersion_elem.text = '$(FRE_VERSION)'
+    for prop in etree_root.iter('property'):
+        
+        if prop.get("name") == "FRE_VERSION" and prop.get("value") != "bronx-13":
+            prop.set("value", "bronx-13")
+            break
+        else:
+            pass
+
+    #Check platform tags for <freVersion> tag
+    for platform in etree_root.iter('platform'):
+
+        if not platform.find('freVersion'):
+            freVersion_elem = ET.SubElement(platform, 'freVersion')
+            freVersion_elem.text = '$(FRE_VERSION)'
+
     
-
+"""
 #Delete Default Platforms if they exist -- Work in progress
 setup_element = root.find('setup')
 platform_list = root.find('setup').findall('platform')
@@ -154,7 +139,7 @@ for platform in platform_list_updated:
     print(platform)
     print(platform.get('name'))
 
-
+"""
 
 #Insert Resource Tags
 ### This is a longer code element. There will be multiple scenarios that have to be checked.
@@ -330,77 +315,75 @@ class Resource(object):
     def add_namelist(nml_obj):
         self.nml_list.append(nml_obj)
 
+
 #END CLASSES AND FUNCTIONS
+
 
 ### Begin Main 3.1 ###
 
+def resources_main_1(etree_root):
 
-for exp in root.iter('experiment'):
+    for exp in etree_root.iter('experiment'):
 
-    if exp.get("name") == 'CM2.5_FLOR_A06_p1_ECDA_2.1Rv3.1_01_MON__YEAR_':
-        for nml in exp.iter('namelist'):
+        if exp.get("name") == 'CM2.5_FLOR_A06_p1_ECDA_2.1Rv3.1_01_MON__YEAR_':
+            for nml in exp.iter('namelist'):
 
-            nml_name = nml.get("name")
-            print("\t\t\t --- NAMELIST " + nml_name + " BEFORE MODIFICATION ---" )
-            print(nml.text)
-            modify_namelist(nml, nml_name)
-            print("\t\t\t --- NAMELIST " + nml_name + " AFTER MODIFICATION ---")
-            print(nml.text)
-
-
+                nml_name = nml.get("name")
+                modify_namelist(nml, nml_name)
 
 
 ### End Main 3.1 ###
 
-
 ### Begin Main 3.2 ###
 
-nmls_to_edit = ["coupler_nml", "fv_core_nml", "ice_model_nml", "land_model_nml", "ocean_model_nml"]
-#key_value_relationship = {"atm": "atm", "ice": "ice", "land": "lnd", "ocean", "ocn"}
+def resources_main_2(etree_root):
+    nmls_to_edit = ["coupler_nml", "fv_core_nml", "ice_model_nml", "land_model_nml", "ocean_model_nml"]
+    #key_value_relationship = {"atm": "atm", "ice": "ice", "land": "lnd", "ocean", "ocn"}
 
+    for exp in etree_root.iter('experiment'):
 
-for exp in root.iter('experiment'):
+        #resource_container = Resource() #1 resource object per experiment. It will hold all necessary resource values per exp
+        if exp.get("name") == 'CM2.5_FLOR_A06_p1_ECDA_2.1Rv3.1_01_MON__YEAR_':
+            resrc_container = Resource()
+            nml_container = Namelist() #1 namelist object per experiment. It will hold all necessary namelist values per key.
+            for nml in exp.iter('namelist'):
 
-    #resource_container = Resource() #1 resource object per experiment. It will hold all necessary resource values per exp
-    if exp.get("name") == 'CM2.5_FLOR_A06_p1_ECDA_2.1Rv3.1_01_MON__YEAR_':
-        resrc_container = Resource()
-        nml_container = Namelist() #1 namelist object per experiment. It will hold all necessary namelist values per key.
-        for nml in exp.iter('namelist'):
+                nml_name = nml.get("name")
+                if nml_name in nmls_to_edit:
+                    nml_container.name = nml_name
+                    nml_dict = nml_to_dict(nml)
 
-            nml_name = nml.get("name")
-            if nml_name in nmls_to_edit:
-                nml_container.name = nml_name
-                nml_dict = nml_to_dict(nml)
+                    if nml_name == 'coupler_nml':
+                        nml_container.set_var(nml_dict, "atmos_npes")
+                        nml_container.set_var(nml_dict, "atmos_nthreads")
+                        nml_container.set_var(nml_dict, "ocean_npes")
+                        nml_container.set_var(nml_dict, "ocean_nthreads")
+                        nml_container.set_var(nml_dict, "atmos_mask_table")
 
-                if nml_name == 'coupler_nml':
-                    nml_container.set_var(nml_dict, "atmos_npes")
-                    nml_container.set_var(nml_dict, "atmos_nthreads")
-                    nml_container.set_var(nml_dict, "ocean_npes")
-                    nml_container.set_var(nml_dict, "ocean_nthreads")
-                    nml_container.set_var(nml_dict, "atmos_mask_table")
-                elif nml_name == 'fv_core_nml':
-                    nml_container.set_var(nml_dict, "layout", set_layout=True, layout_group="atm")
-                    nml_container.set_var(nml_dict, "io_layout", set_io_layout=True, io_layout_group="atm")
-                elif nml_name == 'ice_model_nml':
-                    nml_container.set_var(nml_dict, "layout", set_layout=True, layout_group="ice")
+                    elif nml_name == 'fv_core_nml':
+                        nml_container.set_var(nml_dict, "layout", set_layout=True, layout_group="atm")
+                        nml_container.set_var(nml_dict, "io_layout", set_io_layout=True, io_layout_group="atm")
 
-                    nml_container.set_var(nml_dict, "io_layout", set_io_layout=True, io_layout_group="ice")
-                    nml_container.set_var(nml_dict, "ice_mask_table")
-                elif nml_name == 'land_model_nml':
-                    nml_container.set_var(nml_dict, "layout", set_layout=True, layout_group="lnd")
-                    nml_container.set_var(nml_dict, "io_layout", set_io_layout=True, io_layout_group="lnd")
-                    nml_container.set_var(nml_dict, "land_mask_table")
-                elif nml_name == 'ocean_model_nml':
-                    nml_container.set_var(nml_dict, "layout", set_layout=True, layout_group="ocn")
-                    nml_container.set_var(nml_dict, "io_layout", set_io_layout=True, io_layout_group="ocn")
-                    nml_container.set_var(nml_dict, "ocean_mask_table")
-                else:
-                    pass
+                    elif nml_name == 'ice_model_nml':
+                        nml_container.set_var(nml_dict, "layout", set_layout=True, layout_group="ice")
+                        nml_container.set_var(nml_dict, "io_layout", set_io_layout=True, io_layout_group="ice")
+                        nml_container.set_var(nml_dict, "ice_mask_table")
 
-        break #Leaves the loop after getting through the experiment conditional
+                    elif nml_name == 'land_model_nml':
+                        nml_container.set_var(nml_dict, "layout", set_layout=True, layout_group="lnd")
+                        nml_container.set_var(nml_dict, "io_layout", set_io_layout=True, io_layout_group="lnd")
+                        nml_container.set_var(nml_dict, "land_mask_table")
 
-print("\n\n")
-nml_container.print_vars()
+                    elif nml_name == 'ocean_model_nml':
+                        nml_container.set_var(nml_dict, "layout", set_layout=True, layout_group="ocn")
+                        nml_container.set_var(nml_dict, "io_layout", set_io_layout=True, io_layout_group="ocn")
+                        nml_container.set_var(nml_dict, "ocean_mask_table")
+
+                    else:
+                        pass
+
+            break #Leaves the loop after getting through the experiment conditional
+
 
 ### End Main 3.2 ###
 
@@ -409,65 +392,63 @@ nml_container.print_vars()
 
 ###CREATE RESOURCE TAGS###
 
-for exp in root.iter('experiment'):
-    if exp.get('name') == 'CM2.5_FLOR_A06_p1_ECDA_2.1Rv3.1_01_MON__YEAR_':
-        try:
-            exp.find('runtime').find('production').attrib.pop('npes')
-        except KeyError as e:
-            pass
-        
-        try:
-            exp.find('runtime').find('production').attrib.pop('runTime')
-        except KeyError as e:
-            pass
-        
-        try:
-            exp.find('runtime').find('production').find('segment').attrib.pop('runTime')
-        except KeyError as e:
-            pass
-        
-        print(exp.find('runtime').find('production').attrib)
-        print(exp.find('runtime').find('production').find('segment').attrib)
+    for exp in etree_root.iter('experiment'):
 
-        #IGNORING attributes that don't exist, like mask_table and ice/land ranks and threads.
-        #Need to build in exceptions for attributes that don't exist but need checking.
-        if exp.find('runtime').find('production').find('resources') is None:
-            print("\nResource content: " + str(exp.find('resources')))
-            print("\nBefore resource line\n")
-            resource = ET.SubElement(exp.find('runtime').find('production'), 'resources', \
-                                    attrib={'site': 'ncrc3', 'jobWallclock': '10:00:00', \
+        if exp.get('name') == 'CM2.5_FLOR_A06_p1_ECDA_2.1Rv3.1_01_MON__YEAR_':
+            try:
+                exp.find('runtime').find('production').attrib.pop('npes')
+            except KeyError as e:
+                pass
+        
+            try:
+                exp.find('runtime').find('production').attrib.pop('runTime')
+            except KeyError as e:
+                pass
+        
+            try:
+                exp.find('runtime').find('production').find('segment').attrib.pop('runTime')
+            except KeyError as e:
+                pass
+        
 
+            #IGNORING attributes that don't exist, like mask_table and ice/land ranks and threads.
+            #Need to build in exceptions for attributes that don't exist but need checking.
+            if not exp.find('runtime').find('production').find('resources'):
+                
+                resource = ET.SubElement(exp.find('runtime').find('production'), 'resources', \
+                                         attrib={'site': 'ncrc3', 'jobWallclock': '10:00:00', \
                                          'segRuntime': '10:00:00'})
-            atm = ET.SubElement(exp.find('runtime').find('production').find('resources'), 'atm', \
-                                attrib={'ranks': nml_container.get_var('atmos_npes'), \
-                                    'threads': nml_container.get_var('atmos_nthreads'), \
-                                    'layout': nml_container.get_var('atm_layout'), \
-                                    'io_layout': nml_container.get_var('atm_io_layout')})
 
-            ocn = ET.SubElement(exp.find('runtime').find('production').find('resources'), 'ocn', \
-                                attrib={'ranks': nml_container.get_var('ocean_npes'), \
-                                   'layout': nml_container.get_var('ocn_layout'), \
-                                   'io_layout': nml_container.get_var('ocn_io_layout')})
+                atm = ET.SubElement(exp.find('runtime').find('production').find('resources'), 'atm', \
+                                    attrib={'ranks': nml_container.get_var('atmos_npes'), \
+                                            'threads': nml_container.get_var('atmos_nthreads'), \
+                                            'layout': nml_container.get_var('atm_layout'), \
+                                            'io_layout': nml_container.get_var('atm_io_layout')})
 
-            lnd = ET.SubElement(exp.find('runtime').find('production').find('resources'), 'lnd', \
-                                attrib={'layout': nml_container.get_var('lnd_layout'), \
-                                   'io_layout': nml_container.get_var('lnd_io_layout')})
+                ocn = ET.SubElement(exp.find('runtime').find('production').find('resources'), 'ocn', \
+                                    attrib={'ranks': nml_container.get_var('ocean_npes'), \
+                                            'layout': nml_container.get_var('ocn_layout'), \
+                                            'io_layout': nml_container.get_var('ocn_io_layout')})
 
-            ice = ET.SubElement(exp.find('runtime').find('production').find('resources'), 'ice', \
-                                attrib={'layout': nml_container.get_var('ice_layout'), \
-                                   'io_layout': nml_container.get_var('ice_io_layout')})
+                lnd = ET.SubElement(exp.find('runtime').find('production').find('resources'), 'lnd', \
+                                    attrib={'layout': nml_container.get_var('lnd_layout'), \
+                                            'io_layout': nml_container.get_var('lnd_io_layout')})
 
-        else:
-            pass
+                ice = ET.SubElement(exp.find('runtime').find('production').find('resources'), 'ice', \
+                                    attrib={'layout': nml_container.get_var('ice_layout'), \
+                                            'io_layout': nml_container.get_var('ice_io_layout')})
+
+            else:
+                pass
+
+            break #Exit experiment loop to save resources (temporary)
         
-        print(exp.find('runtime').find('production').find('resources'))
-        
-
-        print(ET.dump(exp.find('runtime')))
 
 #END MAIN 3.3#
 
+
 #Insert/Modify PublicMetadata Tags
+
 ### We will ignore any community tags or attributes in the build experiment
 ### Primary attributes seen in many bronx-10 XMLs are for database insertion. These
 ### include the following attributes: "communityProject", "communityModel", "communityModelID",
@@ -507,6 +488,7 @@ for exp in root.iter('experiment'):
 #   There are 3 tiers of database entry. First tier in bronx-10 with the community tags.
 #   Second tier is bronx-11 with publicMetadata tags, but outdated tags.
 #   Third tier is Bronx-12+ with correct publicMetadata tags in place.
+
 
 class Metadata(object):
 
@@ -584,10 +566,6 @@ class Metadata(object):
 
             return self.conversion_table_bronx_11[attrib]
 
-    #def sanity_check(self, experiment_element):
-    #
-    #    try:
-
 
     def delete_attributes(self, element):
 
@@ -617,124 +595,137 @@ class Metadata(object):
 
             else:
                 value = self.get_value_from_tag(tag)
+
                 if value is not None:
-
                     meta_sub_element = ET.SubElement(new_metadata, tag) #Create new tag if content exists.
-
                     meta_sub_element.text = value
+
                 else:
                     pass #Don't create any tags if value is None.
 
+#End Class Metadata
 
+def do_metadata_main(etree_root):
 
-#--MAIN--#
+    for exp in root.iter('experiment'):
 
-for exp in root.iter('experiment'):
+        if exp.get('name') == 'CM2.5_FLOR_A06_p1_ECDA_2.1Rv3.1_01_MON__YEAR_':
+            test = Metadata()
 
-    if exp.get('name') == 'CM2.5_FLOR_A06_p1_ECDA_2.1Rv3.1_01_MON__YEAR_':
-        test = Metadata()
+            experiment_name = exp.get('name')
 
-        experiment_name = exp.get('name')
+            #Sanity check -- make sure no publicMetadata tags are intermingled with description attributes,
+            #scenario tags, or communityComment tags
 
-        #Sanity check -- make sure no publicMetadata tags are intermingled with description attributes,
-        #scenario tags, or communityComment tags
+            if (exp.find('publicMetadata') is not None) and ((exp.find('scenario') is not None) \
+            or (exp.find('communityComment') is not None) or (exp.find('description').attrib != {})):
 
-        if (exp.find('publicMetadata') is not None) and ((exp.find('scenario') is not None) \
-        or (exp.find('communityComment') is not None) or (exp.find('description').attrib != {})):
-
-            print("\nCondtion truth table\n\n")
+                #print("\nCondtion truth table\n\n")
             
-            print("publicMetadata: " + str(exp.find('publicMetadata')) + "\n")
-            print("scenario: " + str(exp.find('scenario')) + "\n")
-            print("communityComment: " + str(exp.find('communityComment')) + "\n")
-            print("description: " + str(exp.find('description')) + "\n")
+                #print("publicMetadata: " + str(exp.find('publicMetadata')) + "\n")
+                #print("scenario: " + str(exp.find('scenario')) + "\n")
+                #print("communityComment: " + str(exp.find('communityComment')) + "\n")
+                #print("description: " + str(exp.find('description')) + "\n")
             
-            print("ERROR! You have a mix of Bronx-10 and Bronx-11/12 metadata elements")
-            print("Skipping experiment %s" % experiment_name)
-            continue
+                print("ERROR! You have a mix of Bronx-10 and Bronx-11/12 metadata elements")
+                print("Skipping experiment %s" % experiment_name)
+                continue
 
         #---------------Bronx-11 metadata checks--------------#
 
-        if exp.find('publicMetadata') is not None:
-            metadata_head = exp.find('publicMetadata')
-            for elem in metadata_head.iter():
-                if elem.tag == 'publicMetadata':
-                    continue
-                else:
-                    print("Old tag: " + elem.tag)
-                    elem.tag = test.convert_to_tag(elem.tag, bronx_version=11)
-                    print("New tag: " + elem.tag)
+            if exp.find('publicMetadata') is not None:
+                metadata_head = exp.find('publicMetadata')
+                for elem in metadata_head.iter():
 
-            print("\nHere's the new metadata section\n")
+                    if elem.tag == 'publicMetadata':
+                        continue
+                    else:
+                        #print("Old tag: " + elem.tag)
+                        elem.tag = test.convert_to_tag(elem.tag, bronx_version=11)
+                        #print("New tag: " + elem.tag)
 
-            ET.dump(metadata_head)
-            continue #No need to do Bronx-10 metadata checks. We already did that above. Go to next experiment.
+                #print("\nHere's the new metadata section\n")
+
+                #ET.dump(metadata_head)
+                continue #No need to do Bronx-10 metadata checks. We already did that above. Go to next experiment.
 
         #------------Bronx-10 metadata checks------------#
 
 
-        if exp.find('scenario') is not None:
-            scenario_element = exp.find('scenario')
-            print(scenario_element.attrib)
-            print("\n")
-            test.set_tags_from_element(scenario_element)
-            test.delete_attributes(scenario_element)
-            exp.remove(scenario_element)
-            #print(scenario_element.attrib)
-            print("After deletion: " + str(scenario_element.attrib))
+            if exp.find('scenario') is not None:
+                scenario_element = exp.find('scenario')
+                #print(scenario_element.attrib)
+                #print("\n")
+                test.set_tags_from_element(scenario_element)
+                test.delete_attributes(scenario_element)
+                exp.remove(scenario_element)
+                #print(scenario_element.attrib)
+                #print("After deletion: " + str(scenario_element.attrib))
 
 
-        if exp.find('description') is not None:
-            description_element = exp.find('description')
-            print(description_element.attrib)
-            print("\n")
-            test.set_tags_from_element(description_element)
-            test.delete_attributes(description_element)
-            print("After deletion: " + str(description_element.attrib))
-            print("Description text: " + description_element.text)
+            if exp.find('description') is not None:
+                description_element = exp.find('description')
+                #print(description_element.attrib)
+                #print("\n")
+                test.set_tags_from_element(description_element)
+                test.delete_attributes(description_element)
+                #print("After deletion: " + str(description_element.attrib))
+                #print("Description text: " + description_element.text)
 
-        if exp.find('communityComment') is not None:
-            comment_element = exp.find('communityComment')
-            test.set_comment(comment_element)
-            exp.remove(comment_element)
+            if exp.find('communityComment') is not None:
+                comment_element = exp.find('communityComment')
+                test.set_comment(comment_element)
+                exp.remove(comment_element)
 
 
-        test.print_metadata()
-        print("\nBelow is the new metadata xml section\n\n")
+            #test.print_metadata()
+            #print("\nBelow is the new metadata xml section\n\n")
 
-        test.build_metadata_xml(exp)
+            test.build_metadata_xml(exp)
 
-        ET.dump(exp.find('publicMetadata'))
-        continue
+            #ET.dump(exp.find('publicMetadata'))
+            #continue
+            break #DEBUG. We will eventually do a continue statement here.
 
 
 # END publicMetadata Tags
-"""
+
 
 if __name__ == '__main__':
 
-    parser = argparse.ArgumentParser(prog='freconvert', description="A script that \
-                                 converts a user's XML to Bronx-13")
-    parser.add_argument('-o', '--output', help='Destination path of converted XML')
+    parser = argparse.ArgumentParser(prog='freconvert', description="A script that converts a user's XML to Bronx-13")
+    parser.add_argument('-o', '--output_xml', help='Destination path of converted XML')
     parser.add_argument('-v', '--verbosity', help='Increase output verbosity.')
-    parser.add_argument('input_xml', type=str, help='XML to be converted.')
+    parser.add_argument('-x', '--input_xml', type=str, help='Path of XML to be converted.')
     args = parser.parse_args()
 
     input_xml = args.input_xml
-    file_dest = args.output
+    file_dest = args.output_xml
 
     with open(input_xml, 'r') as f:
         input_content = f.read()
 
     pre_parsed_xml = write_parsable_xml(input_content)
+    tree = ET.ElementTree(ET.fromstring(pre_parsed_xml))
+    root = tree.getroot()
 
+    # PARSE AND MODIFY ELEMENTS #
+
+    modify_components(root) # xyInterp modification
+    do_fre_version(root)    # freVersion checking
+    resources_main_1(root)  # Resource Tags - part 1 - change namelists
+    resources_main_2(root)  # Resource Tags - part 2 - create resource tags
+    do_metadata_main(root)  # Create and/or modify metadata tags
+    
     if file_dest is not None:
-        with open(file_dest, 'w') as g:
-            g.write(pre_parsed_xml)
+        tree.write(file_dest)
+
     else:
         input_xml = input_xml.replace('.xml', '')
         file_dest = os.getcwd() + '/' + input_xml + '_converted.xml'
-        with open(file_dest, 'w') as g:
-            g.write(pre_parsed_xml)
+        tree.write(file_dest)
 
+    #LATER ON: Post-XML parser. We will need to turn comments and CDATA tags
+    #          back into their original form.
 
+#END SCRIPT   
