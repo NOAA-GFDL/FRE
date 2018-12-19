@@ -35,6 +35,29 @@ def strip_char(list_of_strings, char_to_strip='<', char_to_replace='&lt;'):
     return list_of_strings, replacement_count_list
 
 
+def points_to_f2(xml_string):
+
+    soft_filesystem_pointers = {'$CDATA': '$PDATA/gfdl', '${CDATA}': '$PDATA/gfdl', 
+                                '$CTMP': '$SCRATCH', '${CTMP}': '$SCRATCH', 
+                                '$CPERM': '$DEV', '${CPERM}': '$DEV'}
+
+    hard_filesystem_pointers = {'/lustre/f1/$USER': '/lustre/f2/scratch/$USER',
+                                '/lustre/f1/unswept': '/lustre/f2/dev',
+                                '/lustre/f1/pdata': '/lustre/f2/pdata/gfdl'}
+
+    for f1_soft_pointer, f2_soft_pointer in soft_filesystem_pointers.items():
+   
+        xml_string = xml_string.replace(f1_soft_pointer, f2_soft_pointer)
+
+    for f1_hard_pointer, f2_hard_pointer in hard_filesystem_pointers.items():
+
+        xml_string = xml_string.replace(f1_hard_pointer, f2_hard_pointer)
+
+    xml_string = xml_string.replace('lustre/f1', 'lustre/f2/dev')
+
+    return xml_string
+
+
 def write_parsable_xml(xml_string):
     
     xml_declaration = '<?xml version="1.0"?>'
@@ -58,6 +81,8 @@ def write_parsable_xml(xml_string):
     xml_string = xml_string.replace('<![CDATA[', '<cdata>')
     xml_string = xml_string.replace(']]>', '</cdata>')
     
+    xml_string = points_to_f2(xml_string)
+
     comment_opens = [m.start() + 13 for m in re.finditer('<xml_comment>', xml_string)]
     comment_ends = [m.start() for m in re.finditer('</xml_comment>', xml_string)]
     
@@ -715,9 +740,10 @@ if __name__ == '__main__':
         input_content = f.read()
 
     pre_parsed_xml = write_parsable_xml(input_content)
+
     tree = ET.ElementTree(ET.fromstring(pre_parsed_xml))
     root = tree.getroot()
-
+   
     # PARSE AND MODIFY ELEMENTS #
 
     modify_components(root) # xyInterp modification
