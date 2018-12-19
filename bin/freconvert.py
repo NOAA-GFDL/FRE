@@ -210,7 +210,8 @@ def nml_to_dict(nml):
 
 def get_str_list(nml):
 
-    str_list = nml.text.replace(' ', '').splitlines()
+    #str_list = nml.text.replace(' ', '').splitlines()
+    str_list = nml.text.splitlines()
     return str_list
 
 
@@ -233,26 +234,37 @@ def get_new_nml_str(nml_name, old_nml_str_list):
     for index, substr in enumerate(old_nml_str_list):
 
         #Checking only the string to the LEFT of the equal sign
-        str_to_check = substr[:substr.find('=')]
+        #str_to_check = substr[:substr.find('=')]
+        #print(substr)
+        #print(old_nml_str_list)
+        str_to_check = re.search('\w+|^\s*$', substr).group()
 
         if str_to_check not in configs_to_edit:
             continue
 
         #Anything right of the '=' sign will be replaced
         if nml_name == 'coupler_nml':
+            coupler_dict = {'atmos_npes': '$atm_ranks', 'atmos_nthreads': '$atm_threads',
+                            'atmos_mask_table': '$atm_mask_table', 'ocean_npes': '$ocn_ranks',
+                            'ocean_nthreads': '$ocn_threads'}
+            for old_str, new_str in coupler_dict.items():
+            
+                if str_to_check == old_str:
+                    old_nml_str_list[index] = re.sub('(?<=\=).*', new_str, substr)
+                    break 
 
-            if str_to_check == 'atmos_npes':
-                old_nml_str_list[index] = substr.replace(substr[substr.find('=')+1:], '$atm_ranks')
-            elif str_to_check == 'atmos_nthreads':
-                old_nml_str_list[index] = substr.replace(substr[substr.find('=')+1:], '$atm_threads')
-            elif str_to_check == 'atmos_mask_table':
-                old_nml_str_list[index] = substr.replace(substr[substr.find('=')+1:], '$atm_mask_table')
-            elif str_to_check == 'ocean_npes':
-                old_nml_str_list[index] = substr.replace(substr[substr.find('=')+1:], '$ocn_ranks')
-            elif str_to_check == 'ocean_nthreads':
-                old_nml_str_list[index] = substr.replace(substr[substr.find('=')+1:], '$ocn_threads')
-            else:
-                pass
+            #if str_to_check == 'atmos_npes':
+            #    old_nml_str_list[index] = substr.replace(substr[substr.find('=')+1:], '$atm_ranks')
+            #elif str_to_check == 'atmos_nthreads':
+            #    old_nml_str_list[index] = substr.replace(substr[substr.find('=')+1:], '$atm_threads')
+            #elif str_to_check == 'atmos_mask_table':
+            #    old_nml_str_list[index] = substr.replace(substr[substr.find('=')+1:], '$atm_mask_table')
+            #elif str_to_check == 'ocean_npes':
+            #    old_nml_str_list[index] = substr.replace(substr[substr.find('=')+1:], '$ocn_ranks')
+            #elif str_to_check == 'ocean_nthreads':
+            #    old_nml_str_list[index] = substr.replace(substr[substr.find('=')+1:], '$ocn_threads')
+            #else:
+            #    pass
 
         elif nml_name == 'fv_core_nml':
             if str_to_check == 'layout':
@@ -309,10 +321,10 @@ class Namelist(object):
         self.nml_vars = {}
 
 
-    def set_var(self, nml_dict, nml_name, set_layout=False, set_io_layout=False, layout_group="", io_layout_group=""):
+    def set_var(self, nml_dict, nml_field, set_layout=False, set_io_layout=False, layout_group="", io_layout_group=""):
 
         try:
-            value = nml_dict[nml_name]
+            value = nml_dict[nml_field]
 
         except KeyError as e:
             return 
@@ -330,13 +342,13 @@ class Namelist(object):
  
         #Set up class dictionary
         if set_layout:
-            self.nml_vars[layout_group + "_" + nml_name] = value
+            self.nml_vars[layout_group + "_" + nml_field] = value
 
         elif set_io_layout:
-            self.nml_vars[io_layout_group + "_" + nml_name] = value
+            self.nml_vars[io_layout_group + "_" + nml_field] = value
 
         else:
-            self.nml_vars[nml_name] = value
+            self.nml_vars[nml_field] = value
 
 
     def print_vars(self):
@@ -347,7 +359,8 @@ class Namelist(object):
 
 
     def get_var(self, var):
-
+        
+        #print(self.nml_vars)
         return self.nml_vars[var]
 
 
@@ -371,6 +384,17 @@ class Namelist(object):
 
 ### Begin Main 3.2 ###
 
+def strip_dict_whitespace(nml_dict):
+
+    new_dict = {}
+    for key, value in nml_dict.items():
+    
+        new_key = key.replace(' ', '')
+        new_value = value.replace(' ', '')
+        new_dict[new_key] = new_value
+
+    return new_dict
+
 def do_resources_main(etree_root):
 
     nmls_to_edit = ["coupler_nml", "fv_core_nml", "ice_model_nml", "land_model_nml", "ocean_model_nml"]
@@ -386,6 +410,7 @@ def do_resources_main(etree_root):
                 if nml_name in nmls_to_edit:
                     nml_container.name = nml_name
                     nml_dict = nml_to_dict(nml)
+                    nml_dict = strip_dict_whitespace(nml_dict)
 
                     if nml_name == 'coupler_nml':
                         nml_container.set_var(nml_dict, "atmos_npes")
