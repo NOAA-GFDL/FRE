@@ -175,8 +175,8 @@ def nml_to_dict(nml):
     str_list = get_str_list(nml)
     nml_dict = {}
     for substr in str_list:
+            
         key = substr[:substr.find('=')]
-
         value = substr[substr.find('=')+1:]
         nml_dict[key] = value
 
@@ -211,7 +211,6 @@ def get_new_nml_str(nml_name, old_nml_str_list):
         str_to_check = substr[:substr.find('=')]
 
         if str_to_check not in configs_to_edit:
-            #print(substr)
             continue
 
         #Anything right of the '=' sign will be replaced
@@ -222,7 +221,7 @@ def get_new_nml_str(nml_name, old_nml_str_list):
             elif str_to_check == 'atmos_nthreads':
                 old_nml_str_list[index] = substr.replace(substr[substr.find('=')+1:], '$atm_threads')
             elif str_to_check == 'atmos_mask_table':
-                old_nml_str_list[index] = substr.replace(substr[substr.find('=')+1:], '$atm_mask_table'    )
+                old_nml_str_list[index] = substr.replace(substr[substr.find('=')+1:], '$atm_mask_table')
             elif str_to_check == 'ocean_npes':
                 old_nml_str_list[index] = substr.replace(substr[substr.find('=')+1:], '$ocn_ranks')
             elif str_to_check == 'ocean_nthreads':
@@ -275,45 +274,56 @@ def get_new_nml_str(nml_name, old_nml_str_list):
     final_str = '\n'.join(old_nml_str_list)
     return final_str
 
-#END FUNCTION: get_new_nml_str
 
 ###3.2 - EXTRACT VALUES FROM NAMELISTS###
 
 class Namelist(object):
+
     def __init__(self):
+
         self.nml_vars = {}
 
-    def set_var(self, nml_dict, nml_name, set_layout=False, set_io_layout=False, layout_group="", io_layout_group=""):
-        try:
-            if set_layout == True:
-                self.nml_vars[layout_group + "_" + nml_name] = nml_dict[nml_name]
-            elif set_io_layout == True:
-                self.nml_vars[io_layout_group + "_" + nml_name] = nml_dict[nml_name]
-            else:
-                self.nml_vars[nml_name] = nml_dict[nml_name]
 
+    def set_var(self, nml_dict, nml_name, set_layout=False, set_io_layout=False, layout_group="", io_layout_group=""):
+
+        try:
+            value = nml_dict[nml_name]
 
         except KeyError as e:
-            pass
+            return 
+
+        #Next 3 'if' statements quality check the value (namelist comments and extra commas)
+        if '!' in value:
+            exc_idx = string.index('!')
+            value = value[:exc_idx]
+
+        if value.count(',') > 1:
+            value = rreplace(value, ',', '', occurrence=value.count - 1)
+
+        if value[-1] == ',':
+            value = rreplace(value, ',', '')
+ 
+        #Set up class dictionary
+        if set_layout:
+            self.nml_vars[layout_group + "_" + nml_name] = value
+
+        elif set_io_layout:
+            self.nml_vars[io_layout_group + "_" + nml_name] = value
+
+        else:
+            self.nml_vars[nml_name] = value
+
 
     def print_vars(self):
+
         for key, value in self.nml_vars.items():
+
             print("%s = %s" % (key, value))
+
 
     def get_var(self, var):
 
         return self.nml_vars[var]
-
-
-class Resource(object):
-    def __init__(self):
-        self.nml_list = []
-        self.jobWallclock = ""
-        self.segRuntime = ""
-        self.site = ""
-
-    def add_namelist(nml_obj):
-        self.nml_list.append(nml_obj)
 
 
 #END CLASSES AND FUNCTIONS
@@ -321,30 +331,29 @@ class Resource(object):
 
 ### Begin Main 3.1 ###
 
-def resources_main_1(etree_root):
-
-    for exp in etree_root.iter('experiment'):
-
-        if exp.get("name") == 'CM2.5_FLOR_A06_p1_ECDA_2.1Rv3.1_01_MON__YEAR_':
-            for nml in exp.iter('namelist'):
-
-                nml_name = nml.get("name")
-                modify_namelist(nml, nml_name)
-
-
+#def resources_main_1(etree_root):
+#
+#    for exp in etree_root.iter('experiment'):
+#
+#        if True: #exp.get("name") == 'CM2.5_FLOR_A06_p1_ECDA_2.1Rv3.1_01_MON__YEAR_':
+#            for nml in exp.iter('namelist'):
+#
+#                nml_name = nml.get("name")
+#                modify_namelist(nml, nml_name)
+#
+#
 ### End Main 3.1 ###
 
 ### Begin Main 3.2 ###
 
-def resources_main_2(etree_root):
+def do_resources_main(etree_root):
+
     nmls_to_edit = ["coupler_nml", "fv_core_nml", "ice_model_nml", "land_model_nml", "ocean_model_nml"]
-    #key_value_relationship = {"atm": "atm", "ice": "ice", "land": "lnd", "ocean", "ocn"}
 
     for exp in etree_root.iter('experiment'):
 
-        #resource_container = Resource() #1 resource object per experiment. It will hold all necessary resource values per exp
-        if exp.get("name") == 'CM2.5_FLOR_A06_p1_ECDA_2.1Rv3.1_01_MON__YEAR_':
-            resrc_container = Resource()
+        subelements = [elem.tag for elem in exp.iter() if elem is not exp]
+        if not 'compile' in subelements: 
             nml_container = Namelist() #1 namelist object per experiment. It will hold all necessary namelist values per key.
             for nml in exp.iter('namelist'):
 
@@ -382,7 +391,7 @@ def resources_main_2(etree_root):
                     else:
                         pass
 
-            break #Leaves the loop after getting through the experiment conditional
+                modify_namelist(nml, nml_name)
 
 
 ### End Main 3.2 ###
@@ -392,28 +401,26 @@ def resources_main_2(etree_root):
 
 ###CREATE RESOURCE TAGS###
 
-    for exp in etree_root.iter('experiment'):
-
-        if exp.get('name') == 'CM2.5_FLOR_A06_p1_ECDA_2.1Rv3.1_01_MON__YEAR_':
             try:
                 exp.find('runtime').find('production').attrib.pop('npes')
-            except KeyError as e:
+            except (AttributeError, KeyError) as e:
                 pass
         
             try:
                 exp.find('runtime').find('production').attrib.pop('runTime')
-            except KeyError as e:
+            except (AttributeError, KeyError) as e:
                 pass
         
             try:
                 exp.find('runtime').find('production').find('segment').attrib.pop('runTime')
-            except KeyError as e:
+            except (AttributeError, KeyError) as e:
                 pass
         
 
             #IGNORING attributes that don't exist, like mask_table and ice/land ranks and threads.
             #Need to build in exceptions for attributes that don't exist but need checking.
-            if not exp.find('runtime').find('production').find('resources'):
+
+            if True: #exp.find('runtime').find('production').find('resources'):
                 
                 resource = ET.SubElement(exp.find('runtime').find('production'), 'resources', \
                                          attrib={'site': 'ncrc3', 'jobWallclock': '10:00:00', \
@@ -438,10 +445,9 @@ def resources_main_2(etree_root):
                                     attrib={'layout': nml_container.get_var('ice_layout'), \
                                             'io_layout': nml_container.get_var('ice_io_layout')})
 
-            else:
-                pass
+        else: #Don't do Build experiment
+            pass
 
-            break #Exit experiment loop to save resources (temporary)
         
 
 #END MAIN 3.3#
@@ -609,9 +615,9 @@ def do_metadata_main(etree_root):
 
     for exp in etree_root.iter('experiment'):
 
-        if exp.get('name') == 'CM2.5_FLOR_A06_p1_ECDA_2.1Rv3.1_01_MON__YEAR_':
+        subelements = [elem.tag for elem in exp.iter() if elem is not exp]
+        if not 'compile' in subelements: 
             test = Metadata()
-
             experiment_name = exp.get('name')
 
             #Sanity check -- make sure no publicMetadata tags are intermingled with description attributes,
@@ -683,13 +689,16 @@ def do_metadata_main(etree_root):
 
             test.build_metadata_xml(exp)
 
-            #ET.dump(exp.find('publicMetadata'))
-            #continue
-            break #DEBUG. We will eventually do a continue statement here.
+            continue
+
+        else: #Don't do Build Experiment
+            pass
 
 
 # END publicMetadata Tags
 
+
+# MAIN #
 
 if __name__ == '__main__':
 
@@ -713,8 +722,7 @@ if __name__ == '__main__':
 
     modify_components(root) # xyInterp modification
     do_fre_version(root)    # freVersion checking
-    resources_main_1(root)  # Resource Tags - part 1 - change namelists
-    resources_main_2(root)  # Resource Tags - part 2 - create resource tags
+    do_resources_main(root)    # Resource Tags - change namelists and create <resources>
     do_metadata_main(root)  # Create and/or modify metadata tags
     
     if file_dest is not None:
