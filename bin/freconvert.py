@@ -747,11 +747,54 @@ def do_metadata_main(etree_root):
 
 # END publicMetadata Tags
 
+## ----------------------------- END XML PARSING  ----------------------------##
 
-# MAIN #
+## ----------------------------- BEGIN POST-XML PARSING  ----------------------------##
+
+def write_final_xml(xml_string):
+
+
+    #1. Parse <xml_comment> and </xml_comment> back to <!-- and --> respectively
+    xml_string = xml_string.replace('<xml_comment>', '<!--')
+    xml_string = xml_string.replace('</xml_comment>', '-->')
+ 
+    #2. Parse <cdata> and </cdata> back to <![CDATA[ and ]]> respectively.
+    xml_string = xml_string.replace('<cdata>', '<![CDATA[')
+    xml_string = xml_string.replace('</cdata>', ']]>')
+
+    #3. Restore any escaped chars from pre-XML parsing
+    xml_string = xml_string.replace('&amp;', '&')
+    xml_string = xml_string.replace('&lt;', '<')
+    xml_string = xml_string.replace('&gt;', '>')
+
+    #4. Remove <root> tags (restore first <root> with <?xml_version?> tag
+    xml_string = re.sub('<root.*', '<?xml version="1.0"?>', xml_string)
+    xml_string = xml_string.replace('</root>', '') 
+
+    #5. Remove instances of 'ns0:'; replace with 'xi:'
+    xml_string = xml_string.replace('<ns0:', '<xi:')
+    
+    #6. Restore attribute xml:ns for the <experimentSuite> tag
+    ns_line = re.search('<experimentSuite.*(?=\>)', xml_string).group()
+    ns_att = ' xmlns:xi="http://www.w3.org/2001/XInclude"'
+    xml_string = xml_string.replace(ns_line, ns_line + ns_att)
+
+    #7. Replace "DO_DATABASE" and "DO_ANALYSIS" with "DB_SWITCH" and "ANALYSIS_SWITCH"
+    xml_string = xml_string.replace('DO_ANALYSIS', 'ANALYSIS_SWITCH')
+    xml_string = xml_string.replace('DO_DATABASE', 'DB_SWITCH')
+ 
+    return xml_string 
+
+#8. Restore original spacing between tag attributes
+#9. Insert appropriate spacing and \n chars for blocks containing new tags
+
+## ----------------------------- END POST-XML PARSING  --------------------------- ##
+
+## ----------------------------- MAIN PROGRAM ------------------------------------ ##
 
 if __name__ == '__main__':
 
+    # GET THE COMMAND LINE ARGUMENTS AND READ IN THE INPUT XML #
     parser = argparse.ArgumentParser(prog='freconvert', description="A script that converts a user's XML to Bronx-13")
     parser.add_argument('-o', '--output_xml', help='Destination path of converted XML')
     parser.add_argument('-v', '--verbosity', help='Increase output verbosity.')
@@ -764,27 +807,35 @@ if __name__ == '__main__':
     with open(input_xml, 'r') as f:
         input_content = f.read()
 
+    # RUN THE PRE-XML PARSER AND TURN INTO ElementTree INSTANCE # 
     pre_parsed_xml = write_parsable_xml(input_content)
 
     tree = ET.ElementTree(ET.fromstring(pre_parsed_xml))
     root = tree.getroot()
    
     # PARSE AND MODIFY ELEMENTS #
-
     modify_components(root) # xyInterp modification
     do_fre_version(root)    # freVersion checking
     do_resources_main(root)    # Resource Tags - change namelists and create <resources>
     do_metadata_main(root)  # Create and/or modify metadata tags
+
+    # CONVERT EVERYTHING BACK TO A STRING #
+    xml_string = ET.tostring(root)
+
+    # RUN THE POST-XML PARSER #
+    final_xml = write_final_xml(xml_string)
+
+    # WRITE THE FINAL XML TO STATED FILE DESTINATION
+    with open('test_final_xml.xml', 'w') as f:
+        f.write(final_xml)
     
-    if file_dest is not None:
-        tree.write(file_dest)
-
-    else:
-        input_xml = input_xml.replace('.xml', '')
-        file_dest = os.getcwd() + '/' + input_xml + '_converted.xml'
-        tree.write(file_dest)
-
-    #LATER ON: Post-XML parser. We will need to turn comments and CDATA tags
-    #          back into their original form.
+    #    if file_dest is not None:
+    #        tree.write(file_dest)
+    #
+    #    else:
+    #        input_xml = input_xml.replace('.xml', '')
+    #        file_dest = os.getcwd() + '/' + input_xml + '_converted.xml'
+    #        tree.write(file_dest)
+    #
 
 #END SCRIPT   
