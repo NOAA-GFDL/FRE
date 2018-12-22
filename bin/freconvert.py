@@ -228,8 +228,9 @@ def modify_namelist(nml, nml_name):
 
 def get_new_nml_str(nml_name, old_nml_str_list):
 
-    configs_to_edit = ['atmos_npes', 'atmos_nthreads', 'ocean_npes', 'layout', 'io_layout', \
-                      'ocean_mask_table', 'ice_mask_table', 'land_mask_table', 'atm_mask_table']
+    configs_to_edit = ['atmos_npes', 'atmos_nthreads', 'ocean_npes', 'ocean_nthreads',
+                       'layout', 'io_layout', 'ocean_mask_table', 'ice_mask_table', 
+                       'land_mask_table', 'atm_mask_table']
 
     for index, substr in enumerate(old_nml_str_list):
 
@@ -239,6 +240,8 @@ def get_new_nml_str(nml_name, old_nml_str_list):
         #print(old_nml_str_list)
         str_to_check = re.search('\w+|^\s*$', substr).group()
 
+        #We need to set some default value in case there is no record in namelist
+        #Reason: Validation purposes
         if str_to_check not in configs_to_edit:
             continue
 
@@ -247,11 +250,24 @@ def get_new_nml_str(nml_name, old_nml_str_list):
             coupler_dict = {'atmos_npes': '$atm_ranks', 'atmos_nthreads': '$atm_threads',
                             'atmos_mask_table': '$atm_mask_table', 'ocean_npes': '$ocn_ranks',
                             'ocean_nthreads': '$ocn_threads'}
+
+            #Below dictionary is updated if a parameter is found
+            coupler_dict_found = {'atmos_npes': False, 'atmos_nthreads': False,
+                                  'atmos_mask_table': False, 'ocean_npes': False,
+                                  'ocean_nthreads': False}
+
             for old_str, new_str in coupler_dict.items():
             
                 if str_to_check == old_str:
+                    coupler_dict_found[old_str] = True
                     old_nml_str_list[index] = re.sub('(?<=\=).*', new_str, substr)
                     break 
+
+            #Most recent edit.
+            for old_str, found in coupler_dict_found.items():
+
+                if not found:
+                    old_nml_str_list.append(old_str + '=' + coupler_dict[old_str])
 
             #if str_to_check == 'atmos_npes':
             #    old_nml_str_list[index] = substr.replace(substr[substr.find('=')+1:], '$atm_ranks')
