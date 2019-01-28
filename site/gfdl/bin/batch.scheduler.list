@@ -24,7 +24,7 @@ use XML::LibXML();
     use constant VERSION => '$Id: batch.scheduler.list,v 1.1.2.1 2012/08/29 22:01:36 afy Exp $';
 
     use constant OPTLIST => (
-        'help|h',          'name|n=s',  'queue|q=s', 'retries-number|N=i',
+        'help|h',          'name|n=s',  'feature|f=s', 'retries-number|N=i',
         'retry-delay|D=i', 'running|R', 'user|u=s',  'verbose|v+',
         'version|V'
     );
@@ -45,7 +45,7 @@ use XML::LibXML();
             "  Usage: $self [option] ...\n\n",
             "  Options:\n\n",
             "   -n STRING, --name=STRING          list jobs with name STRING\n",
-            "   -q STRING, --queue=STRING         list jibs in the queue STRING\n",
+            "   -f STRING, --feature=STRING       list jobs with the feature request STRING\n",
             "   -u STRING, --user=STRING          list jobs owned by a user STRING\n",
             "   -R,        --running              list jobs in the running state only\n\n",
             "   -N NUM,    --retries-number=NUM   a number NUM of retries (default is '$rtn')\n",
@@ -63,7 +63,7 @@ use XML::LibXML();
         my @usage = Usage();
         return (
             "\n",
-            "   Synopsis: The '$self' lists batch scheduler jobs in the standard format 'gid,id,name,state,time'.\n",
+            "   Synopsis: The '$self' lists batch scheduler jobs in the standard format 'id,name,state,submitted-time,user'.\n",
             "@usage",
             "   Possible job states are ('blocked', 'completed', 'failed', 'running', 'waiting').\n\n"
         );
@@ -72,21 +72,30 @@ use XML::LibXML();
     my @states = ( 'blocked', 'completed', 'failed', 'running', 'waiting' );
 
     my %state_mapping = (
-        BatchHold  => 0,
-        Canceling  => 2,
-        Completed  => 1,
-        Deferred   => 0,
-        Idle       => 4,
-        Migrated   => 4,
-        NotQueued  => 2,
-        Removed    => 2,
-        Running    => 3,
-        Staging    => 3,
-        Starting   => 3,
-        Suspended  => 0,
-        SystemHold => 0,
-        UserHold   => 0,
-        Vacated    => 2
+        RESV_DEL_HOLD => 0,
+        STOPPED       => 0,
+        SUSPENDED     => 0,
+        COMPLETED     => 1,
+        BOOT_FAIL     => 2,
+        CANCELLED     => 2,
+        DEADLINE      => 2,
+        FAILED        => 2,
+        NODE_FAIL     => 2,
+        OUT_OF_MEMORY => 2,
+        PREEMPTED     => 2,
+        REQUEUE_FED   => 2, # not sure- job is being run again with a new id but this one is a goner
+        REQUEUE_HOLD  => 2, # same
+        REQUEUED      => 2, # same
+        REVOKED       => 2, # similar
+        SPECIAL_EXIT  => 2,
+        TIMEOUT       => 2,
+        COMPLETING    => 3,
+        RESIZING      => 3, # going to be resized, but presumably still running ok
+        RUNNING       => 3,
+        SIGNALING     => 3, # signalling doesn't sound good, but it's running now (I think)
+        STAGE_OUT     => 3,
+        CONFIGURING   => 4,
+        PENDING       => 4,
     );
 
     sub State($)
@@ -116,40 +125,32 @@ use XML::LibXML();
     if ( $opt{help} ) { print batch_scheduler_list::Help() and exit 0; }
 
     if ( scalar(@ARGV) == 0 ) {
-        my $showqCall = 'showq --xml --noblock';
-        $showqCall .= " -w class=$opt{queue}" if $opt{queue};
-        $showqCall .= " -u $opt{user}"        if $opt{user};
-        $showqCall .= " -r"                   if $opt{running};
-        my $parser = XML::LibXML->new();
+        my $queryCall = 'squeue -h -o "%i,%j,%T,%V,%u,%f"';
+        $queryCall .= " -u $opt{user}"        if $opt{user};
+        $queryCall .= " -t running"           if $opt{running};
         my $retry  = 0;
         while (1) {
-            print STDERR "$showqCall\n" if $opt{verbose};
-            chomp( my $res = qx($showqCall) );
+            print STDERR "$queryCall\n" if $opt{verbose};
+            chomp( my $res = qx($queryCall) );
             if ( $? == 0 ) {
                 print STDERR "$res\n" if $opt{verbose} > 1;
-                my $root = $parser->parse_string($res)->documentElement();
-                my $xpath
-                    = ( $opt{name} )
-                    ? '/Data/queue/job[@JobName="' . $opt{name} . '"]'
-                    : '/Data/queue/job';
-                foreach my $job ( $root->findnodes($xpath) ) {
-                    my $gid   = $job->getAttribute('GJID');
-                    my $id    = $job->getAttribute('DRMJID');
-                    my $name  = $job->getAttribute('JobName');
-                    my $state = batch_scheduler_list::State( $job->getAttribute('State') );
-                    my $time  = $job->getAttribute('SubmissionTime');
-                    my $user  = $job->getAttribute('User');
-                    print "$gid,$id,$name,$state,$time,$user\n";
+                for ( split "\n", $res ) {
+                    my ($id, $name, $state, $time, $user, $features) = split ',';
+                    if ($opt{feature}) {
+                        next unless $features =~ /\b$opt{feature}\b/;
+                    }
+                    my $summary_state = batch_scheduler_list::State($state);
+                    print "$id,$name,$summary_state,$time,$user\n";
                 }
                 exit 0;
             }
             elsif ( $retry < $opt{'retries-number'} ) {
-                print STDERR "Retrying showq ($retry)...\n";
+                print STDERR "Retrying batch system query ($retry)...\n";
                 sleep $opt{'retry-delay'};
                 $retry++;
             }
             else {
-                print STDERR "No more showq retries\n";
+                print STDERR "No more retries\n";
                 exit 1;
             }
         } ## end while (1)
