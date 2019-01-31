@@ -130,7 +130,6 @@ def modify_components(etree_root):
             
 
 #2 ON CHANGE FOR XML CONVERTER
-# Also, test for case where <freVersion> tag doesn't exist
 
 def do_fre_version(etree_root):
 
@@ -143,23 +142,17 @@ def do_fre_version(etree_root):
             pass
 
     #Check platform tags for <freVersion> tag
-    namespace = {'ns0': 'http://www.w3.org/2001/XInclude'}
     for platform in etree_root.iter('platform'):
 
-        if not platform.find('freVersion'):
-            for elem in platform.iter():
-                #print(elem.tag)
-                if elem.tag == '{http://www.w3.org/2001/XInclude}include':
-                    print("Found the namespace!!!")
-                    continue
-            #print('Found a non-freVersion platform')
-            #print(platform.tag)
-            #if platform.find('ns0:include', namespace):
-            #    print('Found namespace platform')
-            #    continue
-            
-            freVersion_elem = ET.SubElement(platform, 'freVersion')
-            freVersion_elem.text = '$(FRE_VERSION)'
+        #Skip over xi:include tags. We DO NOT put a <freVersion> tag here!
+        #The element tag name for xi:include is '{http://www.w3.org/2001/XInclude}include'
+        xi_include = ET.iselement(platform.find('{http://www.w3.org/2001/XInclude}include'))
+        if xi_include:
+            continue
+        else:
+            if not platform.find('freVersion'):
+                freVersion_elem = ET.SubElement(platform, 'freVersion')
+                freVersion_elem.text = '$(FRE_VERSION)'
 
     
 """
