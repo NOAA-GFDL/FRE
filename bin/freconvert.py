@@ -143,9 +143,21 @@ def do_fre_version(etree_root):
             pass
 
     #Check platform tags for <freVersion> tag
+    namespace = {'ns0': 'http://www.w3.org/2001/XInclude'}
     for platform in etree_root.iter('platform'):
 
         if not platform.find('freVersion'):
+            for elem in platform.iter():
+                #print(elem.tag)
+                if elem.tag == '{http://www.w3.org/2001/XInclude}include':
+                    print("Found the namespace!!!")
+                    continue
+            #print('Found a non-freVersion platform')
+            #print(platform.tag)
+            #if platform.find('ns0:include', namespace):
+            #    print('Found namespace platform')
+            #    continue
+            
             freVersion_elem = ET.SubElement(platform, 'freVersion')
             freVersion_elem.text = '$(FRE_VERSION)'
 
@@ -228,9 +240,17 @@ def modify_namelist(nml, nml_name):
 
 def get_new_nml_str(nml_name, old_nml_str_list):
 
+<<<<<<< HEAD
+    configs_to_edit = ['atmos_npes', 'atmos_nthreads', 'ocean_npes', \
+                       'ocean_nthreads', 'layout', 'io_layout', \
+                       'ocean_mask_table', 'ice_mask_table', 'land_mask_table', \
+                       'atm_mask_table']
+    #print(old_nml_str_list)
+=======
     configs_to_edit = ['atmos_npes', 'atmos_nthreads', 'ocean_npes', 'ocean_nthreads',
                        'layout', 'io_layout', 'ocean_mask_table', 'ice_mask_table', 
                        'land_mask_table', 'atm_mask_table']
+>>>>>>> 3e071c3f77622d77d0b4cab14cc2990dbd5afbe2
 
     for index, substr in enumerate(old_nml_str_list):
 
@@ -239,6 +259,7 @@ def get_new_nml_str(nml_name, old_nml_str_list):
         #print(substr)
         #print(old_nml_str_list)
         str_to_check = re.search('\w+|^\s*$', substr).group()
+        #print(str_to_check)
 
         #We need to set some default value in case there is no record in namelist
         #Reason: Validation purposes
@@ -247,6 +268,7 @@ def get_new_nml_str(nml_name, old_nml_str_list):
 
         #Anything right of the '=' sign will be replaced
         if nml_name == 'coupler_nml':
+            #print("String to check: %s" % str_to_check)
             coupler_dict = {'atmos_npes': '$atm_ranks', 'atmos_nthreads': '$atm_threads',
                             'atmos_mask_table': '$atm_mask_table', 'ocean_npes': '$ocn_ranks',
                             'ocean_nthreads': '$ocn_threads'}
@@ -259,7 +281,11 @@ def get_new_nml_str(nml_name, old_nml_str_list):
             for old_str, new_str in coupler_dict.items():
             
                 if str_to_check == old_str:
+<<<<<<< HEAD
+                    #print("String to check: %s; old_str: %s" % (str_to_check, old_str))
+=======
                     coupler_dict_found[old_str] = True
+>>>>>>> 3e071c3f77622d77d0b4cab14cc2990dbd5afbe2
                     old_nml_str_list[index] = re.sub('(?<=\=).*', new_str, substr)
                     break 
 
@@ -377,6 +403,19 @@ class Namelist(object):
     def get_var(self, var):
         
         #print(self.nml_vars)
+        #There will be instances where attributes won't exist, so test a 
+        #dummy variable in a Try-Except to determine which fields exist/don't exist.
+        try:
+            foo = self.nml_vars[var]
+    
+        #Sometimes ocn_nthreads will not be displayed in namelist, but we need
+        #it in the resource tags. Set a default value of 1 to be returned.
+        except KeyError as e:
+            if var == 'ocean_nthreads':
+                #print("HEEEELLLLLLOOOO")
+                self.nml_vars[var] = '1'
+                return self.nml_vars[var]
+
         return self.nml_vars[var]
 
 
@@ -500,6 +539,7 @@ def do_resources_main(etree_root):
 
                 ocn = ET.SubElement(exp.find('runtime').find('production').find('resources'), 'ocn', \
                                     attrib={'ranks': nml_container.get_var('ocean_npes'), \
+                                            'threads': nml_container.get_var('ocean_nthreads'), \
                                             'layout': nml_container.get_var('ocn_layout'), \
                                             'io_layout': nml_container.get_var('ocn_io_layout')})
 
@@ -842,7 +882,7 @@ if __name__ == '__main__':
     final_xml = write_final_xml(xml_string)
 
     # WRITE THE FINAL XML TO STATED FILE DESTINATION
-    with open('test_final_xml.xml', 'w') as f:
+    with open('test_final_original_xml.xml', 'w') as f:
         f.write(final_xml)
     
     #    if file_dest is not None:
