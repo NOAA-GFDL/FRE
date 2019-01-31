@@ -240,60 +240,41 @@ def modify_namelist(nml, nml_name):
 
 def get_new_nml_str(nml_name, old_nml_str_list):
 
-<<<<<<< HEAD
     configs_to_edit = ['atmos_npes', 'atmos_nthreads', 'ocean_npes', \
                        'ocean_nthreads', 'layout', 'io_layout', \
                        'ocean_mask_table', 'ice_mask_table', 'land_mask_table', \
                        'atm_mask_table']
-    #print(old_nml_str_list)
-=======
-    configs_to_edit = ['atmos_npes', 'atmos_nthreads', 'ocean_npes', 'ocean_nthreads',
-                       'layout', 'io_layout', 'ocean_mask_table', 'ice_mask_table', 
-                       'land_mask_table', 'atm_mask_table']
->>>>>>> 3e071c3f77622d77d0b4cab14cc2990dbd5afbe2
 
     for index, substr in enumerate(old_nml_str_list):
 
         #Checking only the string to the LEFT of the equal sign
-        #str_to_check = substr[:substr.find('=')]
-        #print(substr)
-        #print(old_nml_str_list)
         str_to_check = re.search('\w+|^\s*$', substr).group()
-        #print(str_to_check)
 
         #We need to set some default value in case there is no record in namelist
         #Reason: Validation purposes
         if str_to_check not in configs_to_edit:
             continue
 
+        #print("In for. past first if")
         #Anything right of the '=' sign will be replaced
         if nml_name == 'coupler_nml':
-            #print("String to check: %s" % str_to_check)
-            coupler_dict = {'atmos_npes': '$atm_ranks', 'atmos_nthreads': '$atm_threads',
-                            'atmos_mask_table': '$atm_mask_table', 'ocean_npes': '$ocn_ranks',
+            coupler_dict = {'atmos_npes': '$atm_ranks', 'atmos_nthreads': '$atm_threads', \
+                            'atmos_mask_table': '$atm_mask_table', 'ocean_npes': '$ocn_ranks', \
                             'ocean_nthreads': '$ocn_threads'}
 
-            #Below dictionary is updated if a parameter is found
-            coupler_dict_found = {'atmos_npes': False, 'atmos_nthreads': False,
-                                  'atmos_mask_table': False, 'ocean_npes': False,
-                                  'ocean_nthreads': False}
-
             for old_str, new_str in coupler_dict.items():
-            
+             
                 if str_to_check == old_str:
-<<<<<<< HEAD
                     #print("String to check: %s; old_str: %s" % (str_to_check, old_str))
-=======
-                    coupler_dict_found[old_str] = True
->>>>>>> 3e071c3f77622d77d0b4cab14cc2990dbd5afbe2
+                    #coupler_dict_found[old_str] = True
                     old_nml_str_list[index] = re.sub('(?<=\=).*', new_str, substr)
                     break 
 
             #Most recent edit.
-            for old_str, found in coupler_dict_found.items():
+            #for old_str, found in coupler_dict_found.items():
 
-                if not found:
-                    old_nml_str_list.append(old_str + '=' + coupler_dict[old_str])
+            #    if not found:
+            #        old_nml_str_list.append(old_str + '=' + coupler_dict[old_str])
 
             #if str_to_check == 'atmos_npes':
             #    old_nml_str_list[index] = substr.replace(substr[substr.find('=')+1:], '$atm_ranks')
@@ -412,7 +393,6 @@ class Namelist(object):
         #it in the resource tags. Set a default value of 1 to be returned.
         except KeyError as e:
             if var == 'ocean_nthreads':
-                #print("HEEEELLLLLLOOOO")
                 self.nml_vars[var] = '1'
                 return self.nml_vars[var]
 
@@ -460,7 +440,6 @@ def do_resources_main(etree_root):
         if not 'compile' in subelements: 
             nml_container = Namelist() #1 namelist object per experiment. It will hold all necessary namelist values per key.
             for nml in exp.iter('namelist'):
-
                 nml_name = nml.get("name")
                 if nml_name in nmls_to_edit:
                     nml_container.name = nml_name
@@ -880,7 +859,6 @@ if __name__ == '__main__':
 
     # RUN THE POST-XML PARSER #
     final_xml = write_final_xml(xml_string)
-
     # WRITE THE FINAL XML TO STATED FILE DESTINATION
     with open('test_final_original_xml.xml', 'w') as f:
         f.write(final_xml)
