@@ -695,7 +695,7 @@ sub writescript {
     else {
         ####### The graphical analysis is specified in batch mode ######
         sleep 3;
-        print STDERR "Submitting '$batch_command'";
+        print STDERR "Submitting '$batch_command'\n";
 
         my $message = `$batch_command`;
         print $message;
