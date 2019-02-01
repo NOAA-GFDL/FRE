@@ -157,6 +157,28 @@ def do_fre_version(etree_root):
                 freVersion_elem.tail = '\n      '
                 platform.insert(0, freVersion_elem)
 
+#3. Add attribute 'doF90Cpp="yes"' to <compile> tag for land component in build experiment
+
+#Note, will only work for 1 land build component. Manual modification is needed for more than 1.
+def do_land_f90(etree_root):
+
+    for experiment in etree_root.iter('experiment'):
+
+        for component_elem in experiment.iter('component'):
+            
+            if component_elem.get('name') == 'land':
+                compile_elem = component_elem.find('compile')
+                if not 'doF90Cpp' in compile_elem.keys():
+                    compile_elem.set('doF90Cpp', 'yes')
+                    csh_land_elem = compile_elem.find('csh')
+                    cdata_elem = csh_land_elem.find('cdata')
+                    csh_land_elem.remove(cdata_elem)
+                    compile_elem.remove(csh_land_elem)
+                    return
+                else:
+                    return
+            else:
+                continue
     
 """
 #Delete Default Platforms if they exist -- Work in progress
@@ -299,7 +321,7 @@ def get_new_nml_str(nml_name, old_nml_str_list):
             elif str_to_check == 'io_layout':
                 old_nml_str_list[index] = substr.replace(substr[substr.find('=')+1:], '$ice_io_layout')
             elif str_to_check == 'ice_mask_table':
-                old_nml_str_list[index] = substr.replace(substr[substr.find('=')+1:], '$ice_mask_table'    )
+                old_nml_str_list[index] = substr.replace(substr[substr.find('=')+1:], '$ice_mask_table')
             else:
                 pass
 
@@ -309,8 +331,7 @@ def get_new_nml_str(nml_name, old_nml_str_list):
             elif str_to_check == 'io_layout':
                 old_nml_str_list[index] = substr.replace(substr[substr.find('=')+1:], '$lnd_io_layout')
             elif str_to_check == 'ice_mask_table':
-
-                 old_nml_str_list[index] = substr.replace(substr[substr.find('=')+1:], '$lnd_mask_table'    )
+                 old_nml_str_list[index] = substr.replace(substr[substr.find('=')+1:], '$lnd_mask_table')
             else:
                 pass
 
@@ -320,7 +341,7 @@ def get_new_nml_str(nml_name, old_nml_str_list):
             elif str_to_check == 'io_layout':
                 old_nml_str_list[index] = substr.replace(substr[substr.find('=')+1:], '$ocn_io_layout')
             elif str_to_check == 'ocean_mask_table':
-                old_nml_str_list[index] = substr.replace(substr[substr.find('=')+1:], '$ocn_mask_table'    )
+                old_nml_str_list[index] = substr.replace(substr[substr.find('=')+1:], '$ocn_mask_table')
             else:
                 pass
 
@@ -852,16 +873,20 @@ if __name__ == '__main__':
         input_content = f.read()
 
     # RUN THE PRE-XML PARSER AND TURN INTO ElementTree INSTANCE # 
-    pre_parsed_xml = write_parsable_xml(input_content)
+    pre_parsed_xml = write_parsable_xml(input_content) #Change paths to F2 - ALL BRONX VERSIONS
 
     tree = ET.ElementTree(ET.fromstring(pre_parsed_xml))
     root = tree.getroot()
+
+    #SOON, QUERY FOR INPUT XML BRONX VERSION. i.e. if Bronx-10, do stuff.
+    #If Bronx-11, do stuff. If Bronx-12, do stuff. If Bronx-13, do stuff.
    
     # PARSE AND MODIFY ELEMENTS #
-    modify_components(root) # xyInterp modification
-    do_fre_version(root)    # freVersion checking
-    do_resources_main(root)    # Resource Tags - change namelists and create <resources>
-    do_metadata_main(root)  # Create and/or modify metadata tags
+    modify_components(root) # xyInterp modification # IF BRONX-10 or BRONX-11
+    do_fre_version(root)    # freVersion checking # ALL BRONX VERSIONS
+    do_land_f90(root)       # Land F90 checking # (mainly for Bronx-10) 
+    do_resources_main(root) # Resource Tags - change namelists and create <resources> # IF BRONX-10
+    do_metadata_main(root)  # Create and/or modify metadata tags #IF BRONX-10 or BRONX-11
 
     # CONVERT EVERYTHING BACK TO A STRING #
     xml_string = ET.tostring(root)
