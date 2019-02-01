@@ -146,13 +146,15 @@ def do_fre_version(etree_root):
 
         #Skip over xi:include tags. We DO NOT put a <freVersion> tag here!
         #The element tag name for xi:include is '{http://www.w3.org/2001/XInclude}include'
+        #Insert <freVersion> tag at the VERY BEGINNING of the <platform> tag
         xi_include = ET.iselement(platform.find('{http://www.w3.org/2001/XInclude}include'))
         if xi_include:
             continue
         else:
             if not platform.find('freVersion'):
-                freVersion_elem = ET.SubElement(platform, 'freVersion')
+                freVersion_elem = ET.Element('freVersion')
                 freVersion_elem.text = '$(FRE_VERSION)'
+                platform.insert(0, freVersion_elem)
 
     
 """
@@ -667,6 +669,7 @@ class Metadata(object):
                 try:
                     realization_element = experiment_element.find('realization')
                     realization_dict = realization_element.attrib
+                    experiment_element.remove(realization_element)
                     realization_meta_tag = ET.SubElement(new_metadata, 'realization')
                     for key, value in realization_dict.items():
 
@@ -810,6 +813,9 @@ def write_final_xml(xml_string):
     #7. Replace "DO_DATABASE" and "DO_ANALYSIS" with "DB_SWITCH" and "ANALYSIS_SWITCH"
     xml_string = xml_string.replace('DO_ANALYSIS', 'ANALYSIS_SWITCH')
     xml_string = xml_string.replace('DO_DATABASE', 'DB_SWITCH')
+
+    #8. Remove database_ingestor.csh script -- not needed anymore
+    xml_string = xml_string.replace(' script="$FRE_CURATOR_HOME/share/bin/database_ingestor.csh"', '')
  
     return xml_string 
 
