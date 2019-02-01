@@ -154,6 +154,7 @@ def do_fre_version(etree_root):
             if not platform.find('freVersion'):
                 freVersion_elem = ET.Element('freVersion')
                 freVersion_elem.text = '$(FRE_VERSION)'
+                freVersion_elem.tail = '\n      '
                 platform.insert(0, freVersion_elem)
 
     
@@ -649,7 +650,6 @@ class Metadata(object):
         if bronx_version == 10:
             return self.conversion_table_bronx_10[attrib]
         else:
-
             return self.conversion_table_bronx_11[attrib]
 
 
@@ -662,6 +662,8 @@ class Metadata(object):
     def build_metadata_xml(self, experiment_element):
 
         new_metadata = ET.Element('publicMetadata', attrib={'DBswitch': '$(DB_SWITCH)'})
+        new_metadata.text = '\n      '
+        new_metadata.tail = '\n\n    '
         experiment_element.insert(0, new_metadata)
         for tag in self.__slots__:
 
@@ -672,6 +674,7 @@ class Metadata(object):
                     realization_dict = realization_element.attrib
                     experiment_element.remove(realization_element)
                     realization_meta_tag = ET.SubElement(new_metadata, 'realization')
+                    realization_meta_tag.tail = '\n      '
                     for key, value in realization_dict.items():
 
                         realization_meta_tag.set(key, value)
@@ -687,6 +690,7 @@ class Metadata(object):
                 if value is not None:
                     meta_sub_element = ET.SubElement(new_metadata, tag) #Create new tag if content exists.
                     meta_sub_element.text = value
+                    meta_sub_element.tail = '\n      '
 
                 else:
                     pass #Don't create any tags if value is None.
@@ -753,6 +757,7 @@ def do_metadata_main(etree_root):
 
             if exp.find('description') is not None:
                 description_element = exp.find('description')
+                description_element.text = description_element.text.strip()
                 #print(description_element.attrib)
                 #print("\n")
                 test.set_tags_from_element(description_element)
@@ -762,6 +767,7 @@ def do_metadata_main(etree_root):
 
             if exp.find('communityComment') is not None:
                 comment_element = exp.find('communityComment')
+                comment_element.text = comment_element.text.strip()
                 test.set_comment(comment_element)
                 exp.remove(comment_element)
 
@@ -817,6 +823,9 @@ def write_final_xml(xml_string):
 
     #8. Remove database_ingestor.csh script -- not needed anymore
     xml_string = xml_string.replace(' script="$FRE_CURATOR_HOME/share/bin/database_ingestor.csh"', '')
+
+    #9. Remove two whitespace characters before closing </publicMetadata> tag
+    xml_string = xml_string.replace('      </publicMetadata>', '    </publicMetadata>')
  
     return xml_string 
 
