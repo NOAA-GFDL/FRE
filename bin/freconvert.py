@@ -661,7 +661,8 @@ class Metadata(object):
 
     def build_metadata_xml(self, experiment_element):
 
-        new_metadata = ET.SubElement(experiment_element, 'publicMetadata')
+        new_metadata = ET.Element('publicMetadata', attrib={'DBswitch': '$(DB_SWITCH)'})
+        experiment_element.insert(0, new_metadata)
         for tag in self.__slots__:
 
             #Check for realization tag. Go to next tag once try/except is completed
