@@ -169,12 +169,15 @@ def do_land_f90(etree_root):
             if component_elem.get('name') == 'land':
                 compile_elem = component_elem.find('compile')
                 if not 'doF90Cpp' in compile_elem.keys():
-                    compile_elem.set('doF90Cpp', 'yes')
                     csh_land_elem = compile_elem.find('csh')
-                    cdata_elem = csh_land_elem.find('cdata')
-                    csh_land_elem.remove(cdata_elem)
-                    compile_elem.remove(csh_land_elem)
-                    return
+                    if csh_land_elem is not None:
+                        compile_elem.set('doF90Cpp', 'yes')
+                        cdata_elem = csh_land_elem.find('cdata')
+                        csh_land_elem.remove(cdata_elem)
+                        compile_elem.remove(csh_land_elem)
+                        return
+                    else:
+                        return
                 else:
                     return
             else:
@@ -406,9 +409,12 @@ class Namelist(object):
         try:
             foo = self.nml_vars[var]
     
-        #Sometimes ocn_nthreads will not be displayed in namelist, but we need
+        #Sometimes ocn_nthreads or atmos_nthreads will not be displayed in namelist, but we need
         #it in the resource tags. Set a default value of 1 to be returned.
         except KeyError as e:
+            if var == 'atmos_nthreads':
+                self.nml_vars[var] = '1'
+                return self.nml_vars[var]
             if var == 'ocean_nthreads':
                 self.nml_vars[var] = '1'
                 return self.nml_vars[var]
@@ -894,7 +900,7 @@ if __name__ == '__main__':
     # RUN THE POST-XML PARSER #
     final_xml = write_final_xml(xml_string)
     # WRITE THE FINAL XML TO STATED FILE DESTINATION
-    with open('test_final_original_xml.xml', 'w') as f:
+    with open('test_CM2.1_gaea.xml', 'w') as f:
         f.write(final_xml)
     
     #    if file_dest is not None:
