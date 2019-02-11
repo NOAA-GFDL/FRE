@@ -112,8 +112,13 @@ def write_parsable_xml(xml_string):
 
 ## ----------------------------- BEGIN XML PARSING  ----------------------------##
 
+#def get_fre_version(etree_root):
+    
+    #for elem in etree_root.iter('platform'):
+        
+        
 
-#1 ON CHANGE FOR XML CONVERTER
+#1 Change any 'cubicToLatLon' attributes to 'xyInterp' in post-processing components
 
 def modify_components(etree_root):
 
@@ -129,13 +134,15 @@ def modify_components(etree_root):
 
             
 
-#2 ON CHANGE FOR XML CONVERTER
+#2 MODIFY (OR ADD) <freVersion> tag
 
 def do_fre_version(etree_root):
 
+    old_ver = "bronx-10" # Default value (i.e. if no FRE_VERSION property exists)
     for prop in etree_root.iter('property'):
         
         if prop.get("name") == "FRE_VERSION" and prop.get("value") != "bronx-13":
+            old_ver = prop.get("value")
             prop.set("value", "bronx-13")
             break
         else:
@@ -156,6 +163,8 @@ def do_fre_version(etree_root):
                 freVersion_elem.text = '$(FRE_VERSION)'
                 freVersion_elem.tail = '\n      '
                 platform.insert(0, freVersion_elem)
+                
+    return old_ver
 
 #3. Add attribute 'doF90Cpp="yes"' to <compile> tag for land component in build experiment
 
@@ -883,33 +892,37 @@ if __name__ == '__main__':
 
     tree = ET.ElementTree(ET.fromstring(pre_parsed_xml))
     root = tree.getroot()
-
-    #SOON, QUERY FOR INPUT XML BRONX VERSION. i.e. if Bronx-10, do stuff.
-    #If Bronx-11, do stuff. If Bronx-12, do stuff. If Bronx-13, do stuff.
    
-    # PARSE AND MODIFY ELEMENTS #
-    modify_components(root) # xyInterp modification # IF BRONX-10 or BRONX-11
-    do_fre_version(root)    # freVersion checking # ALL BRONX VERSIONS
-    do_land_f90(root)       # Land F90 checking # (mainly for Bronx-10) 
-    do_resources_main(root) # Resource Tags - change namelists and create <resources> # IF BRONX-10
-    do_metadata_main(root)  # Create and/or modify metadata tags #IF BRONX-10 or BRONX-11
+    # PARSE AND MODIFY ELEMENTS DEPENDING ON ORIGINAL BRONX VERSION #
+    old_version = do_fre_version(root)    # freVersion checking # ALL BRONX VERSIONS
+    if old_version == 'bronx-10':
+        modify_components(root) # xyInterp modification # IF BRONX-10 or BRONX-11
+        do_land_f90(root)       # Land F90 checking # (mainly for Bronx-10) 
+        do_resources_main(root) # Resource Tags - change namelists and create <resources> # IF BRONX-10
+        do_metadata_main(root)  # Create and/or modify metadata tags #IF BRONX-10 or BRONX-11
+    elif old_version == 'bronx-11':
+        modify_components(root)
+        do_metadata_main(root)
+    elif old_version == 'bronx-12':
+        pass # At this point, everything has been converted
 
     # CONVERT EVERYTHING BACK TO A STRING #
     xml_string = ET.tostring(root)
 
     # RUN THE POST-XML PARSER #
     final_xml = write_final_xml(xml_string)
-    # WRITE THE FINAL XML TO STATED FILE DESTINATION
-    with open('test_CM2.1_gaea.xml', 'w') as f:
-        f.write(final_xml)
     
-    #    if file_dest is not None:
-    #        tree.write(file_dest)
-    #
-    #    else:
-    #        input_xml = input_xml.replace('.xml', '')
-    #        file_dest = os.getcwd() + '/' + input_xml + '_converted.xml'
-    #        tree.write(file_dest)
-    #
+    # WRITE THE FINAL XML TO STATED FILE DESTINATION OR CREATE ONE IF -o OPTION IS NOT GIVEN
+    if file_dest is not None:
+        
+        with open(file_dest, 'w') as f:
+            f.write(final_xml)
+    
+    else:
+        input_xml = input_xml.replace('.xml', '')
+        file_dest = os.getcwd() + '/' + input_xml + '_bronx13.xml'
+        with open(file_dest, 'w') as f:
+            f.write(final_xml)
+    
 
 #END SCRIPT   
