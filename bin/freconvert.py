@@ -121,21 +121,11 @@ def write_parsable_xml(xml_string):
 
 
 #1 Change any 'cubicToLatLon' attributes to 'xyInterp' in post-processing components
+def modify_pp_components(xml_string):
 
+    xml_string = xml_string.replace('cubicToLatLon', 'xyInterp')
+    return xml_string
 
-def modify_components(etree_root):
-
-    for elem in etree_root.iter('postProcess'):
-
-        component_list = elem.findall('component')
-        #print(mylist)
-        for component in component_list:
-            if 'cubicToLatLon' in component.keys():
-                temp = component.attrib['cubicToLatLon']
-                component.attrib.pop('cubicToLatLon')
-                component.set('xyInterp', temp)
-
-            
 
 #2 MODIFY 'FRE_VERSION' PROPERTY AND MODIFY (OR ADD) <freVersion> tag
 
@@ -893,6 +883,7 @@ if __name__ == '__main__':
         input_content = f.read()
 
     # RUN THE PRE-XML PARSER AND TURN INTO ElementTree INSTANCE # 
+    input_content = modify_pp_components(input_content)
     pre_parsed_xml = write_parsable_xml(input_content) #Change paths to F2 - ALL BRONX VERSIONS
 
     tree = ET.ElementTree(ET.fromstring(pre_parsed_xml))
@@ -902,7 +893,6 @@ if __name__ == '__main__':
     old_version = do_fre_version(root)    # freVersion checking # ALL BRONX VERSIONS
 
     if old_version == 'bronx-10':
-        modify_components(root) # xyInterp modification # IF BRONX-10 or BRONX-11
         do_land_f90(root)       # Land F90 checking # (mainly for Bronx-10) 
         do_resources_main(root) # Resource Tags - change namelists and create <resources> # IF BRONX-10
         do_metadata_main(root)  # Create and/or modify metadata tags #IF BRONX-10 or BRONX-11
@@ -911,7 +901,6 @@ if __name__ == '__main__':
         final_xml = write_final_xml(xml_string)
 
     elif old_version == 'bronx-11':
-        modify_components(root)
         do_metadata_main(root)
         xml_string = ET.tostring(root)
         xml_string = do_misc_string_replacements(xml_string)
