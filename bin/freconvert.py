@@ -158,7 +158,7 @@ def do_fre_version(etree_root):
         if xi_include:
             continue
         else:
-            if not platform.find('freVersion'):
+            if platform.find('freVersion') is None:
                 freVersion_elem = ET.Element('freVersion')
                 freVersion_elem.text = '$(FRE_VERSION)'
                 freVersion_elem.tail = '\n      '
@@ -895,6 +895,7 @@ if __name__ == '__main__':
    
     # PARSE AND MODIFY ELEMENTS DEPENDING ON ORIGINAL BRONX VERSION #
     old_version = do_fre_version(root)    # freVersion checking # ALL BRONX VERSIONS
+
     if old_version == 'bronx-10':
         modify_components(root) # xyInterp modification # IF BRONX-10 or BRONX-11
         do_land_f90(root)       # Land F90 checking # (mainly for Bronx-10) 
