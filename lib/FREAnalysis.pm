@@ -673,8 +673,8 @@ sub writescript {
 
     # once MOAB is turned off, set this to always send to Slurm
     my $batch_command = grep(/#SBATCH/, $out)
-        ? 'sbatch --chdir $HOME $outscript'
-        : 'msub -d $HOME $outscript';
+        ? "sbatch --chdir \$HOME $outscript"
+        : "msub -d \$HOME $outscript";
 
     if ( substr( $mode, 0, 1 ) eq "i" ) {
         ####### The graphical analysis is specified in interactive mode #####
@@ -695,7 +695,7 @@ sub writescript {
     else {
         ####### The graphical analysis is specified in batch mode ######
         sleep 3;
-        print STDERR "Submitting '$batch_command'";
+        print STDERR "Submitting '$batch_command'\n";
 
         my $message = `$batch_command`;
         print $message;
