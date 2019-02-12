@@ -10,8 +10,6 @@ import xml.etree.ElementTree as ET
 
 ## --------------- Parse the XML as a Text file first ------------- ##
 
-# Rewrite comment and 'CDATA' blocks as their own temporary tags #
-
 replacement_char = '&lt;'
 
 
@@ -59,8 +57,6 @@ def points_to_f2(xml_string):
 
 
 def change_fre_version(xml_string):
-
-    #This function is only used for Bronx-12 XML's!
 
     return xml_string.replace('bronx-12', 'bronx-13')
 
@@ -127,7 +123,7 @@ def modify_pp_components(xml_string):
     return xml_string
 
 
-#2 MODIFY 'FRE_VERSION' PROPERTY AND MODIFY (OR ADD) <freVersion> tag
+#2 Modify 'FRE_VERSION' property and modify (or add) <freVersion> tag
 
 def do_fre_version(etree_root):
 
@@ -159,9 +155,10 @@ def do_fre_version(etree_root):
                 
     return old_ver
 
-#3. Add attribute 'doF90Cpp="yes"' to <compile> tag for land component in build experiment
 
-#Note, will only work for 1 land build component. Manual modification is needed for more than 1.
+#3. Add attribute 'doF90Cpp="yes"' to <compile> tag for land component in build experiment
+#Note: will only work for 1 land build component. Manual modification is needed for more than 1.
+
 def do_land_f90(etree_root):
 
     for experiment in etree_root.iter('experiment'):
@@ -201,9 +198,9 @@ for platform in platform_list_updated:
 
 """
 
-#Insert Resource Tags
-### This is a longer code element. There will be multiple scenarios that have to be checked.
-### First, check for the existence of resources tags in the XML.
+#4. Insert <resources> tags for 'production' and 'regression' elements
+
+###     First, check for the existence of resources tags in the XML.
 ###     If none exist
 
 ###           Find the values of the atm, ocn, lnd, and ice ranks using the namelists located under each
@@ -225,9 +222,7 @@ for platform in platform_list_updated:
 ###     If they do exist, then pass.
 ###
 
-#nml_names = ["coupler_nml", "fv_core_nml", "ice_model_nml", "land_model_nml", "ocean_model_nml"]
-
-###3.1 - Change variable names in namelist string and produce new namelist string ###
+#4.1 - Change variable names in namelist string and produce new namelist string ###
 
 
 def nml_to_dict(nml):
@@ -245,7 +240,6 @@ def nml_to_dict(nml):
 
 def get_str_list(nml):
 
-    #str_list = nml.text.replace(' ', '').splitlines()
     str_list = nml.text.splitlines()
     return str_list
 
@@ -256,10 +250,6 @@ def modify_namelist(nml, nml_name):
     new_nml_str = get_new_nml_str(nml_name, str_list)
     nml.text = new_nml_str
 
-#END FUNCTION: modify_namelist
-
-
-#Below function returns a string of the new namelist text to be inserted.
 
 def get_new_nml_str(nml_name, old_nml_str_list):
 
@@ -278,7 +268,6 @@ def get_new_nml_str(nml_name, old_nml_str_list):
         if str_to_check not in configs_to_edit:
             continue
 
-        #print("In for. past first if")
         #Anything right of the '=' sign will be replaced
         if nml_name == 'coupler_nml':
             coupler_dict = {'atmos_npes': '$atm_ranks', 'atmos_nthreads': '$atm_threads', \
@@ -288,12 +277,9 @@ def get_new_nml_str(nml_name, old_nml_str_list):
             for old_str, new_str in coupler_dict.items():
              
                 if str_to_check == old_str:
-                    #print("String to check: %s; old_str: %s" % (str_to_check, old_str))
-                    #coupler_dict_found[old_str] = True
                     old_nml_str_list[index] = re.sub('(?<=\=).*', new_str, substr)
                     break 
 
-            #Most recent edit.
             #for old_str, found in coupler_dict_found.items():
 
             #    if not found:
@@ -357,7 +343,7 @@ def get_new_nml_str(nml_name, old_nml_str_list):
     return final_str
 
 
-###3.2 - EXTRACT VALUES FROM NAMELISTS###
+#4.2 - EXTRACT VALUES FROM NAMELISTS###
 
 class Namelist(object):
 
@@ -405,7 +391,6 @@ class Namelist(object):
 
     def get_var(self, var):
         
-        #print(self.nml_vars)
         #There will be instances where attributes won't exist, so test a 
         #dummy variable in a Try-Except to determine which fields exist/don't exist.
         try:
@@ -424,25 +409,10 @@ class Namelist(object):
         return self.nml_vars[var]
 
 
-#END CLASSES AND FUNCTIONS
 
+### End Main 4.1 ###
 
-### Begin Main 3.1 ###
-
-#def resources_main_1(etree_root):
-#
-#    for exp in etree_root.iter('experiment'):
-#
-#        if True: #exp.get("name") == 'CM2.5_FLOR_A06_p1_ECDA_2.1Rv3.1_01_MON__YEAR_':
-#            for nml in exp.iter('namelist'):
-#
-#                nml_name = nml.get("name")
-#                modify_namelist(nml, nml_name)
-#
-#
-### End Main 3.1 ###
-
-### Begin Main 3.2 ###
+### Begin Main 4.2 ###
 
 def strip_dict_whitespace(nml_dict):
 
@@ -502,14 +472,6 @@ def do_resources_main(etree_root):
 
                 modify_namelist(nml, nml_name)
 
-
-### End Main 3.2 ###
-
-
-### Begin Main 3.3 ###
-
-###CREATE RESOURCE TAGS###
-
             try:
                 exp.find('runtime').find('production').attrib.pop('npes')
             except (AttributeError, KeyError) as e:
@@ -529,7 +491,7 @@ def do_resources_main(etree_root):
             #IGNORING attributes that don't exist, like mask_table and ice/land ranks and threads.
             #Need to build in exceptions for attributes that don't exist but need checking.
 
-            if True: #exp.find('runtime').find('production').find('resources'):
+            if True: 
                 
                 resource = ET.SubElement(exp.find('runtime').find('production'), 'resources', \
                                          attrib={'site': 'ncrc3', 'jobWallclock': '10:00:00', \
@@ -560,10 +522,10 @@ def do_resources_main(etree_root):
 
         
 
-#END MAIN 3.3#
+# End Main 4.2 #
 
 
-#Insert/Modify PublicMetadata Tags
+#5. Insert/Modify PublicMetadata Tags
 
 ### We will ignore any community tags or attributes in the build experiment
 ### Primary attributes seen in many bronx-10 XMLs are for database insertion. These
@@ -724,7 +686,6 @@ class Metadata(object):
                 else:
                     pass #Don't create any tags if value is None.
 
-#End Class Metadata
 
 def do_metadata_main(etree_root):
 
@@ -732,7 +693,7 @@ def do_metadata_main(etree_root):
 
         subelements = [elem.tag for elem in exp.iter() if elem is not exp]
         if not 'compile' in subelements: 
-            test = Metadata()
+            meta = Metadata()
             experiment_name = exp.get('name')
 
             #Sanity check -- make sure no publicMetadata tags are intermingled with description attributes,
@@ -741,13 +702,6 @@ def do_metadata_main(etree_root):
             if (exp.find('publicMetadata') is not None) and ((exp.find('scenario') is not None) \
             or (exp.find('communityComment') is not None) or (exp.find('description').attrib != {})):
 
-                #print("\nCondtion truth table\n\n")
-            
-                #print("publicMetadata: " + str(exp.find('publicMetadata')) + "\n")
-                #print("scenario: " + str(exp.find('scenario')) + "\n")
-                #print("communityComment: " + str(exp.find('communityComment')) + "\n")
-                #print("description: " + str(exp.find('description')) + "\n")
-            
                 print("ERROR! You have a mix of Bronx-10 and Bronx-11/12 metadata elements")
                 print("Skipping experiment %s" % experiment_name)
                 continue
@@ -761,13 +715,8 @@ def do_metadata_main(etree_root):
                     if elem.tag == 'publicMetadata':
                         continue
                     else:
-                        #print("Old tag: " + elem.tag)
-                        elem.tag = test.convert_to_tag(elem.tag, bronx_version=11)
-                        #print("New tag: " + elem.tag)
+                        elem.tag = meta.convert_to_tag(elem.tag, bronx_version=11)
 
-                #print("\nHere's the new metadata section\n")
-
-                #ET.dump(metadata_head)
                 continue #No need to do Bronx-10 metadata checks. We already did that above. Go to next experiment.
 
         #------------Bronx-10 metadata checks------------#
@@ -775,46 +724,32 @@ def do_metadata_main(etree_root):
 
             if exp.find('scenario') is not None:
                 scenario_element = exp.find('scenario')
-                #print(scenario_element.attrib)
-                #print("\n")
-                test.set_tags_from_element(scenario_element)
-                test.delete_attributes(scenario_element)
+                meta.set_tags_from_element(scenario_element)
+                meta.delete_attributes(scenario_element)
                 exp.remove(scenario_element)
-                #print(scenario_element.attrib)
-                #print("After deletion: " + str(scenario_element.attrib))
-
 
             if exp.find('description') is not None:
                 description_element = exp.find('description')
                 description_element.text = description_element.text.strip()
-                #print(description_element.attrib)
-                #print("\n")
-                test.set_tags_from_element(description_element)
-                test.delete_attributes(description_element)
-                #print("After deletion: " + str(description_element.attrib))
-                #print("Description text: " + description_element.text)
+                meta.set_tags_from_element(description_element)
+                meta.delete_attributes(description_element)
 
             if exp.find('communityComment') is not None:
                 comment_element = exp.find('communityComment')
                 comment_element.text = comment_element.text.strip()
-                test.set_comment(comment_element)
+                meta.set_comment(comment_element)
                 exp.remove(comment_element)
 
 
-            #test.print_metadata()
-            #print("\nBelow is the new metadata xml section\n\n")
-
-            test.build_metadata_xml(exp)
-
+            meta.build_metadata_xml(exp)
             continue
 
         else: #Don't do Build Experiment
             pass
 
 
-# END publicMetadata Tags
-
 ## ----------------------------- END XML PARSING  ----------------------------##
+
 
 ## ----------------------------- BEGIN POST-XML PARSING  ----------------------------##
 
@@ -924,4 +859,3 @@ if __name__ == '__main__':
             f.write(final_xml)
     
 
-#END SCRIPT   
