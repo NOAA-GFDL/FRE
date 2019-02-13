@@ -310,9 +310,9 @@ my $schedulerResources = sub($$$$$$$)
 
         my %option = (
             time => $fre->propertyParameterized( 'FRE.scheduler.option.time', $t ),
-            partition =>
-                $fre->propertyParameterized( 'FRE.scheduler.option.partition', $partition ),
-            queue    => $fre->propertyParameterized( 'FRE.scheduler.option.queue',    $queue ),
+            cluster =>
+                $fre->propertyParameterized( 'FRE.scheduler.option.cluster', $partition ),
+            queue    => $fre->propertyParameterized( 'FRE.scheduler.option.partition',    $queue ),
             priority => $fre->propertyParameterized( 'FRE.scheduler.option.priority', $priority ),
             qos      => $fre->propertyParameterized( 'FRE.scheduler.option.qos',      $qos ),
             join     => $fre->propertyParameterized('FRE.scheduler.option.join'),
@@ -320,7 +320,6 @@ my $schedulerResources = sub($$$$$$$)
             cpuset      => $fre->propertyParameterized('FRE.scheduler.option.cpuset'),
             rerun       => $fre->propertyParameterized('FRE.scheduler.option.rerun'),
             mail    => $fre->propertyParameterized( 'FRE.scheduler.option.mail', $mailMode ),
-            envVars => $fre->propertyParameterized('FRE.scheduler.option.envVars'),
             shell   => $fre->propertyParameterized('FRE.scheduler.option.shell')
         );
 
@@ -783,22 +782,24 @@ sub setRunCommand($$$)
     my $runCommandSize = FRETemplate::PRAGMA_RUN_COMMAND_SIZE;
     my $placeholder    = qr/^[ \t]*$prefix[ \t]+$runCommandSize[ \t]*$/mo;
 
-    my $runCommandLauncher = $fre->property('FRE.mpi.runCommand.launcher');
+    # use a different launcher if there's more than one component with ranks
+    my $runCommandLauncher = (grep({ $_ } @$rp) > 1)
+                           ? $fre->property('FRE.mpi.runCommand.launcher.multi')
+                           : $fre->property('FRE.mpi.runCommand.launcher.single');
     my @components = split( ';', $fre->property('FRE.mpi.component.names') );
     my ( $runCommand, $runSizeInfo ) = ( $runCommandLauncher, "  set -r npes = $np\n" );
 
-    my ( $ht, $htopt )
-        = $mpiInfo->{ht}
-        ? ( '.true.', $fre->property('FRE.mpi.runCommand.option.ht') )
-        : ( '.false.', $fre->property('FRE.mpi.runCommand.option.noht') );
+    my $ht = $mpiInfo->{ht} ? '.true.' : '.false.';
     $runSizeInfo .= "  set -r ht = $ht\n";
-    $runSizeInfo .= "  set -r htopt = $htopt\n";
 
     foreach my $inx ( 0 .. $#components ) {
         my $component = $components[$inx];
-        $rt->[$inx] *= 2 if $rp->[$inx] and $mpiInfo->{ht};
         $runSizeInfo .= "  set -r ${component}_ranks = $ranks_per_ens->[$inx]\n";
         $runSizeInfo .= "  set -r tot_${component}_ranks = $rp->[$inx]\n";
+        # always double the threads passed to the scheduler
+        $runSizeInfo .= "  set -r scheduler_${component}_threads = @{[$rt->[$inx] * 2]}\n" if $rt->[$inx];
+        # double the threads passed to the namelists only if hyperthreading is used
+        $rt->[$inx] *= 2 if $rp->[$inx] and $mpiInfo->{ht};
         $runSizeInfo .= "  set -r ${component}_threads = $rt->[$inx]\n";
         $runSizeInfo .= "  set -r ${component}_layout = $layout->[$inx]\n";
         $runSizeInfo .= "  set -r ${component}_io_layout = $io_layout->[$inx]\n";
@@ -810,18 +811,18 @@ sub setRunCommand($$$)
             my $component = $components[$inx];
             if ( $rp->[$inx] > 0 ) {
                 $runCommand .= ' :' if $runCommand ne $runCommandLauncher;
-                $runCommand .= ' $htopt '
+                $runCommand .= ' '
                     . $fre->propertyParameterized( 'FRE.mpi.runCommand.option.mpiprocs',
                     '$' . 'tot_' . ${component} . '_ranks' );
                 $runCommand .= ' '
                     . $fre->propertyParameterized( 'FRE.mpi.runCommand.option.nthreads',
-                    '$' . ${component} . '_threads' );
+                    '$scheduler_' . ${component} . '_threads' );
                 $runCommand .= ' ' . $fre->property('FRE.mpi.runCommand.executable');
             }
         }
     }
     else {
-        $runCommand .= ' $htopt '
+        $runCommand .= ' '
             . $fre->propertyParameterized( 'FRE.mpi.runCommand.option.mpiprocs', '$npes' );
         $runCommand .= ' ' . $fre->propertyParameterized( 'FRE.mpi.runCommand.option.nthreads', 1 );
         $runCommand .= ' ' . $fre->property('FRE.mpi.runCommand.executable');
