@@ -362,7 +362,8 @@ my $schedulerNames = sub($$$)
         my %option = (
             name    => $fre->propertyParameterized( 'FRE.scheduler.option.name',    $n ),
             stdout  => $fre->propertyParameterized( 'FRE.scheduler.option.stdout',  $d ),
-            workDir => $fre->propertyParameterized( 'FRE.scheduler.option.workDir', $d )
+            workDir => $fre->propertyParameterized( 'FRE.scheduler.option.workDir', $d ),
+            freVersion => $fre->propertyParameterized( 'FRE.scheduler.option.freVersion', $fre->{freVersion} )
         );
 
         return \%option;
