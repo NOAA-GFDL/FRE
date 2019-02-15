@@ -254,29 +254,19 @@ my $schedulerSize = sub($$$$$$)
 
 };
 
-my $schedulerAccount = sub($$)
+my $schedulerAccount = sub($)
 
-    # ------ arguments: $fre $windfallFlag
+    # ------ arguments: $fre
 {
 
-    my ( $fre, $f ) = @_;
+    my ( $fre ) = @_;
 
     if ( $fre->property('FRE.scheduler.enabled') ) {
 
-        my $project = (
-            ($f)
-            ? $fre->property('FRE.scheduler.windfall.project.set')
-            : $fre->property('FRE.scheduler.windfall.project.unset')
-            )
-            || $fre->project();
-        my $qos
-            = ($f)
-            ? $fre->property('FRE.scheduler.windfall.qos.set')
-            : $fre->property('FRE.scheduler.windfall.qos.unset');
+        my $project = $fre->project();
 
         my %option = (
             project => $fre->propertyParameterized( 'FRE.scheduler.option.project', $project ),
-            qos     => $fre->propertyParameterized( 'FRE.scheduler.option.qos',     $qos )
         );
 
         return \%option;
@@ -290,37 +280,31 @@ my $schedulerAccount = sub($$)
 
 };
 
-my $schedulerResources = sub($$$$$$$)
+my $schedulerResources = sub($$$$$$$$$)
 
-    # ------ arguments: $fre $jobType $ncores $time $partition $queue $dualFlag
+    # ------ arguments: $fre $jobType $ncores $time $partition $queue $dualFlag $windfall $urgent
 {
 
-    my ( $fre, $j, $n, $t, $p, $q, $f ) = @_;
+    my ( $fre, $j, $n, $t, $p, $q, $f, $windfall, $urgent ) = @_;
 
     if ( $fre->property('FRE.scheduler.enabled') ) {
 
-        my $partition = $p || $fre->property("FRE.scheduler.$j.partition");
-        my $queue
-            = ( ($f) ? $fre->property('FRE.scheduler.dual.queue') : undef )
-            || $q
-            || $fre->property("FRE.scheduler.$j.queue");
-        my $priority = ($f) ? $fre->property('FRE.scheduler.dual.priority') : undef;
-        my $qos      = ($f) ? $fre->property('FRE.scheduler.dual.qos')      : undef;
+        my $cluster = $p || $fre->property("FRE.scheduler.$j.cluster");
+        my $partition = $q || $fre->property("FRE.scheduler.$j.partition");
+        my $dual = ($f) ? $fre->property('FRE.scheduler.dual.option') : undef;
+        my $qos = $f        ? $fre->property('FRE.scheduler.qos.windfall')
+                : $windfall ? $fre->property('FRE.scheduler.qos.windfall')
+                : $urgent   ? $fre->property('FRE.scheduler.qos.urgent')
+                :             $fre->property('FRE.scheduler.qos.default');
         my $mailMode = $fre->mailMode();
 
         my %option = (
             time => $fre->propertyParameterized( 'FRE.scheduler.option.time', $t ),
-            cluster =>
-                $fre->propertyParameterized( 'FRE.scheduler.option.cluster', $partition ),
-            queue    => $fre->propertyParameterized( 'FRE.scheduler.option.partition',    $queue ),
-            priority => $fre->propertyParameterized( 'FRE.scheduler.option.priority', $priority ),
-            qos      => $fre->propertyParameterized( 'FRE.scheduler.option.qos',      $qos ),
-            join     => $fre->propertyParameterized('FRE.scheduler.option.join'),
-            stdoutUmask => $fre->propertyParameterized( 'FRE.scheduler.option.stdoutUmask', '026' ),
-            cpuset      => $fre->propertyParameterized('FRE.scheduler.option.cpuset'),
-            rerun       => $fre->propertyParameterized('FRE.scheduler.option.rerun'),
+            cluster => $fre->propertyParameterized( 'FRE.scheduler.option.cluster', $cluster ),
+            partition => $fre->propertyParameterized( 'FRE.scheduler.option.partition', $partition ),
+            qos      => $fre->propertyParameterized( 'FRE.scheduler.option.qos', $qos ),
             mail    => $fre->propertyParameterized( 'FRE.scheduler.option.mail', $mailMode ),
-            shell   => $fre->propertyParameterized('FRE.scheduler.option.shell')
+            dual    => $dual
         );
 
         if ($n) {
@@ -583,19 +567,19 @@ sub schedulerSizeAsString($$$$$$)
 
 }
 
-sub setSchedulerAccount($$$)
+sub setSchedulerAccount($$)
 
-    # ------ arguments: $fre $refToScript $windfallFlag
+    # ------ arguments: $fre $refToScript
 {
 
-    my ( $fre, $r, $f ) = @_;
+    my ( $fre, $r ) = @_;
 
     my $prefix           = FRETemplate::PRAGMA_PREFIX;
     my $schedulerOptions = FRETemplate::PRAGMA_SCHEDULER_OPTIONS;
     my $placeholder      = qr/^[ \t]*$prefix[ \t]+$schedulerOptions[ \t]*$/mo;
 
     my $schedulerPrefix = $fre->property('FRE.scheduler.prefix');
-    my $h = $schedulerAccount->( $fre, $f );
+    my $h = $schedulerAccount->( $fre );
 
     foreach my $key ( sort keys %{$h} ) {
         my $value = $h->{$key};
@@ -622,19 +606,19 @@ sub schedulerAccountAsString($$)
 
 }
 
-sub setSchedulerResources($$$$$$$$)
+sub setSchedulerResources($$$$$$$$$$)
 
-    # ------ arguments: $fre $refToScript $jobType $ncores $time $partition $queue $dualFlag
+    # ------ arguments: $fre $refToScript $jobType $ncores $time $partition $queue $dualFlag $windfall $urgent
 {
 
-    my ( $fre, $r, $j, $n, $t, $p, $q, $f ) = @_;
+    my ( $fre, $r, $j, $n, $t, $p, $q, $f, $windfall, $urgent ) = @_;
 
     my $prefix           = FRETemplate::PRAGMA_PREFIX;
     my $schedulerOptions = FRETemplate::PRAGMA_SCHEDULER_OPTIONS;
     my $placeholder      = qr/^[ \t]*$prefix[ \t]+$schedulerOptions[ \t]*$/mo;
 
     my $schedulerPrefix = $fre->property('FRE.scheduler.prefix');
-    my $h = $schedulerResources->( $fre, $j, $n, $t, $p, $q, $f );
+    my $h = $schedulerResources->( $fre, $j, $n, $t, $p, $q, $f, $windfall, $urgent );
 
     foreach my $key ( sort keys %{$h} ) {
         my $value = $h->{$key};
@@ -643,14 +627,14 @@ sub setSchedulerResources($$$$$$$$)
 
 }
 
-sub schedulerResourcesAsString($$$$$$$)
+sub schedulerResourcesAsString($$$$$$$$$)
 
-    # ------ arguments: $fre $jobType $ncores $time $partition $queue $dualFlag
+    # ------ arguments: $fre $jobType $ncores $time $partition $queue $dualFlag $windfall $urgent
 {
 
-    my ( $fre, $j, $n, $t, $p, $q, $f ) = @_;
+    my ( $fre, $j, $n, $t, $p, $q, $f, $windfall, $urgent ) = @_;
 
-    my ( $h, @result ) = ( $schedulerResources->( $fre, $j, $n, $t, $p, $q, $f ), () );
+    my ( $h, @result ) = ( $schedulerResources->( $fre, $j, $n, $t, $p, $q, $f, $windfall, $urgent ), () );
 
     foreach my $key ( sort keys %{$h} ) {
         my $value = $h->{$key};

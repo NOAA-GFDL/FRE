@@ -308,7 +308,7 @@ use FREUtil();
         'queue|q=s',              'submit|s',
         'target|t=s',             'version|V',
         'verbose|v+',             'walltime|w=i',
-        'xmlfile|x=s'
+        'xmlfile|x=s',            'urgent'
     );
 
     use constant RUNSCRIPT_TEMPLATE_MAIN => 'runscript.template.main';
@@ -359,7 +359,8 @@ use FREUtil();
             "   -S,        --submit-chained            submit all the created scripts as input data staging jobs, submitting run jobs at their end\n",
             "   -T,        --transfer                  transfer all the model output back to a post-processing site (negatable, default depends on site)\n",
             "   -u,        --unique                    create a new unique run of existing experiment\n",
-            "   -W,        --windfall                  don't charge model running time to the project (may not be supported)\n\n",
+            "   -W,        --windfall                  don't charge model running time to the project (may not be supported)\n",
+            "              --urgent                    ask scheduler to make jobs high-priority\n",
             "   -E,        --execute                   execute all the created scripts in the current session\n",
             "   -h,        --help                      print help message and exit\n",
             "   -n NUM,    --ncores=NUM                number of processor cores to use for input data staging (default depends on site)\n",
@@ -1205,12 +1206,12 @@ use FREUtil();
 
     } ## end sub setTables($$$)
 
-    sub setRegressionTimingParameters($$$$$$)
+    sub setRegressionTimingParameters($$$$$$$$)
 
-        # ------ arguments: $refToScript $exp $refToInfo $partition $queue $dualFlag
+        # ------ arguments: $refToScript $exp $refToInfo $partition $queue $dualFlag $windfall $urgent
     {
 
-        my ( $r, $z, $i, $p, $q, $f ) = @_;
+        my ( $r, $z, $i, $p, $q, $f, $windfall, $urgent ) = @_;
         my ( $expName, $fre ) = ( $z->name(), $z->fre() );
 
         # -------------------------------------------- extract timing parameters
@@ -1229,14 +1230,14 @@ use FREUtil();
         FRETemplate::setList( $fre, $r, 'hourslist',  @ha );
 
         # -------------------------------------------------------------- set scheduler resources
-        FRETemplate::setSchedulerResources( $fre, $r, 'run', undef, $rt, $p, $q, $f );
+        FRETemplate::setSchedulerResources( $fre, $r, 'run', undef, $rt, $p, $q, $f, $windfall, $urgent );
     } ## end sub setRegressionTimingParameters($$$$$$)
 
-    sub setProductionTimingParameters($$$$$$)
+    sub setProductionTimingParameters($$$$$$$$)
 
-        # ------ arguments: $refToScript $exp $refToInfo $partition $queue $dualFlag
+        # ------ arguments: $refToScript $exp $refToInfo $partition $queue $dualFlag $windfall $urgent
     {
-        my ( $r, $z, $i, $p, $q, $f ) = @_;
+        my ( $r, $z, $i, $p, $q, $f, $windfall, $urgent ) = @_;
         my ( $expName, $fre ) = ( $z->name(), $z->fre() );
 
         # -------------------------------------------- extract timing parameters
@@ -1296,7 +1297,7 @@ use FREUtil();
         FRETemplate::setList( $fre, $r, 'hourslist',  @ha );
 
      # --------------------------------------------------------------------- set scheduler resources
-        FRETemplate::setSchedulerResources( $fre, $r, 'run', undef, $simRunTime, $p, $q, $f );
+        FRETemplate::setSchedulerResources( $fre, $r, 'run', undef, $simRunTime, $p, $q, $f, $windfall, $urgent );
     } ## end sub setProductionTimingParameters($$$$$$)
 
     sub setRegressionDirectories($$$%)
@@ -1559,7 +1560,7 @@ use FREUtil();
                                     $submitChainCommand .= ' '
                                         . FRETemplate::schedulerResourcesAsString( $fre,
                                         'inputStager', $o{ncores}, $o{walltime},
-                                        undef, undef, undef );
+                                        undef, undef, undef, $o{windfall}, $o{urgent} );
                                     $submitChainCommand .= ' '
                                         . FRETemplate::schedulerNamesAsString( $fre,
                                         "$scriptBasename.input.stager",
@@ -1645,7 +1646,7 @@ use FREUtil();
                 frerun::setInputGridSpecification( \$runScript, $z );
                 frerun::setAllShellCommands( \$runScript, $z );
                 FRETemplate::setVersionInfo( $fre, \$runScript, $0, $expName, %o );
-                FRETemplate::setSchedulerAccount( $fre, \$runScript, $o{windfall} );
+                FRETemplate::setSchedulerAccount( $fre, \$runScript );
                 if ( my $regInfo = $z->extractRegressionRunInfo( $l, $o{ht} ) ) {
                     my @runNos = keys %{$regInfo};
                     my ( $ok, $runsNmb ) = ( 1, scalar(@runNos) );
@@ -1665,7 +1666,7 @@ use FREUtil();
                                 frerun::setMPI( \$rtScript, $z, $runInfo->{mpiInfo} );
                                 frerun::setRegressionTimeStampOptions( \$rtScript, $z, $runInfo );
                                 frerun::setRegressionTimingParameters( \$rtScript, $z, $runInfo,
-                                    $o{partition}, $o{queue}, $o{dual} );
+                                    $o{partition}, $o{queue}, $o{dual}, $o{windfall}, $o{urgent} );
                                 FRETemplate::setNamelists( $fre, \$rtScript,
                                     $runInfo->{namelists} );
                                 my $scriptName = frerun::regressionRunScriptName( $z, $extension );
@@ -1759,7 +1760,7 @@ use FREUtil();
                 frerun::setInputGridSpecification( \$runScript, $z );
                 frerun::setAllShellCommands( \$runScript, $z );
                 FRETemplate::setVersionInfo( $fre, \$runScript, $0, $expName, %o );
-                FRETemplate::setSchedulerAccount( $fre, \$runScript, $o{windfall} );
+                FRETemplate::setSchedulerAccount( $fre, \$runScript );
                 if ( my $prdInfo = $z->extractProductionRunInfo( $o{ht} ) ) {
                     ( $runScript, my $extension, $status )
                         = frerun::setProductionDirectories( $runScript, $z, %o );
@@ -1770,7 +1771,7 @@ use FREUtil();
                             frerun::setMPI( \$runScript, $z, $prdInfo->{mpiInfo} );
                             frerun::setProductionTimeStampOptions( \$runScript, $z, $prdInfo );
                             frerun::setProductionTimingParameters( \$runScript, $z, $prdInfo,
-                                $o{partition}, $o{queue}, $o{dual} );
+                                $o{partition}, $o{queue}, $o{dual}, $o{windfall}, $o{urgent} );
                             FRETemplate::setNamelists( $fre, \$runScript, $prdInfo->{namelists} );
                             my $scriptName = frerun::productionRunScriptName( $z, $extension );
                             my $stdoutName = frerun::stdoutName( $z, $scriptName );
