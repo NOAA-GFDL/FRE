@@ -799,7 +799,10 @@ sub setRunCommand($$$)
         $runSizeInfo .= "  set -r tot_${component}_ranks = $rp->[$inx]\n";
         # for now, double the threads passed to the scheduler if using srun only
         # 2019-2-13: gaea Slurm admins appear to be going with NOT doubling on either
-        if ($runCommand != /multi/) {
+        if ($runCommand =~ /multi/) {
+            $runSizeInfo .= "  set -r scheduler_${component}_threads = $rt->[$inx]\n" if $rt->[$inx];
+        }
+        else {
             $runSizeInfo .= "  set -r scheduler_${component}_threads = @{[$rt->[$inx] * 2]}\n" if $rt->[$inx];
         }
         # double the threads passed to the namelists only if hyperthreading is used
