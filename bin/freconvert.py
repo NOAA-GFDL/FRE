@@ -25,8 +25,9 @@ def strip_char(list_of_strings, char_to_strip='<', char_to_replace='&lt;'):
     for i in range(len(list_of_strings)):
         
         if char_to_strip in list_of_strings[i]:
+            original_count = list_of_strings[i].count(replacement_char) #usually zero
             list_of_strings[i] = list_of_strings[i].replace(char_to_strip, replacement_char)
-            replacement_count_list.append(list_of_strings[i].count(replacement_char))
+            replacement_count_list.append(list_of_strings[i].count(replacement_char) - original_count)
         else:
             replacement_count_list.append(0)
             
@@ -62,7 +63,11 @@ def change_fre_version(xml_string):
 
 
 def write_parsable_xml(xml_string):
-    
+   
+    xml_string = points_to_f2(xml_string)
+    xml_string = xml_string.replace('<root>', '<xml_root>')
+    xml_string = xml_string.replace('</root>', '</xml_root>')
+ 
     xml_declaration = '<?xml version="1.0"?>'
     xml_string = xml_declaration + "\n" + '<root>' + "\n" + xml_string
     
@@ -71,30 +76,21 @@ def write_parsable_xml(xml_string):
         
     xml_string = xml_string.replace('&', '&amp;')
     
-    comment_regex = '<!--(.*?)-->'
-    cdata_regex = '<!\[CDATA\[(.*?)\]\]>'
-    
-    comment_strings, comment_replacements = strip_char(re.findall(comment_regex, xml_string, re.DOTALL), \
-                                                      char_to_replace=replacement_char)
-    cdata_strings, cdata_replacements = strip_char(re.findall(cdata_regex, xml_string, re.DOTALL), \
-                                                  char_to_replace=replacement_char)
-    
+    #comment_regex = '<!--(.*?)-->'
+    #cdata_regex = '<!\[CDATA\[(.*?)\]\]>'
+       
     xml_string = xml_string.replace('<!--', '<xml_comment>')
     xml_string = xml_string.replace('-->', '</xml_comment>')
     xml_string = xml_string.replace('<![CDATA[', '<cdata>')
     xml_string = xml_string.replace(']]>', '</cdata>')
-    
-    xml_string = points_to_f2(xml_string)
 
-    comment_opens = [m.start() + 13 for m in re.finditer('<xml_comment>', xml_string)]
-    comment_ends = [m.start() for m in re.finditer('</xml_comment>', xml_string)]
     
-    diff = 0
-    for i, start in enumerate(comment_opens):
-        
-        xml_string = xml_string.replace(xml_string[start + diff:comment_ends[i] + diff], comment_strings[i])
-        diff += ((len(replacement_char) - 1) * comment_replacements[i])
-        
+    comment_regex = '<xml_comment>(.*?)</xml_comment>'
+    cdata_regex = '<cdata>(.*?)</cdata>'
+    
+    cdata_strings, cdata_replacements = strip_char(re.findall(cdata_regex, xml_string, re.DOTALL), \
+                                                  char_to_replace=replacement_char)
+
     cdata_opens = [m.start() + 7 for m in re.finditer('<cdata>', xml_string)]
     cdata_ends = [m.start() for m in re.finditer('</cdata>', xml_string)]
     
@@ -103,6 +99,18 @@ def write_parsable_xml(xml_string):
         
         xml_string = xml_string.replace(xml_string[start + diff:cdata_ends[i] + diff], cdata_strings[i])
         diff += (len(replacement_char) - 1) * cdata_replacements[i]
+
+    
+    comment_strings, comment_replacements = strip_char(re.findall(comment_regex, xml_string, re.DOTALL), \
+                                                      char_to_replace=replacement_char)
+
+    comment_opens = [m.start() + 13 for m in re.finditer('<xml_comment>', xml_string)]
+    comment_ends = [m.start() for m in re.finditer('</xml_comment>', xml_string)]
+    diff = 0
+    for i, start in enumerate(comment_opens):
+        
+        xml_string = xml_string.replace(xml_string[start + diff:comment_ends[i] + diff], comment_strings[i])
+        diff += ((len(replacement_char) - 1) * comment_replacements[i])
     
     xml_string = xml_string + "\n</root>"
     
@@ -491,8 +499,9 @@ def do_resources_main(etree_root):
             #IGNORING attributes that don't exist, like mask_table and ice/land ranks and threads.
             #Need to build in exceptions for attributes that don't exist but need checking.
 
-            if True: 
-                
+             
+            if exp.find('runtime') is not None:
+ 
                 resource = ET.SubElement(exp.find('runtime').find('production'), 'resources', \
                                          attrib={'site': 'ncrc3', 'jobWallclock': '10:00:00', \
                                          'segRuntime': '10:00:00'})
@@ -516,6 +525,9 @@ def do_resources_main(etree_root):
                 ice = ET.SubElement(exp.find('runtime').find('production').find('resources'), 'ice', \
                                     attrib={'layout': nml_container.get_var('ice_layout'), \
                                             'io_layout': nml_container.get_var('ice_io_layout')})
+
+            else:
+                pass
 
         else: #Don't do Build experiment
             pass
@@ -720,9 +732,12 @@ def do_metadata_main(etree_root):
                 continue #No need to do Bronx-10 metadata checks. We already did that above. Go to next experiment.
 
         #------------Bronx-10 metadata checks------------#
-
+            scenario_elem = False
+            description_metadata = False
+            community_comm_elem = False
 
             if exp.find('scenario') is not None:
+                scenario_elem = True
                 scenario_element = exp.find('scenario')
                 meta.set_tags_from_element(scenario_element)
                 meta.delete_attributes(scenario_element)
@@ -730,18 +745,23 @@ def do_metadata_main(etree_root):
 
             if exp.find('description') is not None:
                 description_element = exp.find('description')
-                description_element.text = description_element.text.strip()
-                meta.set_tags_from_element(description_element)
-                meta.delete_attributes(description_element)
+
+                if not len(description_element.keys()) == 0:
+                    description_metadata = True
+                    description_element.text = description_element.text.strip()
+                    meta.set_tags_from_element(description_element)
+                    meta.delete_attributes(description_element)
 
             if exp.find('communityComment') is not None:
+                community_comm_elem = True
                 comment_element = exp.find('communityComment')
                 comment_element.text = comment_element.text.strip()
                 meta.set_comment(comment_element)
                 exp.remove(comment_element)
 
+            if scenario_elem or community_comm_elem or description_metadata:
+                meta.build_metadata_xml(exp)
 
-            meta.build_metadata_xml(exp)
             continue
 
         else: #Don't do Build Experiment
@@ -770,6 +790,8 @@ def do_misc_string_replacements(xml_string):
 
 def write_final_xml(xml_string):
 
+    xml_string = xml_string.replace('&lt;', '<')
+ 
     #1. Parse <xml_comment> and </xml_comment> back to <!-- and --> respectively
     xml_string = xml_string.replace('<xml_comment>', '<!--')
     xml_string = xml_string.replace('</xml_comment>', '-->')
@@ -780,12 +802,14 @@ def write_final_xml(xml_string):
 
     #3. Restore any escaped chars from pre-XML parsing
     xml_string = xml_string.replace('&amp;', '&')
-    xml_string = xml_string.replace('&lt;', '<')
     xml_string = xml_string.replace('&gt;', '>')
 
     #4. Remove <root> tags (restore first <root> with <?xml_version?> tag
     xml_string = re.sub('<root.*', '<?xml version="1.0"?>', xml_string)
     xml_string = xml_string.replace('</root>', '') 
+   
+    xml_string = xml_string.replace('<xml_root>', '<root>')
+    xml_string = xml_string.replace('</xml_root>', '</root>')
 
     #5. Remove instances of 'ns0:'; replace with 'xi:'
     xml_string = xml_string.replace('<ns0:', '<xi:')
@@ -826,7 +850,7 @@ if __name__ == '__main__':
    
     # PARSE AND MODIFY ELEMENTS DEPENDING ON ORIGINAL BRONX VERSION #
     old_version = do_fre_version(root)    # freVersion checking # ALL BRONX VERSIONS
-
+    
     if old_version == 'bronx-10':
         do_land_f90(root)       # Land F90 checking # (mainly for Bronx-10) 
         do_resources_main(root) # Resource Tags - change namelists and create <resources> # IF BRONX-10
@@ -846,8 +870,9 @@ if __name__ == '__main__':
         xml_string = points_to_f2(input_content)
         xml_string = do_misc_string_replacements(xml_string)
         final_xml = change_fre_version(xml_string)
-
     
+     
+    #final_xml = write_final_xml(pre_parsed_xml)
     # WRITE THE FINAL XML TO STATED FILE DESTINATION OR CREATE ONE IF -o OPTION IS NOT GIVEN
     if file_dest is not None:        
         with open(file_dest, 'w') as f:
