@@ -195,6 +195,10 @@ use Getopt::Long( ':config', 'no_ignore_case', 'no_auto_abbrev' );
         # ------ arguments: absolute filename, job name, job queue, options hash
     {
         my ( $f, $n, $q, %o ) = @_;
+        # 2019-2-18 ceb temporary hack to pass PATH and HOME environment variables through
+        # we don't want this probably, but they aren't set otherwise which is worse
+        # HOME is needed for globus (loaded by system init scripts) and PATH is needed by everything
+        $o{options} =~ s/--export=/--export=PATH,HOME,/;
         my $command = "sbatch $o{options} $f";
         print STDERR "$command\n" if $o{verbose};
         chomp( my $baseTimestamp = qx(date +%s) );
