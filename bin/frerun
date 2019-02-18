@@ -304,7 +304,7 @@ use FREUtil();
         'transfer|T!',            'unique|u',
         'windfall|W',             'execute|E',
         'help|h',                 'ncores|n=i',
-        'partition|P=s',          'platform|p=s',
+        'cluster|=s',             'platform|p=s',
         'queue|q=s',              'submit|s',
         'target|t=s',             'version|V',
         'verbose|v+',             'walltime|w=i',
@@ -364,7 +364,6 @@ use FREUtil();
             "   -E,        --execute                   execute all the created scripts in the current session\n",
             "   -h,        --help                      print help message and exit\n",
             "   -n NUM,    --ncores=NUM                number of processor cores to use for input data staging (default depends on site)\n",
-            "   -P STRING, --partition=STRING          partition STRING to use for model runs\n",
             "   -p STRING, --platform=STRING           hardware and software platform STRING (required)\n",
             "   -q STRING, --queue=STRING              queue STRING to use for model runs\n",
             "   -s,        --submit                    submit all the created scripts as batch jobs\n",
@@ -373,6 +372,7 @@ use FREUtil();
             "   -v,        --verbose                   get verbose messages (repeat the option to increase verbosity level)\n",
             "   -w NUM,    --walltime=NUM              maximum wall time (in minutes) to use for input data staging (default depends on site)\n",
             "   -x FILE,   --xmlfile=FILE              experiment suite XML configuration FILE (default is '$cwd/$xml')\n",
+            "              --cluster=STRING            cluster STRING to use for model runs\n",
             "              --ht                        enable hyperthreading (off by default)\n\n",
             "  The platform and at least one experiment from the FILE must be listed as an argument.\n\n"
         );
@@ -849,7 +849,7 @@ use FREUtil();
 
             FRETemplate::setVariable( $fre, \$s, 'project', $fre->project() );
             FRETemplate::setVariable( $fre, \$s, 'windfallFlagInit', ( $o{windfall} ) ? '1' : '0' );
-            FRETemplate::setVariable( $fre, \$s, 'partitionInit', $o{partition} );
+            FRETemplate::setVariable( $fre, \$s, 'clusterInit', $o{cluster} );
             FRETemplate::setVariable( $fre, \$s, 'queueInit',     $o{queue} );
 
             FRETemplate::setVariable( $fre, \$s, 'platform',   $fre->platform() );
@@ -875,22 +875,8 @@ use FREUtil();
             FRETemplate::setVariable( $fre, \$s, 'freCommandsVersionRemote', "'$remoteVersion'" );
             FRETemplate::setVariable( $fre, \$s, 'envRemote', "'$remotePlatformCsh'" );
 
-            FRETemplate::setVariable( $fre, \$s, 'outputStagerPartition',
-                $fre->property('FRE.scheduler.outputStager.partition') );
-            FRETemplate::setVariable( $fre, \$s, 'outputStagerQueue',
-                $fre->property('FRE.scheduler.outputStager.queue') );
-            FRETemplate::setVariable( $fre, \$s, 'outputStagerCoreSpec',
-                $fre->property('FRE.scheduler.outputStager.coreSpec') );
-            FRETemplate::setVariable( $fre, \$s, 'outputStagerRuntimeAscii',
-                       $fre->property('FRE.scheduler.outputStager.runtime.ascii')
-                    || $fre->property('FRE.scheduler.runtime.max') );
-            FRETemplate::setVariable( $fre, \$s, 'outputStagerRuntimeRestart',
-                       $fre->property('FRE.scheduler.outputStager.runtime.restart')
-                    || $fre->property('FRE.scheduler.runtime.max') );
-            FRETemplate::setVariable( $fre, \$s, 'outputStagerRuntimeHistory',
-                       $fre->property('FRE.scheduler.outputStager.runtime.history')
-                    || $fre->property('FRE.scheduler.runtime.max') );
-
+            FRETemplate::setVariable( $fre, \$s, 'outputStagerSaveCluster',
+                $fre->property('FRE.scheduler.outputStager.save.cluster') );
             FRETemplate::setVariable( $fre, \$s, 'outputStagerSavePartition',
                 $fre->property('FRE.scheduler.outputStager.save.partition') );
             FRETemplate::setVariable( $fre, \$s, 'outputStagerSaveCoreSpec',
@@ -907,6 +893,8 @@ use FREUtil();
             FRETemplate::setVariable( $fre, \$s, 'outputStagerSaveRetries',
                 $fre->property('FRE.scheduler.outputStager.save.retries') );
 
+            FRETemplate::setVariable( $fre, \$s, 'outputStagerXferCluster',
+                $fre->property('FRE.scheduler.outputStager.transfer.cluster') );
             FRETemplate::setVariable( $fre, \$s, 'outputStagerXferPartition',
                 $fre->property('FRE.scheduler.outputStager.transfer.partition') );
             FRETemplate::setVariable( $fre, \$s, 'outputStagerXferCoreSpec',
@@ -1483,9 +1471,7 @@ use FREUtil();
     {
         my $fre = shift;
         if ( my $delay = $fre->property('FRE.scheduler.dual.delay') ) {
-            my $dateTime
-                = Date::Manip::UnixDate( Date::Manip::DateCalc( 'now', "+$delay" ), '%Y%m%d%H%M' );
-            return $fre->propertyParameterized( 'FRE.scheduler.option.startTime', $dateTime );
+            return $fre->propertyParameterized( 'FRE.scheduler.option.startTime', 'now+' . $delay );
         }
         else {
             return '';
@@ -1666,7 +1652,7 @@ use FREUtil();
                                 frerun::setMPI( \$rtScript, $z, $runInfo->{mpiInfo} );
                                 frerun::setRegressionTimeStampOptions( \$rtScript, $z, $runInfo );
                                 frerun::setRegressionTimingParameters( \$rtScript, $z, $runInfo,
-                                    $o{partition}, $o{queue}, $o{dual}, $o{windfall}, $o{urgent} );
+                                    $o{cluster}, $o{queue}, $o{dual}, $o{windfall}, $o{urgent} );
                                 FRETemplate::setNamelists( $fre, \$rtScript,
                                     $runInfo->{namelists} );
                                 my $scriptName = frerun::regressionRunScriptName( $z, $extension );
@@ -1771,7 +1757,7 @@ use FREUtil();
                             frerun::setMPI( \$runScript, $z, $prdInfo->{mpiInfo} );
                             frerun::setProductionTimeStampOptions( \$runScript, $z, $prdInfo );
                             frerun::setProductionTimingParameters( \$runScript, $z, $prdInfo,
-                                $o{partition}, $o{queue}, $o{dual}, $o{windfall}, $o{urgent} );
+                                $o{cluster}, $o{queue}, $o{dual}, $o{windfall}, $o{urgent} );
                             FRETemplate::setNamelists( $fre, \$runScript, $prdInfo->{namelists} );
                             my $scriptName = frerun::productionRunScriptName( $z, $extension );
                             my $stdoutName = frerun::stdoutName( $z, $scriptName );
@@ -2050,50 +2036,50 @@ use FREUtil();
         exit FREDefaults::STATUS_FRE_GENERIC_PROBLEM;
     }
 
-    if ( scalar( my @partitions = split( /;/, $fre->property('FRE.scheduler.partitions') ) ) > 0 ) {
-        my $partitionDefault = $partitions[0];
-        if ( exists( $opt{partition} ) ) {
-            if ( $opt{partition} && substr( $opt{partition}, 0, 1 ) ne '-' ) {
-                if ( scalar( grep( $_ eq $opt{partition}, @partitions ) ) > 0 ) {
-                    $fre->out( FREMsg::NOTE, "The '$opt{partition}' partition will be used" );
+    if ( scalar( my @clusters = split( /;/, $fre->property('FRE.scheduler.clusters') ) ) > 0 ) {
+        my $clusterDefault = $clusters[0];
+        if ( exists( $opt{cluster} ) ) {
+            if ( $opt{cluster} && substr( $opt{cluster}, 0, 1 ) ne '-' ) {
+                if ( scalar( grep( $_ eq $opt{cluster}, @clusters ) ) > 0 ) {
+                    $fre->out( FREMsg::NOTE, "The '$opt{cluster}' cluster will be used" );
                 }
-                elsif ( scalar(@partitions) > 1 ) {
-                    my $partitions = join( "', '", @partitions );
+                elsif ( scalar(@clusters) > 1 ) {
+                    my $clusters = join( "', '", @clusters );
                     $fre->out( FREMsg::FATAL,
-                        "The '$opt{partition}' partition isn't allowed",
-                        "Allowed partitions are '$partitions', the default one is '$partitionDefault'"
+                        "The '$opt{cluster}' cluster isn't allowed",
+                        "Allowed cluster are '$clusters', the default one is '$clusterDefault'"
                     );
                     exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
                 }
                 else {
                     $fre->out( FREMsg::FATAL,
-                        "The '$opt{partition}' partition isn't allowed",
-                        "Allowed partition is '$partitionDefault' only"
+                        "The '$opt{cluster}' cluster isn't allowed",
+                        "Allowed cluster is '$clusterDefault' only"
                     );
                     exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
                 }
-            } ## end if ( $opt{partition} &&...)
+            }
             else {
-                $fre->out( FREMsg::FATAL, "The --partition option's value is missing" );
+                $fre->out( FREMsg::FATAL, "The --cluster option's value is missing" );
                 exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
             }
-        } ## end if ( exists( $opt{partition...}))
+        }
         else {
             $fre->out( FREMsg::WARNING,
-                "Option --partition=$partitionDefault has been automatically added" );
-            $opt{partition} = $partitionDefault;
+                "Option --cluster=$clusterDefault has been automatically added" );
+            $opt{cluster} = $clusterDefault;
         }
-    } ## end if ( scalar( my @partitions...))
-    elsif ( exists( $opt{partition} ) ) {
-        $fre->out( FREMsg::FATAL, "Option --partition is not supported on this site" );
+    }
+    elsif ( exists( $opt{cluster} ) ) {
+        $fre->out( FREMsg::FATAL, "Option --cluster is not supported on this site" );
         exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
     }
 
     if (scalar(
             my @queues = split(
                 /;/,
-                ( $opt{partition} )
-                ? $fre->property("FRE.scheduler.$opt{partition}.queues")
+                ( $opt{cluster} )
+                ? $fre->property("FRE.scheduler.$opt{cluster}.queues")
                 : $fre->property("FRE.scheduler.queues")
             )
         ) > 0
