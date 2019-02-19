@@ -781,15 +781,8 @@ sub setRunCommand($$$)
         my $component = $components[$inx];
         $runSizeInfo .= "  set -r ${component}_ranks = $ranks_per_ens->[$inx]\n";
         $runSizeInfo .= "  set -r tot_${component}_ranks = $rp->[$inx]\n";
-        # for now, double the threads passed to the scheduler if using srun only
-        # 2019-2-13: gaea Slurm admins appear to be going with NOT doubling on either
-        if ($runCommand =~ /multi/) {
-            $runSizeInfo .= "  set -r scheduler_${component}_threads = $rt->[$inx]\n" if $rt->[$inx];
-        }
-        else {
-            $runSizeInfo .= "  set -r scheduler_${component}_threads = @{[$rt->[$inx] * 2]}\n" if $rt->[$inx];
-        }
-        # double the threads passed to the namelists only if hyperthreading is used
+        $runSizeInfo .= "  set -r scheduler_${component}_threads = $rt->[$inx]\n" if $rt->[$inx];
+        # double the threads passed to the namelists if hyperthreading is used
         $rt->[$inx] *= 2 if $rp->[$inx] and $mpiInfo->{ht};
         $runSizeInfo .= "  set -r ${component}_threads = $rt->[$inx]\n";
         $runSizeInfo .= "  set -r ${component}_layout = $layout->[$inx]\n";
