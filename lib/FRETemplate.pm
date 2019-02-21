@@ -818,7 +818,7 @@ sub setRunCommand($$$)
 
     # 2019-2-19 ceb temporarily run srun-multi --test first
     if ($runCommand =~ /multi/) {
-        (my $runCommandTest = $runCommand) =~ s/srun-multi`/srun-multi` --test/;
+        (my $runCommandTest = $runCommand) =~ s/srun-multi`/srun-multi` --test --cpu-bind=verbose/;
         FRETemplate::setAlias( $fre, $r, 'runCommandTest', $runCommandTest );
     }
     else {
