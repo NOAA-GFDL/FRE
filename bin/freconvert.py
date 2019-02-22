@@ -84,19 +84,36 @@ def write_parsable_xml(xml_string):
     xml_string = xml_string.replace('<![CDATA[', '<cdata>')
     xml_string = xml_string.replace(']]>', '</cdata>')
 
-    
     comment_regex = '<xml_comment>(.*?)</xml_comment>'
     cdata_regex = '<cdata>(.*?)</cdata>'
+   
     
     cdata_strings, cdata_replacements = strip_char(re.findall(cdata_regex, xml_string, re.DOTALL), \
                                                   char_to_replace=replacement_char)
 
     cdata_opens = [m.start() + 7 for m in re.finditer('<cdata>', xml_string)]
     cdata_ends = [m.start() for m in re.finditer('</cdata>', xml_string)]
+    #print(cdata_opens)
+    #print(cdata_ends)
+    #print(cdata_strings[0])
+    #print(cdata_replacements[0])
+
+    #var = "abcdefg"
+    #var = var.replace(var[0:3], 
     
     diff = 0
     for i, start in enumerate(cdata_opens):
-        
+        if i < 10:
+            orig_str = xml_string[start + diff:cdata_ends[i] + diff] #debug
+            new_str = cdata_strings[i]
+            #print("Diff: " + str(diff))
+            #print(orig_str)
+            #print(new_str + '\n')
+            #print("Start: " + str(start))
+            #print("Start + diff: " + str(start + diff))
+            #print("cdata_ends[i]: " + str(cdata_ends[i]))
+            #print("cdata_ends[i] + diff: " + str(cdata_ends[i] + diff))
+            #print("cdata_strings[i]: " + str(cdata_strings[i]) + '\n')
         xml_string = xml_string.replace(xml_string[start + diff:cdata_ends[i] + diff], cdata_strings[i])
         diff += (len(replacement_char) - 1) * cdata_replacements[i]
 
@@ -113,7 +130,7 @@ def write_parsable_xml(xml_string):
         diff += ((len(replacement_char) - 1) * comment_replacements[i])
     
     xml_string = xml_string + "\n</root>"
-    
+    print(xml_string) 
     return xml_string
     
     
@@ -190,21 +207,33 @@ def do_land_f90(etree_root):
             else:
                 continue
     
-"""
-#Delete Default Platforms if they exist -- Work in progress
-setup_element = root.find('setup')
-platform_list = root.find('setup').findall('platform')
 
-for platform in platform_list:
-    if 'default' in platform.get('name'):
-        setup_element.remove(platform)
+#Delete Default Platforms -- if they exist
+def delete_default_platforms(etree_root):
+
+    setup_element = etree_root.find('experimentSuite').find('setup')
+    platform_list = setup_element.findall('platform')
+
+    for i in range(len(platform_list)):
+        if 'default' in platform_list[i].get('name'):
+            setup_element.remove(platform_list[i])
+
+
+def add_compiler_tag(etree_root):
+
+    platform_list = etree_root.find('experimentSuite').find('setup').findall('platform')
+    print(platform_list)
+    
+    for platform in platform_list:
+        if not platform.find('compiler'):
+            xi_include = ET.iselement(platform.find('{http://www.w3.org/2001/XInclude}include'))
+            if xi_include:
+                continue
+            else:
+                compiler_tag = ET.SubElement(platform, 'compiler', attrib={'type': 'intel', 'version': '16.0.3.210'})
+                comment_element = ET.Comment(text="For Conversion, a default compiler of Intel 16.0.3.210 has been set")
+                compiler_tag.insert(0, comment_element)
         
-platform_list_updated = root.find('setup').findall('platform')
-for platform in platform_list_updated:
-    print(platform)
-    print(platform.get('name'))
-
-"""
 
 #4. Insert <resources> tags for 'production' and 'regression' elements
 
@@ -534,6 +563,18 @@ def do_resources_main(etree_root):
 
         
 
+def throw_regression_warnings(etree_root):
+
+    for exp in etree_root.iter('experiment'):
+
+        exp_name = exp.get('name')
+        if exp.find('runtime').find('regression') is not None:
+            print("ATTENTION! Experiment " + str(exp_name) + " contains <regression> tags. \
+                  freconvert.py does not adjust content within <regression> and will have \
+                  to be modified manually.")
+
+
+
 # End Main 4.2 #
 
 
@@ -842,9 +883,10 @@ if __name__ == '__main__':
         input_content = f.read()
 
     # RUN THE PRE-XML PARSER AND TURN INTO ElementTree INSTANCE # 
-    input_content = modify_pp_components(input_content)
+    #input_content = modify_pp_components(input_content)
     pre_parsed_xml = write_parsable_xml(input_content) #Change paths to F2 - ALL BRONX VERSIONS
 
+    #Beginning of Multi-line comment - for testing
     tree = ET.ElementTree(ET.fromstring(pre_parsed_xml))
     root = tree.getroot()
    
@@ -853,7 +895,10 @@ if __name__ == '__main__':
     
     if old_version == 'bronx-10':
         do_land_f90(root)       # Land F90 checking # (mainly for Bronx-10) 
+        delete_default_platforms(root)
+        add_compiler_tag(root)
         do_resources_main(root) # Resource Tags - change namelists and create <resources> # IF BRONX-10
+        throw_regression_warnings(root)
         do_metadata_main(root)  # Create and/or modify metadata tags #IF BRONX-10 or BRONX-11
         xml_string = ET.tostring(root)
         xml_string = do_misc_string_replacements(xml_string)
@@ -871,8 +916,10 @@ if __name__ == '__main__':
         xml_string = do_misc_string_replacements(xml_string)
         final_xml = change_fre_version(xml_string)
     
-     
-    #final_xml = write_final_xml(pre_parsed_xml)
+    #End of Multi-comment - for testing
+    final_xml = write_final_xml(pre_parsed_xml)
+    #pre_parsed_xml = points_to_f2(input_content) - to go after multi-line comment
+
     # WRITE THE FINAL XML TO STATED FILE DESTINATION OR CREATE ONE IF -o OPTION IS NOT GIVEN
     if file_dest is not None:        
         with open(file_dest, 'w') as f:
