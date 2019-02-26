@@ -76,6 +76,7 @@ frelist -x <xml> -p <platform> -t <target> --executable <experiment>
     # e.g. old_exec = /lustre/f1/unswept/Chris.Blanton/warsaw_201803/CM2.5_FLOR_exec/ncrc4.intel16-prod-openmp/exec/fms_CM2.5_FLOR_exec.x
     #      new_exec = /lustre/f2/dev/Chris.Blanton/warsaw_201803/CM2.5_FLOR_exec/ncrc4.intel16-prod-openmp/exec/fms_CM2.5_FLOR_exec.x
     #      gcp -cd -v /lustre/f1/unswept/Chris.Blanton/warsaw_201803/CM2.5_FLOR_exec/ncrc4.intel16-prod-openmp/exec/fms_CM2.5_FLOR_exec.x /lustre/f2/dev/Chris.Blanton/warsaw_201803/CM2.5_FLOR_exec/ncrc4.intel16-prod-openmp/exec/fms_CM2.5_FLOR_exec.x
+    ```
     4. Change the executable permission to make it runnable (otherwise, frerun will complain)
     ```
     chmod +x <new_exec>
