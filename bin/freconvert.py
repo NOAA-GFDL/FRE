@@ -8,9 +8,35 @@ import argparse
 import xml.etree.ElementTree as ET
 
 
-## --------------- Parse the XML as a Text file first ------------- ##
+## --------------- Parse the XML as a Text file first ------------- ###
 
+# Perform all XML string replacements first, including F2 transitions #
+
+char_to_replace = "<"
 replacement_char = '&lt;'
+
+def convert_xml_text(xml_string, prev_version='bronx-12'):
+
+    # Replace all old versions of bronx with the newest version
+    xml_string = change_fre_version(xml_string, old_version)
+    # Change all F1 paths to the corresponding F2 destination
+    xml_string = points_to_f2(xml_string)
+    # Change any 'cubicToLatLon' attributes to 'xyInterp' in the post-processing
+    xml_string = modify_pp_components(xml_string)
+    # Replace any "DO_DATABASE" and "DO_ANALYSIS" property elements with "MDBI_SWITCH" and "ANALYSIS_SWITCH"
+    xml_string = xml_string.replace('DO_ANALYSIS', 'ANALYSIS_SWITCH')
+    xml_string = xml_string.replace('DO_DATABASE', 'MDBI_SWITCH')
+    # Remove database_ingestor.csh script, if it exists
+    xml_string = xml_string.replace(' script="$FRE_CURATOR_HOME/share/bin/database_ingestor.csh"', '')
+    #9. Remove two whitespace characters before closing </publicMetadata> tag
+    #xml_string = xml_string.replace('      </publicMetadata>', '    </publicMetadata>')
+
+    return xml_string
+
+
+def replace_chars(string):
+
+    return re.sub(char_to_replace, replacement_char, string)
 
 
 def rreplace(string, old, new, occurrence=1):
@@ -19,19 +45,10 @@ def rreplace(string, old, new, occurrence=1):
     return new.join(str_list)
 
 
-def strip_char(list_of_strings, char_to_strip='<', char_to_replace='&lt;'):
-    
-    replacement_count_list = []
-    for i in range(len(list_of_strings)):
-        
-        if char_to_strip in list_of_strings[i]:
-            original_count = list_of_strings[i].count(replacement_char) #usually zero
-            list_of_strings[i] = list_of_strings[i].replace(char_to_strip, replacement_char)
-            replacement_count_list.append(list_of_strings[i].count(replacement_char) - original_count)
-        else:
-            replacement_count_list.append(0)
-            
-    return list_of_strings, replacement_count_list
+def modify_pp_components(xml_string):
+
+    xml_string = xml_string.replace('cubicToLatLon', 'xyInterp')
+    return xml_string
 
 
 def points_to_f2(xml_string):
@@ -57,14 +74,13 @@ def points_to_f2(xml_string):
     return xml_string
 
 
-def change_fre_version(xml_string):
+def change_fre_version(xml_string, version='bronx-12'):
 
-    return xml_string.replace('bronx-12', 'bronx-13')
+    return xml_string.replace(version, 'bronx-14')
 
 
 def write_parsable_xml(xml_string):
    
-    xml_string = points_to_f2(xml_string)
     xml_string = xml_string.replace('<root>', '<xml_root>')
     xml_string = xml_string.replace('</root>', '</xml_root>')
  
@@ -76,9 +92,6 @@ def write_parsable_xml(xml_string):
         
     xml_string = xml_string.replace('&', '&amp;')
     
-    #comment_regex = '<!--(.*?)-->'
-    #cdata_regex = '<!\[CDATA\[(.*?)\]\]>'
-       
     xml_string = xml_string.replace('<!--', '<xml_comment>')
     xml_string = xml_string.replace('-->', '</xml_comment>')
     xml_string = xml_string.replace('<![CDATA[', '<cdata>')
@@ -87,53 +100,26 @@ def write_parsable_xml(xml_string):
     comment_regex = '<xml_comment>(.*?)</xml_comment>'
     cdata_regex = '<cdata>(.*?)</cdata>'
    
-    
-    cdata_strings, cdata_replacements = strip_char(re.findall(cdata_regex, xml_string, re.DOTALL), \
-                                                  char_to_replace=replacement_char)
+    #Fix CDATA
+    xml_string = fix_special_strings(cdata_regex, xml_string)
 
-    cdata_opens = [m.start() + 7 for m in re.finditer('<cdata>', xml_string)]
-    cdata_ends = [m.start() for m in re.finditer('</cdata>', xml_string)]
-    #print(cdata_opens)
-    #print(cdata_ends)
-    #print(cdata_strings[0])
-    #print(cdata_replacements[0])
+    #Fix Comments
+    xml_string = fix_special_strings(comment_regex, xml_string)
 
-    #var = "abcdefg"
-    #var = var.replace(var[0:3], 
-    
-    diff = 0
-    for i, start in enumerate(cdata_opens):
-        if i < 10:
-            orig_str = xml_string[start + diff:cdata_ends[i] + diff] #debug
-            new_str = cdata_strings[i]
-            #print("Diff: " + str(diff))
-            #print(orig_str)
-            #print(new_str + '\n')
-            #print("Start: " + str(start))
-            #print("Start + diff: " + str(start + diff))
-            #print("cdata_ends[i]: " + str(cdata_ends[i]))
-            #print("cdata_ends[i] + diff: " + str(cdata_ends[i] + diff))
-            #print("cdata_strings[i]: " + str(cdata_strings[i]) + '\n')
-        xml_string = xml_string.replace(xml_string[start + diff:cdata_ends[i] + diff], cdata_strings[i])
-        diff += (len(replacement_char) - 1) * cdata_replacements[i]
-
-    
-    comment_strings, comment_replacements = strip_char(re.findall(comment_regex, xml_string, re.DOTALL), \
-                                                      char_to_replace=replacement_char)
-
-    comment_opens = [m.start() + 13 for m in re.finditer('<xml_comment>', xml_string)]
-    comment_ends = [m.start() for m in re.finditer('</xml_comment>', xml_string)]
-    diff = 0
-    for i, start in enumerate(comment_opens):
-        
-        xml_string = xml_string.replace(xml_string[start + diff:comment_ends[i] + diff], comment_strings[i])
-        diff += ((len(replacement_char) - 1) * comment_replacements[i])
-    
+    #Add new-line character at end of XML to separate the final 'root' tag
     xml_string = xml_string + "\n</root>"
-    print(xml_string) 
     return xml_string
     
     
+def fix_special_strings(regex_str, xml_string):
+
+    regex_matches = re.findall(regex_str, xml_string, re.DOTALL)
+    for match in regex_matches:
+        
+        xml_string = re.sub(re.escape(match), replace_chars(match), xml_string)
+
+    return xml_string
+
 
 ## ----------------------------- END PRE-XML PARSER ----------------------------##
 
@@ -141,30 +127,40 @@ def write_parsable_xml(xml_string):
 ## ----------------------------- BEGIN XML PARSING  ----------------------------##
 
 
-#1 Change any 'cubicToLatLon' attributes to 'xyInterp' in post-processing components
-def modify_pp_components(xml_string):
+# Modify (or add) 'FRE_VERSION' property and retrieve old version 
 
-    xml_string = xml_string.replace('cubicToLatLon', 'xyInterp')
-    return xml_string
-
-
-#2 Modify 'FRE_VERSION' property and modify (or add) <freVersion> tag
-
-def do_fre_version(etree_root):
+def do_fre_version_props(etree_root):
 
     old_ver = "bronx-10" # Default value (i.e. if no FRE_VERSION property exists)
+    fre_prop_exists = False
+
+    #Retrieve the current XML bronx version through the FRE_VERSION property tag
     for prop in etree_root.iter('property'):
         
-        if prop.get("name") == "FRE_VERSION" and prop.get("value") != "bronx-13":
+        if prop.get("name") == "FRE_VERSION":
             old_ver = prop.get("value")
-            prop.set("value", "bronx-13")
+            fre_prop_exists = True
             break
         else:
             pass
 
+    #If no FRE_VERSION property tag exists (rare), add one as the first property tag
+    if not fre_prop_exists:
+        fre_version_property = ET.Element('property', attrib={'name': 'FRE_VERSION', \
+                                                              'value': old_ver})
+        parent = etree_root.find('experimentSuite')
+        parent.insert(0, fre_version_property)
+
+    return old_ver
+
+
+#Add platform-specific <freVersion> tags, if necessary
+def add_fre_version_tag(etree_root):
+
     #Check platform tags for <freVersion> tag
     for platform in etree_root.iter('platform'):
 
+        print("Now on platform : " + str(platform.get('name')))
         #Skip over xi:include tags. We DO NOT put a <freVersion> tag here!
         #The element tag name for xi:include is '{http://www.w3.org/2001/XInclude}include'
         #Insert <freVersion> tag at the VERY BEGINNING of the <platform> tag
@@ -178,10 +174,8 @@ def do_fre_version(etree_root):
                 freVersion_elem.tail = '\n      '
                 platform.insert(0, freVersion_elem)
                 
-    return old_ver
 
-
-#3. Add attribute 'doF90Cpp="yes"' to <compile> tag for land component in build experiment
+#Add attribute 'doF90Cpp="yes"' to <compile> tag for land component in build experiment
 #Note: will only work for 1 land build component. Manual modification is needed for more than 1.
 
 def do_land_f90(etree_root):
@@ -192,7 +186,12 @@ def do_land_f90(etree_root):
             
             if component_elem.get('name') == 'land':
                 compile_elem = component_elem.find('compile')
-                if not 'doF90Cpp' in compile_elem.keys():
+
+                #Terminate inner loop if no compile element exists for land
+                if compile_elem is None:
+                    break
+
+                elif not 'doF90Cpp' in compile_elem.keys():
                     csh_land_elem = compile_elem.find('csh')
                     if csh_land_elem is not None:
                         compile_elem.set('doF90Cpp', 'yes')
@@ -200,10 +199,16 @@ def do_land_f90(etree_root):
                         csh_land_elem.remove(cdata_elem)
                         compile_elem.remove(csh_land_elem)
                         return
+
+                    #Shouldn't get here very often, but if no <csh> exists, exit
                     else:
                         return
+
+                #Exit if 'doF90Cpp' already exists
                 else:
                     return
+
+            #If not on land component, check next component
             else:
                 continue
     
@@ -215,27 +220,30 @@ def delete_default_platforms(etree_root):
     platform_list = setup_element.findall('platform')
 
     for i in range(len(platform_list)):
-        if 'default' in platform_list[i].get('name'):
+        platform_name = platform_list[i].get('name')
+        if '.default' in platform_name:
+            print("Deleting platform: %s" % platform_name)
             setup_element.remove(platform_list[i])
 
 
-def add_compiler_tag(etree_root):
+def add_compiler_tag(etree_root, compiler_type='intel', compiler_version='16.0.3.210'):
 
-    platform_list = etree_root.find('experimentSuite').find('setup').findall('platform')
-    print(platform_list)
-    
+    platform_list = etree_root.find('experimentSuite').find('setup').findall('platform')    
     for platform in platform_list:
+
         if not platform.find('compiler'):
             xi_include = ET.iselement(platform.find('{http://www.w3.org/2001/XInclude}include'))
+
             if xi_include:
                 continue
             else:
-                compiler_tag = ET.SubElement(platform, 'compiler', attrib={'type': 'intel', 'version': '16.0.3.210'})
-                comment_element = ET.Comment(text="For Conversion, a default compiler of Intel 16.0.3.210 has been set")
-                compiler_tag.insert(0, comment_element)
+                compiler_tag = ET.SubElement(platform, 'compiler', attrib={'type': compiler_type, \
+                                                                           'version': compiler_version})
+        else:
+            continue
         
 
-#4. Insert <resources> tags for 'production' and 'regression' elements
+# Insert <resources> tags for 'production' and 'regression' elements
 
 ###     First, check for the existence of resources tags in the XML.
 ###     If none exist
@@ -436,15 +444,28 @@ class Namelist(object):
         #Sometimes ocn_nthreads or atmos_nthreads will not be displayed in namelist, but we need
         #it in the resource tags. Set a default value of 1 to be returned.
         except KeyError as e:
+
             if var == 'atmos_nthreads':
                 self.nml_vars[var] = '1'
                 return self.nml_vars[var]
-            if var == 'ocean_nthreads':
+
+            elif var == 'atmos_npes':
                 self.nml_vars[var] = '1'
                 return self.nml_vars[var]
 
-        return self.nml_vars[var]
+            elif var == 'ocean_nthreads':
+                self.nml_vars[var] = '1'
+                return self.nml_vars[var]
 
+            elif var == 'ocean_npes':
+                self.nml_vars[var] = '1'
+                return self.nml_vars[var]
+
+            elif var == 'ocean_layout':
+                self.nml_vars[var] = '1,1'
+                return self.nml_vars[var]
+
+        return self.nml_vars[var]
 
 
 ### End Main 4.1 ###
@@ -566,12 +587,13 @@ def do_resources_main(etree_root):
 def throw_regression_warnings(etree_root):
 
     for exp in etree_root.iter('experiment'):
-
+        
         exp_name = exp.get('name')
-        if exp.find('runtime').find('regression') is not None:
-            print("ATTENTION! Experiment " + str(exp_name) + " contains <regression> tags. \
-                  freconvert.py does not adjust content within <regression> and will have \
-                  to be modified manually.")
+        if exp.find('runtime') is not None:
+            if exp.find('runtime').find('regression') is not None:
+                print("ATTENTION! Experiment " + str(exp_name) + " contains <regression> tags. \
+                      freconvert.py does not adjust content within <regression> and will have \
+                      to be modified manually.")
 
 
 
@@ -705,7 +727,7 @@ class Metadata(object):
 
     def build_metadata_xml(self, experiment_element):
 
-        new_metadata = ET.Element('publicMetadata', attrib={'DBswitch': '$(DB_SWITCH)'})
+        new_metadata = ET.Element('publicMetadata', attrib={'DBswitch': '$(MDBI_SWITCH)'})
         new_metadata.text = '\n      '
         new_metadata.tail = '\n\n    '
         experiment_element.insert(0, new_metadata)
@@ -814,21 +836,6 @@ def do_metadata_main(etree_root):
 
 ## ----------------------------- BEGIN POST-XML PARSING  ----------------------------##
 
-def do_misc_string_replacements(xml_string):
-
-    #7. Replace "DO_DATABASE" and "DO_ANALYSIS" with "DB_SWITCH" and "ANALYSIS_SWITCH"
-    xml_string = xml_string.replace('DO_ANALYSIS', 'ANALYSIS_SWITCH')
-    xml_string = xml_string.replace('DO_DATABASE', 'DB_SWITCH')
-
-    #8. Remove database_ingestor.csh script (if necessary) -- not needed anymore
-    xml_string = xml_string.replace(' script="$FRE_CURATOR_HOME/share/bin/database_ingestor.csh"', '')
-
-    #9. Remove two whitespace characters before closing </publicMetadata> tag
-    xml_string = xml_string.replace('      </publicMetadata>', '    </publicMetadata>')
-
-    return xml_string
-  
-
 def write_final_xml(xml_string):
 
     xml_string = xml_string.replace('&lt;', '<')
@@ -879,55 +886,86 @@ if __name__ == '__main__':
     input_xml = args.input_xml
     file_dest = args.output_xml
 
+    if file_dest is None:
+        modified_input_xml = input_xml.replace('.xml', '')
+        file_dest = os.getcwd() + '/' + modified_input_xml + '_bronx14.xml'
+    else:
+        pass
+        
     with open(input_xml, 'r') as f:
         input_content = f.read()
 
-    # RUN THE PRE-XML PARSER AND TURN INTO ElementTree INSTANCE # 
-    #input_content = modify_pp_components(input_content)
+    # RUN THE PRE-XML PARSER AND TURN INTO ElementTree INSTANCE #
+    print("Pre-parsing XML...")
+    time.sleep(1) 
     pre_parsed_xml = write_parsable_xml(input_content) #Change paths to F2 - ALL BRONX VERSIONS
-
-    #Beginning of Multi-line comment - for testing
-    tree = ET.ElementTree(ET.fromstring(pre_parsed_xml))
-    root = tree.getroot()
-   
-    # PARSE AND MODIFY ELEMENTS DEPENDING ON ORIGINAL BRONX VERSION #
-    old_version = do_fre_version(root)    # freVersion checking # ALL BRONX VERSIONS
     
+    try:
+        tree = ET.ElementTree(ET.fromstring(pre_parsed_xml))
+    except ET.ParseError as e:
+        print("\nERROR: %s" % str(e).upper()) 
+        print("The XML is non-conforming! Please correct issues and rerun freconvert.py")
+        print("Writing out the pre-parsed file for debugging.")
+        file_dest = file_dest.replace('bronx14.xml', 'pre_parsed_error.xml')
+        with open(file_dest, 'w') as f:
+            f.write(pre_parsed_xml)
+        print("Path to Pre-Parsed XML: %s" % file_dest)
+        sys.exit(1)
+    
+    #tree = ET.ElementTree(ET.fromstring(pre_parsed_xml))
+    root = tree.getroot()
+    
+    # PARSE AND MODIFY ELEMENTS DEPENDING ON ORIGINAL BRONX VERSION #
+    old_version = do_fre_version_props(root)    # freVersion checking # ALL BRONX VERSIONS
+    print("Converting XML from %s to bronx-14..." % old_version)
+    time.sleep(3)
     if old_version == 'bronx-10':
-        do_land_f90(root)       # Land F90 checking # (mainly for Bronx-10) 
+        print("Checking for land F90 <csh> block...")
+        time.sleep(1)
+        do_land_f90(root)
+        print("Checking for 'default' platforms (will be removed)...")
+        time.sleep(1) 
         delete_default_platforms(root)
+        print("Adding <freVersion> tags...")
+        time.sleep(1)
+        add_fre_version_tag(root)
+        print("Checking for existence of 'compiler' tag in build experiment")
+        time.sleep(1)
         add_compiler_tag(root)
+        print("Adding resources tags...")
+        time.sleep(1)
         do_resources_main(root) # Resource Tags - change namelists and create <resources> # IF BRONX-10
         throw_regression_warnings(root)
+        time.sleep(1)
+        print("Checking for metadata. Adding <publicMetadata> tags if necessary...")
+        time.sleep(1)
         do_metadata_main(root)  # Create and/or modify metadata tags #IF BRONX-10 or BRONX-11
         xml_string = ET.tostring(root)
-        xml_string = do_misc_string_replacements(xml_string)
+        print("Linking paths to F2. Performing final XML manipulations...")
+        time.sleep(1)
+        xml_string = convert_xml_text(xml_string, prev_version=old_version)
+        print("Debug: past convert_xml_text. Now onto write_final_xml")
         final_xml = write_final_xml(xml_string)
 
     elif old_version == 'bronx-11':
+        delete_default_platforms(root)
         do_metadata_main(root)
         xml_string = ET.tostring(root)
-        xml_string = do_misc_string_replacements(xml_string)
+        xml_string = convert_xml_text(xml_string, prev_version=old_version)
         final_xml = write_final_xml(xml_string)
 
-    # No need to parse XML with ElementTree if Bronx-12. Just do string replacements.
-    elif old_version == 'bronx-12':
-        xml_string = points_to_f2(input_content)
-        xml_string = do_misc_string_replacements(xml_string)
-        final_xml = change_fre_version(xml_string)
-    
-    #End of Multi-comment - for testing
-    final_xml = write_final_xml(pre_parsed_xml)
-    #pre_parsed_xml = points_to_f2(input_content) - to go after multi-line comment
-
+    # No need to parse XML with ElementTree if Bronx-12 or Bronx-13. Just do string replacements.
+    elif old_version == 'bronx-12' or old_version == 'bronx-13':
+        print("Linking paths to F2. Performing final XML manipulations...")
+        time.sleep(1)
+        final_xml = convert_xml_text(input_content, prev_version=old_version)
+   
+    print("Writing new XML...")
+    time.sleep(1)
     # WRITE THE FINAL XML TO STATED FILE DESTINATION OR CREATE ONE IF -o OPTION IS NOT GIVEN
-    if file_dest is not None:        
-        with open(file_dest, 'w') as f:
-            f.write(final_xml)
-    else:
-        input_xml = input_xml.replace('.xml', '')
-        file_dest = os.getcwd() + '/' + input_xml + '_bronx13.xml'
-        with open(file_dest, 'w') as f:
-            f.write(final_xml)
+    with open(file_dest, 'w') as f:
+        f.write(final_xml)
+
+    print("Converted XML written to %s" % (file_dest))
     
 
