@@ -43,7 +43,7 @@ frerun <other FRE options> --extend
 ## From Bronx-11 or 12
 Updating from Bronx-11 or 12 to Bronx-14 requires a bit of care due to the F1 to F2 filesytem transition. If you feel comfortable updating your experiment yourself, please follow the instructions below.
 Otherwise, please submit a help desk ticket.
-1. Record the (old) FRE `state` directory and executable location
+1. Record the (old) `state` directory and executable location
 ```
 module load fre/<old-bronx>
 frelist -x <xml> -p <platform> -t <target> -d state <experiment>
@@ -76,7 +76,11 @@ frelist -x <xml> -p <platform> -t <target> --executable <experiment>
     # e.g. old_exec = /lustre/f1/unswept/Chris.Blanton/warsaw_201803/CM2.5_FLOR_exec/ncrc4.intel16-prod-openmp/exec/fms_CM2.5_FLOR_exec.x
     #      new_exec = /lustre/f2/dev/Chris.Blanton/warsaw_201803/CM2.5_FLOR_exec/ncrc4.intel16-prod-openmp/exec/fms_CM2.5_FLOR_exec.x
     #      gcp -cd -v /lustre/f1/unswept/Chris.Blanton/warsaw_201803/CM2.5_FLOR_exec/ncrc4.intel16-prod-openmp/exec/fms_CM2.5_FLOR_exec.x /lustre/f2/dev/Chris.Blanton/warsaw_201803/CM2.5_FLOR_exec/ncrc4.intel16-prod-openmp/exec/fms_CM2.5_FLOR_exec.x
-5. Regenerate your runscript using the `--extend` option
+    4. Change the executable permission to make it runnable (otherwise, frerun will complain)
+    ```
+    chmod +x <new_exec>
+    ```
+5. Regenerate your runscript using the `--extend` option. Make a note of any warnings or errors related to files, and fix them before continuing.
 ```
 module load fre/bronx-14
 frerun <other FRE options> --extend
