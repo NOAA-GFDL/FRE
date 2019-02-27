@@ -1,6 +1,6 @@
 # Bronx-14 Release Notes
 
-FRE Bronx-14 was released on February 27, 2018. The major feature is PP/AN Slurm support; Bronx-14
+FRE Bronx-14 was released on February 27, 2019. The major feature is PP/AN Slurm support; Bronx-14
 will be replaced by Bronx-15 which will have full (gaea & GFDL) Slurm support.
 
 ## Features
