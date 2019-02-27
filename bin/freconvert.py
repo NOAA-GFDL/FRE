@@ -317,13 +317,13 @@ def get_new_nml_str(nml_name, old_nml_str_list):
         if nml_name == 'coupler_nml':
             coupler_dict = {'atmos_npes': '$atm_ranks', 'atmos_nthreads': '$atm_threads', \
                             'atmos_mask_table': '$atm_mask_table', 'ocean_npes': '$ocn_ranks', \
-                            'ocean_nthreads': '$ocn_threads'}
+                            'ocean_nthreads': '$ocn_threads', 'ocean_mask_table': '$ocn_mask_table'}
 
             for old_str, new_str in coupler_dict.items():
              
                 if str_to_check == old_str:
                     old_nml_str_list[index] = re.sub('(?<=\=).*', new_str, substr)
-                    break 
+                    break
 
             #for old_str, found in coupler_dict_found.items():
 
@@ -416,7 +416,7 @@ class Namelist(object):
         if value[-1] == ',':
             value = rreplace(value, ',', '')
  
-        #Set up class dictionary
+        #Insert namelist value into the Namelist class dictionary
         if set_layout:
             self.nml_vars[layout_group + "_" + nml_field] = value
 
@@ -453,6 +453,10 @@ class Namelist(object):
                 self.nml_vars[var] = '1'
                 return self.nml_vars[var]
 
+            elif var == 'atmos_layout':
+                self.nml_vars[var] = '1,1'
+                return self.nml_vars[var]
+
             elif var == 'ocean_nthreads':
                 self.nml_vars[var] = '1'
                 return self.nml_vars[var]
@@ -463,6 +467,9 @@ class Namelist(object):
 
             elif var == 'ocean_layout':
                 self.nml_vars[var] = '1,1'
+                return self.nml_vars[var]
+            else:
+                self.nml_vars[var] = ''
                 return self.nml_vars[var]
 
         return self.nml_vars[var]
@@ -482,6 +489,7 @@ def strip_dict_whitespace(nml_dict):
         new_dict[new_key] = new_value
 
     return new_dict
+
 
 def do_resources_main(etree_root):
 
@@ -552,29 +560,48 @@ def do_resources_main(etree_root):
              
             if exp.find('runtime') is not None:
  
-                resource = ET.SubElement(exp.find('runtime').find('production'), 'resources', \
-                                         attrib={'site': 'ncrc3', 'jobWallclock': '10:00:00', \
-                                         'segRuntime': '10:00:00'})
+                resource_element = ET.SubElement(exp.find('runtime').find('production'), 'resources', \
+                                                 attrib={'site': 'ncrc3', 'jobWallclock': '10:00:00', \
+                                                         'segRuntime': '10:00:00'})
 
-                atm = ET.SubElement(exp.find('runtime').find('production').find('resources'), 'atm', \
-                                    attrib={'ranks': nml_container.get_var('atmos_npes'), \
-                                            'threads': nml_container.get_var('atmos_nthreads'), \
-                                            'layout': nml_container.get_var('atm_layout'), \
-                                            'io_layout': nml_container.get_var('atm_io_layout')})
+                atm_attribs = {'ranks': nml_container.get_var('atmos_npes'), \
+                               'threads': nml_container.get_var('atmos_nthreads'), \
+                               'layout': nml_container.get_var('atm_layout'), \
+                               'io_layout': nml_container.get_var('atm_io_layout'), \
+                               'mask_table': nml_container.get_var('atm_mask_table')}
 
-                ocn = ET.SubElement(exp.find('runtime').find('production').find('resources'), 'ocn', \
-                                    attrib={'ranks': nml_container.get_var('ocean_npes'), \
-                                            'threads': nml_container.get_var('ocean_nthreads'), \
-                                            'layout': nml_container.get_var('ocn_layout'), \
-                                            'io_layout': nml_container.get_var('ocn_io_layout')})
+                ocn_attribs = {'ranks': nml_container.get_var('ocean_npes'), \
+                               'threads': nml_container.get_var('ocean_nthreads'), \
+                               'layout': nml_container.get_var('ocn_layout'), \
+                               'io_layout': nml_container.get_var('ocn_io_layout'), \
+                               'mask_table': nml_container.get_var('ocn_mask_table')}
 
-                lnd = ET.SubElement(exp.find('runtime').find('production').find('resources'), 'lnd', \
-                                    attrib={'layout': nml_container.get_var('lnd_layout'), \
-                                            'io_layout': nml_container.get_var('lnd_io_layout')})
+                lnd_attribs = {'ranks': nml_container.get_var('land_npes'), \
+                               'threads': nml_container.get_var('land_nthreads'), \
+                               'layout': nml_container.get_var('lnd_layout'), \
+                               'io_layout': nml_container.get_var('lnd_io_layout'), \
+                               'mask_table': nml_container.get_var('lnd_mask_table')}
 
-                ice = ET.SubElement(exp.find('runtime').find('production').find('resources'), 'ice', \
-                                    attrib={'layout': nml_container.get_var('ice_layout'), \
-                                            'io_layout': nml_container.get_var('ice_io_layout')})
+                ice_attribs = {'ranks': nml_container.get_var('ice_npes'), \
+                               'threads': nml_container.get_var('ice_nthreads'), \
+                               'layout': nml_container.get_var('ice_layout'), \
+                               'io_layout': nml_container.get_var('ice_io_layout'), \
+                               'mask_table': nml_container.get_var('ice_mask_table')}
+
+                attrib_list = [atm_attribs, ocn_attribs, lnd_attribs, ice_attribs]
+
+                for attrib_dict in attrib_list:
+           
+                    for key, value in attrib_dict.items():
+
+                        if value == '' or value == None:
+                            del attrib_dict[key]
+                
+
+                atm = ET.SubElement(resource_element, 'atm', attrib=atm_attribs)
+                ocn = ET.SubElement(resource_element, 'ocn', attrib=ocn_attribs)
+                lnd = ET.SubElement(resource_element, 'lnd', attrib=lnd_attribs)
+                ice = ET.SubElement(resource_element, 'ice', attrib=ice_attribs)
 
             else:
                 pass
@@ -866,6 +893,9 @@ def write_final_xml(xml_string):
     ns_line = re.search('<experimentSuite.*(?=\>)', xml_string).group()
     ns_att = ' xmlns:xi="http://www.w3.org/2001/XInclude"'
     xml_string = xml_string.replace(ns_line, ns_line + ns_att)
+
+    #7. Remove two whitespace characters before closing </publicMetadata> tag
+    xml_string = xml_string.replace('      </publicMetadata>', '    </publicMetadata>')
 
     return xml_string 
 
