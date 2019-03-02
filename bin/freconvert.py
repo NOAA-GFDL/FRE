@@ -61,12 +61,10 @@ def points_to_f2(xml_string):
                                 '/lustre/f1/unswept': '/lustre/f2/dev',
                                 '/lustre/f1/pdata': '/lustre/f2/pdata/gfdl'}
 
-    for f1_soft_pointer, f2_soft_pointer in soft_filesystem_pointers.items():
-   
+    for f1_soft_pointer, f2_soft_pointer in soft_filesystem_pointers.items(): 
         xml_string = xml_string.replace(f1_soft_pointer, f2_soft_pointer)
 
     for f1_hard_pointer, f2_hard_pointer in hard_filesystem_pointers.items():
-
         xml_string = xml_string.replace(f1_hard_pointer, f2_hard_pointer)
 
     xml_string = xml_string.replace('lustre/f1', 'lustre/f2/dev')
@@ -296,12 +294,35 @@ def modify_namelist(nml, nml_name):
     nml.text = new_nml_str
 
 
+#Helper function for get_new_nml_str
+def nml_text_replace(str_to_check, namelist_dict, namelist_substr, old_nml_str_list,
+                     loop_index):
+
+    for old_str, new_str in namelist_dict.items():
+        if str_to_check == old_str:
+            old_nml_str_list[loop_index] = re.sub('(?<=\=).*', new_str, namelist_substr)
+            break
+
+    return old_nml_str_list[loop_index]
+
+
 def get_new_nml_str(nml_name, old_nml_str_list):
 
-    configs_to_edit = ['atmos_npes', 'atmos_nthreads', 'ocean_npes', \
-                       'ocean_nthreads', 'layout', 'io_layout', \
-                       'ocean_mask_table', 'ice_mask_table', 'land_mask_table', \
+    configs_to_edit = ['atmos_npes', 'atmos_nthreads', 'ocean_npes',
+                       'ocean_nthreads', 'layout', 'io_layout',
+                       'ocean_mask_table', 'ice_mask_table', 'land_mask_table',
                        'atm_mask_table']
+
+    coupler_dict = {'atmos_npes': '$atm_ranks', 'atmos_nthreads': '$atm_threads',
+                    'atmos_mask_table': '$atm_mask_table', 'ocean_npes': '$ocn_ranks',
+                    'ocean_nthreads': '$ocn_threads', 'ocean_mask_table': '$ocn_mask_table'}
+    fv_core_dict = {'layout': '$atm_layout', 'io_layout': '$atm_io_layout'}
+    ice_model_dict = {'layout': '$ice_layout', 'io_layout': '$ice_io_layout', 
+                      'ice_mask_table': '$ice_mask_table'}
+    land_model_dict = {'layout': '$lnd_layout', 'io_layout': '$lnd_io_layout', 
+                       'land_mask_table': '$lnd_mask_table'}
+    ocean_model_dict = {'layout': '$ocn_layout', 'io_layout': '$ocn_io_layout', 
+                        'ocean_mask_table': '$ocn_mask_table'}
 
     for index, substr in enumerate(old_nml_str_list):
 
@@ -313,77 +334,29 @@ def get_new_nml_str(nml_name, old_nml_str_list):
         if str_to_check not in configs_to_edit:
             continue
 
-        #Anything right of the '=' sign will be replaced
         if nml_name == 'coupler_nml':
-            coupler_dict = {'atmos_npes': '$atm_ranks', 'atmos_nthreads': '$atm_threads', \
-                            'atmos_mask_table': '$atm_mask_table', 'ocean_npes': '$ocn_ranks', \
-                            'ocean_nthreads': '$ocn_threads', 'ocean_mask_table': '$ocn_mask_table'}
-
-            for old_str, new_str in coupler_dict.items():
-             
-                if str_to_check == old_str:
-                    old_nml_str_list[index] = re.sub('(?<=\=).*', new_str, substr)
-                    break
-
-            #for old_str, found in coupler_dict_found.items():
-
-            #    if not found:
-            #        old_nml_str_list.append(old_str + '=' + coupler_dict[old_str])
-
-            #if str_to_check == 'atmos_npes':
-            #    old_nml_str_list[index] = substr.replace(substr[substr.find('=')+1:], '$atm_ranks')
-            #elif str_to_check == 'atmos_nthreads':
-            #    old_nml_str_list[index] = substr.replace(substr[substr.find('=')+1:], '$atm_threads')
-            #elif str_to_check == 'atmos_mask_table':
-            #    old_nml_str_list[index] = substr.replace(substr[substr.find('=')+1:], '$atm_mask_table')
-            #elif str_to_check == 'ocean_npes':
-            #    old_nml_str_list[index] = substr.replace(substr[substr.find('=')+1:], '$ocn_ranks')
-            #elif str_to_check == 'ocean_nthreads':
-            #    old_nml_str_list[index] = substr.replace(substr[substr.find('=')+1:], '$ocn_threads')
-            #else:
-            #    pass
-
+            old_nml_str_list[index] = nml_text_replace(str_to_check,
+                                                       coupler_dict, substr, 
+                                                       old_nml_str_list, index)
         elif nml_name == 'fv_core_nml':
-            if str_to_check == 'layout':
-                old_nml_str_list[index] = substr.replace(substr[substr.find('=')+1:], '$atm_layout')
-            elif str_to_check == 'io_layout':
-                old_nml_str_list[index] = substr.replace(substr[substr.find('=')+1:], '$atm_io_layout')
-            else:
-                pass
-
+            old_nml_str_list[index] = nml_text_replace(str_to_check,
+                                                       fv_core_dict, substr, 
+                                                       old_nml_str_list, index)
         elif nml_name == 'ice_model_nml':
-            if str_to_check == 'layout':
-                old_nml_str_list[index] = substr.replace(substr[substr.find('=')+1:], '$ice_layout')
-            elif str_to_check == 'io_layout':
-                old_nml_str_list[index] = substr.replace(substr[substr.find('=')+1:], '$ice_io_layout')
-            elif str_to_check == 'ice_mask_table':
-                old_nml_str_list[index] = substr.replace(substr[substr.find('=')+1:], '$ice_mask_table')
-            else:
-                pass
-
+            old_nml_str_list[index] = nml_text_replace(str_to_check,
+                                                       ice_model_dict, substr, 
+                                                       old_nml_str_list, index)
         elif nml_name == 'land_model_nml':
-            if str_to_check == 'layout':
-                old_nml_str_list[index] = substr.replace(substr[substr.find('=')+1:], '$lnd_layout')
-            elif str_to_check == 'io_layout':
-                old_nml_str_list[index] = substr.replace(substr[substr.find('=')+1:], '$lnd_io_layout')
-            elif str_to_check == 'ice_mask_table':
-                 old_nml_str_list[index] = substr.replace(substr[substr.find('=')+1:], '$lnd_mask_table')
-            else:
-                pass
-
+            old_nml_str_list[index] = nml_text_replace(str_to_check,
+                                                       land_model_dict, substr, 
+                                                       old_nml_str_list, index)
         elif nml_name == 'ocean_model_nml':
-            if str_to_check == 'layout':
-                old_nml_str_list[index] = substr.replace(substr[substr.find('=')+1:], '$ocn_layout')
-            elif str_to_check == 'io_layout':
-                old_nml_str_list[index] = substr.replace(substr[substr.find('=')+1:], '$ocn_io_layout')
-            elif str_to_check == 'ocean_mask_table':
-                old_nml_str_list[index] = substr.replace(substr[substr.find('=')+1:], '$ocn_mask_table')
-            else:
-                pass
-
+            old_nml_str_list[index] = nml_text_replace(str_to_check,
+                                                       ocean_model_dict, substr, 
+                                                       old_nml_str_list, index)
         else:
             pass
-
+ 
     final_str = '\n'.join(old_nml_str_list)
     return final_str
 
@@ -441,30 +414,25 @@ class Namelist(object):
         try:
             foo = self.nml_vars[var]
     
-        #Sometimes ocn_nthreads or atmos_nthreads will not be displayed in namelist, but we need
-        #it in the resource tags. Set a default value of 1 to be returned.
+        #Sometimes, there will be namelist keys that will not be displayed in namelist, but we need
+        #it in the resource tags. Set default values to be returned.
         except KeyError as e:
 
             if var == 'atmos_nthreads':
                 self.nml_vars[var] = '1'
                 return self.nml_vars[var]
-
             elif var == 'atmos_npes':
                 self.nml_vars[var] = '1'
                 return self.nml_vars[var]
-
             elif var == 'atmos_layout':
                 self.nml_vars[var] = '1,1'
                 return self.nml_vars[var]
-
             elif var == 'ocean_nthreads':
                 self.nml_vars[var] = '1'
                 return self.nml_vars[var]
-
             elif var == 'ocean_npes':
                 self.nml_vars[var] = '1'
                 return self.nml_vars[var]
-
             elif var == 'ocean_layout':
                 self.nml_vars[var] = '1,1'
                 return self.nml_vars[var]
@@ -912,6 +880,13 @@ if __name__ == '__main__':
     parser.add_argument('-v', '--verbosity', help='Increase output verbosity.')
     parser.add_argument('-x', '--input_xml', type=str, help='Path of XML to be converted.')
     args = parser.parse_args()
+
+    if not os.path.exists(args.input_xml):
+        print("ERROR! The file path for the input XML does not exist")
+        sys.exit(1) 
+    elif '.xml' not in args.input_xml:
+        print("ERROR! Not a valid XML file")
+        sys.exit(1)
 
     input_xml = args.input_xml
     file_dest = args.output_xml
