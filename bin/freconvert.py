@@ -26,17 +26,16 @@ def convert_xml_text(xml_string, prev_version='bronx-12'):
     # Replace any "DO_DATABASE" and "DO_ANALYSIS" property elements with "MDBI_SWITCH" and "ANALYSIS_SWITCH"
     xml_string = xml_string.replace('DO_ANALYSIS', 'ANALYSIS_SWITCH')
     xml_string = xml_string.replace('DO_DATABASE', 'MDBI_SWITCH')
+    xml_string = xml_string.replace('DB_SWITCH', 'MDBI_SWITCH')
     # Remove database_ingestor.csh script, if it exists
     xml_string = xml_string.replace(' script="$FRE_CURATOR_HOME/share/bin/database_ingestor.csh"', '')
-    #9. Remove two whitespace characters before closing </publicMetadata> tag
-    #xml_string = xml_string.replace('      </publicMetadata>', '    </publicMetadata>')
 
     return xml_string
 
 
-def replace_chars(string):
+def replace_chars(string, to_replace, replacement):
 
-    return re.sub(char_to_replace, replacement_char, string)
+    return re.sub(to_replace, replacement, string)
 
 
 def rreplace(string, old, new, occurrence=1):
@@ -94,27 +93,36 @@ def write_parsable_xml(xml_string):
     xml_string = xml_string.replace('-->', '</xml_comment>')
     xml_string = xml_string.replace('<![CDATA[', '<cdata>')
     xml_string = xml_string.replace(']]>', '</cdata>')
+    xml_string = xml_string.replace('<!DOCTYPE', '<doctype>')
+    xml_string = xml_string.replace(']>', '</doctype>')
 
-    comment_regex = '<xml_comment>(.*?)</xml_comment>'
-    cdata_regex = '<cdata>(.*?)</cdata>'
+    comment_regex = r'<xml_comment>(.*?)</xml_comment>'
+    cdata_regex = r'<cdata>(.*?)</cdata>'
+    entity_regex = r'<!ENTITY.*?>'
    
     #Fix CDATA
-    xml_string = fix_special_strings(cdata_regex, xml_string)
+    xml_string = fix_special_strings(cdata_regex, xml_string, '<', '&lt;')
 
     #Fix Comments
-    xml_string = fix_special_strings(comment_regex, xml_string)
+    xml_string = fix_special_strings(comment_regex, xml_string, '<', '&lt;')
+
+    #Fix Entity Doctypes (Closing tags)
+    xml_string = fix_special_strings(entity_regex, xml_string, '>', '</entity>')
+    
+    #Fix Entity Doctypes (Opening tags)
+    xml_string = xml_string.replace('<!ENTITY', '<entity>')
 
     #Add new-line character at end of XML to separate the final 'root' tag
     xml_string = xml_string + "\n</root>"
     return xml_string
     
     
-def fix_special_strings(regex_str, xml_string):
+def fix_special_strings(regex_str, xml_string, to_replace, replacement):
 
     regex_matches = re.findall(regex_str, xml_string, re.DOTALL)
     for match in regex_matches:
         
-        xml_string = re.sub(re.escape(match), replace_chars(match), xml_string)
+        xml_string = re.sub(re.escape(match), replace_chars(match, to_replace, replacement), xml_string)
 
     return xml_string
 
@@ -127,24 +135,40 @@ def fix_special_strings(regex_str, xml_string):
 
 # Modify (or add) 'FRE_VERSION' property and retrieve old version 
 
-def do_fre_version_props(etree_root):
+def do_properties(etree_root):
 
     old_ver = "bronx-10" # Default value (i.e. if no FRE_VERSION property exists)
     fre_prop_exists = False
+    mdbi_switch = False
 
     #Retrieve the current XML bronx version through the FRE_VERSION property tag
     for prop in etree_root.iter('property'):
         
-        if prop.get("name") == "FRE_VERSION":
+        if prop.get("name").upper() == "FRE_VERSION":
+
+            if 'fre/' in prop.get("value").lower():
+                prop.set("value", prop.get("value").lower().replace('fre/', ''))
+
             old_ver = prop.get("value")
             fre_prop_exists = True
             break
+        
+        # Check if the MDBI switch property exists. If not, set it to "off" by default.
+        elif prop.get("name").upper() == "MDBI_SWITCH" or prop.get("name").upper() == "DB_SWITCH":
+            mdbi_switch = True
+
         else:
             pass
 
+    if not mdbi_switch:
+        db_property = ET.Element('property', attrib={'name': 'MDBI_SWITCH',
+                                                     'value': 'off'}
+        parent = etree_root.find('experimentSuite')
+        parent.insert(0, db_property)
+ 
     #If no FRE_VERSION property tag exists (rare), add one as the first property tag
     if not fre_prop_exists:
-        fre_version_property = ET.Element('property', attrib={'name': 'FRE_VERSION', \
+        fre_version_property = ET.Element('property', attrib={'name': 'FRE_VERSION',
                                                               'value': old_ver})
         parent = etree_root.find('experimentSuite')
         parent.insert(0, fre_version_property)
@@ -215,7 +239,15 @@ def do_land_f90(etree_root):
 def delete_default_platforms(etree_root):
 
     setup_element = etree_root.find('experimentSuite').find('setup')
-    platform_list = setup_element.findall('platform')
+    try:
+        platform_list = setup_element.findall('platform')
+    except AttributeError as e:
+        if setup_element is None:
+            print("Setup tag doesn't exist. Skipping...")
+            return
+        else:
+            print("No platforms listed under setup. Skipping...")
+            return
 
     for i in range(len(platform_list)):
         platform_name = platform_list[i].get('name')
@@ -380,7 +412,7 @@ class Namelist(object):
 
         #Next 3 'if' statements quality check the value (namelist comments and extra commas)
         if '!' in value:
-            exc_idx = string.index('!')
+            exc_idx = value.index('!')
             value = value[:exc_idx]
 
         if value.count(',') > 1:
@@ -439,6 +471,10 @@ class Namelist(object):
             else:
                 self.nml_vars[var] = ''
                 return self.nml_vars[var]
+        
+        #There will be times when ranks (or other resource params) are set to 0. Set to 1 instead.
+        if self.nml_vars[var] == '0':
+            self.nml_vars[var] = '1'
 
         return self.nml_vars[var]
 
@@ -466,10 +502,13 @@ def do_resources_main(etree_root):
     for exp in etree_root.iter('experiment'):
 
         subelements = [elem.tag for elem in exp.iter() if elem is not exp]
+
         if not 'compile' in subelements: 
             nml_container = Namelist() #1 namelist object per experiment. It will hold all necessary namelist values per key.
+
             for nml in exp.iter('namelist'):
                 nml_name = nml.get("name")
+
                 if nml_name in nmls_to_edit:
                     nml_container.name = nml_name
                     nml_dict = nml_to_dict(nml)
@@ -504,20 +543,29 @@ def do_resources_main(etree_root):
                     else:
                         pass
 
-                modify_namelist(nml, nml_name)
+                #Empty Namelist elements will contain the value "None" for the text. Make sure to catch this.
+                try:
+                    modify_namelist(nml, nml_name)
+                except AttributeError as e:
+                    pass
+
+            runtime_element = exp.find('runtime')       # Set to None if it doesn't exist
+            prod_element = None                         # Initialize production element as None
+            if runtime_element is not None:
+                prod_element = runtime_element.find('production') # Set to None if it doesn't exist
 
             try:
-                exp.find('runtime').find('production').attrib.pop('npes')
+                prod_element.attrib.pop('npes')
             except (AttributeError, KeyError) as e:
                 pass
         
             try:
-                exp.find('runtime').find('production').attrib.pop('runTime')
+                prod_element.attrib.pop('runTime')
             except (AttributeError, KeyError) as e:
                 pass
         
             try:
-                exp.find('runtime').find('production').find('segment').attrib.pop('runTime')
+                prod_element.find('segment').attrib.pop('runTime')
             except (AttributeError, KeyError) as e:
                 pass
         
@@ -525,35 +573,36 @@ def do_resources_main(etree_root):
             #IGNORING attributes that don't exist, like mask_table and ice/land ranks and threads.
             #Need to build in exceptions for attributes that don't exist but need checking.
 
-             
-            if exp.find('runtime') is not None:
+            
+            if runtime_element is not None and prod_element is not None:
  
-                resource_element = ET.SubElement(exp.find('runtime').find('production'), 'resources', \
-                                                 attrib={'site': 'ncrc3', 'jobWallclock': '10:00:00', \
+                resource_element = ET.SubElement(prod_element, 'resources',
+                                                 attrib={'site': 'ncrc3',
+                                                         'jobWallclock': '10:00:00',
                                                          'segRuntime': '10:00:00'})
 
-                atm_attribs = {'ranks': nml_container.get_var('atmos_npes'), \
-                               'threads': nml_container.get_var('atmos_nthreads'), \
-                               'layout': nml_container.get_var('atm_layout'), \
-                               'io_layout': nml_container.get_var('atm_io_layout'), \
+                atm_attribs = {'ranks': nml_container.get_var('atmos_npes'),
+                               'threads': nml_container.get_var('atmos_nthreads'),
+                               'layout': nml_container.get_var('atm_layout'),
+                               'io_layout': nml_container.get_var('atm_io_layout'),
                                'mask_table': nml_container.get_var('atm_mask_table')}
 
-                ocn_attribs = {'ranks': nml_container.get_var('ocean_npes'), \
-                               'threads': nml_container.get_var('ocean_nthreads'), \
-                               'layout': nml_container.get_var('ocn_layout'), \
-                               'io_layout': nml_container.get_var('ocn_io_layout'), \
+                ocn_attribs = {'ranks': nml_container.get_var('ocean_npes'),
+                               'threads': nml_container.get_var('ocean_nthreads'),
+                               'layout': nml_container.get_var('ocn_layout'),
+                               'io_layout': nml_container.get_var('ocn_io_layout'),
                                'mask_table': nml_container.get_var('ocn_mask_table')}
 
-                lnd_attribs = {'ranks': nml_container.get_var('land_npes'), \
-                               'threads': nml_container.get_var('land_nthreads'), \
-                               'layout': nml_container.get_var('lnd_layout'), \
-                               'io_layout': nml_container.get_var('lnd_io_layout'), \
+                lnd_attribs = {'ranks': nml_container.get_var('land_npes'),
+                               'threads': nml_container.get_var('land_nthreads'),
+                               'layout': nml_container.get_var('lnd_layout'),
+                               'io_layout': nml_container.get_var('lnd_io_layout'),
                                'mask_table': nml_container.get_var('lnd_mask_table')}
 
-                ice_attribs = {'ranks': nml_container.get_var('ice_npes'), \
-                               'threads': nml_container.get_var('ice_nthreads'), \
-                               'layout': nml_container.get_var('ice_layout'), \
-                               'io_layout': nml_container.get_var('ice_io_layout'), \
+                ice_attribs = {'ranks': nml_container.get_var('ice_npes'),
+                               'threads': nml_container.get_var('ice_nthreads'),
+                               'layout': nml_container.get_var('ice_layout'),
+                               'io_layout': nml_container.get_var('ice_io_layout'),
                                'mask_table': nml_container.get_var('ice_mask_table')}
 
                 attrib_list = [atm_attribs, ocn_attribs, lnd_attribs, ice_attribs]
@@ -759,6 +808,7 @@ class Metadata(object):
 
 def do_metadata_main(etree_root):
 
+    executed_metadata = False
     for exp in etree_root.iter('experiment'):
 
         subelements = [elem.tag for elem in exp.iter() if elem is not exp]
@@ -786,6 +836,7 @@ def do_metadata_main(etree_root):
                         continue
                     else:
                         elem.tag = meta.convert_to_tag(elem.tag, bronx_version=11)
+                        executed_metadata = True
 
                 continue #No need to do Bronx-10 metadata checks. We already did that above. Go to next experiment.
 
@@ -818,12 +869,17 @@ def do_metadata_main(etree_root):
                 exp.remove(comment_element)
 
             if scenario_elem or community_comm_elem or description_metadata:
+                if not 'MDBI_SWITCH' in etree_root.findall('experimentSuite').find('property').get("name"
                 meta.build_metadata_xml(exp)
+                executed_metadata = True
 
             continue
 
         else: #Don't do Build Experiment
             pass
+
+    if not executed_metadata:
+        print("No metadata to parse. Skipping...")
 
 
 ## ----------------------------- END XML PARSING  ----------------------------##
@@ -842,6 +898,14 @@ def write_final_xml(xml_string):
     #2. Parse <cdata> and </cdata> back to <![CDATA[ and ]]> respectively.
     xml_string = xml_string.replace('<cdata>', '<![CDATA[')
     xml_string = xml_string.replace('</cdata>', ']]>')
+
+    #3. Parse <doctype> and </doctype> back to '<!DOCTYPE' and ']>' respectively
+    xml_string = xml_string.replace('<doctype>', '<!DOCTYPE')
+    xml_string = xml_string.replace('</doctype>', ']>')
+
+    #4. Parse <entity> and </entity> back to '<!ENTITY' and '>' respectively
+    xml_string = xml_string.replace('<entity>', '<!ENTITY')
+    xml_string = xml_string.replace('</entity>', '>')
 
     #3. Restore any escaped chars from pre-XML parsing
     xml_string = xml_string.replace('&amp;', '&')
@@ -864,6 +928,9 @@ def write_final_xml(xml_string):
 
     #7. Remove two whitespace characters before closing </publicMetadata> tag
     xml_string = xml_string.replace('      </publicMetadata>', '    </publicMetadata>')
+
+    #8. Get rid of extra space between end tag slash.
+    xml_string = xml_string.replace(' />', '/>')
 
     return xml_string 
 
@@ -904,7 +971,9 @@ if __name__ == '__main__':
     print("Pre-parsing XML...")
     time.sleep(1) 
     pre_parsed_xml = write_parsable_xml(input_content) #Change paths to F2 - ALL BRONX VERSIONS
-    
+    #with open('testing.xml', 'w') as f:
+        #f.write(pre_parsed_xml)
+    #exit()
     try:
         tree = ET.ElementTree(ET.fromstring(pre_parsed_xml))
     except ET.ParseError as e:
@@ -921,7 +990,7 @@ if __name__ == '__main__':
     root = tree.getroot()
     
     # PARSE AND MODIFY ELEMENTS DEPENDING ON ORIGINAL BRONX VERSION #
-    old_version = do_fre_version_props(root)    # freVersion checking # ALL BRONX VERSIONS
+    old_version = do_properties(root)    # freVersion checking # ALL BRONX VERSIONS
     print("Converting XML from %s to bronx-14..." % old_version)
     time.sleep(3)
     if old_version == 'bronx-10':
@@ -949,13 +1018,17 @@ if __name__ == '__main__':
         print("Linking paths to F2. Performing final XML manipulations...")
         time.sleep(1)
         xml_string = convert_xml_text(xml_string, prev_version=old_version)
-        print("Debug: past convert_xml_text. Now onto write_final_xml")
         final_xml = write_final_xml(xml_string)
 
     elif old_version == 'bronx-11':
+        print("Cehcking for 'default' platforms (will be removed)...")
+        time.sleep(1)
         delete_default_platforms(root)
+        print("Checking for metadata. Updating tags if necessary...")
+        time.sleep(1)
         do_metadata_main(root)
         xml_string = ET.tostring(root)
+        print("Linking paths to F2. Performing final XML manipulations...")
         xml_string = convert_xml_text(xml_string, prev_version=old_version)
         final_xml = write_final_xml(xml_string)
 
