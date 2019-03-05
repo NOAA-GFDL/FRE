@@ -4,6 +4,7 @@ import os
 import sys
 import re
 import time
+import copy
 import argparse
 import xml.etree.ElementTree as ET
 
@@ -11,22 +12,29 @@ import xml.etree.ElementTree as ET
 ## --------------- Parse the XML as a Text file first ------------- ###
 
 # Perform all XML string replacements first, including F2 transitions #
-
+newest_version = 'bronx-14'
 char_to_replace = "<"
 replacement_char = '&lt;'
+
+configs_to_edit = ['atmos_npes', 'atmos_nthreads', 'ocean_npes',
+                   'ocean_nthreads', 'layout', 'io_layout',
+                   'ocean_mask_table', 'ice_mask_table', 'land_mask_table',
+                   'atm_mask_table']
+nmls_to_edit = ["coupler_nml", "fv_core_nml", "ice_model_nml", "land_model_nml",
+                "ocean_model_nml"]
+
 
 def convert_xml_text(xml_string, prev_version='bronx-12'):
 
     # Replace all old versions of bronx with the newest version
-    xml_string = change_fre_version(xml_string, old_version)
+    xml_string = change_fre_version(xml_string, prev_version)
     # Change all F1 paths to the corresponding F2 destination
     xml_string = points_to_f2(xml_string)
     # Change any 'cubicToLatLon' attributes to 'xyInterp' in the post-processing
     xml_string = modify_pp_components(xml_string)
     # Replace any "DO_DATABASE" and "DO_ANALYSIS" property elements with "MDBI_SWITCH" and "ANALYSIS_SWITCH"
     xml_string = xml_string.replace('DO_ANALYSIS', 'ANALYSIS_SWITCH')
-    xml_string = xml_string.replace('DO_DATABASE', 'MDBI_SWITCH')
-    xml_string = xml_string.replace('DB_SWITCH', 'MDBI_SWITCH')
+    xml_string = xml_string.replace('DO_DATABASE', 'DB_SWITCH')
     # Remove database_ingestor.csh script, if it exists
     xml_string = xml_string.replace(' script="$FRE_CURATOR_HOME/share/bin/database_ingestor.csh"', '')
 
@@ -73,7 +81,7 @@ def points_to_f2(xml_string):
 
 def change_fre_version(xml_string, version='bronx-12'):
 
-    return xml_string.replace(version, 'bronx-14')
+    return xml_string.replace(version, newest_version)
 
 
 def write_parsable_xml(xml_string):
@@ -162,7 +170,7 @@ def do_properties(etree_root):
 
     if not mdbi_switch:
         db_property = ET.Element('property', attrib={'name': 'MDBI_SWITCH',
-                                                     'value': 'off'}
+                                                     'value': 'off'})
         parent = etree_root.find('experimentSuite')
         parent.insert(0, db_property)
  
@@ -182,7 +190,6 @@ def add_fre_version_tag(etree_root):
     #Check platform tags for <freVersion> tag
     for platform in etree_root.iter('platform'):
 
-        print("Now on platform : " + str(platform.get('name')))
         #Skip over xi:include tags. We DO NOT put a <freVersion> tag here!
         #The element tag name for xi:include is '{http://www.w3.org/2001/XInclude}include'
         #Insert <freVersion> tag at the VERY BEGINNING of the <platform> tag
@@ -261,7 +268,7 @@ def add_compiler_tag(etree_root, compiler_type='intel', compiler_version='16.0.3
     platform_list = etree_root.find('experimentSuite').find('setup').findall('platform')    
     for platform in platform_list:
 
-        if not platform.find('compiler'):
+        if platform.find('compiler') is not None:
             xi_include = ET.iselement(platform.find('{http://www.w3.org/2001/XInclude}include'))
 
             if xi_include:
@@ -340,10 +347,10 @@ def nml_text_replace(str_to_check, namelist_dict, namelist_substr, old_nml_str_l
 
 def get_new_nml_str(nml_name, old_nml_str_list):
 
-    configs_to_edit = ['atmos_npes', 'atmos_nthreads', 'ocean_npes',
-                       'ocean_nthreads', 'layout', 'io_layout',
-                       'ocean_mask_table', 'ice_mask_table', 'land_mask_table',
-                       'atm_mask_table']
+    #configs_to_edit = ['atmos_npes', 'atmos_nthreads', 'ocean_npes',
+                       #'ocean_nthreads', 'layout', 'io_layout',
+                       #'ocean_mask_table', 'ice_mask_table', 'land_mask_table',
+                       #'atm_mask_table']
 
     coupler_dict = {'atmos_npes': '$atm_ranks', 'atmos_nthreads': '$atm_threads',
                     'atmos_mask_table': '$atm_mask_table', 'ocean_npes': '$ocn_ranks',
@@ -497,10 +504,9 @@ def strip_dict_whitespace(nml_dict):
 
 def do_resources_main(etree_root):
 
-    nmls_to_edit = ["coupler_nml", "fv_core_nml", "ice_model_nml", "land_model_nml", "ocean_model_nml"]
+    #nmls_to_edit = ["coupler_nml", "fv_core_nml", "ice_model_nml", "land_model_nml", "ocean_model_nml"]
 
     for exp in etree_root.iter('experiment'):
-
         subelements = [elem.tag for elem in exp.iter() if elem is not exp]
 
         if not 'compile' in subelements: 
@@ -549,102 +555,259 @@ def do_resources_main(etree_root):
                 except AttributeError as e:
                     pass
 
+            #             #           #              #              #             #             #            #
+            # Start building the Resource Tags after Modifying the Namelists #
+
             runtime_element = exp.find('runtime')       # Set to None if it doesn't exist
             prod_element = None                         # Initialize production element as None
+            reg_element_list = []                       # Initialize regression element as None
+            runtime_hours = '10:00:00'                  # Default setting
+            segment_hours = '10:00:00'                  # Default setting
+
+            atm_attribs = {'ranks': nml_container.get_var('atmos_npes'),
+                           'threads': nml_container.get_var('atmos_nthreads'),
+                           'layout': nml_container.get_var('atm_layout'),
+                           'io_layout': nml_container.get_var('atm_io_layout'),
+                           'mask_table': nml_container.get_var('atm_mask_table')}
+
+            ocn_attribs = {'ranks': nml_container.get_var('ocean_npes'),
+                           'threads': nml_container.get_var('ocean_nthreads'),
+                           'layout': nml_container.get_var('ocn_layout'),
+                           'io_layout': nml_container.get_var('ocn_io_layout'),
+                           'mask_table': nml_container.get_var('ocn_mask_table')}
+
+            lnd_attribs = {'ranks': nml_container.get_var('land_npes'),
+                           'threads': nml_container.get_var('land_nthreads'),
+                           'layout': nml_container.get_var('lnd_layout'),
+                           'io_layout': nml_container.get_var('lnd_io_layout'),
+                           'mask_table': nml_container.get_var('lnd_mask_table')}
+
+            ice_attribs = {'ranks': nml_container.get_var('ice_npes'),
+                           'threads': nml_container.get_var('ice_nthreads'),
+                           'layout': nml_container.get_var('ice_layout'),
+                           'io_layout': nml_container.get_var('ice_io_layout'),
+                           'mask_table': nml_container.get_var('ice_mask_table')}
+
+            attrib_list = [atm_attribs, ocn_attribs, lnd_attribs, ice_attribs]
+            for attrib_dict in attrib_list:
+           
+                for key, value in attrib_dict.items():
+
+                    if value == '' or value == None:
+                        del attrib_dict[key]
+            
+            # Create a copies of the unedited dictionaries for regression tags #
+            # We will create shallow copies, because we don't have nested objects #
+            #atm_attr_copy = copy.copy(atm_attribs)
+            #ocn_attr_copy = copy.copy(ocn_attribs)
+            #lnd_attr_copy = copy.copy(lnd_attribs)
+            #ice_attr_copy = copy.copy(ice_attribs)
+
             if runtime_element is not None:
                 prod_element = runtime_element.find('production') # Set to None if it doesn't exist
+                reg_element_list = runtime_element.findall('regression') # Will never be 'None'
 
-            try:
-                prod_element.attrib.pop('npes')
-            except (AttributeError, KeyError) as e:
-                pass
-        
-            try:
-                prod_element.attrib.pop('runTime')
-            except (AttributeError, KeyError) as e:
-                pass
-        
-            try:
-                prod_element.find('segment').attrib.pop('runTime')
-            except (AttributeError, KeyError) as e:
-                pass
-        
+            # ------------- PRODUCTION RUNS --------------- #
 
-            #IGNORING attributes that don't exist, like mask_table and ice/land ranks and threads.
-            #Need to build in exceptions for attributes that don't exist but need checking.
-
-            
-            if runtime_element is not None and prod_element is not None:
+                try:
+                    prod_element.attrib.pop('npes')
+                except (AttributeError, KeyError) as e:
+                    pass
+        
+                try:
+                    runtime_hours = prod_element.attrib.pop('runTime')
+                except (AttributeError, KeyError) as e:
+                    pass
+        
+                try:
+                    segment_hours = prod_element.find('segment').attrib.pop('runTime')
+                except (AttributeError, KeyError) as e:
+                    pass
+        
+                if prod_element is not None:
  
-                resource_element = ET.SubElement(prod_element, 'resources',
-                                                 attrib={'site': 'ncrc3',
-                                                         'jobWallclock': '10:00:00',
-                                                         'segRuntime': '10:00:00'})
+                    resource_prod_element = ET.SubElement(prod_element, 'resources',
+                                                          attrib={'site': 'ncrc3',
+                                                                  'jobWallclock': runtime_hours,
+                                                                  'segRuntime': segment_hours})
 
-                atm_attribs = {'ranks': nml_container.get_var('atmos_npes'),
-                               'threads': nml_container.get_var('atmos_nthreads'),
-                               'layout': nml_container.get_var('atm_layout'),
-                               'io_layout': nml_container.get_var('atm_io_layout'),
-                               'mask_table': nml_container.get_var('atm_mask_table')}
+                    # Make a child element only if the dictionary has attributes
+                    atm = ET.SubElement(resource_prod_element, 'atm', attrib=atm_attribs) if len(atm_attribs) > 0 else None
+                    ocn = ET.SubElement(resource_prod_element, 'ocn', attrib=ocn_attribs) if len(ocn_attribs) > 0 else None
+                    lnd = ET.SubElement(resource_prod_element, 'lnd', attrib=lnd_attribs) if len(lnd_attribs) > 0 else None
+                    ice = ET.SubElement(resource_prod_element, 'ice', attrib=ice_attribs) if len(ice_attribs) > 0 else None
 
-                ocn_attribs = {'ranks': nml_container.get_var('ocean_npes'),
-                               'threads': nml_container.get_var('ocean_nthreads'),
-                               'layout': nml_container.get_var('ocn_layout'),
-                               'io_layout': nml_container.get_var('ocn_io_layout'),
-                               'mask_table': nml_container.get_var('ocn_mask_table')}
+                # ----------------- REGRESSION RUNS -------------------- #
 
-                lnd_attribs = {'ranks': nml_container.get_var('land_npes'),
-                               'threads': nml_container.get_var('land_nthreads'),
-                               'layout': nml_container.get_var('lnd_layout'),
-                               'io_layout': nml_container.get_var('lnd_io_layout'),
-                               'mask_table': nml_container.get_var('lnd_mask_table')}
+                for reg_element in reg_element_list:
+                    run_element_list = reg_element.findall('run')
+                    
+                    for run_element in run_element_list:
 
-                ice_attribs = {'ranks': nml_container.get_var('ice_npes'),
-                               'threads': nml_container.get_var('ice_nthreads'),
-                               'layout': nml_container.get_var('ice_layout'),
-                               'io_layout': nml_container.get_var('ice_io_layout'),
-                               'mask_table': nml_container.get_var('ice_mask_table')}
+                        try:
+                            run_element.attrib.pop('npes')
+                        except (AttributeError, KeyError) as e:
+                            pass
 
-                attrib_list = [atm_attribs, ocn_attribs, lnd_attribs, ice_attribs]
+                        try:
+                            runtime_hours = run_element.attrib.pop('runTimePerJob')
+                        except (AttributeError, KeyError) as e:
+                            pass
 
-                for attrib_dict in attrib_list:
+                        if run_element is not None:                    
+                            resource_reg_element = ET.SubElement(run_element, 'resources',
+                                                                 attrib={'site': 'ncrc3',
+                                                                         'jobWallclock': runtime_hours,})
+
+                            if not 'overrideParams' in run_element.attrib.keys():
+
+                                # Make a child element only if the dictionary has attributes
+                                atm = ET.SubElement(resource_reg_element, 'atm', attrib=atm_attribs) if len(atm_attribs) > 0 else None
+                                ocn = ET.SubElement(resource_reg_element, 'ocn', attrib=ocn_attribs) if len(ocn_attribs) > 0 else None
+                                lnd = ET.SubElement(resource_reg_element, 'lnd', attirb=lnd_attribs) if len(lnd_attribs) > 0 else None
+                                ice = ET.SubElement(resource_reg_element, 'ice', attrib=ice_attribs) if len(ice_attribs) > 0 else None
+                            else:
+                                override_container = Namelist()
+                                override_str = run_element.get('overrideParams')
+                                parse_overrides(override_str, override_container)
+                                modified_override_str = get_modified_overrides(override_str)
+
+                                if not modified_override_str:
+                                    run_element.attrib.pop('overrideParams')
+                                else:
+                                    run_element.set('overrideParams', modified_override_str)
+
+                                # OVERRIDE ATTRIBUTES BELOW #
+                          
+                                atm_overrides = {'ranks': override_container.get_var('atmos_npes'),
+                                                 'threads': override_container.get_var('atmos_nthreads'),
+                                                 'layout': override_container.get_var('atm_layout'),
+                                                 'io_layout': override_container.get_var('atm_io_layout'),
+                                                 'mask_table': override_container.get_var('atm_mask_table')}
+
+                                ocn_overrides = {'ranks': override_container.get_var('ocean_npes'),
+                                                 'threads': override_container.get_var('ocean_nthreads'),
+                                                 'layout': override_container.get_var('ocn_layout'),
+                                                 'io_layout': override_container.get_var('ocn_io_layout'),
+                                                 'mask_table': override_container.get_var('ocn_mask_table')}
+
+                                lnd_overrides = {'ranks': override_container.get_var('land_npes'),
+                                                 'threads': override_container.get_var('land_nthreads'),
+                                                 'layout': override_container.get_var('lnd_layout'),
+                                                 'io_layout': override_container.get_var('lnd_io_layout'),
+                                                 'mask_table': override_container.get_var('lnd_mask_table')}
+
+                                ice_overrides = {'ranks': override_container.get_var('ice_npes'),
+                                                 'threads': override_container.get_var('ice_nthreads'),
+                                                 'layout': override_container.get_var('ice_layout'),
+                                                 'io_layout': override_container.get_var('ice_io_layout'),
+                                                 'mask_table': override_container.get_var('ice_mask_table')}
+
+                                override_list = [atm_overrides, ocn_overrides, lnd_overrides, ice_overrides]
+
+                                #DEBUG
+                                #print(atm_overrides)
+                                #print(ocn_overrides)
+                                #print(lnd_overrides)
+                                #print(ice_overrides)
+
+                                for override_dict in override_list:
            
-                    for key, value in attrib_dict.items():
+                                    for key, value in override_dict.items():
 
-                        if value == '' or value == None:
-                            del attrib_dict[key]
-                
+                                        if value == '' or value == None:
+                                            del override_dict[key]
 
-                atm = ET.SubElement(resource_element, 'atm', attrib=atm_attribs)
-                ocn = ET.SubElement(resource_element, 'ocn', attrib=ocn_attribs)
-                lnd = ET.SubElement(resource_element, 'lnd', attrib=lnd_attribs)
-                ice = ET.SubElement(resource_element, 'ice', attrib=ice_attribs)
+                                atm = ET.SubElement(resource_reg_element, 'atm', attrib=atm_overrides) if len(atm_overrides) > 0 else None
+                                ocn = ET.SubElement(resource_reg_element, 'ocn', attrib=ocn_overrides) if len(ocn_overrides) > 0 else None
+                                lnd = ET.SubElement(resource_reg_element, 'lnd', attrib=lnd_overrides) if len(lnd_overrides) > 0 else None
+                                ice = ET.SubElement(resource_reg_element, 'ice', attrib=ice_overrides) if len(ice_overrides) > 0 else None
 
+                        #No <run> tag inside <regression> = Do nothing!
+                        else:
+                            pass
+
+            # No <runtime> tag = Do nothing!
             else:
                 pass
 
         else: #Don't do Build experiment
             pass
-
         
 
+def parse_overrides(override_str, override_container):
+
+    nml_regex = r';\s*(.*?)\s*:'
+    param_regex = r':\s*(.*?)\s*='
+    value_regex = r'=\s*(.*?)\s*;'
+
+    foo_override = ';' + override_str
+    namelists = re.findall(nml_regex, foo_override)
+    params = re.findall(param_regex, override_str)
+    values = re.findall(value_regex, override_str)
+
+    #Sanity check - length of namelists, params, and values should be the same
+    if not len(namelists) == len(params) == len(values):
+        print("ERROR! The overrideParams attribute is not set up correctly! Skipping regression.")
+        return None
+
+    for index, namelist in enumerate(namelists):
+
+        if namelist in nmls_to_edit:
+
+            if params[index] in configs_to_edit:
+        
+                if params[index] == 'layout' or params[index] == 'io_layout':
+                
+                    if namelist == 'fv_core_nml':
+                        key = 'atm_' + params[index]
+                        override_container.nml_vars[key] = values[index]
+                    elif namelist == 'ocean_model_nml':
+                        key = 'ocn_' + params[index]
+                        override_container.nml_vars[key] = values[index]
+                    elif namelist == 'ice_model_nml':
+                        key = 'ice_' + params[index]
+                        override_container.nml_vars[key] = values[index]
+                    elif namelist == 'land_model_nml':
+                        key = 'lnd_' + params[index]
+                        override_container.nml_vars[key] = values[index]
+
+                else:
+                    override_container.nml_vars[params[index]] = values[index]
+
+            #Correct namelist, wrong parameter, so don't parse
+            else:
+                pass
+
+        #A namelist we don't have to parse
+        else:
+            pass
+ 
+
+def get_modified_overrides(override_str):
+
+    override_list = override_str.split(';')
+    modified_overrides_list = [item for item in override_list if not \
+                              ('npes' in item or 'nthreads' in item \
+                               or 'layout' in item)]
+    modified_overrides_str = ';'.join(modified_overrides_list)
+    return modified_overrides_str
+
+'''
 def throw_regression_warnings(etree_root):
 
-    for exp in etree_root.iter('experiment'):
-        
+    for exp in etree_root.iter('experiment'):    
         exp_name = exp.get('name')
+
         if exp.find('runtime') is not None:
+
             if exp.find('runtime').find('regression') is not None:
                 print("ATTENTION! Experiment " + str(exp_name) + " contains <regression> tags. \
                       freconvert.py does not adjust content within <regression> and will have \
                       to be modified manually.")
+'''
 
-
-
-# End Main 4.2 #
-
-
-#5. Insert/Modify PublicMetadata Tags
+#5. Insert/Modify publicMetadata Tags
 
 ### We will ignore any community tags or attributes in the build experiment
 ### Primary attributes seen in many bronx-10 XMLs are for database insertion. These
@@ -869,7 +1032,6 @@ def do_metadata_main(etree_root):
                 exp.remove(comment_element)
 
             if scenario_elem or community_comm_elem or description_metadata:
-                if not 'MDBI_SWITCH' in etree_root.findall('experimentSuite').find('property').get("name"
                 meta.build_metadata_xml(exp)
                 executed_metadata = True
 
@@ -944,6 +1106,7 @@ if __name__ == '__main__':
     # GET THE COMMAND LINE ARGUMENTS AND READ IN THE INPUT XML #
     parser = argparse.ArgumentParser(prog='freconvert', description="A script that converts a user's XML to Bronx-13")
     parser.add_argument('-o', '--output_xml', help='Destination path of converted XML')
+    parser.add_argument('-q', '--quiet', help='Very little verbosity')
     parser.add_argument('-v', '--verbosity', help='Increase output verbosity.')
     parser.add_argument('-x', '--input_xml', type=str, help='Path of XML to be converted.')
     args = parser.parse_args()
@@ -960,7 +1123,7 @@ if __name__ == '__main__':
 
     if file_dest is None:
         modified_input_xml = input_xml.replace('.xml', '')
-        file_dest = os.getcwd() + '/' + modified_input_xml + '_bronx14.xml'
+        file_dest = os.getcwd() + '/' + modified_input_xml + '_' + newest_version + '.xml'
     else:
         pass
         
@@ -978,12 +1141,14 @@ if __name__ == '__main__':
         tree = ET.ElementTree(ET.fromstring(pre_parsed_xml))
     except ET.ParseError as e:
         print("\nERROR: %s" % str(e).upper()) 
-        print("The XML is non-conforming! Please correct issues and rerun freconvert.py")
+        print("The XML is non-conforming! Please correct issues and re-run freconvert.py")
         print("Writing out the pre-parsed file for debugging.")
-        file_dest = file_dest.replace('bronx14.xml', 'pre_parsed_error.xml')
+        file_dest = file_dest.replace(newest_version + '.xml', 'pre_parsed_error.xml')
+
         with open(file_dest, 'w') as f:
             f.write(pre_parsed_xml)
         print("Path to Pre-Parsed XML: %s" % file_dest)
+
         sys.exit(1)
     
     #tree = ET.ElementTree(ET.fromstring(pre_parsed_xml))
@@ -991,7 +1156,7 @@ if __name__ == '__main__':
     
     # PARSE AND MODIFY ELEMENTS DEPENDING ON ORIGINAL BRONX VERSION #
     old_version = do_properties(root)    # freVersion checking # ALL BRONX VERSIONS
-    print("Converting XML from %s to bronx-14..." % old_version)
+    print("Converting XML from %s to %s..." % (old_version, newest_version))
     time.sleep(3)
     if old_version == 'bronx-10':
         print("Checking for land F90 <csh> block...")
@@ -1009,7 +1174,7 @@ if __name__ == '__main__':
         print("Adding resources tags...")
         time.sleep(1)
         do_resources_main(root) # Resource Tags - change namelists and create <resources> # IF BRONX-10
-        throw_regression_warnings(root)
+        #throw_regression_warnings(root)
         time.sleep(1)
         print("Checking for metadata. Adding <publicMetadata> tags if necessary...")
         time.sleep(1)
@@ -1021,7 +1186,7 @@ if __name__ == '__main__':
         final_xml = write_final_xml(xml_string)
 
     elif old_version == 'bronx-11':
-        print("Cehcking for 'default' platforms (will be removed)...")
+        print("Checking for 'default' platforms (will be removed)...")
         time.sleep(1)
         delete_default_platforms(root)
         print("Checking for metadata. Updating tags if necessary...")
@@ -1033,10 +1198,23 @@ if __name__ == '__main__':
         final_xml = write_final_xml(xml_string)
 
     # No need to parse XML with ElementTree if Bronx-12 or Bronx-13. Just do string replacements.
-    elif old_version == 'bronx-12' or old_version == 'bronx-13':
+    elif old_version == 'bronx-12':
         print("Linking paths to F2. Performing final XML manipulations...")
         time.sleep(1)
         final_xml = convert_xml_text(input_content, prev_version=old_version)
+    
+    elif old_version == 'bronx-13':
+        print("Making Slurm compatible...")
+        time.sleep(1)
+        final_xml = convert_xml_text(input_content, prev_version=old_version)
+    
+    elif old_version == newest_version:
+        print("XML is already at the newest version (%s)" % newest_version)
+        sys.exit(1)
+
+    else:
+        print("ERROR! This version of FRE (%s) isn't supported for conversion!" % old_version)
+        sys.exit(1)
    
     print("Writing new XML...")
     time.sleep(1)
