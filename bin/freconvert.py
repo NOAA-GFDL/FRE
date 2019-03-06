@@ -508,6 +508,7 @@ def do_resources_main(etree_root):
 
     for exp in etree_root.iter('experiment'):
         subelements = [elem.tag for elem in exp.iter() if elem is not exp]
+        print("On experiment " + str(exp.get('name')))
 
         if not 'compile' in subelements: 
             nml_container = Namelist() #1 namelist object per experiment. It will hold all necessary namelist values per key.
@@ -596,6 +597,10 @@ def do_resources_main(etree_root):
                     if value == '' or value == None:
                         del attrib_dict[key]
             
+            print(atm_attribs)
+            print(ocn_attribs)
+            print(lnd_attribs)
+            print(ice_attribs)
             # Create a copies of the unedited dictionaries for regression tags #
             # We will create shallow copies, because we don't have nested objects #
             #atm_attr_copy = copy.copy(atm_attribs)
@@ -664,7 +669,7 @@ def do_resources_main(etree_root):
                                 # Make a child element only if the dictionary has attributes
                                 atm = ET.SubElement(resource_reg_element, 'atm', attrib=atm_attribs) if len(atm_attribs) > 0 else None
                                 ocn = ET.SubElement(resource_reg_element, 'ocn', attrib=ocn_attribs) if len(ocn_attribs) > 0 else None
-                                lnd = ET.SubElement(resource_reg_element, 'lnd', attirb=lnd_attribs) if len(lnd_attribs) > 0 else None
+                                lnd = ET.SubElement(resource_reg_element, 'lnd', attrib=lnd_attribs) if len(lnd_attribs) > 0 else None
                                 ice = ET.SubElement(resource_reg_element, 'ice', attrib=ice_attribs) if len(ice_attribs) > 0 else None
                             else:
                                 override_container = Namelist()
@@ -704,12 +709,22 @@ def do_resources_main(etree_root):
                                                  'mask_table': override_container.get_var('ice_mask_table')}
 
                                 override_list = [atm_overrides, ocn_overrides, lnd_overrides, ice_overrides]
-
+                                
                                 #DEBUG
-                                #print(atm_overrides)
-                                #print(ocn_overrides)
-                                #print(lnd_overrides)
-                                #print(ice_overrides)
+                                print("\n****************REGULAR ATTRIBUTES*******************")
+                                print("Experiment: " + str(exp.get('name')))
+                                print(atm_attribs)
+                                print(ocn_attribs)
+                                print(lnd_attribs)
+                                print(ice_attribs)
+
+                                print("\n**************OVERRIDE ATTRIBUTES*******************")
+                                print("Experiment: " + str(exp.get('name')))
+                                print(atm_overrides)
+                                print(ocn_overrides)
+                                print(lnd_overrides)
+                                print(ice_overrides)
+                                sys.exit(1)
 
                                 for override_dict in override_list:
            
