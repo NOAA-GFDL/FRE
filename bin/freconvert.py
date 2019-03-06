@@ -274,15 +274,17 @@ def add_compiler_tag(etree_root, compiler_type='intel', compiler_version='16.0.3
     platform_list = etree_root.find('experimentSuite').find('setup').findall('platform')
 
     for platform in platform_list:
-
-        if platform.find('compiler') is not None:
+        
+        if platform.find('compiler') is None:
             xi_include = ET.iselement(platform.find('{http://www.w3.org/2001/XInclude}include'))
 
             if xi_include:
                 continue
             else:
+                print("Writing compiler tag...")
                 compiler_tag = ET.SubElement(platform, 'compiler', attrib={'type': compiler_type, \
                                                                            'version': compiler_version})
+                compiler_tag.tail = "\n    "
         else:
             continue
         
@@ -1191,7 +1193,7 @@ if __name__ == '__main__':
         print("Adding <freVersion> tags...")
         time.sleep(1)
         add_fre_version_tag(root)
-        print("Checking for existence of 'compiler' tag in build experiment")
+        print("Checking for existence of 'compiler' tag in platforms")
         time.sleep(1)
         add_compiler_tag(root)
         print("Adding resources tags...")
