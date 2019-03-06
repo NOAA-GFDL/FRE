@@ -128,8 +128,8 @@ def write_parsable_xml(xml_string):
 def fix_special_strings(regex_str, xml_string, to_replace, replacement):
 
     regex_matches = re.findall(regex_str, xml_string, re.DOTALL)
-    for match in regex_matches:
-        
+
+    for match in regex_matches:        
         xml_string = re.sub(re.escape(match), replace_chars(match, to_replace, replacement), xml_string)
 
     return xml_string
@@ -171,6 +171,7 @@ def do_properties(etree_root):
     if not mdbi_switch:
         db_property = ET.Element('property', attrib={'name': 'MDBI_SWITCH',
                                                      'value': 'off'})
+        db_property.tail = '\n  '
         parent = etree_root.find('experimentSuite')
         parent.insert(0, db_property)
  
@@ -178,6 +179,7 @@ def do_properties(etree_root):
     if not fre_prop_exists:
         fre_version_property = ET.Element('property', attrib={'name': 'FRE_VERSION',
                                                               'value': old_ver})
+        fre_version_property.tail = '\n  '
         parent = etree_root.find('experimentSuite')
         parent.insert(0, fre_version_property)
 
@@ -222,6 +224,7 @@ def do_land_f90(etree_root):
 
                 elif not 'doF90Cpp' in compile_elem.keys():
                     csh_land_elem = compile_elem.find('csh')
+
                     if csh_land_elem is not None:
                         compile_elem.set('doF90Cpp', 'yes')
                         cdata_elem = csh_land_elem.find('cdata')
@@ -246,9 +249,11 @@ def do_land_f90(etree_root):
 def delete_default_platforms(etree_root):
 
     setup_element = etree_root.find('experimentSuite').find('setup')
+
     try:
         platform_list = setup_element.findall('platform')
     except AttributeError as e:
+
         if setup_element is None:
             print("Setup tag doesn't exist. Skipping...")
             return
@@ -258,6 +263,7 @@ def delete_default_platforms(etree_root):
 
     for i in range(len(platform_list)):
         platform_name = platform_list[i].get('name')
+
         if '.default' in platform_name:
             print("Deleting platform: %s" % platform_name)
             setup_element.remove(platform_list[i])
@@ -265,7 +271,8 @@ def delete_default_platforms(etree_root):
 
 def add_compiler_tag(etree_root, compiler_type='intel', compiler_version='16.0.3.210'):
 
-    platform_list = etree_root.find('experimentSuite').find('setup').findall('platform')    
+    platform_list = etree_root.find('experimentSuite').find('setup').findall('platform')
+
     for platform in platform_list:
 
         if platform.find('compiler') is not None:
@@ -311,8 +318,8 @@ def nml_to_dict(nml):
 
     str_list = get_str_list(nml)
     nml_dict = {}
-    for substr in str_list:
-            
+
+    for substr in str_list:            
         key = substr[:substr.find('=')]
         value = substr[substr.find('=')+1:]
         nml_dict[key] = value
@@ -597,10 +604,10 @@ def do_resources_main(etree_root):
                     if value == '' or value == None:
                         del attrib_dict[key]
             
-            print(atm_attribs)
-            print(ocn_attribs)
-            print(lnd_attribs)
-            print(ice_attribs)
+            #print(atm_attribs)
+            #print(ocn_attribs)
+            #print(lnd_attribs)
+            #print(ice_attribs)
             # Create a copies of the unedited dictionaries for regression tags #
             # We will create shallow copies, because we don't have nested objects #
             #atm_attr_copy = copy.copy(atm_attribs)
@@ -711,20 +718,20 @@ def do_resources_main(etree_root):
                                 override_list = [atm_overrides, ocn_overrides, lnd_overrides, ice_overrides]
                                 
                                 #DEBUG
-                                print("\n****************REGULAR ATTRIBUTES*******************")
-                                print("Experiment: " + str(exp.get('name')))
-                                print(atm_attribs)
-                                print(ocn_attribs)
-                                print(lnd_attribs)
-                                print(ice_attribs)
+                                #print("\n****************REGULAR ATTRIBUTES*******************")
+                                #print("Experiment: " + str(exp.get('name')))
+                                #print(atm_attribs)
+                                #print(ocn_attribs)
+                                #print(lnd_attribs)
+                                #print(ice_attribs)
 
-                                print("\n**************OVERRIDE ATTRIBUTES*******************")
-                                print("Experiment: " + str(exp.get('name')))
-                                print(atm_overrides)
-                                print(ocn_overrides)
-                                print(lnd_overrides)
-                                print(ice_overrides)
-                                sys.exit(1)
+                                #print("\n**************OVERRIDE ATTRIBUTES*******************")
+                                #print("Experiment: " + str(exp.get('name')))
+                                #print(atm_overrides)
+                                #print(ocn_overrides)
+                                #print(lnd_overrides)
+                                #print(ice_overrides)
+                                #sys.exit(1)
 
                                 for override_dict in override_list:
            
@@ -1119,11 +1126,12 @@ def write_final_xml(xml_string):
 if __name__ == '__main__':
 
     # GET THE COMMAND LINE ARGUMENTS AND READ IN THE INPUT XML #
-    parser = argparse.ArgumentParser(prog='freconvert', description="A script that converts a user's XML to Bronx-13")
+    parser = argparse.ArgumentParser(prog='freconvert', description=\
+                                     "A script that converts a user's XML to Bronx-13")
     parser.add_argument('-o', '--output_xml', help='Destination path of converted XML')
     parser.add_argument('-q', '--quiet', help='Very little verbosity')
     parser.add_argument('-v', '--verbosity', help='Increase output verbosity.')
-    parser.add_argument('-x', '--input_xml', type=str, help='Path of XML to be converted.')
+    parser.add_argument('-x', '--input_xml', required=True, type=str, help='Path of XML to be converted.')
     args = parser.parse_args()
 
     if not os.path.exists(args.input_xml):
@@ -1137,11 +1145,11 @@ if __name__ == '__main__':
     file_dest = args.output_xml
 
     if file_dest is None:
-        modified_input_xml = input_xml.replace('.xml', '')
-        file_dest = os.getcwd() + '/' + modified_input_xml + '_' + newest_version + '.xml'
+        modified_input_path = os.path.abspath(input_xml).replace('.xml', '')
+        file_dest = modified_input_path + '_' + newest_version + '.xml'
     else:
         pass
-        
+    
     with open(input_xml, 'r') as f:
         input_content = f.read()
 
