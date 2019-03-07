@@ -8,7 +8,7 @@ import copy
 import argparse
 import xml.etree.ElementTree as ET
 
-
+#py_vers = sys.version
 ## --------------- Parse the XML as a Text file first ------------- ###
 
 # Perform all XML string replacements first, including F2 transitions #
@@ -32,7 +32,7 @@ def convert_xml_text(xml_string, prev_version='bronx-12'):
     xml_string = points_to_f2(xml_string)
     # Change any 'cubicToLatLon' attributes to 'xyInterp' in the post-processing
     xml_string = modify_pp_components(xml_string)
-    # Replace any "DO_DATABASE" and "DO_ANALYSIS" property elements with "MDBI_SWITCH" and "ANALYSIS_SWITCH"
+    # Replace any "DO_DATABASE" and "DO_ANALYSIS" property elements with "MDBIswitch" and "ANALYSIS_SWITCH"
     xml_string = xml_string.replace('DO_ANALYSIS', 'ANALYSIS_SWITCH')
     xml_string = xml_string.replace('DO_DATABASE', 'DB_SWITCH')
     # Remove database_ingestor.csh script, if it exists
@@ -151,7 +151,7 @@ def do_properties(etree_root):
 
     #Retrieve the current XML bronx version through the FRE_VERSION property tag
     for prop in etree_root.iter('property'):
-        
+         
         if prop.get("name").upper() == "FRE_VERSION":
 
             if 'fre/' in prop.get("value").lower():
@@ -159,17 +159,16 @@ def do_properties(etree_root):
 
             old_ver = prop.get("value")
             fre_prop_exists = True
-            break
         
         # Check if the MDBI switch property exists. If not, set it to "off" by default.
-        elif prop.get("name").upper() == "MDBI_SWITCH" or prop.get("name").upper() == "DB_SWITCH":
+        if prop.get("name") == "MDBIswitch" or prop.get("name").upper() == "DB_SWITCH":
             mdbi_switch = True
 
         else:
             pass
 
     if not mdbi_switch:
-        db_property = ET.Element('property', attrib={'name': 'MDBI_SWITCH',
+        db_property = ET.Element('property', attrib={'name': 'MDBIswitch',
                                                      'value': 'off'})
         db_property.tail = '\n  '
         parent = etree_root.find('experimentSuite')
@@ -347,6 +346,7 @@ def nml_text_replace(str_to_check, namelist_dict, namelist_substr, old_nml_str_l
                      loop_index):
 
     for old_str, new_str in namelist_dict.items():
+
         if str_to_check == old_str:
             old_nml_str_list[loop_index] = re.sub('(?<=\=).*', new_str, namelist_substr)
             break
@@ -565,7 +565,7 @@ def do_resources_main(etree_root):
                 except AttributeError as e:
                     pass
 
-            #             #           #              #              #             #             #            #
+            
             # Start building the Resource Tags after Modifying the Namelists #
 
             runtime_element = exp.find('runtime')       # Set to None if it doesn't exist
@@ -639,17 +639,32 @@ def do_resources_main(etree_root):
                     pass
         
                 if prod_element is not None:
+                    segment_element = prod_element.find('segment')
+                    
+                    if segment_element is not None:
+                        segment_element.tail = "\n            "
  
                     resource_prod_element = ET.SubElement(prod_element, 'resources',
                                                           attrib={'site': 'ncrc3',
                                                                   'jobWallclock': runtime_hours,
                                                                   'segRuntime': segment_hours})
+                    resource_prod_element.text = "\n              "
+                    resource_prod_element.tail = "\n          "
 
                     # Make a child element only if the dictionary has attributes
-                    atm = ET.SubElement(resource_prod_element, 'atm', attrib=atm_attribs) if len(atm_attribs) > 0 else None
-                    ocn = ET.SubElement(resource_prod_element, 'ocn', attrib=ocn_attribs) if len(ocn_attribs) > 0 else None
-                    lnd = ET.SubElement(resource_prod_element, 'lnd', attrib=lnd_attribs) if len(lnd_attribs) > 0 else None
-                    ice = ET.SubElement(resource_prod_element, 'ice', attrib=ice_attribs) if len(ice_attribs) > 0 else None
+                    atm_prod = ET.SubElement(resource_prod_element, 'atm', attrib=atm_attribs) if len(atm_attribs) > 0 else None
+                    atm_prod.tail = "\n              "
+                    ocn_prod = ET.SubElement(resource_prod_element, 'ocn', attrib=ocn_attribs) if len(ocn_attribs) > 0 else None
+                    ocn_prod.tail = "\n              "
+                    lnd_prod = ET.SubElement(resource_prod_element, 'lnd', attrib=lnd_attribs) if len(lnd_attribs) > 0 else None
+
+                    if lnd_prod is not None:
+                        lnd_prod.tail = "\n              "
+
+                    ice_prod = ET.SubElement(resource_prod_element, 'ice', attrib=ice_attribs) if len(ice_attribs) > 0 else None
+
+                    if ice_prod is not None:
+                        ice_prod.tail = "\n            "
 
                 # ----------------- REGRESSION RUNS -------------------- #
 
@@ -668,18 +683,29 @@ def do_resources_main(etree_root):
                         except (AttributeError, KeyError) as e:
                             pass
 
-                        if run_element is not None:                    
+                        if run_element is not None:
+                            run_element.text = "\n              "
                             resource_reg_element = ET.SubElement(run_element, 'resources',
                                                                  attrib={'site': 'ncrc3',
                                                                          'jobWallclock': runtime_hours,})
+                            resource_reg_element.text = "\n                "
+                            resource_reg_element.tail = "\n            "
 
                             if not 'overrideParams' in run_element.attrib.keys():
 
                                 # Make a child element only if the dictionary has attributes
-                                atm = ET.SubElement(resource_reg_element, 'atm', attrib=atm_attribs) if len(atm_attribs) > 0 else None
-                                ocn = ET.SubElement(resource_reg_element, 'ocn', attrib=ocn_attribs) if len(ocn_attribs) > 0 else None
-                                lnd = ET.SubElement(resource_reg_element, 'lnd', attrib=lnd_attribs) if len(lnd_attribs) > 0 else None
-                                ice = ET.SubElement(resource_reg_element, 'ice', attrib=ice_attribs) if len(ice_attribs) > 0 else None
+                                atm_reg = ET.SubElement(resource_reg_element, 'atm', attrib=atm_attribs) if len(atm_attribs) > 0 else None
+                                atm_reg.tail = "\n                    "
+                                ocn_reg = ET.SubElement(resource_reg_element, 'ocn', attrib=ocn_attribs) if len(ocn_attribs) > 0 else None
+                                ocn_reg.tail = "\n                    "
+                                lnd_reg = ET.SubElement(resource_reg_element, 'lnd', attrib=lnd_attribs) if len(lnd_attribs) > 0 else None
+                                if lnd_reg is not None:
+                                    lnd_reg.tail = "\n                    "
+
+                                ice_reg = ET.SubElement(resource_reg_element, 'ice', attrib=ice_attribs) if len(ice_attribs) > 0 else None
+
+                                if ice_reg is not None:
+                                    ice_reg.tail = "\n                 "
                             else:
                                 override_container = Namelist()
                                 override_str = run_element.get('overrideParams')
@@ -718,7 +744,8 @@ def do_resources_main(etree_root):
                                                  'mask_table': override_container.get_var('ice_mask_table')}
 
                                 override_list = [atm_overrides, ocn_overrides, lnd_overrides, ice_overrides]
-                                
+                               
+                                 
                                 #DEBUG
                                 #print("\n****************REGULAR ATTRIBUTES*******************")
                                 #print("Experiment: " + str(exp.get('name')))
@@ -742,10 +769,30 @@ def do_resources_main(etree_root):
                                         if value == '' or value == None:
                                             del override_dict[key]
 
-                                atm = ET.SubElement(resource_reg_element, 'atm', attrib=atm_overrides) if len(atm_overrides) > 0 else None
-                                ocn = ET.SubElement(resource_reg_element, 'ocn', attrib=ocn_overrides) if len(ocn_overrides) > 0 else None
-                                lnd = ET.SubElement(resource_reg_element, 'lnd', attrib=lnd_overrides) if len(lnd_overrides) > 0 else None
-                                ice = ET.SubElement(resource_reg_element, 'ice', attrib=ice_overrides) if len(ice_overrides) > 0 else None
+                                #The following nested loop preserves values from experiment namelist
+                                #that were not overriden by the overrideParams attribute
+                                for index, override_dict in enumerate(override_list):
+
+                                    if len(override_dict) < len(attrib_list[index]):
+
+                                        for key, value in attrib_list[index].items():
+
+                                            if key not in override_dict:
+                                                override_dict[key] = value
+
+                                atm_reg_ovr = ET.SubElement(resource_reg_element, 'atm', attrib=atm_overrides) if len(atm_overrides) > 0 else None
+                                atm_reg_ovr.tail = "\n                "
+                                ocn_reg_ovr = ET.SubElement(resource_reg_element, 'ocn', attrib=ocn_overrides) if len(ocn_overrides) > 0 else None
+                                ocn_reg_ovr.tail = "\n                "
+                                lnd_reg_ovr = ET.SubElement(resource_reg_element, 'lnd', attrib=lnd_overrides) if len(lnd_overrides) > 0 else None
+
+                                if lnd_reg_ovr is not None:
+                                    lnd_reg_ovr.tail = "\n                "
+
+                                ice_reg_ovr = ET.SubElement(resource_reg_element, 'ice', attrib=ice_overrides) if len(ice_overrides) > 0 else None
+
+                                if ice_reg_ovr is not None:
+                                    ice_reg_ovr.tail = "\n              "               
 
                         #No <run> tag inside <regression> = Do nothing!
                         else:
@@ -958,7 +1005,7 @@ class Metadata(object):
 
     def build_metadata_xml(self, experiment_element):
 
-        new_metadata = ET.Element('publicMetadata', attrib={'DBswitch': '$(MDBI_SWITCH)'})
+        new_metadata = ET.Element('publicMetadata', attrib={'DBswitch': '$(MDBIswitch)'})
         new_metadata.text = '\n      '
         new_metadata.tail = '\n\n    '
         experiment_element.insert(0, new_metadata)
