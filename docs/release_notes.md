@@ -33,6 +33,13 @@ will be replaced by Bronx-15 which will have full (gaea & GFDL) Slurm support.
 Bronx-13 is (almost) identical to Bronx-14 except for PP/AN Slurm support. To switch a Bronx-13 experiment to Bronx-14,
 1. Stop any production jobs that use the XML
 1. Update your XML by updating the `<platform>/<freVersion>` tag
+
+   **WARNING: If you have active Bronx-13 post-processing jobs, they may be adversely impacted when the Bronx-14 XML
+gets transferred back to GFDL (e.g. when frepp re-parses the XML to submit analysis scripts). If you have Bronx-13 postprocessing
+for this experiment, please either**
+   - **wait until the post-processing competes before submitting Bronx-14 runscripts,**
+   - **kill the Bronx-13 frepp jobs and then re-frepp with Bronx-14 (or accept the possibility of failed frepp jobs), or**
+   - **rename the XML so that the Bronx-13 jobs at GFDL can continue to use the Bronx-13 XML. In this case, please verify that you aren't using the $(suite) FRE-defined property in your FRE directories (you can confirm this by frelist'ing Bronx-13 and Bronx-14 FRE directories (`frelist -d all`) and verifying they are identical).**
 1. Regenerate your runscript using the `--extend` option
 ```
 module load fre/bronx-14
@@ -49,12 +56,19 @@ module load fre/<old-bronx>
 frelist -x <xml> -p <platform> -t <target> -d state <experiment>
 frelist -x <xml> -p <platform> -t <target> --executable <experiment>
 ```
-3. Stop any production jobs that use the XML
-4. Update your XML to use F2 filesystem
+2. Stop any production jobs that use the XML
+3. Update your XML to use F2 filesystem
     1. Migrate your input data to F2. Pdata directories are arranged by institution and group, e.g. `/lustre/f2/pdata/gfdl/gfdl_B`. As Pdata isn't backed up, please copy any input from GFDL's `/archive`
     1. Update the FRE directories in your XML. If you use FRE's default directories, no changes may be needed except Pdata. Since Pdata directories on F2 are now organized by institution, you'll need to add a `/gfdl` to your input file directory. e.g `$(CDATA)/fms` should be changed to `$PDATA/gfdl/fms`
     1. Double-check that no parts of your XML (including any c-shell!) reference F1. While the `$(CDATA)` FRE property has been removed, the environment variable `$CDATA` continues to point to `/lustre/f1/pdata`. While F1 is still mounted, referencing F1 paths will still work; however, you *must* update the location before F1 is removed. Please take the time now to ensure your XML isn't dependent on F1.
     1. Update the `<platform>/<freVersion>` tag to `bronx-14`.
+
+   **WARNING: If you have active Bronx-(11|12) post-processing jobs, they may be adversely impacted when the Bronx-14 XML
+gets transferred back to GFDL (e.g. when frepp re-parses the XML to submit analysis scripts). If you have Bronx-(11|12) postprocessing
+for this experiment, please either**
+   - **wait until the post-processing competes before submitting Bronx-14 runscripts,**
+   - **kill the Bronx-(11|12) frepp jobs and then re-frepp with Bronx-14 (or accept the possibility of failed frepp jobs), or**
+   - **rename the XML so that the Bronx-(11|12) jobs at GFDL can continue to use the Bronx-(11|12) XML. In this case, please verify that you aren't using the $(suite) FRE-defined property in your FRE directories (you can confirm this by frelist'ing Bronx-(11|12) and Bronx-14 FRE directories (`frelist -d all`) and verifying they are identical).**
 4. Copy executable and state directories to F2 filesystem
     1. Record the new `state` directory and executable location.
     ```
