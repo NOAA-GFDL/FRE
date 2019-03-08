@@ -39,7 +39,7 @@ gets transferred back to GFDL (e.g. when frepp re-parses the XML to submit analy
 for this experiment, please either**
    - **wait until the post-processing competes before submitting Bronx-14 runscripts,**
    - **kill the Bronx-13 frepp jobs and then re-frepp with Bronx-14 (or accept the possibility of failed frepp jobs), or**
-   - **rename the XML so that the Bronx-13 jobs at GFDL can continue to use the Bronx-13 XML. In this case, please verify that you aren't using the $(suite) FRE-defined property in your FRE directories (you can confirm this by frelist'ing Bronx-13 and Bronx-14 FRE directories (`frelist -d all`) and verifying they are identical).**
+   - **rename the XML so that the Bronx-13 jobs at GFDL can continue to use the Bronx-13 XML. In this case, please verify that you aren't using the $(suite) FRE-defined property in your FRE directories (you can confirm this by frelist'ing Bronx-13 and Bronx-14 GDFL-side FRE directories (`frelist -d all -p <gfdl-platform>`) and verifying they are identical).**
 1. Regenerate your runscript using the `--extend` option
 ```
 module load fre/bronx-14
