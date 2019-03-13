@@ -280,7 +280,7 @@ def add_compiler_tag(etree_root, compiler_type='intel', compiler_version='16.0.3
             if xi_include:
                 continue
             else:
-                print("Writing compiler tag...")
+                print("Writing compiler tag for platform %s" % platform.get("name"))
                 compiler_tag = ET.SubElement(platform, 'compiler', attrib={'type': compiler_type, \
                                                                            'version': compiler_version})
                 compiler_tag.tail = "\n    "
@@ -517,7 +517,7 @@ def do_resources_main(etree_root):
 
     for exp in etree_root.iter('experiment'):
         subelements = [elem.tag for elem in exp.iter() if elem is not exp]
-        print("On experiment " + str(exp.get('name')))
+        print("Inserting resources tags for experiment " + str(exp.get('name')))
 
         if not 'compile' in subelements: 
             nml_container = Namelist() #1 namelist object per experiment. It will hold all necessary namelist values per key.
@@ -819,7 +819,7 @@ def parse_overrides(override_str, override_container):
 
     #Sanity check - length of namelists, params, and values should be the same
     if not len(namelists) == len(params) == len(values):
-        print("ERROR! The overrideParams attribute is not set up correctly! Skipping regression.")
+        print("WARNING! The overrideParams attribute is not set up correctly! Skipping regression.")
         return None
 
     for index, namelist in enumerate(namelists):
@@ -1056,7 +1056,7 @@ def do_metadata_main(etree_root):
             if (exp.find('publicMetadata') is not None) and ((exp.find('scenario') is not None) \
             or (exp.find('communityComment') is not None) or (exp.find('description').attrib != {})):
 
-                print("ERROR! You have a mix of Bronx-10 and Bronx-11/12 metadata elements")
+                print("WARNING! You have a mix of Bronx-10 and Bronx-11/12 metadata elements")
                 print("Skipping experiment %s" % experiment_name)
                 continue
 
@@ -1186,8 +1186,8 @@ if __name__ == '__main__':
     if not os.path.exists(args.input_xml):
         print("ERROR! The file path for the input XML does not exist")
         sys.exit(1) 
-    elif '.xml' not in args.input_xml:
-        print("ERROR! Not a valid XML file")
+    elif not args.input_xml.endswith('.xml'):
+        print("ERROR! Not a valid XML file (Bad extension)")
         sys.exit(1)
 
     input_xml = args.input_xml
@@ -1231,19 +1231,19 @@ if __name__ == '__main__':
     print("Converting XML from %s to %s..." % (old_version, newest_version))
     time.sleep(3)
     if old_version == 'bronx-10':
-        print("Checking for land F90 <csh> block...")
+        #print("Checking for land F90 <csh> block...")
         time.sleep(1)
         do_land_f90(root)
-        print("Checking for 'default' platforms (will be removed)...")
+        #print("Checking for 'default' platforms (will be removed)...")
         time.sleep(1) 
         delete_default_platforms(root)
-        print("Adding <freVersion> tags...")
+        #print("Adding <freVersion> tags...")
         time.sleep(1)
         add_fre_version_tag(root)
-        print("Checking for existence of 'compiler' tag in platforms")
+        #print("Checking for existence of 'compiler' tag in platforms")
         time.sleep(1)
         add_compiler_tag(root)
-        print("Adding resources tags...")
+        #print("Adding resources tags...")
         time.sleep(1)
         do_resources_main(root) # Resource Tags - change namelists and create <resources> # IF BRONX-10
         #throw_regression_warnings(root)
