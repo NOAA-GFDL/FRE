@@ -172,6 +172,10 @@ def do_properties(etree_root):
                                                      'value': 'off'})
         db_property.tail = '\n  '
         parent = etree_root.find('experimentSuite')
+        #setup_include XML's won't have an 'experimentSuite' root
+        if not parent:
+            parent = etree_root.find('setup')
+
         parent.insert(0, db_property)
  
     #If no FRE_VERSION property tag exists (rare), add one as the first property tag
@@ -180,6 +184,9 @@ def do_properties(etree_root):
                                                               'value': old_ver})
         fre_version_property.tail = '\n  '
         parent = etree_root.find('experimentSuite')
+        if not parent:
+            parent = etree_root.find('setup')
+
         parent.insert(0, fre_version_property)
 
     return old_ver
@@ -247,7 +254,10 @@ def do_land_f90(etree_root):
 #Delete Default Platforms -- if they exist
 def delete_default_platforms(etree_root):
 
-    setup_element = etree_root.find('experimentSuite').find('setup')
+    try:
+        setup_element = etree_root.find('experimentSuite').find('setup')
+    except AttributeError as e:
+        setup_element = etree_root.find('setup')
 
     try:
         platform_list = setup_element.findall('platform')
@@ -270,7 +280,10 @@ def delete_default_platforms(etree_root):
 
 def add_compiler_tag(etree_root, compiler_type='intel', compiler_version='16.0.3.210'):
 
-    platform_list = etree_root.find('experimentSuite').find('setup').findall('platform')
+    try:
+        platform_list = etree_root.find('experimentSuite').find('setup').findall('platform')
+    except AttributeError as e:
+        platform_list = etree_root.find('setup').findall('platform') 
 
     for platform in platform_list:
         
@@ -1120,7 +1133,7 @@ def do_metadata_main(etree_root):
 
 ## ----------------------------- BEGIN POST-XML PARSING  ----------------------------##
 
-def write_final_xml(xml_string):
+def write_final_xml(xml_string, setup_include=False):
 
     xml_string = xml_string.replace('&lt;', '<')
  
@@ -1154,8 +1167,12 @@ def write_final_xml(xml_string):
     #5. Remove instances of 'ns0:'; replace with 'xi:'
     xml_string = xml_string.replace('<ns0:', '<xi:')
     
-    #6. Restore attribute xml:ns for the <experimentSuite> tag
-    ns_line = re.search('<experimentSuite.*(?=\>)', xml_string).group()
+    #6. Restore attribute xml:ns for the <experimentSuite> tag or <setup> tag
+    if setup_include:
+        ns_line = re.search('<setup.*(?=\>)', xml_string).group()
+    else:
+        ns_line = re.search('<experimentSuite.*(?=\>)', xml_string).group()
+
     ns_att = ' xmlns:xi="http://www.w3.org/2001/XInclude"'
     xml_string = xml_string.replace(ns_line, ns_line + ns_att)
 
@@ -1178,8 +1195,9 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(prog='freconvert', description=\
                                      "A script that converts a user's XML to Bronx-13")
     parser.add_argument('-o', '--output_xml', help='Destination path of converted XML')
+    parser.add_argument('-s', '--setup', action='store_true', help='Specifies a setup_include XML')
     parser.add_argument('-q', '--quiet', help='Very little verbosity')
-    parser.add_argument('-v', '--verbosity', help='Increase output verbosity.')
+    parser.add_argument('-v', '--verbosity', action='store_true', help='Increase output verbosity.')
     parser.add_argument('-x', '--input_xml', required=True, type=str, help='Path of XML to be converted.')
     args = parser.parse_args()
 
@@ -1255,7 +1273,7 @@ if __name__ == '__main__':
         print("Linking paths to F2. Performing final XML manipulations...")
         time.sleep(1)
         xml_string = convert_xml_text(xml_string, prev_version=old_version)
-        final_xml = write_final_xml(xml_string)
+        final_xml = write_final_xml(xml_string, args.setup)
 
     elif old_version == 'bronx-11':
         print("Checking for 'default' platforms (will be removed)...")
@@ -1267,7 +1285,7 @@ if __name__ == '__main__':
         xml_string = ET.tostring(root)
         print("Linking paths to F2. Performing final XML manipulations...")
         xml_string = convert_xml_text(xml_string, prev_version=old_version)
-        final_xml = write_final_xml(xml_string)
+        final_xml = write_final_xml(xml_string, args.setup)
 
     # No need to parse XML with ElementTree if Bronx-12 or Bronx-13. Just do string replacements.
     elif old_version == 'bronx-12':
