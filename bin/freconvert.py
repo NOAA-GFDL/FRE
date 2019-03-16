@@ -110,61 +110,56 @@ import time
 import argparse
 import xml.etree.ElementTree as ET
 
-#py_vers = sys.version
-## --------------- Parse the XML as a Text file first ------------- ###
-
-# Perform all XML string replacements first, including F2 transitions #
-newest_version = 'bronx-14'
-char_to_replace = "<"
-replacement_char = '&lt;'
+newest_fre_version = 'bronx-14'
 
 configs_to_edit = ['atmos_npes', 'atmos_nthreads', 'ocean_npes',
                    'ocean_nthreads', 'layout', 'io_layout',
-                   'ocean_mask_table', 'ice_mask_table', 'land_mask_table',
-                   'atm_mask_table']
-nmls_to_edit = ["coupler_nml", "fv_core_nml", "ice_model_nml", "land_model_nml",
-                "ocean_model_nml"]
+                   'ocean_mask_table', 'ice_mask_table', 
+                   'land_mask_table', 'atm_mask_table']
 
+nmls_to_edit = ["coupler_nml", "fv_core_nml", "ice_model_nml", 
+                "land_model_nml", "ocean_model_nml"]
 
-def convert_xml_text(xml_string, prev_version='bronx-12'):
-
-    # Replace all old versions of bronx with the newest version
-    xml_string = change_fre_version(xml_string, prev_version)
-    # Change all F1 paths to the corresponding F2 destination
-    xml_string = points_to_f2(xml_string)
-    # Change any 'cubicToLatLon' attributes to 'xyInterp' in the post-processing
-    xml_string = modify_pp_components(xml_string)
-    # Replace any "DO_DATABASE" and "DO_ANALYSIS" property elements with "MDBIswitch" and "ANALYSIS_SWITCH"
-    xml_string = xml_string.replace('DO_ANALYSIS', 'ANALYSIS_SWITCH')
-    xml_string = xml_string.replace('DO_DATABASE', 'DB_SWITCH')
-    # Remove database_ingestor.csh script, if it exists
-    xml_string = xml_string.replace(' script="$FRE_CURATOR_HOME/share/bin/database_ingestor.csh"', '')
-
-    return xml_string
-
-
-def replace_chars(string, to_replace, replacement):
-
-    return re.sub(to_replace, replacement, string)
-
-
-def rreplace(string, old, new, occurrence=1):
-    
-    str_list = string.rsplit(old, occurrence)
-    return new.join(str_list)
-
-
-def modify_pp_components(xml_string):
-
-    xml_string = xml_string.replace('cubicToLatLon', 'xyInterp')
-    return xml_string
-
+#---------------------------- XML PRE-PARSING --------------------------------#
 
 def points_to_f2(xml_string):
+    """
+    Change all file paths in the XML pointing to F1 to point to F2
 
-    soft_filesystem_pointers = {'$CDATA': '$PDATA/gfdl', '${CDATA}': '$PDATA/gfdl', 
-                                '$CTMP': '$SCRATCH', '${CTMP}': '$SCRATCH', 
-                                '$CPERM': '$DEV', '${CPERM}': '$DEV'}
+    Gaea uses environment variables to simplify locations in the file
+    system. On F1, these were $CDATA, $CTMP, and $CPERM, which pointed
+    to /lustre/f1/pdata, /lustre/f1, and /lustre/f1/unswept,
+    respectively. In FRE XML's, users have the option of referencing
+    these environment variables when inserting paths to files such as
+    input files, diag tables, field tables, data tables, etc. Prior to
+    a more recent change in FRE, users could also reference these
+    environment variables the same way they could reference FRE-defined
+    properties, i.e. with braces -- $(CTMP} instead of $CTMP. On F2, 
+    the replacement environment variables are $PDATA, $SCRATCH, and 
+    $DEV, pointing to the locations of /lustre/f2/pdata, 
+    /lustre/f2/scratch, and /lustre/f2/dev, respectively. 
+
+    This function maps these baseline locations together in two 
+    dictionaries, one for the environment variables and one for
+    hard-coded paths, and does a string replacement for every F1
+    reference found in the original XML. The usage of braces is also
+    removed in these string replacements.
+    
+    PARAMETERS (1)
+    --------------
+    xml_string (required): Input XML in string format.
+
+    RETURNS
+    -------
+    A new xml_string variable with F2 references instead of F1
+
+    """
+    soft_filesystem_pointers = {'$CDATA': '$PDATA/gfdl', 
+                                '${CDATA}': '$PDATA/gfdl', 
+                                '$CTMP': '$SCRATCH', 
+                                '${CTMP}': '$SCRATCH', 
+                                '$CPERM': '$DEV', 
+                                '${CPERM}': '$DEV'}
 
     hard_filesystem_pointers = {'/lustre/f1/$USER': '/lustre/f2/scratch/$USER',
                                 '/lustre/f1/unswept': '/lustre/f2/dev',
@@ -176,18 +171,170 @@ def points_to_f2(xml_string):
     for f1_hard_pointer, f2_hard_pointer in hard_filesystem_pointers.items():
         xml_string = xml_string.replace(f1_hard_pointer, f2_hard_pointer)
 
+    #Cover hard-coded F1 swept locations that don't contain '$USER'
     xml_string = xml_string.replace('lustre/f1', 'lustre/f2/dev')
 
     return xml_string
 
 
-def change_fre_version(xml_string, version='bronx-12'):
+def convert_xml_text(xml_string, prev_version='bronx-12'):
+    """
+    Perform a series of string manipulations before XML is pre-parsed
 
-    return xml_string.replace(version, newest_version)
+    This function executes the points_to_f2 function and changes other
+    strings in the XML, namely:
+
+        1) ALL references to the old FRE version are changed to the 
+           newest version.
+        2) In the 'postProcess' section, 'cubicToLatLon' is replaced 
+           with 'xyInterp.'
+        3) 'DO_ANALYSIS' and 'DO_DATABASE' are updated to
+           'ANALYSIS_SWITCH' and 'DB_SWITCH', respectively.
+        4) The 'database_ingestor.csh' script is no longer necessary
+
+    PARAMETERS (2)
+    --------------
+    xml_string (required): input XML in string format
+    prev_version (optional): old XML version
+
+    RETURNS
+    -------
+    A new XML string referencing F2, the new Bronx version, and other
+    string manipulations
+
+    """
+    xml_string = points_to_f2(xml_string)
+    xml_string = xml_string.replace(prev_version, newest_fre_version)
+    xml_string = xml_string.replace('cubicToLatLon', 'xyInterp')
+    xml_string = xml_string.replace('DO_ANALYSIS', 'ANALYSIS_SWITCH')
+    xml_string = xml_string.replace('DO_DATABASE', 'DB_SWITCH')
+    xml_string = xml_string.replace(' script="$FRE_CURATOR_HOME/share/bin/database_ingestor.csh"', '')
+
+    return xml_string
+
+
+def rreplace(string, old, new, occurrence=1):
+    """
+    Replace the last instances of a particular character or substring
+    found, instead of the first
+
+    This function is called by the write_parsable_xml function and is
+    used to remove an extra XML declaration that ElementTree writes.
+
+    PARAMETERS (4)
+    --------------
+    string (required): input string
+    old (required): old substring/character to be removed
+    new (required): new substring/character to be replace 'old'
+    occurrence (optional): number of occurrences of the old subtring/
+                           character to be replaced
+
+    RETURNS
+    -------
+    A new string with the replaced substring/character.
+
+    """    
+    str_list = string.rsplit(old, occurrence)
+    return new.join(str_list)
+
+
+def fix_special_strings(regex_str, xml_string, char_to_replace, replacement):
+    """
+    Substitutes non-XML conforming characters with conforming
+    substrings within specific tags of the XML, notably CDATA tags and
+    comments.
+
+    As explained in the docstring for the write_parsable_xml function, 
+    ElementTree has a difficult time preserving comments and CDATA 
+    tags. Therefore, temporary artificial tags are created to store 
+    the content of these elements. Unfortunately, this exposes 
+    another problem in that non-conforming XML characters, which may
+    be perfectly legal in comments or CDATA tags, are now caught by
+    the ElementTree parser and deemed illegal. Two notable characters
+    that do such a thing in FRE XML's are '<' and '&'. The '&' symbol
+    can easily be changed to its equivalent ('&amp;') with a simple 
+    replace method, however, the '<' symbol (which is to be changed
+    to '&lt;') requires regular expressions capturing only the '<'
+    symbols that appear as text within the artificial tags. 
+    Therefore, this function identifies all of the substrings within
+    the artificial tags and replaces the illegal character with the
+    legal equivalent. The function then returns the new XML string.
+
+    PARAMETERS (4)
+    --------------
+    regex_str (required): Regular expression identifying the necessary
+                          substrings that may need a replacement
+    xml_string (required): The input XML in string format
+    char_to_replace (required): The illegal character to be replaced
+    replacement (required): The legal equivalent to replace the 
+                            illegal character
+
+    RETURNS
+    -------
+    The modified XML string with illegal characters removed
+
+    """
+    regex_matches = re.findall(regex_str, xml_string, re.DOTALL)
+
+    for match in regex_matches:        
+        xml_string = re.sub(re.escape(match), 
+                            re.sub(char_to_replace, replacement, match), 
+                            xml_string)
+
+    return xml_string
 
 
 def write_parsable_xml(xml_string):
-   
+    """
+    Pre-parses the XML into a new string that preserves special tags
+    and the content within them
+
+    One of the issues with ElementTree is its lack of functionality
+    and preservation when it comes to special tags. The ElementTree
+    module may also inadvertently add or duplicate particular tags,
+    which may cause anomalous effects down the line. Two elements 
+    that caused the biggest of problems were the tags for comments,
+    initiated by '<!--' and ended by '-->', and the tags for CDATA 
+    strings (normally in FRE within a <csh> block), initiated by
+    '<![CDATA[' and ended by ']]>'. Other tags that caused problems
+    were DOCTYPE and ENTITY opening and closing tags, the addition
+    of <root> and </root> tags at the beginning and ending of the
+    XML (potentially also conflicting with the <root> tags defined 
+    in the FRE schema), and the duplication of an XML declaration
+    statement.
+
+    To combat these issues, it was decided that a slightly modified
+    XML was needed to behave properly as an ElementTree object. Thus,
+    "pre-parsing" the XML required a manipulation of existing tags
+    into temporary artificial tags that more easily preserved content.
+    This function performs the following string changes:
+
+    1) '<![CDATA[' ---> <cdata>
+    2) ']]>' ---> </cdata>
+    3) '<!--' ---> <xml_comment>
+    4) '-->' ---> </xml_comment>
+    5) '<root>' ---> <xml_root>
+    6) '</root>' ---> </xml_root>
+    7) '<!DOCTYPE' ---> <doctype>
+    8) ']>' ---> </doctype>
+    9) '<!ENTITY' ---> <entity>
+    10) '>' ---> </entity>
+
+    In addition, this pre-parser calls a function called
+    'fix_special_strings' to resolve illegal characters that are not
+    normally caught by the ElementTree parser in FRE XML's (they are 
+    usually hidden within the comment and CDATA blocks), but which are
+    temporarily exposed as text elements of regular XML tags.
+
+    PARAMETERS (1)
+    --------------
+    xml_string (required): input XML in string format
+
+    RETURNS
+    -------
+    A new XML string that is ready to be parsed by ElementTree
+
+    """   
     xml_string = xml_string.replace('<root>', '<xml_root>')
     xml_string = xml_string.replace('</root>', '</xml_root>')
  
@@ -227,23 +374,8 @@ def write_parsable_xml(xml_string):
     return xml_string
     
     
-def fix_special_strings(regex_str, xml_string, to_replace, replacement):
+#------------------------ PARSE XML THROUGH ElementTree -----------------------#
 
-    regex_matches = re.findall(regex_str, xml_string, re.DOTALL)
-
-    for match in regex_matches:        
-        xml_string = re.sub(re.escape(match), replace_chars(match, to_replace, replacement), xml_string)
-
-    return xml_string
-
-
-## ----------------------------- END PRE-XML PARSER ----------------------------##
-
-
-## ----------------------------- BEGIN XML PARSING  ----------------------------##
-
-
-# Modify (or add) 'FRE_VERSION' property and retrieve old version 
 
 def do_properties(etree_root):
 
@@ -1315,7 +1447,7 @@ if __name__ == '__main__':
 
     if file_dest is None:
         modified_input_path = os.path.abspath(input_xml).replace('.xml', '')
-        file_dest = modified_input_path + '_' + newest_version + '.xml'
+        file_dest = modified_input_path + '_' + newest_fre_version + '.xml'
     else:
         pass
     
@@ -1335,7 +1467,7 @@ if __name__ == '__main__':
         print("\nERROR: %s" % str(e).upper()) 
         print("The XML is non-conforming! Please correct issues and re-run freconvert.py")
         print("Writing out the pre-parsed file for debugging.")
-        file_dest = file_dest.replace(newest_version + '.xml', 'pre_parsed_error.xml')
+        file_dest = file_dest.replace(newest_fre_version + '.xml', 'pre_parsed_error.xml')
 
         with open(file_dest, 'w') as f:
             f.write(pre_parsed_xml)
@@ -1348,7 +1480,7 @@ if __name__ == '__main__':
     
     # PARSE AND MODIFY ELEMENTS DEPENDING ON ORIGINAL BRONX VERSION #
     old_version = do_properties(root)    # freVersion checking # ALL BRONX VERSIONS
-    print("Converting XML from %s to %s..." % (old_version, newest_version))
+    print("Converting XML from %s to %s..." % (old_version, newest_fre_version))
     time.sleep(3)
     if old_version == 'bronx-10':
         #print("Checking for land F90 <csh> block...")
@@ -1400,8 +1532,8 @@ if __name__ == '__main__':
         time.sleep(1)
         final_xml = convert_xml_text(input_content, prev_version=old_version)
     
-    elif old_version == newest_version:
-        print("XML is already at the newest version (%s)" % newest_version)
+    elif old_version == newest_fre_version:
+        print("XML is already at the newest version (%s)" % newest_fre_version)
         sys.exit(1)
 
     else:
