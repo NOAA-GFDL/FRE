@@ -244,7 +244,7 @@ def fix_special_strings(regex_str, xml_string, char_to_replace, replacement):
     substrings within specific tags of the XML, notably CDATA tags and
     comments.
 
-    As explained in the docstring for the write_parsable_xml function, 
+    As mentioned in the docstring for the write_parsable_xml function, 
     ElementTree has a difficult time preserving comments and CDATA 
     tags. Therefore, temporary artificial tags are created to store 
     the content of these elements. Unfortunately, this exposes 
@@ -378,12 +378,35 @@ def write_parsable_xml(xml_string):
 
 
 def do_properties(etree_root):
+    """
+    Retrieves the current FRE version of the XML and checks/modifies 
+    specific FRE properties
 
-    old_ver = "bronx-10" # Default value (i.e. if no FRE_VERSION property exists)
+    This function performs the following tasks:
+
+        1) Get the old XML FRE version value, obtained from the 
+           "FRE_VERSION" property. 
+        2) If the FRE_VERSION property doesn't exist, the default FRE
+           version is kept to 'bronx-10' and returned.
+        3) The FRE_VERSION property should be set to 'bronx-##' with 
+           '##' indicating the version number. If the property is set
+           to 'fre/bronx-##', remove the 'fre/' string.
+        4) Looks for the MDBIswitch property and adds it, if needed
+
+    PARAMETERS (1)
+    --------------
+    etree_root (required): An ElementTree object
+
+    RETURNS
+    -------
+    A string containing the version of the input XML, i.e. 'bronx-10'
+
+    """
+    old_ver = "bronx-10" # Default setting for initialization
     fre_prop_exists = False
     mdbi_switch = False
 
-    #Retrieve the current XML bronx version through the FRE_VERSION property tag
+    #Loop through all of the 'property' elements
     for prop in etree_root.iter('property'):
          
         if prop.get("name").upper() == "FRE_VERSION":
@@ -394,13 +417,14 @@ def do_properties(etree_root):
             old_ver = prop.get("value")
             fre_prop_exists = True
         
-        # Check if the MDBI switch property exists. If not, set it to "off" by default.
-        if prop.get("name") == "MDBIswitch" or prop.get("name").upper() == "DB_SWITCH":
+        # Check if the MDBI switch property exists. 
+        if prop.get("name") == "MDBIswitch" or prop.get("name") == "DB_SWITCH":
             mdbi_switch = True
 
         else:
             pass
 
+    #If no MDBIswitch property tag exists, add one as a property tag
     if not mdbi_switch:
         db_property = ET.Element('property', attrib={'name': 'MDBIswitch',
                                                      'value': 'off'})
@@ -412,7 +436,7 @@ def do_properties(etree_root):
 
         parent.insert(0, db_property)
  
-    #If no FRE_VERSION property tag exists (rare), add one as the first property tag
+    #If no FRE_VERSION property tag exists, add one as the first property tag
     if not fre_prop_exists:
         fre_version_property = ET.Element('property', attrib={'name': 'FRE_VERSION',
                                                               'value': old_ver})
@@ -428,8 +452,24 @@ def do_properties(etree_root):
 
 #Add platform-specific <freVersion> tags, if necessary
 def add_fre_version_tag(etree_root):
+    """
+    Adds needed <freVersion> tags to platform elements
 
-    #Check platform tags for <freVersion> tag
+    This function loops through all of the platforms (i.e. ncrc3.intel,
+    gfdl.ncrc4-intel, etc.) and inserts <freVersion> tags wherever
+    necessary. It inserts the tag on the line directly below where
+    the platform is defined. This function skips over xi:include
+    statements, as there is no need to add freVersion elements there.
+
+    PARAMETERS (1)
+    --------------
+    etree_root (required): An ElementTree object
+
+    RETURNS
+    -------
+    None
+
+    """
     for platform in etree_root.iter('platform'):
 
         #Skip over xi:include tags. We DO NOT put a <freVersion> tag here!
@@ -446,11 +486,27 @@ def add_fre_version_tag(etree_root):
                 platform.insert(0, freVersion_elem)
                 
 
-#Add attribute 'doF90Cpp="yes"' to <compile> tag for land component in build experiment
-#Note: will only work for 1 land build component. Manual modification is needed for more than 1.
-
 def do_land_f90(etree_root):
+    """
+    Removes land <csh> block from build experiments and adds an
+    attribute named 'doF90Cpp="yes"' to the land <compile> tag.
 
+    In the past, a semi-lengthy <csh> block was needed to build the 
+    land component for build experiments. In later versions of FRE,
+    this is no longer necessary. Instead, an attribute was added to 
+    the <compile> tag for the land component called 'doF90Cpp'. If
+    this was invoked, users could delete these <csh> blocks. This 
+    function adds the needed attribute and deletes the <csh>.
+
+    PARAMETERS (1)
+    --------------
+    etree_root (required): An ElementTree object
+
+    RETURNS
+    -------
+    None
+
+    """
     for experiment in etree_root.iter('experiment'):
 
         for component_elem in experiment.iter('component'):
@@ -485,9 +541,25 @@ def do_land_f90(etree_root):
                 continue
     
 
-#Delete Default Platforms -- if they exist
 def delete_default_platforms(etree_root):
+    """
+    Deletes all platforms with attached name '.default'.
 
+    The usage of 'default' platforms was removed from FRE in Bronx-12,
+    therefore, this function facilitates the deletion of such named
+    platforms. It works for both regular XML's and 'setup_include'
+    XML's (XML's with the 'setup' tag as the root element, which is
+    xi:included into the main XML).
+
+    PARAMETERS (1)
+    --------------
+    etree_root (required): An ElementTree object
+
+    RETURNS 
+    -------
+    None
+
+    """
     try:
         setup_element = etree_root.find('experimentSuite').find('setup')
     except AttributeError as e:
@@ -512,8 +584,34 @@ def delete_default_platforms(etree_root):
             setup_element.remove(platform_list[i])
 
 
-def add_compiler_tag(etree_root, compiler_type='intel', compiler_version='16.0.3.210'):
+def add_compiler_tag(etree_root, compiler_type='intel', 
+                     compiler_version='16.0.3.210'):
+    """
+    Inserts a <compiler> tag within a platform
 
+    Prior to Bronx-11, users would need to specify the compiler used
+    for a build experiment within a <csh> block, typically by using
+    the 'module swap' command. The need for this <csh> block was 
+    removed and replaced with its own defined tag. The default setting
+    in this function for the compiler type is 'intel' and is set to a 
+    default of '16.0.3.210' for the version. The compiler tag is set 
+    for all platforms, including GFDL platforms (which are usually not
+    necessary).
+
+    PARAMETERS (3)
+    --------------
+    etree_root (required): An ElementTree object
+    compiler_type (optional): A string specifying the type of compiler
+                              used for building the experiment
+    compiler_version (optional): A string specifying the version of 
+                                 compiler used for building the
+                                 experiment.
+
+    RETURNS
+    -------
+    None
+
+    """
     try:
         platform_list = etree_root.find('experimentSuite').find('setup').findall('platform')
     except AttributeError as e:
@@ -528,42 +626,267 @@ def add_compiler_tag(etree_root, compiler_type='intel', compiler_version='16.0.3
                 continue
             else:
                 print("Writing compiler tag for platform %s" % platform.get("name"))
-                compiler_tag = ET.SubElement(platform, 'compiler', attrib={'type': compiler_type, \
-                                                                           'version': compiler_version})
+                compiler_tag = ET.SubElement(platform, 'compiler', 
+                                             attrib={'type': compiler_type,
+                                                     'version': compiler_version})
                 compiler_tag.tail = "\n    "
         else:
             continue
         
 
-# Insert <resources> tags for 'production' and 'regression' elements
+# --------------------------- BUILD RESOURCE TAGS --------------------------- #
+"""
+The following section of code builds <resource> tags for the user's XML.
+As the transition to <resource> tags was implemented in Bronx-11, these 
+code segments will only be relevant for Bronx-10 XML's. 
 
-###     First, check for the existence of resources tags in the XML.
-###     If none exist
+Prior to Bronx-11, parameters for setting the number of processors,
+number of threads, setting the layouts, setting the io_layouts, and
+setting mask tables were initialized in the namelist. For example, the 
+parameter 'atmos_npes' would set the number of processors for the 
+'atmos' component and would itself be set in the 'fv_core_nml' namelist. 
+As another example, the 'layout' parameter could be set for the 'atmos',
+'ocean', 'ice', or 'land' components, and would be initialized in the 
+'coupler_nml', 'ocean_model_nml', 'ice_model_nml' or 'land_model'nml'
+namelists, respectively. 
 
-###           Find the values of the atm, ocn, lnd, and ice ranks using the namelists located under each
-###           individual experiment. Sometimes, namelists are inherited from other experiments.
-###           If certain namelists are not found, then we can reasonably conclude that the resource namelist variables
-###           have been inherited and only need to be rereferenced from their original source when setting the
-###           resource tags for that particular experiment.
+In addition, other parameters that would define the model run would be
+set in either <production> or <regression> tags as children of the 
+<runtime> element. Such attributes would include 'npes' (total 
+processors for experiment run), 'runTime', 'runTimePerJob', 
+'simTime', as well as the model run's temporal resolution level,
+i.e. months, days, years. 
 
-###           Rename the namelist variable values to the new 'resource variable' name. Example: layout     = 'atm_layout'
+With Bronx-11, these values are either added or redefined in new 
+elements called <resources>. A complete summary and visual of the 
+changes can be found here:
 
-###           Delete the 'npes' and 'runTime' attributes from the 'production' tag as well as the 'runTime' attribute
-###           from the 'segment' tag. Inside resource tag, create new attributes 'jobWallclock' and 'segRuntime' and
-###           and use the old 'runTime' values for the new 'jobWallclock' and 'segRuntime' attribute respectively.
+https://wiki.gfdl.noaa.gov/index.php/FRE_Version_History#fre.2Fbronx-11
 
-###           If multiple production tests/regression tests exist, create new <freInclude> tags and reference them in the
-###           <runtime> tags for each experiment using <xi:include>. Regression tags are referenced in     their own
-###           <regression> tags apart from <production>.
+These sets of functions attempt to preserve model run 'resource' 
+parameters by extracting them from the namelists and inserting them
+into these newly defined <resources> tags (as well as those child
+tags) inside both production and regression model runs.
 
-###     If they do exist, then pass.
-###
+"""
 
-#4.1 - Change variable names in namelist string and produce new namelist string ###
+
+class Namelist(object):
+    """
+    The Namelist class serves as a container for values extracted
+    from namelists that display information regarding the parameters 
+    of a model run (either for production or regression). 
+
+    METHODS
+    -------
+    __init__: Initialize an instance of the class
+   
+    set_var: Store the namelist parameter in a class-defined dictionary
+
+    print_vars: Used for debugging
+
+    get_var: Retrieve the namelist parameter from the class-defined 
+             dictionary.
+
+    """
+    def __init__(self):
+        """
+        Initialize a new Namelist object. Define the container dict.
+
+        PARAMETERS
+        ----------
+        self
+
+        RETURNS
+        -------
+        None
+
+        """
+        self.nml_vars = {}
+
+
+    def set_var(self, nml_dict, nml_field, set_layout=False, set_io_layout=False,
+                layout_group="", io_layout_group=""):
+        """
+        Store the namelist parameter into the class dictionary for 
+        later retrieval
+
+        Each namelist is parsed as its own dictionary out of the main
+        XML string. Those dictionary's contents are then examined and
+        stored via this set_var function. The values for more specific
+        field are easier to set, such as 'atmos_npes' or 'ocean_npes',
+        however, 'layout' and 'io_layout' can be named as a field for 
+        any component, i.e. atmos, ocean, model, or land. To prevent
+        a duplication of keys within the class dictionary, 4 additional
+        parameters are set as keyword arguments:
+
+            set_layout (bool)
+            set_io_layout (bool)
+            layout_group (str)
+            io_layout_group (str)
+
+        The two boolean parameters will execute if the given namelist 
+        field equals 'layout' or 'io_layout'. The 'layout_group' and
+        'io_layout_group' string parameters specify the component
+        to which the given 'layout' or 'io_layout' is referring to
+        and then creates a unique 'layout' or 'io_layout' key in the
+        class dictionary for the extracted value.
+
+        A few anomalous characters may also exist in the namelist that
+        we don't want in the <resources> tags. These include namelist
+        comments (defined by a '!') and commas (typically defined at
+        the end of a line in the namelist). This method prevents
+        the storage of these characters.
+
+        PARAMETERS (7)
+        --------------
+        self (required within class): Referring to class-defined object
+        nml_dict (required): Namelist defined as a dictionary
+        nml_field (required): The namelist parameter (key)
+        set_layout (optional): A boolean to indicate a line containing
+                               the parameter 'layout'
+        set_io_layout (optional): A boolean to indicate a line 
+                                  containing the parameter 'io_layout'
+        layout_group (optional): A string referencing the namelist that
+                                 a particular 'layout' is referring to
+        io_layout_group (optional): A string referencing the namelist 
+                                    that a particular 'io_layout' is 
+                                    referring to
+
+        RETURNS
+        -------
+        None
+
+        """
+
+        try:
+            value = nml_dict[nml_field]
+
+        except KeyError as e:
+            return 
+
+        #Next 3 'if' statements quality-check the values 
+        if '!' in value:
+            exc_idx = value.index('!')
+            value = value[:exc_idx]
+
+        if value.count(',') > 1:
+            value = rreplace(value, ',', '', occurrence=value.count - 1)
+
+        if value[-1] == ',':
+            value = rreplace(value, ',', '')
+ 
+        #Insert namelist value into the Namelist class dictionary
+        if set_layout:
+            self.nml_vars[layout_group + "_" + nml_field] = value
+
+        elif set_io_layout:
+            self.nml_vars[io_layout_group + "_" + nml_field] = value
+
+        else:
+            self.nml_vars[nml_field] = value
+
+
+    def print_vars(self):
+        """
+        Mainly used for debugging. Prints out the items of the class
+        dictionary
+
+        PARAMETERS (1)
+        --------------
+        self (required within class): Referring to class-defined object
+
+        RETURNS
+        -------
+        None
+
+        """
+        for key, value in self.nml_vars.items():
+
+            print("%s = %s" % (key, value))
+
+
+    def get_var(self, var):
+        """
+        Returns the namelist value stored in the class dictionary
+
+        After set_var extracts the value of the field for a particular
+        namelist, get_var returns it back. Expected values may not
+        always exist, however. In the XML schema for <resource> tags,
+        'atmos' and 'ocean' model run parameters are typically
+        required. In some cases within Bronx-10 XMLs, these may not
+        exist in the namelist. In some cases, they may even be set in
+        <csh> blocks! Values of '0' are also not acceptable. To combat
+        these problems, arbitrary default values are stored inside
+        the class dictionary and returned if a resource-specific 
+        field isn't defined or contains a value of '0.'
+
+        PARAMETERS (2)
+        --------------
+        self (required within class): Referring to class-defined object
+        var (required): The namelist field (key) that is referenced
+                        when extracting from the class dictionary
+
+        RETURNS
+        -------
+        self.nml_vars[var]: The class dictionary value of key 'var'
+
+        """        
+        #There will be instances where attributes won't exist, so test a 
+        #dummy variable in a Try-Except to determine which fields exist/don't exist.
+        try:
+            foo = self.nml_vars[var]
+    
+        #Sometimes, there will be namelist keys that will not be displayed in namelist, 
+        #but we need it in the resource tags. Set default values to be returned.
+        except KeyError as e:
+
+            if var == 'atmos_nthreads':
+                self.nml_vars[var] = '1'
+                return self.nml_vars[var]
+            elif var == 'atmos_npes':
+                self.nml_vars[var] = '1'
+                return self.nml_vars[var]
+            elif var == 'atmos_layout':
+                self.nml_vars[var] = '1,1'
+                return self.nml_vars[var]
+            elif var == 'ocean_nthreads':
+                self.nml_vars[var] = '1'
+                return self.nml_vars[var]
+            elif var == 'ocean_npes':
+                self.nml_vars[var] = '1'
+                return self.nml_vars[var]
+            elif var == 'ocean_layout':
+                self.nml_vars[var] = '1,1'
+                return self.nml_vars[var]
+            else:
+                self.nml_vars[var] = ''
+                return self.nml_vars[var]
+        
+        #There will be times when ranks (or other resource params) are set to 0. Set to 1 instead.
+        if self.nml_vars[var] == '0':
+            self.nml_vars[var] = '1'
+
+        return self.nml_vars[var]
 
 
 def nml_to_dict(nml):
+    """
+    Transform a string containing a namelist into a dictionary
 
+    This function extracts key, value pairs from a list of lines 
+    defining an XML namelist and places them into a dictionary to be
+    used later.
+
+    PARAMETERS (1)
+    --------------
+    nml (required): A list of line-separated strings that define an XML namelist
+
+    RETURNS
+    -------
+    nml_dict: A dictionary representation of the XML namelist
+
+    """
     str_list = get_str_list(nml)
     nml_dict = {}
 
@@ -575,39 +898,116 @@ def nml_to_dict(nml):
     return nml_dict
 
 
-def get_str_list(nml):
+def get_str_list(nml_string):
+    """
+    Splits a string containing a namelist into a list of 
+    line-separating strings. Returns the list.
 
-    str_list = nml.text.splitlines()
+    PARAMETERS (1)
+    --------------
+    nml_string (required): String containing the namelist
+
+    RETURNS
+    -------
+    str_list: A list of line-separated strings defining the namelist
+
+    """
+    str_list = nml_string.text.splitlines()
     return str_list
 
 
 def modify_namelist(nml, nml_name):
+    """
+    Changes any namelist values that were extracted for resource tags
+    to variables references.
 
+    Examples:
+
+        'atmos_npes = 30' --> 'atmos_npes = $atm_ranks'
+        'ocean_nthreads = 1' --> 'ocean_nthreads = $ocn_threads'
+        (land) 'layout = 1,1' --> (land) 'layout = $lnd_layout'
+        (ice) 'io_layout = 1,1' --> (ice) 'io_layout = $ice_io_layout'
+
+    With resource tags, it is no longer necessary to specify the model
+    parameters directly within the namelist. They must still be 
+    referenced by variables, however, as stated in the examples above.
+
+    PARAMETERS (2)
+    --------------
+    nml (required): The given namelist string
+    nml_name (required): The name of the particular namelist
+
+    RETURNS
+    -------
+    None
+
+    """
     str_list = get_str_list(nml)
     new_nml_str = get_new_nml_str(nml_name, str_list)
     nml.text = new_nml_str
 
 
-#Helper function for get_new_nml_str
 def nml_text_replace(str_to_check, namelist_dict, namelist_substr, old_nml_str_list,
                      loop_index):
+    """
+    Helper function for the get_new_nml_str function. Returns a line of
+    modified namelist text
 
+    PARAMETERS (5)
+    --------------
+    str_to_check (required): The string containing the namelist field
+                             we are operating on
+    namelist_dict (required): Dictionary of parameters tobe modified 
+                              for a particular namelist
+    namelist_substr (required): The entire line of the namelist 
+                                parameter to be modified
+    old_nml_str_list (required): A list of the original namelist, 
+                                 separated via newline characters
+    loop_index (required): Index to keep track of location of 
+                           modifications within old_nml_str_list
+
+    RETURNS
+    -------
+    old_nml_str_list[loop_index]: The new namelist line for a specific
+                                  parameter
+
+    """
     for old_str, new_str in namelist_dict.items():
 
         if str_to_check == old_str:
-            old_nml_str_list[loop_index] = re.sub('(?<=\=).*', new_str, namelist_substr)
+            old_nml_str_list[loop_index] = re.sub('(?<=\=).*',
+                                                  new_str, 
+                                                  namelist_substr)
             break
 
     return old_nml_str_list[loop_index]
 
 
 def get_new_nml_str(nml_name, old_nml_str_list):
+    """
+    Operates on a list of line-separated namelist strings and returns
+    a single modified namelist string
 
-    #configs_to_edit = ['atmos_npes', 'atmos_nthreads', 'ocean_npes',
-                       #'ocean_nthreads', 'layout', 'io_layout',
-                       #'ocean_mask_table', 'ice_mask_table', 'land_mask_table',
-                       #'atm_mask_table']
+    This function changes the values of certain parameters within
+    particular namelists to reference variables within the <resources>
+    tags. It starts by defining key/value pairs for parameters of 
+    specific namelist names, where the 'key' is a parameter for that
+    particular namelist, and the 'value' is the variable-referenced 
+    field value to that parameter. It loops through a list of 
+    line-separated strings containing the old namelist parameter values
+    and replaces it with the new values. 
 
+    PARAMETERS (2)
+    --------------
+    nml_name (required): Name of given namelist
+    old_nml_str_list (required): A list of the original namelist, 
+                                 separated via newline characters
+
+    RETURNS
+    -------
+    final_str: The modified namelist as a single string.
+
+    """
     coupler_dict = {'atmos_npes': '$atm_ranks', 'atmos_nthreads': '$atm_threads',
                     'atmos_mask_table': '$atm_mask_table', 'ocean_npes': '$ocn_ranks',
                     'ocean_nthreads': '$ocn_threads', 'ocean_mask_table': '$ocn_mask_table'}
@@ -656,98 +1056,24 @@ def get_new_nml_str(nml_name, old_nml_str_list):
     return final_str
 
 
-#4.2 - EXTRACT VALUES FROM NAMELISTS###
-
-class Namelist(object):
-
-    def __init__(self):
-
-        self.nml_vars = {}
-
-
-    def set_var(self, nml_dict, nml_field, set_layout=False, set_io_layout=False, layout_group="", io_layout_group=""):
-
-        try:
-            value = nml_dict[nml_field]
-
-        except KeyError as e:
-            return 
-
-        #Next 3 'if' statements quality check the value (namelist comments and extra commas)
-        if '!' in value:
-            exc_idx = value.index('!')
-            value = value[:exc_idx]
-
-        if value.count(',') > 1:
-            value = rreplace(value, ',', '', occurrence=value.count - 1)
-
-        if value[-1] == ',':
-            value = rreplace(value, ',', '')
- 
-        #Insert namelist value into the Namelist class dictionary
-        if set_layout:
-            self.nml_vars[layout_group + "_" + nml_field] = value
-
-        elif set_io_layout:
-            self.nml_vars[io_layout_group + "_" + nml_field] = value
-
-        else:
-            self.nml_vars[nml_field] = value
-
-
-    def print_vars(self):
-
-        for key, value in self.nml_vars.items():
-
-            print("%s = %s" % (key, value))
-
-
-    def get_var(self, var):
-        
-        #There will be instances where attributes won't exist, so test a 
-        #dummy variable in a Try-Except to determine which fields exist/don't exist.
-        try:
-            foo = self.nml_vars[var]
-    
-        #Sometimes, there will be namelist keys that will not be displayed in namelist, but we need
-        #it in the resource tags. Set default values to be returned.
-        except KeyError as e:
-
-            if var == 'atmos_nthreads':
-                self.nml_vars[var] = '1'
-                return self.nml_vars[var]
-            elif var == 'atmos_npes':
-                self.nml_vars[var] = '1'
-                return self.nml_vars[var]
-            elif var == 'atmos_layout':
-                self.nml_vars[var] = '1,1'
-                return self.nml_vars[var]
-            elif var == 'ocean_nthreads':
-                self.nml_vars[var] = '1'
-                return self.nml_vars[var]
-            elif var == 'ocean_npes':
-                self.nml_vars[var] = '1'
-                return self.nml_vars[var]
-            elif var == 'ocean_layout':
-                self.nml_vars[var] = '1,1'
-                return self.nml_vars[var]
-            else:
-                self.nml_vars[var] = ''
-                return self.nml_vars[var]
-        
-        #There will be times when ranks (or other resource params) are set to 0. Set to 1 instead.
-        if self.nml_vars[var] == '0':
-            self.nml_vars[var] = '1'
-
-        return self.nml_vars[var]
-
-
-### End Main 4.1 ###
-
-### Begin Main 4.2 ###
-
 def strip_dict_whitespace(nml_dict):
+    """
+    Strips all whitespace from the namelist dictionary.
 
+    This function gets rid of any whitespace that was stored as a key
+    or value within the namelist dictionary.
+
+    PARAMETERS (1)
+    --------------
+    nml_dict: A dictionary containing the raw key/value pairs from the 
+              original namelist string
+
+    RETURNS 
+    -------
+    new_dict: A dictionary containing the key/value pairs with the 
+              whitespace removed.
+
+    """
     new_dict = {}
     for key, value in nml_dict.items():
     
@@ -759,15 +1085,78 @@ def strip_dict_whitespace(nml_dict):
 
 
 def do_resources_main(etree_root):
+    """
+    The central function for modifying the namelists and inserting
+    <resources> tags.
 
-    #nmls_to_edit = ["coupler_nml", "fv_core_nml", "ice_model_nml", "land_model_nml", "ocean_model_nml"]
+    This function can be divided into 2 sections:
+
+        1) Extract from and modify namelist parameters
+        2) Create <resources> tags for production and regression 
+           elements
+    
+    For Section 1,
+
+    This function loops through each experiment and identifies the 
+    appropriate namelists to modify, that is, namelists that contain
+    parameters which can be inserted into <resources> tags. Those 
+    namelists are defined in the nmls_to_edit list at the beginning of
+    this script. If a namelist that is known to contain resource
+    parameters is found, the function will strip the namelist into a
+    dictionary and store the necessary values within a Namelist object.
+    Regardless of whether or not the parameter exists or not, the 
+    object will attempt to call the set_var method. It will not store
+    anything if the parameter is not defined. Afterwards, the 
+    function modify_namelist is called, which does the work of
+    replacing the namelist values with variable references within the 
+    <resources> tags. 
+
+    For Section 2,
+
+    Continuing the loop and on the same experiment, this function 
+    creates a series of dictionaries containing the values of the 
+    modified namelists. The method get_var is called within the
+    dictionary to obtain the value stored in the object. If the 
+    value does not exist and was stored as '' or None in the object,
+    that key/value pair will be deleted from the final dictionary, i.e.
+    the dictionary that gets used in the <resources> tags. For 
+    production and regression runs, other information is extracted from
+    the existing <production> and <regression> tags and renamed, such
+    as 'runTime', 'runTimePerJob', or 'npes'. 
+
+    Production runs are fairly easy to set up. Regression runs are a 
+    different story. What complicates regression runs is the existence
+    of the 'overrideParams' attribute, which, as it says in the name,
+    overrides the given namelist parameters that originally defined
+    the <resources>. Thus, regression and production <resources> tags
+    must be processed separately, leading to this script's usage of 
+    separate dictionaries for production and regression resources.
+    The parse_overrides function is called when an 'overrideParams'
+    attribute is discovered within the original <regression> tags.
+
+    Final side note: the build experiment is skipped when building
+    <resources> tags. The build experiments are uniquely identified
+    by a <compile> element, which will then cause the loop to go to 
+    the next experiment. Not really that necessary...more of a time
+    saver than anything.
+
+    PARAMETERS (1)
+    --------------
+    etree_root (required): An ElementTree object
+
+    RETURNS
+    -------
+    None
+    
+    """
+    # SECTION 1, STORE AND MODIFY NAMELIST PARAMETERS #
 
     for exp in etree_root.iter('experiment'):
         subelements = [elem.tag for elem in exp.iter() if elem is not exp]
         print("Inserting resources tags for experiment " + str(exp.get('name')))
 
         if not 'compile' in subelements: 
-            nml_container = Namelist() #1 namelist object per experiment. It will hold all necessary namelist values per key.
+            nml_container = Namelist() 
 
             for nml in exp.iter('namelist'):
                 nml_name = nml.get("name")
@@ -806,20 +1195,21 @@ def do_resources_main(etree_root):
                     else:
                         pass
 
-                #Empty Namelist elements will contain the value "None" for the text. Make sure to catch this.
+                #Empty Namelist elements might contain the value "None" for the 
+                #text. Make sure to catch this.
                 try:
                     modify_namelist(nml, nml_name)
                 except AttributeError as e:
                     pass
 
             
-            # Start building the Resource Tags after Modifying the Namelists #
+            # SECTION 2, BUILD THE <resources> TAGS FOR PRODUCTION AND REGRESSION RUNS #
 
-            runtime_element = exp.find('runtime')       # Set to None if it doesn't exist
-            prod_element = None                         # Initialize production element as None
-            reg_element_list = []                       # Initialize regression element as None
-            runtime_hours = '10:00:00'                  # Default setting
-            segment_hours = '10:00:00'                  # Default setting
+            runtime_element = exp.find('runtime') # Set to None if it doesn't exist
+            prod_element = None                   # Initialize production element as None
+            reg_element_list = []                 # Initialize regression element as None
+            runtime_hours = '10:00:00'            # Default setting
+            segment_hours = '10:00:00'            # Default setting
 
             atm_attribs = {'ranks': nml_container.get_var('atmos_npes'),
                            'threads': nml_container.get_var('atmos_nthreads'),
@@ -853,25 +1243,15 @@ def do_resources_main(etree_root):
                     if value == '' or value == None:
                         del attrib_dict[key]
             
-            #print(atm_attribs)
-            #print(ocn_attribs)
-            #print(lnd_attribs)
-            #print(ice_attribs)
-            # Create a copies of the unedited dictionaries for regression tags #
-            # We will create shallow copies, because we don't have nested objects #
-            #atm_attr_copy = copy.copy(atm_attribs)
-            #ocn_attr_copy = copy.copy(ocn_attribs)
-            #lnd_attr_copy = copy.copy(lnd_attribs)
-            #ice_attr_copy = copy.copy(ice_attribs)
 
             if runtime_element is not None:
-                prod_element = runtime_element.find('production') # Set to None if it doesn't exist
-                reg_element_list = runtime_element.findall('regression') # Will never be 'None'
+                prod_element = runtime_element.find('production')
+                reg_element_list = runtime_element.findall('regression')
 
-            # ------------- PRODUCTION RUNS --------------- #
+            # ---------------------------------------- PRODUCTION RUNS --------------------------------------------- #
 
                 try:
-                    prod_element.attrib.pop('npes')
+                    total_npes = prod_element.attrib.pop('npes')
                 except (AttributeError, KeyError) as e:
                     pass
         
@@ -899,21 +1279,26 @@ def do_resources_main(etree_root):
                     resource_prod_element.tail = "\n          "
 
                     # Make a child element only if the dictionary has attributes
-                    atm_prod = ET.SubElement(resource_prod_element, 'atm', attrib=atm_attribs) if len(atm_attribs) > 0 else None
+                    atm_prod = ET.SubElement(resource_prod_element, 'atm', 
+                                             attrib=atm_attribs) if len(atm_attribs) > 0 else None
                     atm_prod.tail = "\n              "
-                    ocn_prod = ET.SubElement(resource_prod_element, 'ocn', attrib=ocn_attribs) if len(ocn_attribs) > 0 else None
+                    ocn_prod = ET.SubElement(resource_prod_element, 'ocn', 
+                                             attrib=ocn_attribs) if len(ocn_attribs) > 0 else None
                     ocn_prod.tail = "\n              "
-                    lnd_prod = ET.SubElement(resource_prod_element, 'lnd', attrib=lnd_attribs) if len(lnd_attribs) > 0 else None
+                    lnd_prod = ET.SubElement(resource_prod_element, 'lnd', 
+                                             attrib=lnd_attribs) if len(lnd_attribs) > 0 else None
 
                     if lnd_prod is not None:
                         lnd_prod.tail = "\n              "
 
-                    ice_prod = ET.SubElement(resource_prod_element, 'ice', attrib=ice_attribs) if len(ice_attribs) > 0 else None
+                    ice_prod = ET.SubElement(resource_prod_element, 'ice', 
+                                             attrib=ice_attribs) if len(ice_attribs) > 0 else None
 
                     if ice_prod is not None:
                         ice_prod.tail = "\n            "
 
-                # ----------------- REGRESSION RUNS -------------------- #
+
+                # --------------------------------------- REGRESSION RUNS ------------------------------------------ #
 
                 for reg_element in reg_element_list:
                     run_element_list = reg_element.findall('run')
@@ -941,18 +1326,23 @@ def do_resources_main(etree_root):
                             if not 'overrideParams' in run_element.attrib.keys():
 
                                 # Make a child element only if the dictionary has attributes
-                                atm_reg = ET.SubElement(resource_reg_element, 'atm', attrib=atm_attribs) if len(atm_attribs) > 0 else None
+                                atm_reg = ET.SubElement(resource_reg_element, 'atm', 
+                                                        attrib=atm_attribs) if len(atm_attribs) > 0 else None
                                 atm_reg.tail = "\n                    "
-                                ocn_reg = ET.SubElement(resource_reg_element, 'ocn', attrib=ocn_attribs) if len(ocn_attribs) > 0 else None
+                                ocn_reg = ET.SubElement(resource_reg_element, 'ocn', 
+                                                        attrib=ocn_attribs) if len(ocn_attribs) > 0 else None
                                 ocn_reg.tail = "\n                    "
-                                lnd_reg = ET.SubElement(resource_reg_element, 'lnd', attrib=lnd_attribs) if len(lnd_attribs) > 0 else None
+                                lnd_reg = ET.SubElement(resource_reg_element, 'lnd', 
+                                                        attrib=lnd_attribs) if len(lnd_attribs) > 0 else None
                                 if lnd_reg is not None:
                                     lnd_reg.tail = "\n                    "
 
-                                ice_reg = ET.SubElement(resource_reg_element, 'ice', attrib=ice_attribs) if len(ice_attribs) > 0 else None
+                                ice_reg = ET.SubElement(resource_reg_element, 'ice', 
+                                                        attrib=ice_attribs) if len(ice_attribs) > 0 else None
 
                                 if ice_reg is not None:
                                     ice_reg.tail = "\n                 "
+
                             else:
                                 override_container = Namelist()
                                 override_str = run_element.get('overrideParams')
@@ -991,24 +1381,6 @@ def do_resources_main(etree_root):
                                                  'mask_table': override_container.get_var('ice_mask_table')}
 
                                 override_list = [atm_overrides, ocn_overrides, lnd_overrides, ice_overrides]
-                               
-                                 
-                                #DEBUG
-                                #print("\n****************REGULAR ATTRIBUTES*******************")
-                                #print("Experiment: " + str(exp.get('name')))
-                                #print(atm_attribs)
-                                #print(ocn_attribs)
-                                #print(lnd_attribs)
-                                #print(ice_attribs)
-
-                                #print("\n**************OVERRIDE ATTRIBUTES*******************")
-                                #print("Experiment: " + str(exp.get('name')))
-                                #print(atm_overrides)
-                                #print(ocn_overrides)
-                                #print(lnd_overrides)
-                                #print(ice_overrides)
-                                #sys.exit(1)
-
                                 for override_dict in override_list:
            
                                     for key, value in override_dict.items():
@@ -1027,16 +1399,20 @@ def do_resources_main(etree_root):
                                             if key not in override_dict:
                                                 override_dict[key] = value
 
-                                atm_reg_ovr = ET.SubElement(resource_reg_element, 'atm', attrib=atm_overrides) if len(atm_overrides) > 0 else None
+                                atm_reg_ovr = ET.SubElement(resource_reg_element, 'atm', 
+                                                            attrib=atm_overrides) if len(atm_overrides) > 0 else None
                                 atm_reg_ovr.tail = "\n                "
-                                ocn_reg_ovr = ET.SubElement(resource_reg_element, 'ocn', attrib=ocn_overrides) if len(ocn_overrides) > 0 else None
+                                ocn_reg_ovr = ET.SubElement(resource_reg_element, 'ocn', 
+                                                            attrib=ocn_overrides) if len(ocn_overrides) > 0 else None
                                 ocn_reg_ovr.tail = "\n                "
-                                lnd_reg_ovr = ET.SubElement(resource_reg_element, 'lnd', attrib=lnd_overrides) if len(lnd_overrides) > 0 else None
+                                lnd_reg_ovr = ET.SubElement(resource_reg_element, 'lnd', 
+                                                            attrib=lnd_overrides) if len(lnd_overrides) > 0 else None
 
                                 if lnd_reg_ovr is not None:
                                     lnd_reg_ovr.tail = "\n                "
 
-                                ice_reg_ovr = ET.SubElement(resource_reg_element, 'ice', attrib=ice_overrides) if len(ice_overrides) > 0 else None
+                                ice_reg_ovr = ET.SubElement(resource_reg_element, 'ice', 
+                                                            attrib=ice_overrides) if len(ice_overrides) > 0 else None
 
                                 if ice_reg_ovr is not None:
                                     ice_reg_ovr.tail = "\n              "               
@@ -1049,12 +1425,42 @@ def do_resources_main(etree_root):
             else:
                 pass
 
-        else: #Don't do Build experiment
+        else: #Don't do Build experiments
             pass
         
 
 def parse_overrides(override_str, override_container):
+    """
+    Obtains the string from an 'overrideParams' attribute and stores
+    resource parameters/values within a Namelist object
 
+    Override parameters are are sometimes stored within a regression
+    experiment and are formatted in the following way:
+
+        name_of_namelist:field=value;
+
+    These series of parameters may or may not contain resource 
+    elements. If an override is not to be stored in a <resources> tag,
+    whether it is comprised of a different namelist or a different
+    field name, it is not changed. If an override is to be stored, the
+    value is extracted and the override is removed from the 
+    overrideParams attribute. Each override definition is to be 
+    terminated with a semicolon (';') symbol. If not, the overrides are
+    completely skipped in the regression. The values that are extracted
+    are stored in a Namelist object to be called upon later.
+
+    PARAMETERS (2)
+    --------------
+    override_str (required): The raw string containing the override
+                             parameters
+    override_container (required): A Namelist object for storing any
+                                   override parameters
+
+    RETURNS
+    -------
+    None
+
+    """
     nml_regex = r';\s*(.*?)\s*:'
     param_regex = r':\s*(.*?)\s*='
     value_regex = r'=\s*(.*?)\s*;'
@@ -1066,7 +1472,8 @@ def parse_overrides(override_str, override_container):
 
     #Sanity check - length of namelists, params, and values should be the same
     if not len(namelists) == len(params) == len(values):
-        print("WARNING! The overrideParams attribute is not set up correctly! Skipping regression.")
+        print("WARNING! The overrideParams attribute is not set up correctly! \
+              Skipping regression.")
         return None
 
     for index, namelist in enumerate(namelists):
@@ -1103,29 +1510,34 @@ def parse_overrides(override_str, override_container):
  
 
 def get_modified_overrides(override_str):
+    """
+    Returns a modified string that contains valid override parameters
 
+    Newer XML's no longer support an 'overrideParams' attribute that 
+    contain 'npes', 'nthreads' or 'layout' in the text. This function
+    removes those references.
+
+    PARAMETERS (1)
+    --------------
+    override_str (required): A string that contains the override
+                             parameters
+
+    RETURNS
+    -------
+    modified_overrides_str: A string that contains the new override
+                            parameters
+
+    """
     override_list = override_str.split(';')
     modified_overrides_list = [item for item in override_list if not \
-                              ('npes' in item or 'nthreads' in item \
+                              ('npes' in item \
+                               or 'nthreads' in item \
                                or 'layout' in item)]
     modified_overrides_str = ';'.join(modified_overrides_list)
     return modified_overrides_str
 
-'''
-def throw_regression_warnings(etree_root):
 
-    for exp in etree_root.iter('experiment'):    
-        exp_name = exp.get('name')
-
-        if exp.find('runtime') is not None:
-
-            if exp.find('runtime').find('regression') is not None:
-                print("ATTENTION! Experiment " + str(exp_name) + " contains <regression> tags. \
-                      freconvert.py does not adjust content within <regression> and will have \
-                      to be modified manually.")
-'''
-
-#5. Insert/Modify publicMetadata Tags
+# INSERT / MODIFY <publicMetadata> TAGS
 
 ### We will ignore any community tags or attributes in the build experiment
 ### Primary attributes seen in many bronx-10 XMLs are for database insertion. These
@@ -1137,8 +1549,8 @@ def throw_regression_warnings(etree_root):
 ### The tags to be replaced are <scenario> and <communityComment>.
 ### The tags that may need modification are <realization> and <description.
 
-### Key changes: communityProject attribute ---------> project tag
-
+### Key changes:
+###              communityProject attribute ---------> project tag
 ###              communityModel attribute -----------> source tag
 ###              communityModelID attribute ---------> source_id tag
 ###              communityExperimentName attribute --> experiment_name tag
@@ -1163,9 +1575,10 @@ def throw_regression_warnings(etree_root):
 ###              sub_experiment_id tag --------------> Add
 
 #   Check to see if tags are already updated (i.e. do publicMetadata tags already exist)
-#   There are 3 tiers of database entry. First tier in bronx-10 with the community tags.
-#   Second tier is bronx-11 with publicMetadata tags, but outdated tags.
-#   Third tier is Bronx-12+ with correct publicMetadata tags in place.
+#   There are 3 tiers of database entry. 
+#       First tier in bronx-10 with the community tags.
+#       Second tier is bronx-11 with publicMetadata tags, but outdated tags.
+#       Third tier is Bronx-12+ with correct publicMetadata tags in place.
 
 
 class Metadata(object):
@@ -1177,36 +1590,77 @@ class Metadata(object):
     #NOTE: ORDER IS VERY IMPORTANT HERE!
 
 
-    __slots__ = ["project", "realization", "source", "source_id", "source_type", "experiment_name", "experiment_id", \
-                 "comment", "variant_info", "start_time", "end_time", "parent_experiment_id", "parent_variant_label", \
-                "parent_activity_id", "parent_time_units", "parent_source_id", "branch_time_in_parent",     \
-                "branch_time_in_child", "activity_id", "sub_experiment", "sub_experiment_id", "name1",     \
-                "name2", "not_applicable_1", "not_applicable_2"]
+    __slots__ = ["project", "realization", "source", "source_id", "source_type",
+                 "experiment_name", "experiment_id", "comment", "variant_info", 
+                 "start_time", "end_time", "parent_experiment_id", 
+                 "parent_variant_label", "parent_activity_id", 
+                 "parent_time_units", "parent_source_id", 
+                 "branch_time_in_parent", "branch_time_in_child", "activity_id",
+                 "sub_experiment", "sub_experiment_id", "name1", "name2", 
+                 "not_applicable_1", "not_applicable_2"]
 
-    conversion_table_bronx_10 = dict(zip(["communityProject", "realization", "communityModel", "communityModelID", \
-                                          "source_type", "communityExperimentName", "communityExperimentID", "comment", \
-                                         "communityForcing", "startTime", "endTime", "parentExperimentID", \
-                                         "parentExperimentRIP", "parent_activity_id", "parent_time_units", \
-                                         "parent_source_id", "branch_time", "branch_time_in_child", "activity_id", \
-                                         "sub_experiment", "sub_experiment_id", "domainName", "communit yName", \
-                                          "communityVersion", "communityGrid"], __slots__))
+    conversion_table_bronx_10 = dict(zip(["communityProject", "realization", 
+                                          "communityModel", "communityModelID",
+                                          "source_type", "communityExperimentName", 
+                                          "communityExperimentID", "comment",
+                                          "communityForcing", "startTime", 
+                                          "endTime", "parentExperimentID",
+                                          "parentExperimentRIP", "parent_activity_id", 
+                                          "parent_time_units", "parent_source_id", 
+                                          "branch_time", "branch_time_in_child", 
+                                          "activity_id", "sub_experiment", 
+                                          "sub_experiment_id", "domainName", 
+                                          "communityName", "communityVersion", 
+                                          "communityGrid"], __slots__))
 
-    conversion_table_bronx_11 = dict(zip(["project", "realization", "model", "modelID", "source_type", "experimentName", \
-                                         "experimentID", "comment", "forcing", "startTime", "endTime", \
-                                         "parentExperimentID", "parentExperimentRIP", "parent_activity_id", \
-                                         "parent_time_units", "parent_source_id", "branchTime", "branch_time_in_child", \
-                                         "activity_id", "sub_experiment", "sub_experiment_id", "name1", "name2", \
-                                         "not_applicable_1", "not_applicable_2"], __slots__))
+    conversion_table_bronx_11 = dict(zip(["project", "realization", 
+                                          "model", "modelID", 
+                                          "source_type", "experimentName",
+                                          "experimentID", "comment", 
+                                          "forcing", "startTime", 
+                                          "endTime", "parentExperimentID", 
+                                          "parentExperimentRIP", "parent_activity_id",
+                                          "parent_time_units", "parent_source_id", 
+                                          "branchTime", "branch_time_in_child",
+                                          "activity_id", "sub_experiment", 
+                                          "sub_experiment_id", "name1", 
+                                          "name2", "not_applicable_1", 
+                                          "not_applicable_2"], __slots__))
+
 
     def __init__(self):
+        """
+        Initialize a Metadata object by setting up a class dictionary
+        based upon the __slots__ list
 
+        PARAMETERS (1)
+        --------------
+        self (requried): Refers to a class-defined object
+
+        RETURNS
+        -------
+        None
+
+        """
         for tag in self.__slots__:
 
              setattr(self, tag, None)
 
 
     def print_metadata(self):
+        """
+        For debugging purposes. Visualize the class dictionary 
+        containing the Metadata class attributes.
 
+        PARAMETERS (1)
+        --------------
+        self (required): Referes to a class-defined object
+
+        RETURNS
+        -------
+        None
+
+        """
         print("\t  Tag\t\t\t\t\t Value\n\t________\t\t\t\t________\n")
         for tag in self.__slots__:
 
@@ -1214,44 +1668,150 @@ class Metadata(object):
 
 
     def set_metadata(self, meta_key, meta_value):
+        """
+        Stores metadata parameter and value into a Metadata object
 
+        PARAMETERS (3)
+        --------------
+        self (required): Refers to class-defined object
+        meta_key (required): Metadata parameter as a string
+        meta_value (required): Metadata value as a string
+
+        RETURNS
+        -------
+        None
+
+        """
         setattr(self, meta_key, meta_value)
 
 
     def get_value_from_tag(self, tag):
+        """
+        Retrive the metadata parameter stored in a Metadata object
 
+        PARAMETERS (2)
+        --------------
+        self (requried): Refers to class-defined object
+        tag (required): A string containing the name of metadata tag
+
+        RETURNS 
+        -------
+        getattr(self,tag): The stored metadata value for a given tag
+
+        """
         return getattr(self, tag)
 
 
     def set_comment(self, communityComment_element):
+        """
+        Stores the comment text from a communityComment element
 
+        PARAMETERS (2)
+        --------------
+        self (required): Refers to class-defined object
+        communityComment_element: An Element object representative of
+                                  a metadata comment
+
+        RETURNS
+        -------
+        None
+
+        """
         self.set_metadata("comment", communityComment_element.text)
 
 
-    def set_tags_from_element(self, element):
-
-        for attrib, value in element.items():
-
-            new_key = self.convert_to_tag(attrib, bronx_version=10)
-            self.set_metadata(new_key, value)
-
-
     def convert_to_tag(self, attrib, bronx_version=10):
+        """
+        Helper function for set_tags_from_element. Returns the new name
+        name for an attribute that will eventually be used as a 
+        metadata tag, based upon Bronx version of original XML
 
+        PARAMETERS (3)
+        --------------
+        self (required): Refers to class-defined object
+        attrib (required): Name of attribute to be converted to a tag
+        bronx_version: Bronx version of original XML. Can either be
+        10 or 11.
+
+        RETURNS
+        -------
+        self.conversion_table_bronx_##[attrib]: Equivalent tag name of 
+                                                a given attribute
+
+        """
         if bronx_version == 10:
             return self.conversion_table_bronx_10[attrib]
         else:
             return self.conversion_table_bronx_11[attrib]
 
 
-    def delete_attributes(self, element):
+    def set_tags_from_element(self, element):
+        """
+        Calls convert_to_tag and stores new Metadata object information
 
+        PARAMETERS (2)
+        ---------------
+        self (required): Refers to class-defined object
+        element (required): Element object that contains attributes to 
+                            be converted a new name (tag)
+ 
+        RETURNS
+        -------
+        None
+
+        """
+        for attrib, value in element.items():
+
+            new_key = self.convert_to_tag(attrib, bronx_version=10)
+            self.set_metadata(new_key, value)
+
+
+
+    def delete_attributes(self, element):
+        """
+        Removes attributes from an Element object
+
+        PARAMETERS (2)
+        --------------
+        self (required): Refers to class-defined object
+        element (required): Element object that contains attributes to
+                            be deleted from the Element object
+
+        RETURNS
+        -------
+        None
+
+        """
         for attrib in element.keys():
             element.attrib.pop(attrib)
             
 
     def build_metadata_xml(self, experiment_element):
+        """
+        Creates <publicMetadata> tags and children underneath it
 
+        This function takes in an experiment Element object and inserts
+        metadata tags directly underneath the 'experiment' tag. It
+        calls the get_value_from_tag method to retrieve the stored 
+        metadata values from the class attribute table. It loops 
+        through every possible metadata parameter, therefore, if it
+        doesn't exist (or wasn't stored), no tag is created. The 
+        'realization' tag is special, as it was stored as its own
+        separate tag prior to Bronx-11. This function thus a new
+        'realization' tag underneath 'publicMetadata' and deletes the 
+        old 'realization' element.
+
+        PARAMETERS (2)
+        --------------
+        self (required): Refers to class-defined object
+        experiment_element: An Element object that references a FRE XML
+                            experiment 
+
+        RETURNS
+        -------
+        None
+
+        """
         new_metadata = ET.Element('publicMetadata', attrib={'DBswitch': '$(MDBIswitch)'})
         new_metadata.text = '\n      '
         new_metadata.tail = '\n\n    '
@@ -1288,7 +1848,38 @@ class Metadata(object):
 
 
 def do_metadata_main(etree_root):
+    """
+    The primary function that builds the metadata tags. Creates a new
+    Metadata object, stores particular attributes as tags, and then
+    deletes unneeded elements.
 
+    The meat and potatoes of metadata transformation from Bronx-10 and
+    Bronx-11 XMLs. The tags named 'scenario', 'communityComment', and
+    'description' used to contain metadata information that a database
+    ingestor .csh script would extract from the XML and put into
+    the Curator database. With recent XMLs, all metadata is taken care
+    of via <publicMetadata> tags. The 'scenario' and 'description' tags
+    in particular contained several attributes of metadata, which are
+    reborn as metadata tags in newer XMLs under <publicMetadata>. Thus,
+    'scenario' and 'communityComment' elements are deleted. The
+    'description' tag is still relevant, but now only contains tags. 
+    There are no longer any attributes for 'description' tags.
+
+    This function checks for the existence of 'publicMetadata' tags and
+    will perform particular checks depending on if the XML is Bronx-10
+    or Bronx-11. Rarely, there will be XMLs containing both Bronx-10
+    and Bronx-11 metadata elements. If that happens, the metadata
+    section is skipped entirely and a warning is thrown.
+
+    PARAMETERS (1)
+    --------------
+    etree_root (required): An ElementTree object
+
+    RETURNS
+    -------
+    None
+
+    """
     executed_metadata = False
     for exp in etree_root.iter('experiment'):
 
@@ -1355,20 +1946,39 @@ def do_metadata_main(etree_root):
 
             continue
 
-        else: #Don't do Build Experiment
+        else: #Don't do Build Experiments
             pass
 
     if not executed_metadata:
         print("No metadata to parse. Skipping...")
 
 
-## ----------------------------- END XML PARSING  ----------------------------##
 
-
-## ----------------------------- BEGIN POST-XML PARSING  ----------------------------##
+# ----------------------------- XML POST-PARSING  --------------------------- #
 
 def write_final_xml(xml_string, setup_include=False):
+    """
+    Parse a modified XML string back into regular form
 
+    Basically the reverse of the write_parsable_xml function. 
+    Translates comments and CDATA tags back into their original form. 
+    Restores '&lt;' back into '<' symbols.
+    Restores DOCTYPE and ENTITY strings
+    Fixes namespace renaming that ElementTree does by default
+    Remove extra <root> tags that ElementTree creates by default
+    Perform other cleanups.
+
+    PARAMETERS (2)
+    --------------
+    xml_string (required): A string containing the modified XML elements
+    setup_include (required): A boolean indicating if XML is a 
+                              setup_include XML
+
+    RETURNS
+    -------
+    xml_string: The final XML string to be written out
+
+    """
     xml_string = xml_string.replace('&lt;', '<')
  
     #1. Parse <xml_comment> and </xml_comment> back to <!-- and --> respectively
@@ -1411,7 +2021,8 @@ def write_final_xml(xml_string, setup_include=False):
     xml_string = xml_string.replace(ns_line, ns_line + ns_att)
 
     #7. Remove two whitespace characters before closing </publicMetadata> tag
-    xml_string = xml_string.replace('      </publicMetadata>', '    </publicMetadata>')
+    xml_string = xml_string.replace('      </publicMetadata>',
+                                    '    </publicMetadata>')
 
     #8. Get rid of extra space between end tag slash.
     xml_string = xml_string.replace(' />', '/>')
@@ -1419,20 +2030,28 @@ def write_final_xml(xml_string, setup_include=False):
     return xml_string 
 
 
-## ----------------------------- END POST-XML PARSING  --------------------------- ##
+# ------------------------ END POST-XML PARSING  ----------------------- #
 
-## ----------------------------- MAIN PROGRAM ------------------------------------ ##
+# ---------------------------- MAIN PROGRAM ---------------------------- #
 
 if __name__ == '__main__':
 
     # GET THE COMMAND LINE ARGUMENTS AND READ IN THE INPUT XML #
-    parser = argparse.ArgumentParser(prog='freconvert', description=\
-                                     "A Python script that converts a user's XML to the latest FRE version (bronx-14)")
-    parser.add_argument('-o', '--output_xml', help='Destination path of converted XML')
-    parser.add_argument('-s', '--setup', action='store_true', help='Specifies a setup_include XML')
-    parser.add_argument('-q', '--quiet', help='Very little verbosity')
-    parser.add_argument('-v', '--verbosity', action='store_true', help='Increase output verbosity.')
-    parser.add_argument('-x', '--input_xml', required=True, type=str, help='Path of XML to be converted.')
+    parser = argparse.ArgumentParser(prog='freconvert', 
+                                     description="A Python script that converts \
+                                                  a user's XML to the latest \
+                                                  FRE version (bronx-14)")
+    parser.add_argument('-x', '--input_xml', required=True, type=str, 
+                        help='Path of XML to be converted.')
+    parser.add_argument('-o', '--output_xml', type=str, 
+                        help='Destination path of converted XML')
+    parser.add_argument('-s', '--setup', action='store_true', 
+                        help='Specifies a setup_include XML')
+    parser.add_argument('-v', '--verbosity', action='store_true',
+                        help='Increase output verbosity.')
+    parser.add_argument('-q', '--quiet', action='store_true', 
+                        help='Very little verbosity')
+ 
     args = parser.parse_args()
 
     if not os.path.exists(args.input_xml):
@@ -1454,13 +2073,10 @@ if __name__ == '__main__':
     with open(input_xml, 'r') as f:
         input_content = f.read()
 
-    # RUN THE PRE-XML PARSER AND TURN INTO ElementTree INSTANCE #
     print("Pre-parsing XML...")
     time.sleep(1) 
-    pre_parsed_xml = write_parsable_xml(input_content) #Change paths to F2 - ALL BRONX VERSIONS
-    #with open('testing.xml', 'w') as f:
-        #f.write(pre_parsed_xml)
-    #exit()
+    pre_parsed_xml = write_parsable_xml(input_content) 
+
     try:
         tree = ET.ElementTree(ET.fromstring(pre_parsed_xml))
     except ET.ParseError as e:
@@ -1475,30 +2091,28 @@ if __name__ == '__main__':
 
         sys.exit(1)
     
-    #tree = ET.ElementTree(ET.fromstring(pre_parsed_xml))
     root = tree.getroot()
     
-    # PARSE AND MODIFY ELEMENTS DEPENDING ON ORIGINAL BRONX VERSION #
-    old_version = do_properties(root)    # freVersion checking # ALL BRONX VERSIONS
+    old_version = do_properties(root) 
     print("Converting XML from %s to %s..." % (old_version, newest_fre_version))
     time.sleep(3)
+
     if old_version == 'bronx-10':
-        #print("Checking for land F90 <csh> block...")
+        print("Checking for land F90 <csh> block...")
         time.sleep(1)
         do_land_f90(root)
-        #print("Checking for 'default' platforms (will be removed)...")
+        print("Checking for 'default' platforms (will be removed)...")
         time.sleep(1) 
         delete_default_platforms(root)
-        #print("Adding <freVersion> tags...")
+        print("Adding <freVersion> tags...")
         time.sleep(1)
         add_fre_version_tag(root)
-        #print("Checking for existence of 'compiler' tag in platforms")
+        print("Checking for existence of 'compiler' tag in platforms")
         time.sleep(1)
         add_compiler_tag(root)
-        #print("Adding resources tags...")
+        print("Adding resources tags...")
         time.sleep(1)
         do_resources_main(root) # Resource Tags - change namelists and create <resources> # IF BRONX-10
-        #throw_regression_warnings(root)
         time.sleep(1)
         print("Checking for metadata. Adding <publicMetadata> tags if necessary...")
         time.sleep(1)
@@ -1542,10 +2156,9 @@ if __name__ == '__main__':
    
     print("Writing new XML...")
     time.sleep(1)
-    # WRITE THE FINAL XML TO STATED FILE DESTINATION OR CREATE ONE IF -o OPTION IS NOT GIVEN
+
     with open(file_dest, 'w') as f:
         f.write(final_xml)
 
     print("Converted XML written to %s" % (file_dest))
     
-
