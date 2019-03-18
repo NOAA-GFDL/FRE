@@ -431,7 +431,7 @@ def do_properties(etree_root):
         db_property.tail = '\n  '
         parent = etree_root.find('experimentSuite')
         #setup_include XML's won't have an 'experimentSuite' root
-        if not parent:
+        if parent is None:
             parent = etree_root.find('setup')
 
         parent.insert(0, db_property)
