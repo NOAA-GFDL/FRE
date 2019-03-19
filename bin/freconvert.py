@@ -172,7 +172,7 @@ def points_to_f2(xml_string):
         xml_string = xml_string.replace(f1_hard_pointer, f2_hard_pointer)
 
     #Cover hard-coded F1 swept locations that don't contain '$USER'
-    xml_string = xml_string.replace('lustre/f1', 'lustre/f2/dev')
+    xml_string = xml_string.replace('lustre/f1', 'lustre/f2/scratch')
 
     return xml_string
 
