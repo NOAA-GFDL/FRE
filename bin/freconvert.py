@@ -543,7 +543,7 @@ def do_land_f90(etree_root):
 
 def delete_default_platforms(etree_root):
     """
-    Deletes all platforms with attached name '.default'.
+    Deletes all platforms with attached name '.default or -default'.
 
     The usage of 'default' platforms was removed from FRE in Bronx-12,
     therefore, this function facilitates the deletion of such named
@@ -579,7 +579,7 @@ def delete_default_platforms(etree_root):
     for i in range(len(platform_list)):
         platform_name = platform_list[i].get('name')
 
-        if '.default' in platform_name:
+        if '.default' in platform_name or '-default' in platform_name:
             print("Deleting platform: %s" % platform_name)
             setup_element.remove(platform_list[i])
 
@@ -1466,6 +1466,9 @@ def parse_overrides(override_str, override_container):
     value_regex = r'=\s*(.*?)\s*;'
 
     foo_override = ';' + override_str
+    if override_str[-1] != ';':
+       override_str = override_str + ';'
+
     namelists = re.findall(nml_regex, foo_override)
     params = re.findall(param_regex, override_str)
     values = re.findall(value_regex, override_str)
