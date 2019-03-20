@@ -205,7 +205,7 @@ def convert_xml_text(xml_string, prev_version='bronx-12'):
     """
     xml_string = points_to_f2(xml_string)
     xml_string = xml_string.replace(prev_version, newest_fre_version)
-    xml_string = xml_string.replace('cubicToLatLon', 'xyInterp')
+    #xml_string = xml_string.replace('cubicToLatLon', 'xyInterp')
     xml_string = xml_string.replace('DO_ANALYSIS', 'ANALYSIS_SWITCH')
     xml_string = xml_string.replace('DO_DATABASE', 'DB_SWITCH')
     xml_string = xml_string.replace(' script="$FRE_CURATOR_HOME/share/bin/database_ingestor.csh"', '')
@@ -334,7 +334,8 @@ def write_parsable_xml(xml_string):
     -------
     A new XML string that is ready to be parsed by ElementTree
 
-    """   
+    """ 
+    xml_string = xml_string.replace('cubicToLatLon', 'xyInterp')  
     xml_string = xml_string.replace('<root>', '<xml_root>')
     xml_string = xml_string.replace('</root>', '</xml_root>')
  
@@ -511,7 +512,7 @@ def do_land_f90(etree_root):
 
         for component_elem in experiment.iter('component'):
             
-            if component_elem.get('name') == 'land':
+            if 'land' in component_elem.get('name'):
                 compile_elem = component_elem.find('compile')
 
                 #Terminate inner loop if no compile element exists for land
@@ -633,6 +634,58 @@ def add_compiler_tag(etree_root, compiler_type='intel',
         else:
             continue
         
+
+def add_sourceGrid_attribute(etree_root):
+    """
+    Adds a sourceGrid attribute to post-process <component> elements
+    that use the 'xyInterp' attribute (or previously, 'cubicToLatLon')
+
+    When the 'cubicToLatLon' attribute was officially retired and 
+    substituted with 'xyInterp' in later versions of Bronx, there was
+    another attribute that was required to be added to the <component>
+    tags before running the post-processing step. This attribute is the
+    'sourceGrid' attribute. For re-gridding purposes, if this attribute
+    is not specified, failures will occur during a frepp session. The 
+    most common values for 'sourceGrid' are 'atmos-cubedsphere' and
+    'land-cubedsphere', which, for conversion purposes, can be captured
+    through extracting the 'type' attribute of the <component> tag. 
+    This function checks to see if a component contains an 'xyInterp' 
+    attribute, and if it does, checks again to see if a 'sourceGrid'
+    attribute exists. If it doesn't, the function adds one to a
+    <component> element based upon the 'type' attribute that SHOULD
+    also exist.
+
+    PARAMETERS (1)
+    --------------
+    etree_root (required): An ElementTree object
+
+    RETURNS
+    -------
+    None
+
+    """
+    for exp in etree_root.iter('experiment'):
+
+        pp_elem = exp.find('postProcess')
+        
+        if pp_elem is None:
+            continue
+        else:
+            
+            for pp_comp in pp_elem.findall('component'):
+
+                if 'xyInterp' in pp_comp.keys() and \
+                   'sourceGrid' not in pp_comp.keys():
+                    comp_type = pp_comp.get('type') # Set to None if not found
+
+                    if comp_type is not None and comp_type != 'stocks':
+                        print("Adding sourceGrid attribute...")
+
+                        if 'atmos' in comp_type:
+                            pp_comp.set('sourceGrid', 'atmos-cubedsphere')
+                        elif 'land' in comp_type:
+                            pp_comp.set('sourceGrid', 'land-cubedsphere')
+                    
 
 # --------------------------- BUILD RESOURCE TAGS --------------------------- #
 """
@@ -2113,6 +2166,9 @@ if __name__ == '__main__':
         print("Checking for existence of 'compiler' tag in platforms")
         time.sleep(1)
         add_compiler_tag(root)
+        print("Checking for sourceGrid attributes...")
+        time.sleep(1)
+        add_sourceGrid_attribute(root)
         print("Adding resources tags...")
         time.sleep(1)
         do_resources_main(root) # Resource Tags - change namelists and create <resources> # IF BRONX-10
@@ -2121,7 +2177,7 @@ if __name__ == '__main__':
         time.sleep(1)
         do_metadata_main(root)  # Create and/or modify metadata tags #IF BRONX-10 or BRONX-11
         xml_string = ET.tostring(root)
-        print("Linking paths to F2. Performing final XML manipulations...")
+        #print("Linking paths to F2. Performing final XML manipulations...")
         time.sleep(1)
         xml_string = convert_xml_text(xml_string, prev_version=old_version)
         final_xml = write_final_xml(xml_string, args.setup)
