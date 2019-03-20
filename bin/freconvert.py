@@ -1590,6 +1590,7 @@ def get_modified_overrides(override_str):
                                or 'nthreads' in item \
                                or 'layout' in item)]
     modified_overrides_str = ';'.join(modified_overrides_list)
+    modified_overrides_str = modified_overrides_str.replace(' ', '') # Remove whitespace
     return modified_overrides_str
 
 
