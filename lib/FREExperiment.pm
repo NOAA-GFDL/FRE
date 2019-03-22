@@ -2417,7 +2417,7 @@ sub getResourceRequests($$) {
     $fre->out( FREMsg::NOTE, "Setting npes=$data{npes}" );
 
     # Apply hyperthreading if desired and possible
-    if ( $ht and !$fre->property('FRE.mpi.runCommand.option.ht') ) {
+    if ( $ht and !$fre->property('FRE.mpi.runCommand.hyperthreading.allowed') ) {
         $fre->out( FREMsg::WARNING,
             "Hyperthreading was requested but isn't supported on this platform." );
     }
@@ -2438,13 +2438,6 @@ sub getResourceRequests($$) {
         }
         if ($ok) {
             $data{ht} = 1;
-            for my $comp (@enabled_components) {
-                if ( $data{$comp}{ranks} ) {
-                    $fre->out( FREMsg::NOTE,
-                        "Using hyperthreading on component $comp -- will set threads to "
-                            . 2 * $data{$comp}{threads} );
-                }
-            }
         }
     } ## end elsif ($ht)
 

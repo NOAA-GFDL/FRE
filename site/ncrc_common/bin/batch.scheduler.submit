@@ -96,15 +96,15 @@ use Getopt::Long( ':config', 'no_ignore_case', 'no_auto_abbrev' );
             "\n",
             "  Usage: $self [option]... filename\n\n",
             "  Options:\n\n",
-            "   -O STRING, --options=STRING           all the 'msub' options STRING\n",
+            "   -O STRING, --options=STRING           all the scheduler options STRING\n",
             "   -I NUM,    --fail-init-delay=NUM      an initial delay NUM before looking for a job after its submission fails (default is '$fid'), in seconds\n",
             "   -X NUM,    --fail-retries-number=NUM  a number NUM of 'batch.scheduler.list' retries (default is '$frn')\n",
             "   -Y NUM,    --fail-retry-delay=NUM     a delay NUM between 'batch.scheduler.list' retries (default is '$frd'), in seconds\n",
-            "   -R NUM,    --fail-range=NUM           a maximum deviation NUM between the 'msub' timestamp and the job timestamp (default is '$flr'), in seconds\n",
+            "   -R NUM,    --fail-range=NUM           a maximum deviation NUM between the batch submission timestamp and the job timestamp (default is '$flr'), in seconds\n",
             "   -n NUM,    --list-retries-number=NUM  a number NUM of 'showq' retries (default is '$lrn')\n",
             "   -d NUM,    --list-retry-delay=NUM     a delay NUM between 'showq' retries (default is '$lrd'), in seconds\n",
-            "   -N NUM,    --retries-number=NUM       a number NUM of 'msub' retries (default is '$rtn')\n",
-            "   -D NUM,    --retry-delay=NUM          a delay NUM between 'msub' retries (default is '$rtd'), in seconds\n\n",
+            "   -N NUM,    --retries-number=NUM       a number NUM of batch submission retries (default is '$rtn')\n",
+            "   -D NUM,    --retry-delay=NUM          a delay NUM between batch submission retries (default is '$rtd'), in seconds\n\n",
             "   -h,        --help                     print the help message and exit\n",
             "   -V,        --version                  print the tool version and exit\n",
             "   -v         --verbose                  increase verbosity\n\n"
@@ -125,15 +125,17 @@ use Getopt::Long( ':config', 'no_ignore_case', 'no_auto_abbrev' );
         # ------ arguments: absolute filename, options string, option marker
     {
         my ( $f, $o, $x ) = @_;
-        my @values = ( $o =~ m/$x\s+(\S+)/g );
+        my @values = ( $o =~ m/$x\b(\S+)/g );
         if ( scalar(@values) > 0 ) {
             return $values[$#values];
         }
         else {
-            chomp( my $value
-                    = qx(grep --extended-regexp "^#PBS +$x" $f | tail -1 | cut --delimiter=' ' --fields=3)
+            chomp( my $line
+                    = qx(grep --extended-regexp "^#SBATCH +$x" $f | tail -1)
             );
-            return ( $? == 0 ) ? $value : '';
+            return '' if $?;
+            my $value = (split /[ =]+/, $line)[2];
+            return $value;
         }
     }
 
@@ -193,10 +195,10 @@ use Getopt::Long( ':config', 'no_ignore_case', 'no_auto_abbrev' );
         # ------ arguments: absolute filename, job name, job queue, options hash
     {
         my ( $f, $n, $q, %o ) = @_;
-        my $msubCommand = "msub $o{options} $f";
-        print STDERR "$msubCommand\n" if $o{verbose};
+        my $command = "sbatch $o{options} $f";
+        print STDERR "$command\n" if $o{verbose};
         chomp( my $baseTimestamp = qx(date +%s) );
-        chomp( my $res           = qx($msubCommand) );
+        chomp( my $res           = qx($command) );
         if ( $? == 0 ) {
             $res =~ s/^\n//s;
             return ( $res, 1 );
@@ -254,7 +256,7 @@ use Getopt::Long( ':config', 'no_ignore_case', 'no_auto_abbrev' );
         if ( -f $absFileName ) {
             if ( -r $absFileName ) {
                 if ( my $name
-                    = batch_scheduler_submit::FindOptionValue( $absFileName, $opt{options}, '-N' ) )
+                    = batch_scheduler_submit::FindOptionValue( $absFileName, $opt{options}, '--job-name' ) )
                 {
                     my ( $queue, $retry ) = (
                         batch_scheduler_submit::FindOptionValue(
@@ -271,12 +273,12 @@ use Getopt::Long( ':config', 'no_ignore_case', 'no_auto_abbrev' );
                             exit 0;
                         }
                         elsif ( $retry < $opt{'retries-number'} ) {
-                            print STDERR "<NOTE> : Retrying msub ($retry)...\n";
+                            print STDERR "<NOTE> : Retrying batch submission ($retry)...\n";
                             sleep $opt{'retry-delay'};
                             $retry++;
                         }
                         else {
-                            print STDERR "*ERROR*: No more msub retries\n";
+                            print STDERR "*ERROR*: No more batch submission retries\n";
                             exit 1;
                         }
                     }

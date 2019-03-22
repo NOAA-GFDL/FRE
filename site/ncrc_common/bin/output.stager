@@ -19,10 +19,11 @@ unalias *
 
 # ---------------- define constants depending on the run type
 
-if ( $?PBS_ENVIRONMENT ) then
-   if ( $PBS_ENVIRONMENT == 'PBS_BATCH' ) then
-      set -r jobName = $PBS_JOBNAME:t.o`echo $PBS_JOBID | sed -r 's/^([0-9]+).*$/\1/'`
-      set -r stdoutDir = $PBS_O_WORKDIR
+if ( $?SLURM_JOB_ID ) then
+   tty -s
+   if ($status) then
+      set -r jobName = $SLURM_JOB_NAME:t.o$SLURM_JOB_ID
+      set -r stdoutDir = $SLURM_SUBMIT_DIR
       set -r batch
    endif
 endif
@@ -1707,7 +1708,7 @@ if ( $actionPPStartToConsider ) then
          endif
 
          set ppStarter = $FRE_COMMANDS_HOME/site/gfdl/bin/pp.starter
-         set ppStarterResult = `submit -O "$ppStarterOptions -v mppnccombineOptString='$mppnccombineOptString' -d $stdoutDirRemotePP -o $stdoutDirRemotePP/" $ppStarter`
+         set ppStarterResult = `submit -O "$ppStarterOptions --export=mppnccombineOptString='$mppnccombineOptString' --chdir=$stdoutDirRemotePP --output=$stdoutDirRemotePP/%x.o%j" $ppStarter`
 
          if ( $status == 0 ) then
             if ( $echoOn ) unset echo
@@ -1751,7 +1752,7 @@ endif
 if ( ( $actionXferOn && ! $actionXferOk ) || ( $actionPPStartOn && ! $actionPPStartOk ) ) then
    if ( $stagingType == 'Chained' ) then
       set outputStager = `which output.stager`
-      set outputStagerResult = `submit -O "$xferOptions -v argFile=$argFile" $outputStager`
+      set outputStagerResult = `submit -O "$xferOptions --export=argFile=$argFile" $outputStager`
 
       if ( $status == 0 ) then
          if ( $echoOn ) unset echo

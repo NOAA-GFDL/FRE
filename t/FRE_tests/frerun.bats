@@ -75,7 +75,7 @@ add_submit_cmd_to_last_line_good() {
         ncrc? )
             platform="ncrc"
             root_stem="/lustre/f2/scratch"
-            submit_cmd="sleep 1; msub"
+            submit_cmd="sleep 1; sbatch"
             ;;
         theia ) platform="theia"
             root_stem="/scratch4/GFDL/gfdlscr"
@@ -132,7 +132,7 @@ add_submit_cmd_to_last_line_good() {
         ncrc? )
             platform="ncrc"
             root_stem="/lustre/f2/scratch"
-            submit_cmd="sleep 1; msub"
+            submit_cmd="sleep 1; sbatch"
             ;;
         theia )
             platform="theia"
@@ -182,7 +182,7 @@ add_submit_cmd_to_last_line_good() {
         ncrc? )
             platform="ncrc"
             root_stem="/lustre/f2/scratch"
-            submit_cmd="sleep 1; msub"
+            submit_cmd="sleep 1; sbatch"
             ;;
         theia )
             platform="theia"
@@ -222,7 +222,7 @@ add_submit_cmd_to_last_line_good() {
         ncrc? )
             platform="ncrc"
             root_stem="/lustre/f2/scratch"
-            submit_cmd="sleep 1; msub"
+            submit_cmd="sleep 1; sbatch"
             ;;
         theia )
             platform="theia"
@@ -262,7 +262,7 @@ add_submit_cmd_to_last_line_good() {
         ncrc? )
             platform="ncrc"
             root_stem="/lustre/f2/scratch"
-            submit_cmd="sleep 1; msub"
+            submit_cmd="sleep 1; sbatch"
             ;;
         theia )
             platform="theia"
@@ -316,7 +316,7 @@ ${lines[$((num_lines-1))]}"
         ncrc? )
             platform="ncrc"
             root_stem="/lustre/f2/scratch"
-            submit_cmd="sleep 1; msub"
+            submit_cmd="sleep 1; sbatch"
             ;;
         theia )
             platform="theia"
@@ -361,7 +361,7 @@ ${lines[$((num_lines-1))]}"
         ncrc? )
             platform="ncrc"
             root_stem="/lustre/f2/scratch"
-            submit_cmd="sleep 1; msub"
+            submit_cmd="sleep 1; sbatch"
             ;;
         theia )
             platform="theia"
@@ -406,7 +406,7 @@ ${lines[$((num_lines-1))]}"
         ncrc? )
             platform="ncrc"
             root_stem="/lustre/f2/scratch"
-            submit_cmd="sleep 1; msub"
+            submit_cmd="sleep 1; sbatch"
             ;;
         theia )
             platform="theia"

@@ -74,7 +74,7 @@ use constant VERSION_DEFAULT => 1;
 use constant VERSION_CURRENT => 4;
 
 use constant MAIL_MODE_VARIABLE => 'FRE_SYSTEM_MAIL_MODE';
-use constant MAIL_MODE_DEFAULT  => 'a';
+use constant MAIL_MODE_DEFAULT  => 'fail';
 
 # //////////////////////////////////////////////////////////////////////////////
 # ///////////////////////////////////////////////////////// Private utilities //
@@ -1046,7 +1046,7 @@ sub mailMode($)
     my $fre = shift;
     my $m   = $ENV{FRE::MAIL_MODE_VARIABLE};
     if ($m) {
-        if ( $m =~ m/^(?:n|a|b|e|ab|ae|be|abe)$/ ) {
+        if ( $m =~ m/^(?:none|begin|end|fail|requeue|all)$/i ) {
             return $m;
         }
         else {

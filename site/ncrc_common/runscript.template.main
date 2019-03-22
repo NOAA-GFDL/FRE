@@ -34,9 +34,10 @@ if ( $echoOn ) set echo
 
 # ---------------- define constants
 
-if ( $?PBS_ENVIRONMENT ) then
-   if ( $PBS_ENVIRONMENT == 'PBS_BATCH' ) then
-      set -r FRE_JOBID = $PBS_JOBNAME:t.o`echo $PBS_JOBID | sed -r 's/^([0-9]+).*$/\1/'`
+if ( $?SLURM_JOB_ID ) then
+   tty -s
+   if ($status) then
+      set -r FRE_JOBID = $SLURM_JOB_NAME:t.o$SLURM_JOB_ID
       set -r batch
    else
       set -r FRE_JOBID = $0:t.o`date +%s`
@@ -92,16 +93,16 @@ banner $FRE_JOBID
 #FRE const(envRemote)
 #FRE const(freCommandsVersionRemote)
 
+#FRE const(outputStagerSaveCluster)
 #FRE const(outputStagerSavePartition)
-#FRE const(outputStagerSaveQueue)
 #FRE const(outputStagerSaveCoreSpec)
 #FRE const(outputStagerSaveRuntimeAscii)
 #FRE const(outputStagerSaveRuntimeRestart)
 #FRE const(outputStagerSaveRuntimeHistory)
 #FRE const(outputStagerSaveRetries)
 
+#FRE const(outputStagerXferCluster)
 #FRE const(outputStagerXferPartition)
-#FRE const(outputStagerXferQueue)
 #FRE const(outputStagerXferCoreSpec)
 #FRE const(outputStagerXferRuntimeAscii)
 #FRE const(outputStagerXferRuntimeRestart)
@@ -109,24 +110,23 @@ banner $FRE_JOBID
 #FRE const(outputStagerXferRetries)
 
 #FRE const(workDirCleanerPartition)
-#FRE const(workDirCleanerQueue)
 #FRE const(workDirCleanerCoreSpec)
 #FRE const(workDirCleanerRuntime)
 
 #FRE const(finisherPartition)
-#FRE const(finisherQueue)
 #FRE const(finisherCoreSpec)
 #FRE const(finisherRuntime)
 
+#FRE const(ppStarterCluster)
 #FRE const(ppStarterPartition)
 #FRE const(ppStarterCoreSpec)
-#FRE const(ppStarterCombineOffLargeOffQueue)
+#FRE const(ppStarterCombineOffLargeOffConstraint)
 #FRE const(ppStarterCombineOffLargeOffRuntime)
-#FRE const(ppStarterCombineOffLargeOnQueue)
+#FRE const(ppStarterCombineOffLargeOnConstraint)
 #FRE const(ppStarterCombineOffLargeOnRuntime)
-#FRE const(ppStarterCombineOnLargeOffQueue)
+#FRE const(ppStarterCombineOnLargeOffConstraint)
 #FRE const(ppStarterCombineOnLargeOffRuntime)
-#FRE const(ppStarterCombineOnLargeOnQueue)
+#FRE const(ppStarterCombineOnLargeOnConstraint)
 #FRE const(ppStarterCombineOnLargeOnRuntime)
 #FRE const(ppStarterHistorySizeThreshold)
 
@@ -154,6 +154,7 @@ banner $FRE_JOBID
 
 #FRE run-command-size
 #FRE alias(runCommand)
+#FRE alias(runCommandTest)
 
 #FRE const(mppnccombineOptsRestart)
 #FRE const(mppnccombineOptsHistory)
@@ -260,12 +261,12 @@ set -r archExt = 'tar'
 
 # ---------------- batch scheduler output staging options
 
-set -r submitOptionsCommon = ( -m $mailMode -j oe -r y -S /bin/tcsh )
-set -r submitOptionsOutputStagerSave = ( $submitOptionsCommon -W umask=026 -d $stdoutDir -o $stdoutDir/ -l partition=$outputStagerSavePartition -q $outputStagerSaveQueue )
-set -r submitOptionsOutputStagerXfer = ( $submitOptionsCommon -W umask=026 -d $stdoutDir -o $stdoutDir/ -l partition=$outputStagerXferPartition -q $outputStagerXferQueue )
-set -r submitOptionsWorkDirCleaner = ( $submitOptionsCommon -W umask=026 -d $stdoutDir -o $stdoutDir/ -l partition=$workDirCleanerPartition -q $workDirCleanerQueue )
-set -r submitOptionsFinisher = ( $submitOptionsCommon -W umask=026 -d $stdoutDir -o $stdoutDir/ -l partition=$finisherPartition -q $finisherQueue )
-set -r submitOptionsPPStarter = ( $submitOptionsCommon -W umask=022 -l partition=$ppStarterPartition )
+set -r submitOptionsCommon = ( --mail-type=$mailMode )
+set -r submitOptionsOutputStagerSave = ( $submitOptionsCommon --chdir=$stdoutDir --output=$stdoutDir/%x.o%j --clusters=$outputStagerSaveCluster --partition=$outputStagerSavePartition )
+set -r submitOptionsOutputStagerXfer = ( $submitOptionsCommon --chdir=$stdoutDir --output=$stdoutDir/%x.o%j --clusters=$outputStagerXferCluster --partition=$outputStagerXferPartition )
+set -r submitOptionsWorkDirCleaner =   ( $submitOptionsCommon --chdir=$stdoutDir --output=$stdoutDir/%x.o%j --partition=$workDirCleanerPartition )
+set -r submitOptionsFinisher =         ( $submitOptionsCommon --chdir=$stdoutDir --output=$stdoutDir/%x.o%j --partition=$finisherPartition )
+set -r submitOptionsPPStarter =        ( $submitOptionsCommon --clusters=$ppStarterCluster --partition=$ppStarterPartition )
 
 # ---------------- output staging type as a string
 
@@ -302,10 +303,10 @@ alias find `which lfs` find
 ################################################################################
 
 if ( $?batch && ! $?FRE_STAGE && ( "$stdoutDir" != "$stdoutTmpDir" ) ) then
-   set finisherOptions = ( $submitOptionsFinisher -N $FRE_JOBID.finisher)
-   set finisherOptions = ( $finisherOptions -l walltime=$finisherRuntime,$finisherCoreSpec )
-   set finisherOptions = ( $finisherOptions -v src=$stdoutTmpDir/$FRE_JOBID,dstDir=$stdoutDir )
-   set finisherOptions = ( $finisherOptions -l depend=afterany:$MOAB_JOBID )
+   set finisherOptions = ( $submitOptionsFinisher --job-name=$FRE_JOBID.finisher)
+   set finisherOptions = ( $finisherOptions --time=$finisherRuntime --mincpus=$finisherCoreSpec )
+   set finisherOptions = ( $finisherOptions --export=src=$stdoutTmpDir/$FRE_JOBID,dstDir=$stdoutDir )
+   set finisherOptions = ( $finisherOptions --dependency=afterany:$SLURM_JOB_ID )
 
    set finisherResult = `submit -O "$finisherOptions" $finisher`
 
@@ -436,7 +437,7 @@ endif
 
 set continueFlag = 1
 
-set submitOptionsProject = ( -A $project )
+set submitOptionsProject = ( --account=$project )
 
 set windfallFlag = $windfallFlagInit
 set submitOptionsWindfall = ( )
@@ -829,19 +830,19 @@ while ( $irun <= $segmentsPerJob && $currentSeg <= $segmentsPerSimulation )
          echo "<NOTE> : The checkpointing condition 'all' is on - exiting..."
          if ( $echoOn ) set echo
          exit 99
-      else if ( -e $checkPointDir/$MOAB_PARTITION ) then
+      else if ( -e $checkPointDir/$SLURM_CLUSTER_NAME ) then
          if ( $echoOn ) unset echo
-         echo "<NOTE> : The checkpointing condition '$MOAB_PARTITION' is on - exiting..."
+         echo "<NOTE> : The checkpointing condition '$SLURM_CLUSTER_NAME' is on - exiting..."
          if ( $echoOn ) set echo
          exit 99
-      else if ( -e $checkPointDir/$MOAB_PARTITION-$MOAB_CLASS ) then
+      else if ( -e $checkPointDir/$SLURM_CLUSTER_NAME-$SLURM_JOB_QOS ) then
          if ( $echoOn ) unset echo
-         echo "<NOTE> : The checkpointing condition '$MOAB_PARTITION-$MOAB_CLASS' is on - exiting..."
+         echo "<NOTE> : The checkpointing condition '$SLURM_CLUSTER_NAME-$SLURM_JOB_QOS' is on - exiting..."
          if ( $echoOn ) set echo
          exit 99
-      else if ( -e $checkPointDir/$MOAB_USER ) then
+      else if ( -e $checkPointDir/$SLURM_JOB_USER ) then
          if ( $echoOn ) unset echo
-         echo "<NOTE> : The checkpointing condition '$MOAB_USER' is on - exiting..."
+         echo "<NOTE> : The checkpointing condition '$SLURM_JOB_USER' is on - exiting..."
          if ( $echoOn ) set echo
          exit 99
       endif
@@ -913,19 +914,22 @@ while ( $irun <= $segmentsPerJob && $currentSeg <= $segmentsPerSimulation )
    echo "Time before runCommand"
    date
 
+   # 2019-2-19 ceb temporarily run srun-multi --test before running for real
+   runCommandTest
+
    runCommand |& tee fms.out
 
    if ( $status == 0 ) then
       if ( $echoOn ) unset echo
-      echo "<NOTE> : The MPI launcher (aprun) exited normally"
+      echo "<NOTE> : The MPI launcher (srun) exited normally"
       if ( $echoOn ) set echo
    else if ( $status == 1 ) then
       set msg =       "*ERROR*: Automatic message from the job '$FRE_JOBID'\n"
       set msg = "${msg}*ERROR*: -----------------------------------------------------------------------\n"
-      set msg = "${msg}*ERROR*: The MPI launcher (aprun) exited with error status\n"
+      set msg = "${msg}*ERROR*: The MPI launcher (srun) exited with error status\n"
       set msg = "${msg}*ERROR*: \n"
-      set msg = "${msg}*ERROR*: Possible Reasons: incorrect aprun options (for example more cores specified\n"
-      set msg = "${msg}*ERROR*: than available), node failure or untrapped aprun error.\n"
+      set msg = "${msg}*ERROR*: Possible Reasons: incorrect srun options (for example more cores specified\n"
+      set msg = "${msg}*ERROR*: than available), node failure or untrapped srun error.\n"
       set msg = "${msg}*ERROR*: \n"
       set msg = "${msg}*ERROR*: Please see the job stdout, located at:\n"
       set msg = "${msg}*ERROR*: \n"
@@ -936,7 +940,7 @@ while ( $irun <= $segmentsPerJob && $currentSeg <= $segmentsPerSimulation )
    else
       set msg =       "*ERROR*: Automatic message from the job '$FRE_JOBID'\n"
       set msg = "${msg}*ERROR*: -----------------------------------------------------------------------\n"
-      set msg = "${msg}*ERROR*: The MPI launcher (aprun) exited abnormally\n"
+      set msg = "${msg}*ERROR*: The MPI launcher (srun) exited abnormally\n"
       set msg = "${msg}*ERROR*: \n"
       set msg = "${msg}*ERROR*: Possible Reasons: job cancelled or job ended through MPI_Abort or segfault.\n"
       set msg = "${msg}*ERROR*: \n"
@@ -1080,12 +1084,12 @@ while ( $irun <= $segmentsPerJob && $currentSeg <= $segmentsPerSimulation )
       set asciiArgFile = $stateDir/$asciiJobName.args
 
       set asciiSaveOptions = ( $submitOptionsOutputStagerSave $submitOptionsProject )
-      set asciiSaveOptions = ( $asciiSaveOptions -N ${asciiJobName}S )
-      set asciiSaveOptions = ( $asciiSaveOptions -l walltime=$outputStagerSaveRuntimeAscii,$outputStagerSaveCoreSpec )
+      set asciiSaveOptions = ( $asciiSaveOptions --job-name=${asciiJobName}S )
+      set asciiSaveOptions = ( $asciiSaveOptions --time=$outputStagerSaveRuntimeAscii --mincpus=$outputStagerSaveCoreSpec )
 
       set asciiXferOptions = ( $submitOptionsOutputStagerXfer $submitOptionsProject )
-      set asciiXferOptions = ( $asciiXferOptions -N ${asciiJobName}T )
-      set asciiXferOptions = ( $asciiXferOptions -l walltime=$outputStagerXferRuntimeAscii,$outputStagerXferCoreSpec )
+      set asciiXferOptions = ( $asciiXferOptions --job-name=${asciiJobName}T )
+      set asciiXferOptions = ( $asciiXferOptions --time=$outputStagerXferRuntimeAscii --mincpus=$outputStagerXferCoreSpec )
 
       echo "set expName                   =   $name"                       > $asciiArgFile
       echo "set type                      =   ascii"                      >> $asciiArgFile
@@ -1170,7 +1174,7 @@ while ( $irun <= $segmentsPerJob && $currentSeg <= $segmentsPerSimulation )
          endif
       else if ( $?flagOutputStagingTypeStaged ) then
          if ( $actionSaveOn ) then
-            set asciiResult = `submit -O "$asciiSaveOptions -v argFile=$asciiArgFile" $outputStager`
+            set asciiResult = `submit -O "$asciiSaveOptions --export=argFile=$asciiArgFile" $outputStager`
 
             if ( $status == 0 ) then
                if ( $echoOn ) unset echo
@@ -1197,7 +1201,7 @@ while ( $irun <= $segmentsPerJob && $currentSeg <= $segmentsPerSimulation )
          endif
 
          if ( $actionXferOn ) then
-            set asciiResult = `submit -O "$asciiXferOptions -v argFile=$asciiArgFile -l depend=afterok:$saveJobIds[$#saveJobIds]" $outputStager`
+            set asciiResult = `submit -O "$asciiXferOptions --export=argFile=$asciiArgFile --dependency=afterok:$saveJobIds[$#saveJobIds]" $outputStager`
 
             if ( $status == 0 ) then
                if ( $echoOn ) unset echo
@@ -1222,7 +1226,7 @@ while ( $irun <= $segmentsPerJob && $currentSeg <= $segmentsPerSimulation )
          endif
       else if ( $?flagOutputStagingTypeChained ) then
          if ( $actionSaveOn || $actionXferOn ) then
-            set asciiResult = `submit -O "$asciiSaveOptions -v argFile=$asciiArgFile" $outputStager`
+            set asciiResult = `submit -O "$asciiSaveOptions --export=argFile=$asciiArgFile" $outputStager`
 
             if ( $status == 0 ) then
                if ( $echoOn ) unset echo
@@ -1360,12 +1364,12 @@ while ( $irun <= $segmentsPerJob && $currentSeg <= $segmentsPerSimulation )
       set restartArgFile = $stateDir/$restartJobName.args
 
       set restartSaveOptions = ( $submitOptionsOutputStagerSave $submitOptionsProject )
-      set restartSaveOptions = ( $restartSaveOptions -N ${restartJobName}S )
-      set restartSaveOptions = ( $restartSaveOptions -l walltime=$outputStagerSaveRuntimeRestart,$outputStagerSaveCoreSpec )
+      set restartSaveOptions = ( $restartSaveOptions --job-name=${restartJobName}S )
+      set restartSaveOptions = ( $restartSaveOptions --time=$outputStagerSaveRuntimeRestart --mincpus=$outputStagerSaveCoreSpec )
 
       set restartXferOptions = ( $submitOptionsOutputStagerXfer $submitOptionsProject )
-      set restartXferOptions = ( $restartXferOptions -N ${restartJobName}T )
-      set restartXferOptions = ( $restartXferOptions -l walltime=$outputStagerXferRuntimeRestart,$outputStagerXferCoreSpec )
+      set restartXferOptions = ( $restartXferOptions --job-name=${restartJobName}T )
+      set restartXferOptions = ( $restartXferOptions --time=$outputStagerXferRuntimeRestart --mincpus=$outputStagerXferCoreSpec )
 
       echo "set expName                   =   $name"                       > $restartArgFile
       echo "set type                      =   restart"                    >> $restartArgFile
@@ -1451,7 +1455,7 @@ while ( $irun <= $segmentsPerJob && $currentSeg <= $segmentsPerSimulation )
          endif
       else if ( $?flagOutputStagingTypeStaged ) then
          if ( $actionCombineOn || $actionSaveOn || $actionCheckOn ) then
-            set restartResult = `submit -O "$restartSaveOptions -v argFile=$restartArgFile" $outputStager`
+            set restartResult = `submit -O "$restartSaveOptions --export=argFile=$restartArgFile" $outputStager`
 
             if ( $status == 0 ) then
                if ( $echoOn ) unset echo
@@ -1478,7 +1482,7 @@ while ( $irun <= $segmentsPerJob && $currentSeg <= $segmentsPerSimulation )
          endif
 
          if ( $actionXferOn ) then
-            set restartResult = `submit -O "$restartXferOptions -v argFile=$restartArgFile -l depend=afterok:$saveJobIds[$#saveJobIds]" $outputStager`
+            set restartResult = `submit -O "$restartXferOptions --export=argFile=$restartArgFile --dependency=afterok:$saveJobIds[$#saveJobIds]" $outputStager`
 
             if ( $status == 0 ) then
                if ( $echoOn ) unset echo
@@ -1503,7 +1507,7 @@ while ( $irun <= $segmentsPerJob && $currentSeg <= $segmentsPerSimulation )
          endif
       else if ( $?flagOutputStagingTypeChained ) then
          if ( $actionCombineOn || $actionSaveOn || $actionCheckOn || $actionXferOn ) then
-            set restartResult = `submit -O "$restartSaveOptions -v argFile=$restartArgFile" $outputStager`
+            set restartResult = `submit -O "$restartSaveOptions --export=argFile=$restartArgFile" $outputStager`
 
             if ( $status == 0 ) then
                if ( $echoOn ) unset echo
@@ -1614,15 +1618,15 @@ while ( $irun <= $segmentsPerJob && $currentSeg <= $segmentsPerSimulation )
             set historySize = `du --block-size=1000000 --summarize $historyWorkDir | sed -r 's/^([0-9]+).*$/\1/'`
             if ( $?flagOutputCombineHistoryOn ) then
                if ( $historySize / $monthslist[$irun] > $ppStarterHistorySizeThreshold ) then
-                  set ppStarterOptionsQueueAndRuntime = ( -q $ppStarterCombineOnLargeOnQueue -l walltime=$ppStarterCombineOnLargeOnRuntime )
+                  set ppStarterOptionsQueueAndRuntime = ( --constraint=$ppStarterCombineOnLargeOnConstraint --time=$ppStarterCombineOnLargeOnRuntime )
                else
-                  set ppStarterOptionsQueueAndRuntime = ( -q $ppStarterCombineOnLargeOffQueue -l walltime=$ppStarterCombineOnLargeOffRuntime )
+                  set ppStarterOptionsQueueAndRuntime = ( --constraint=$ppStarterCombineOnLargeOffConstraint --time=$ppStarterCombineOnLargeOffRuntime )
                endif
             else
                if ( $historySize / $monthslist[$irun] > $ppStarterHistorySizeThreshold ) then
-                  set ppStarterOptionsQueueAndRuntime = ( -q $ppStarterCombineOffLargeOnQueue -l walltime=$ppStarterCombineOffLargeOnRuntime )
+                  set ppStarterOptionsQueueAndRuntime = ( --constraint=$ppStarterCombineOffLargeOnConstraint --time=$ppStarterCombineOffLargeOnRuntime )
                else
-                  set ppStarterOptionsQueueAndRuntime = ( -q $ppStarterCombineOffLargeOffQueue -l walltime=$ppStarterCombineOffLargeOffRuntime )
+                  set ppStarterOptionsQueueAndRuntime = ( --constraint=$ppStarterCombineOffLargeOffConstraint --time=$ppStarterCombineOffLargeOffRuntime )
                endif
             endif
             # Chaco jobs require the pancylc queue on analysis
@@ -1630,9 +1634,9 @@ while ( $irun <= $segmentsPerJob && $currentSeg <= $segmentsPerSimulation )
                set ppStarterOptionsQueueAndRuntime = `echo $ppStarterOptionsQueueAndRuntime | sed -r 's/-q \S+/-q pancylc/'`
             endif
             set ppStarterOptions = ( $submitOptionsPPStarter $submitOptionsProject )
-            set ppStarterOptions = ( $ppStarterOptions -N $FRE_JOBID.pp.starter.$firstDate )
-            set ppStarterOptions = ( $ppStarterOptions $ppStarterOptionsQueueAndRuntime -l $ppStarterCoreSpec )
-            set ppStarterOptions = ( $ppStarterOptions -v expName=$name,xmlFile=$xmlFilesRemote[1],platform=$platformRemote,target=$target,firstDate=$firstDate,freVersion=$freCommandsVersion )
+            set ppStarterOptions = ( $ppStarterOptions --job-name=$FRE_JOBID.pp.starter.$firstDate )
+            set ppStarterOptions = ( $ppStarterOptions $ppStarterOptionsQueueAndRuntime --mincpus=$ppStarterCoreSpec )
+            set ppStarterOptions = ( $ppStarterOptions --export=expName=$name,xmlFile=$xmlFilesRemote[1],platform=$platformRemote,target=$target,firstDate=$firstDate,freVersion=$freCommandsVersion )
             set combineList = ( )
             unset ppStarterOptionsQueueAndRuntime
             unset historySize
@@ -1670,12 +1674,12 @@ while ( $irun <= $segmentsPerJob && $currentSeg <= $segmentsPerSimulation )
       set historyArgFile = $stateDir/$historyJobName.args
 
       set historySaveOptions = ( $submitOptionsOutputStagerSave $submitOptionsProject )
-      set historySaveOptions = ( $historySaveOptions -N ${historyJobName}S )
-      set historySaveOptions = ( $historySaveOptions -l walltime=$outputStagerSaveRuntimeHistory,$outputStagerSaveCoreSpec )
+      set historySaveOptions = ( $historySaveOptions --job-name=${historyJobName}S )
+      set historySaveOptions = ( $historySaveOptions --time=$outputStagerSaveRuntimeHistory --mincpus=$outputStagerSaveCoreSpec )
 
       set historyXferOptions = ( $submitOptionsOutputStagerXfer $submitOptionsProject )
-      set historyXferOptions = ( $historyXferOptions -N ${historyJobName}T )
-      set historyXferOptions = ( $historyXferOptions -l walltime=$outputStagerXferRuntimeHistory,$outputStagerXferCoreSpec )
+      set historyXferOptions = ( $historyXferOptions --job-name=${historyJobName}T )
+      set historyXferOptions = ( $historyXferOptions --time=$outputStagerXferRuntimeHistory --mincpus=$outputStagerXferCoreSpec )
 
       echo "set expName                   =   $name"                       > $historyArgFile
       echo "set type                      =   history"                    >> $historyArgFile
@@ -1770,7 +1774,7 @@ while ( $irun <= $segmentsPerJob && $currentSeg <= $segmentsPerSimulation )
          endif
       else if ( $?flagOutputStagingTypeStaged ) then
          if ( $actionCombineOn || $actionSaveOn || $actionCheckOn ) then
-            set historyResult = `submit -O "$historySaveOptions -v argFile=$historyArgFile" $outputStager`
+            set historyResult = `submit -O "$historySaveOptions --export=argFile=$historyArgFile" $outputStager`
 
             if ( $status == 0 ) then
                if ( $echoOn ) unset echo
@@ -1797,7 +1801,7 @@ while ( $irun <= $segmentsPerJob && $currentSeg <= $segmentsPerSimulation )
          endif
 
          if ( $actionXferOn || $actionPPStartOn ) then
-            set historyResult = `submit -O "$historyXferOptions -v argFile=$historyArgFile -l depend=afterok:$saveJobIds[$#saveJobIds]" $outputStager`
+            set historyResult = `submit -O "$historyXferOptions --export=argFile=$historyArgFile --dependency=afterok:$saveJobIds[$#saveJobIds]" $outputStager`
 
             if ( $status == 0 ) then
                if ( $echoOn ) unset echo
@@ -1822,7 +1826,7 @@ while ( $irun <= $segmentsPerJob && $currentSeg <= $segmentsPerSimulation )
          endif
       else if ( $?flagOutputStagingTypeChained ) then
          if ( $actionCombineOn || $actionSaveOn || $actionCheckOn || $actionXferOn || $actionPPStartOn ) then
-            set historyResult = `submit -O "$historySaveOptions -v argFile=$historyArgFile" $outputStager`
+            set historyResult = `submit -O "$historySaveOptions --export=argFile=$historyArgFile" $outputStager`
 
             if ( $status == 0 ) then
                if ( $echoOn ) unset echo
@@ -2038,16 +2042,16 @@ if ( $?flagWorkDirCleanOn && $outputStagerErrors == 0 ) then
       end
 
       set workDirCleanerOptions = ( $submitOptionsWorkDirCleaner $submitOptionsProject )
-      set workDirCleanerOptions = ( $workDirCleanerOptions -N $FRE_JOBID.workDir.cleaner )
-      set workDirCleanerOptions = ( $workDirCleanerOptions -l walltime=$workDirCleanerRuntime,$workDirCleanerCoreSpec )
+      set workDirCleanerOptions = ( $workDirCleanerOptions --job-name=$FRE_JOBID.workDir.cleaner )
+      set workDirCleanerOptions = ( $workDirCleanerOptions --time=$workDirCleanerRuntime --mincpus=$workDirCleanerCoreSpec )
 
       if ( $#saveJobList > 0 ) then
          set saveJobListAsString = `echo $saveJobList | tr ' ' ':'`
-         set workDirCleanerOptions = ( $workDirCleanerOptions -l depend=afterok:$saveJobListAsString )
+         set workDirCleanerOptions = ( $workDirCleanerOptions --dependency=afterok:$saveJobListAsString )
          unset saveJobListAsString
       endif
 
-      set workDirCleanerResult = `submit -O "$workDirCleanerOptions -v dir=$workDir" $workDirCleaner`
+      set workDirCleanerResult = `submit -O "$workDirCleanerOptions --export=dir=$workDir" $workDirCleaner`
 
       if ( $status == 0 ) then
          if ( $echoOn ) unset echo
@@ -2075,7 +2079,7 @@ endif
 if ( $?NiNaC_LVL ) then
    if ( $NiNaC_LVL > 0 ) then
       set NiNaC_RunRx_Script = `which "$NiNaC_RunRx"`
-      set NiNaC_RunRx_SubOpts = "-v NiNaC_SRCDIR='$FreCommandsSrcDir' -v NiNaC_BLDDIR='$FreCommandsBldDir' -v NiNaC_RUNDIR='$workDir' -N '${FRE_JOBID}.NiNaCgetRunSig'"
+      set NiNaC_RunRx_SubOpts = "--export=NiNaC_SRCDIR='$FreCommandsSrcDir',NiNaC_BLDDIR='$FreCommandsBldDir',NiNaC_RUNDIR='$workDir' --job-name='${FRE_JOBID}.NiNaCgetRunSig'"
       set NiNaC_RunRx_JobId = `submit -O "$NiNaC_RunRx_SubOpts" "$NiNaC_RunRx_Script"`
 
       if ( $status == 0 ) then

@@ -254,29 +254,19 @@ my $schedulerSize = sub($$$$$$)
 
 };
 
-my $schedulerAccount = sub($$)
+my $schedulerAccount = sub($)
 
-    # ------ arguments: $fre $windfallFlag
+    # ------ arguments: $fre
 {
 
-    my ( $fre, $f ) = @_;
+    my ( $fre ) = @_;
 
     if ( $fre->property('FRE.scheduler.enabled') ) {
 
-        my $project = (
-            ($f)
-            ? $fre->property('FRE.scheduler.windfall.project.set')
-            : $fre->property('FRE.scheduler.windfall.project.unset')
-            )
-            || $fre->project();
-        my $qos
-            = ($f)
-            ? $fre->property('FRE.scheduler.windfall.qos.set')
-            : $fre->property('FRE.scheduler.windfall.qos.unset');
+        my $project = $fre->project();
 
         my %option = (
             project => $fre->propertyParameterized( 'FRE.scheduler.option.project', $project ),
-            qos     => $fre->propertyParameterized( 'FRE.scheduler.option.qos',     $qos )
         );
 
         return \%option;
@@ -290,38 +280,31 @@ my $schedulerAccount = sub($$)
 
 };
 
-my $schedulerResources = sub($$$$$$$)
+my $schedulerResources = sub($$$$$$$$$)
 
-    # ------ arguments: $fre $jobType $ncores $time $partition $queue $dualFlag
+    # ------ arguments: $fre $jobType $ncores $time $partition $queue $dualFlag $windfall $urgent
 {
 
-    my ( $fre, $j, $n, $t, $p, $q, $f ) = @_;
+    my ( $fre, $j, $n, $t, $p, $q, $f, $windfall, $urgent ) = @_;
 
     if ( $fre->property('FRE.scheduler.enabled') ) {
 
-        my $partition = $p || $fre->property("FRE.scheduler.$j.partition");
-        my $queue
-            = ( ($f) ? $fre->property('FRE.scheduler.dual.queue') : undef )
-            || $q
-            || $fre->property("FRE.scheduler.$j.queue");
-        my $priority = ($f) ? $fre->property('FRE.scheduler.dual.priority') : undef;
-        my $qos      = ($f) ? $fre->property('FRE.scheduler.dual.qos')      : undef;
+        my $cluster = $p || $fre->property("FRE.scheduler.$j.cluster");
+        my $partition = $q || $fre->property("FRE.scheduler.$j.partition");
+        my $dual = ($f) ? $fre->property('FRE.scheduler.dual.option') : undef;
+        my $qos = $f        ? $fre->property('FRE.scheduler.qos.windfall')
+                : $windfall ? $fre->property('FRE.scheduler.qos.windfall')
+                : $urgent   ? $fre->property('FRE.scheduler.qos.urgent')
+                :             $fre->property('FRE.scheduler.qos.default');
         my $mailMode = $fre->mailMode();
 
         my %option = (
             time => $fre->propertyParameterized( 'FRE.scheduler.option.time', $t ),
-            partition =>
-                $fre->propertyParameterized( 'FRE.scheduler.option.partition', $partition ),
-            queue    => $fre->propertyParameterized( 'FRE.scheduler.option.queue',    $queue ),
-            priority => $fre->propertyParameterized( 'FRE.scheduler.option.priority', $priority ),
-            qos      => $fre->propertyParameterized( 'FRE.scheduler.option.qos',      $qos ),
-            join     => $fre->propertyParameterized('FRE.scheduler.option.join'),
-            stdoutUmask => $fre->propertyParameterized( 'FRE.scheduler.option.stdoutUmask', '026' ),
-            cpuset      => $fre->propertyParameterized('FRE.scheduler.option.cpuset'),
-            rerun       => $fre->propertyParameterized('FRE.scheduler.option.rerun'),
+            cluster => $fre->propertyParameterized( 'FRE.scheduler.option.cluster', $cluster ),
+            partition => $fre->propertyParameterized( 'FRE.scheduler.option.partition', $partition ),
+            qos      => $fre->propertyParameterized( 'FRE.scheduler.option.qos', $qos ),
             mail    => $fre->propertyParameterized( 'FRE.scheduler.option.mail', $mailMode ),
-            envVars => $fre->propertyParameterized('FRE.scheduler.option.envVars'),
-            shell   => $fre->propertyParameterized('FRE.scheduler.option.shell')
+            dual    => $dual
         );
 
         if ($n) {
@@ -363,7 +346,8 @@ my $schedulerNames = sub($$$)
         my %option = (
             name    => $fre->propertyParameterized( 'FRE.scheduler.option.name',    $n ),
             stdout  => $fre->propertyParameterized( 'FRE.scheduler.option.stdout',  $d ),
-            workDir => $fre->propertyParameterized( 'FRE.scheduler.option.workDir', $d )
+            workDir => $fre->propertyParameterized( 'FRE.scheduler.option.workDir', $d ),
+            freVersion => $fre->propertyParameterized( 'FRE.scheduler.option.freVersion', $fre->{freVersion} )
         );
 
         return \%option;
@@ -583,19 +567,19 @@ sub schedulerSizeAsString($$$$$$)
 
 }
 
-sub setSchedulerAccount($$$)
+sub setSchedulerAccount($$)
 
-    # ------ arguments: $fre $refToScript $windfallFlag
+    # ------ arguments: $fre $refToScript
 {
 
-    my ( $fre, $r, $f ) = @_;
+    my ( $fre, $r ) = @_;
 
     my $prefix           = FRETemplate::PRAGMA_PREFIX;
     my $schedulerOptions = FRETemplate::PRAGMA_SCHEDULER_OPTIONS;
     my $placeholder      = qr/^[ \t]*$prefix[ \t]+$schedulerOptions[ \t]*$/mo;
 
     my $schedulerPrefix = $fre->property('FRE.scheduler.prefix');
-    my $h = $schedulerAccount->( $fre, $f );
+    my $h = $schedulerAccount->( $fre );
 
     foreach my $key ( sort keys %{$h} ) {
         my $value = $h->{$key};
@@ -622,19 +606,19 @@ sub schedulerAccountAsString($$)
 
 }
 
-sub setSchedulerResources($$$$$$$$)
+sub setSchedulerResources($$$$$$$$$$)
 
-    # ------ arguments: $fre $refToScript $jobType $ncores $time $partition $queue $dualFlag
+    # ------ arguments: $fre $refToScript $jobType $ncores $time $partition $queue $dualFlag $windfall $urgent
 {
 
-    my ( $fre, $r, $j, $n, $t, $p, $q, $f ) = @_;
+    my ( $fre, $r, $j, $n, $t, $p, $q, $f, $windfall, $urgent ) = @_;
 
     my $prefix           = FRETemplate::PRAGMA_PREFIX;
     my $schedulerOptions = FRETemplate::PRAGMA_SCHEDULER_OPTIONS;
     my $placeholder      = qr/^[ \t]*$prefix[ \t]+$schedulerOptions[ \t]*$/mo;
 
     my $schedulerPrefix = $fre->property('FRE.scheduler.prefix');
-    my $h = $schedulerResources->( $fre, $j, $n, $t, $p, $q, $f );
+    my $h = $schedulerResources->( $fre, $j, $n, $t, $p, $q, $f, $windfall, $urgent );
 
     foreach my $key ( sort keys %{$h} ) {
         my $value = $h->{$key};
@@ -643,14 +627,14 @@ sub setSchedulerResources($$$$$$$$)
 
 }
 
-sub schedulerResourcesAsString($$$$$$$)
+sub schedulerResourcesAsString($$$$$$$$$)
 
-    # ------ arguments: $fre $jobType $ncores $time $partition $queue $dualFlag
+    # ------ arguments: $fre $jobType $ncores $time $partition $queue $dualFlag $windfall $urgent
 {
 
-    my ( $fre, $j, $n, $t, $p, $q, $f ) = @_;
+    my ( $fre, $j, $n, $t, $p, $q, $f, $windfall, $urgent ) = @_;
 
-    my ( $h, @result ) = ( $schedulerResources->( $fre, $j, $n, $t, $p, $q, $f ), () );
+    my ( $h, @result ) = ( $schedulerResources->( $fre, $j, $n, $t, $p, $q, $f, $windfall, $urgent ), () );
 
     foreach my $key ( sort keys %{$h} ) {
         my $value = $h->{$key};
@@ -783,22 +767,23 @@ sub setRunCommand($$$)
     my $runCommandSize = FRETemplate::PRAGMA_RUN_COMMAND_SIZE;
     my $placeholder    = qr/^[ \t]*$prefix[ \t]+$runCommandSize[ \t]*$/mo;
 
-    my $runCommandLauncher = $fre->property('FRE.mpi.runCommand.launcher');
+    # use a different launcher if there's more than one component with ranks
+    my $runCommandLauncher = (grep({ $_ } @$rp) > 1)
+                           ? $fre->property('FRE.mpi.runCommand.launcher.multi')
+                           : $fre->property('FRE.mpi.runCommand.launcher.single');
     my @components = split( ';', $fre->property('FRE.mpi.component.names') );
     my ( $runCommand, $runSizeInfo ) = ( $runCommandLauncher, "  set -r npes = $np\n" );
 
-    my ( $ht, $htopt )
-        = $mpiInfo->{ht}
-        ? ( '.true.', $fre->property('FRE.mpi.runCommand.option.ht') )
-        : ( '.false.', $fre->property('FRE.mpi.runCommand.option.noht') );
+    my $ht = $mpiInfo->{ht} ? '.true.' : '.false.';
     $runSizeInfo .= "  set -r ht = $ht\n";
-    $runSizeInfo .= "  set -r htopt = $htopt\n";
 
     foreach my $inx ( 0 .. $#components ) {
         my $component = $components[$inx];
-        $rt->[$inx] *= 2 if $rp->[$inx] and $mpiInfo->{ht};
         $runSizeInfo .= "  set -r ${component}_ranks = $ranks_per_ens->[$inx]\n";
         $runSizeInfo .= "  set -r tot_${component}_ranks = $rp->[$inx]\n";
+        $runSizeInfo .= "  set -r scheduler_${component}_threads = $rt->[$inx]\n" if $rt->[$inx];
+        # double the threads passed to the namelists if hyperthreading is used
+        $rt->[$inx] *= 2 if $rp->[$inx] and $mpiInfo->{ht};
         $runSizeInfo .= "  set -r ${component}_threads = $rt->[$inx]\n";
         $runSizeInfo .= "  set -r ${component}_layout = $layout->[$inx]\n";
         $runSizeInfo .= "  set -r ${component}_io_layout = $io_layout->[$inx]\n";
@@ -810,18 +795,18 @@ sub setRunCommand($$$)
             my $component = $components[$inx];
             if ( $rp->[$inx] > 0 ) {
                 $runCommand .= ' :' if $runCommand ne $runCommandLauncher;
-                $runCommand .= ' $htopt '
+                $runCommand .= ' '
                     . $fre->propertyParameterized( 'FRE.mpi.runCommand.option.mpiprocs',
                     '$' . 'tot_' . ${component} . '_ranks' );
                 $runCommand .= ' '
                     . $fre->propertyParameterized( 'FRE.mpi.runCommand.option.nthreads',
-                    '$' . ${component} . '_threads' );
+                    '$scheduler_' . ${component} . '_threads' );
                 $runCommand .= ' ' . $fre->property('FRE.mpi.runCommand.executable');
             }
         }
     }
     else {
-        $runCommand .= ' $htopt '
+        $runCommand .= ' '
             . $fre->propertyParameterized( 'FRE.mpi.runCommand.option.mpiprocs', '$npes' );
         $runCommand .= ' ' . $fre->propertyParameterized( 'FRE.mpi.runCommand.option.nthreads', 1 );
         $runCommand .= ' ' . $fre->property('FRE.mpi.runCommand.executable');
@@ -830,6 +815,15 @@ sub setRunCommand($$$)
     $fre->out( FREMsg::NOTE, "Running executable with:", $runCommand );
     FRETemplate::setAlias( $fre, $r, 'runCommand', $runCommand );
     ${$r} =~ s/$placeholder/$runSizeInfo/;
+
+    # 2019-2-19 ceb temporarily run srun-multi --test first
+    if ($runCommand =~ /multi/) {
+        (my $runCommandTest = $runCommand) =~ s/srun-multi`/srun-multi` --test --cpu-bind=verbose/;
+        FRETemplate::setAlias( $fre, $r, 'runCommandTest', $runCommandTest );
+    }
+    else {
+        FRETemplate::setAlias( $fre, $r, 'runCommandTest', "echo Not using srun-multi" )
+    }
 
 } ## end sub setRunCommand($$$)
 
