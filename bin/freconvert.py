@@ -154,6 +154,7 @@ def points_to_f2(xml_string):
     A new xml_string variable with F2 references instead of F1
 
     """
+    xml_string = xml_string.replace('$CTMP/unswept', '/lustre/f1/unswept')
     soft_filesystem_pointers = {'$CDATA': '$PDATA/gfdl', 
                                 '${CDATA}': '$PDATA/gfdl', 
                                 '$CTMP': '$SCRATCH', 
@@ -209,6 +210,7 @@ def convert_xml_text(xml_string, prev_version='bronx-12'):
     xml_string = xml_string.replace('DO_ANALYSIS', 'ANALYSIS_SWITCH')
     xml_string = xml_string.replace('DO_DATABASE', 'DB_SWITCH')
     xml_string = xml_string.replace(' script="$FRE_CURATOR_HOME/share/bin/database_ingestor.csh"', '')
+    xml_string = xml_string.replace('gfdl_G', 'gfdl_sd')
 
     return xml_string
 
@@ -512,34 +514,41 @@ def do_land_f90(etree_root):
 
         for component_elem in experiment.iter('component'):
             
-            if 'land' in component_elem.get('name'):
-                compile_elem = component_elem.find('compile')
+            try:
+                if 'land' in component_elem.get('name'):
+                    compile_elem = component_elem.find('compile')
 
                 #Terminate inner loop if no compile element exists for land
-                if compile_elem is None:
-                    break
+                    if compile_elem is None:
+                        break
 
-                elif not 'doF90Cpp' in compile_elem.keys():
-                    csh_land_elem = compile_elem.find('csh')
+                    elif not 'doF90Cpp' in compile_elem.keys():
+                        csh_land_elem = compile_elem.find('csh')
 
-                    if csh_land_elem is not None:
-                        compile_elem.set('doF90Cpp', 'yes')
-                        cdata_elem = csh_land_elem.find('cdata')
-                        csh_land_elem.remove(cdata_elem)
-                        compile_elem.remove(csh_land_elem)
-                        return
+                        if csh_land_elem is not None:
+                            compile_elem.set('doF90Cpp', 'yes')
+                            cdata_elem = csh_land_elem.find('cdata')
+                            csh_land_elem.remove(cdata_elem)
+                            compile_elem.remove(csh_land_elem)
+                            return
 
-                    #Shouldn't get here very often, but if no <csh> exists, exit
+                        #Shouldn't get here very often, but if no <csh> exists, exit
+                        else:
+                            return
+
+                    #Exit if 'doF90Cpp' already exists
                     else:
                         return
 
-                #Exit if 'doF90Cpp' already exists
-                else:
-                    return
-
             #If not on land component, check next component
-            else:
-                continue
+                else:
+                    continue
+
+            #In the case of no build experiments, but a postProcess section,
+            #a 'component' element will be caught, but not the one we wanted,
+            #so in this case, just catch the error and pass.
+            except TypeError as e:
+                pass
     
 
 def delete_default_platforms(etree_root):
@@ -1309,7 +1318,10 @@ def do_resources_main(etree_root):
                     pass
         
                 try:
-                    runtime_hours = prod_element.attrib.pop('runTime')
+                    if 'runTime'.lower() in prod_element.attrib.keys():
+                        runtime_hours = prod_element.attrib.pop('runtime')
+                    else:
+                        runtime_hours = prod_element.attrib.pop('runTime')
                 except (AttributeError, KeyError) as e:
                     pass
         
@@ -1440,6 +1452,7 @@ def do_resources_main(etree_root):
 
                                         if value == '' or value == None:
                                             del override_dict[key]
+                                #print(atm_overrides)
 
                                 #The following nested loop preserves values from experiment namelist
                                 #that were not overriden by the overrideParams attribute
