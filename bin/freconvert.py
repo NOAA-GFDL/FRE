@@ -187,11 +187,11 @@ def convert_xml_text(xml_string, prev_version='bronx-12'):
 
         1) ALL references to the old FRE version are changed to the 
            newest version.
-        2) In the 'postProcess' section, 'cubicToLatLon' is replaced 
-           with 'xyInterp.'
+        2) The -traceback option is removed for build experiments.
         3) 'DO_ANALYSIS' and 'DO_DATABASE' are updated to
            'ANALYSIS_SWITCH' and 'DB_SWITCH', respectively.
         4) The 'database_ingestor.csh' script is no longer necessary
+        5) The 'gfdl_G' group has been changed to 'gfdl_sd'
 
     PARAMETERS (2)
     --------------
@@ -206,7 +206,7 @@ def convert_xml_text(xml_string, prev_version='bronx-12'):
     """
     xml_string = points_to_f2(xml_string)
     xml_string = xml_string.replace(prev_version, newest_fre_version)
-    #xml_string = xml_string.replace('cubicToLatLon', 'xyInterp')
+    xml_string = xml_string.replace('-traceback', '')
     xml_string = xml_string.replace('DO_ANALYSIS', 'ANALYSIS_SWITCH')
     xml_string = xml_string.replace('DO_DATABASE', 'DB_SWITCH')
     xml_string = xml_string.replace(' script="$FRE_CURATOR_HOME/share/bin/database_ingestor.csh"', '')
@@ -359,7 +359,7 @@ def write_parsable_xml(xml_string):
     comment_regex = r'<xml_comment>(.*?)</xml_comment>'
     cdata_regex = r'<cdata>(.*?)</cdata>'
     entity_regex = r'<!ENTITY.*?>'
-   
+
     #Fix CDATA
     xml_string = fix_special_strings(cdata_regex, xml_string, '<', '&lt;')
 
@@ -372,8 +372,12 @@ def write_parsable_xml(xml_string):
     #Fix Entity Doctypes (Opening tags)
     xml_string = xml_string.replace('<!ENTITY', '<entity>')
 
+    #Replace occasional special characters, such as \r
+    #xml_string = xml_string.replace('\r', r'\r')
+
     #Add new-line character at end of XML to separate the final 'root' tag
     xml_string = xml_string + "\n</root>"
+    
     return xml_string
     
     
@@ -530,7 +534,6 @@ def do_land_f90(etree_root):
                             cdata_elem = csh_land_elem.find('cdata')
                             csh_land_elem.remove(cdata_elem)
                             compile_elem.remove(csh_land_elem)
-                            return
 
                         #Shouldn't get here very often, but if no <csh> exists, exit
                         else:
@@ -2145,8 +2148,8 @@ if __name__ == '__main__':
 
     print("Pre-parsing XML...")
     time.sleep(1) 
-    pre_parsed_xml = write_parsable_xml(input_content) 
-
+    pre_parsed_xml = write_parsable_xml(input_content)
+    
     try:
         tree = ET.ElementTree(ET.fromstring(pre_parsed_xml))
     except ET.ParseError as e:
