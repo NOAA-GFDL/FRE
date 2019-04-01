@@ -373,7 +373,7 @@ def write_parsable_xml(xml_string):
     xml_string = xml_string.replace('<!ENTITY', '<entity>')
 
     #Replace occasional special characters, such as \r
-    #xml_string = xml_string.replace('\r', r'\r')
+    xml_string = xml_string.replace('\r', r'\r')
 
     #Add new-line character at end of XML to separate the final 'root' tag
     xml_string = xml_string + "\n</root>"
@@ -1655,7 +1655,38 @@ def get_modified_overrides(override_str):
 
 
 class Metadata(object):
+    """
+    The Metadata class serves as a container for conversion for old
+    Bronx-10 or Bronx-11 metadata tags. A common denominator for nearly
+    every old metadata conversion exists, with the exception of 
+    'communityVersion' and 'communityGrid', which are converted to an
+    arbitrary value of 'not_applicable_1' and 'not_applicable_2',
+    respectively. A special list holding the newest tags, named
+    __slots__ is used to save on memory, though may be changed to a 
+    normal list in the future.
 
+    METHODS
+    -------
+    __init__: Initialize the Metadata class object with the full list
+               of the newest metadata tags
+
+    print_metadata: Prints out the converted metadata. Mainly for debug
+
+    set_metadata: Set the old metadata parameter into a class variable
+
+    get_value_from_tag: Retrieve metadata parameter
+
+    set_comment: Preserves the communityComment attribute
+
+    convert_to_tag: Translates old text/attributes into an Element
+
+    set_tags_from_element: Convert scenario element into separate tags
+
+    delete_attributes: Remove attributes from old metadata elements
+
+    build_metadata: Creates the <publicMetadata> section
+
+    """
     #"not_applicable_1" and "not_applicable_2" refer to "communityVersion" and "communityGrid" respectively
     #They are tagged as N/A, but it's not possible to use a '/' in __slots__
     #Currently excludes 'realization' tag
@@ -2146,8 +2177,9 @@ if __name__ == '__main__':
     with open(input_xml, 'r') as f:
         input_content = f.read()
 
-    print("Pre-parsing XML...")
-    time.sleep(1) 
+    if args.verbose:
+        print("Pre-parsing XML...")
+        time.sleep(1) 
     pre_parsed_xml = write_parsable_xml(input_content)
     
     try:
@@ -2166,64 +2198,73 @@ if __name__ == '__main__':
     
     root = tree.getroot()
     
-    old_version = do_properties(root) 
-    print("Converting XML from %s to %s..." % (old_version, newest_fre_version))
-    time.sleep(3)
+    old_version = do_properties(root)
+    if not args.quiet:
+        print("Converting XML from %s to %s..." % (old_version, newest_fre_version))
+        time.sleep(3)
 
     if old_version == 'bronx-10':
-        print("Checking for land F90 <csh> block...")
-        time.sleep(1)
+        if args.verbose:
+            print("Checking for land F90 <csh> block...")
+            time.sleep(1)
         do_land_f90(root)
-        print("Checking for 'default' platforms (will be removed)...")
-        time.sleep(1) 
+        if args.verbose:
+            print("Checking for 'default' platforms (will be removed)...")
+            time.sleep(1) 
         delete_default_platforms(root)
-        print("Adding <freVersion> tags...")
-        time.sleep(1)
+        if args.verbose:
+            print("Adding <freVersion> tags...")
+            time.sleep(1)
         add_fre_version_tag(root)
-        print("Checking for existence of 'compiler' tag in platforms")
-        time.sleep(1)
+        if args.verbose:
+            print("Checking for existence of 'compiler' tag in platforms")
+            time.sleep(1)
         add_compiler_tag(root)
-        print("Checking for sourceGrid attributes...")
-        time.sleep(1)
+        if args.verbose:
+            print("Checking for sourceGrid attributes...")
+            time.sleep(1)
         add_sourceGrid_attribute(root)
-        print("Adding resources tags...")
-        time.sleep(1)
-        do_resources_main(root) # Resource Tags - change namelists and create <resources> # IF BRONX-10
-        time.sleep(1)
-        print("Checking for metadata. Adding <publicMetadata> tags if necessary...")
-        time.sleep(1)
-        do_metadata_main(root)  # Create and/or modify metadata tags #IF BRONX-10 or BRONX-11
+        if args.verbose:
+            print("Adding resources tags...")
+            time.sleep(1)
+        do_resources_main(root)
+        if args.verbose:
+            print("Checking for metadata...")
+            time.sleep(1)
+        do_metadata_main(root)  
         xml_string = ET.tostring(root)
-        #print("Linking paths to F2. Performing final XML manipulations...")
-        time.sleep(1)
         xml_string = convert_xml_text(xml_string, prev_version=old_version)
         final_xml = write_final_xml(xml_string, args.setup)
 
     elif old_version == 'bronx-11':
-        print("Checking for 'default' platforms (will be removed)...")
-        time.sleep(1)
+        if args.verbose:
+            print("Checking for 'default' platforms (will be removed)...")
+            time.sleep(1)
         delete_default_platforms(root)
-        print("Checking for metadata. Updating tags if necessary...")
-        time.sleep(1)
+        if args.verbose:
+            print("Checking for metadata. Updating tags if necessary...")
+            time.sleep(1)
         do_metadata_main(root)
         xml_string = ET.tostring(root)
-        print("Linking paths to F2. Performing final XML manipulations...")
         xml_string = convert_xml_text(xml_string, prev_version=old_version)
         final_xml = write_final_xml(xml_string, args.setup)
 
     # No need to parse XML with ElementTree if Bronx-12 or Bronx-13. Just do string replacements.
     elif old_version == 'bronx-12':
-        print("Linking paths to F2. Performing final XML manipulations...")
-        time.sleep(1)
+        if args.verbose:
+            print("Linking paths to F2. Performing final XML manipulations...")
+            time.sleep(1)
         final_xml = convert_xml_text(input_content, prev_version=old_version)
     
     elif old_version == 'bronx-13':
-        print("Making Slurm compatible...")
-        time.sleep(1)
+        if args.verbose:
+            print("Making Slurm compatible...")
+            time.sleep(1)
         final_xml = convert_xml_text(input_content, prev_version=old_version)
     
     elif old_version == newest_fre_version:
-        print("XML is already at the newest version (%s)" % newest_fre_version)
+        if not args.quiet:
+            print("XML is already at the newest version (%s)" % newest_fre_version)
         sys.exit(1)
 
     else:
@@ -2236,5 +2277,6 @@ if __name__ == '__main__':
     with open(file_dest, 'w') as f:
         f.write(final_xml)
 
-    print("Converted XML written to %s" % (file_dest))
-    
+    if not args.quiet:
+        print("Converted XML written to %s" % (file_dest))
+
