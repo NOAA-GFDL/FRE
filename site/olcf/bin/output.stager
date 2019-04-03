@@ -807,13 +807,17 @@ else
    goto END
 endif
 
-if ( $freCommandsToLoad ) then
+if ( $freCommandsToLoad || $hsmToLoad || $xferToolToLoad ) then
    if ( -d $freCommandsModuleFilesDir && -r $freCommandsModuleFilesDir ) then
       set freCommandsModuleFile = $freCommandsModuleFilesDir/fre/$freCommandsVersion
       if ( -f $freCommandsModuleFile && -r $freCommandsModuleFile ) then
          module use $freCommandsModuleFilesDir
          module unload fre
          module load fre/$freCommandsVersion
+
+         set -r xferSrcPrefix = ""
+         set -r xferDstPrefix = "gfdl:"
+         alias gcp `which gcp`
       else
          if ( $echoOn ) unset echo
          echo "*ERROR*: The 'fre' modulefile '$freCommandsModuleFile' doesn't exist or not readable"
@@ -825,63 +829,6 @@ if ( $freCommandsToLoad ) then
    else
       if ( $echoOn ) unset echo
       echo "*ERROR*: The 'fre' modulefiles directory '$freCommandsModuleFilesDir' doesn't exist or not readable"
-      if ( $echoOn ) set echo
-      set exitStatus = 2
-      goto END
-   endif
-endif
-
-if ( $hsmToLoad ) then
-   if ( -d $hsmModuleFilesDir && -r $hsmModuleFilesDir ) then
-      set hsmModuleFile = $hsmModuleFilesDir/hsm/$hsmVersion
-      if ( -f $hsmModuleFile && -r $hsmModuleFile ) then
-         module use $hsmModuleFilesDir
-         module unload hsm
-         module load hsm/$hsmVersion
-      else
-         if ( $echoOn ) unset echo
-         echo "*ERROR*: The 'hsm' modulefile '$hsmModuleFile' doesn't exist or not readable"
-         if ( $echoOn ) set echo
-         set exitStatus = 2
-         goto END
-      endif
-      unset hsmModuleFile
-   else
-      if ( $echoOn ) unset echo
-      echo "*ERROR*: The 'hsm' modulefiles directory '$hsmModuleFilesDir' doesn't exist or not readable"
-      if ( $echoOn ) set echo
-      set exitStatus = 2
-      goto END
-   endif
-endif
-
-if ( $xferToolToLoad ) then
-   if ( -d $xferToolModuleFilesDir && -r $xferToolModuleFilesDir ) then
-      set xferToolModuleFile = $xferToolModuleFilesDir/gcp/$xferToolVersion
-      if ( -f $xferToolModuleFile && -r $xferToolModuleFile ) then
-         module use $xferToolModuleFilesDir
-         module unload gcp globus
-         module load globus
-         module load gcp/$xferToolVersion
-         set -r xferSrcPrefix = ""
-         set -r xferDstPrefix = "gfdl:"
-         alias gcp `which gcp`
-         if ( $actionPPStartToDo ) then
-            set gfdlSubmit = 'external-ppan-submit.princeton.rdhpcs.noaa.gov'
-            alias callTool `which gsissh` $gfdlSubmit
-            unset gfdlSubmit
-         endif
-      else
-         if ( $echoOn ) unset echo
-         echo "*ERROR*: The 'gcp' modulefile '$xferToolModuleFile' doesn't exist or not readable"
-         if ( $echoOn ) set echo
-         set exitStatus = 2
-         goto END
-      endif
-      unset xferToolModuleFile
-   else
-      if ( $echoOn ) unset echo
-      echo "*ERROR*: The 'gcp' modulefiles directory '$xferToolModuleFilesDir' doesn't exist or not readable"
       if ( $echoOn ) set echo
       set exitStatus = 2
       goto END
