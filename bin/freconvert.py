@@ -107,10 +107,11 @@ import os
 import sys
 import re
 import time
+import logging
 import argparse
 import xml.etree.ElementTree as ET
 
-newest_fre_version = 'bronx-14'
+newest_fre_version = 'bronx-15'
 
 configs_to_edit = ['atmos_npes', 'atmos_nthreads', 'ocean_npes',
                    'ocean_nthreads', 'layout', 'io_layout',
@@ -437,6 +438,7 @@ def do_properties(etree_root):
                                                      'value': 'off'})
         db_property.tail = '\n  '
         parent = etree_root.find('experimentSuite')
+
         #setup_include XML's won't have an 'experimentSuite' root
         if parent is None:
             parent = etree_root.find('setup')
@@ -449,7 +451,8 @@ def do_properties(etree_root):
                                                               'value': old_ver})
         fre_version_property.tail = '\n  '
         parent = etree_root.find('experimentSuite')
-        if not parent:
+
+        if parent is None:
             parent = etree_root.find('setup')
 
         parent.insert(0, fre_version_property)
@@ -457,7 +460,6 @@ def do_properties(etree_root):
     return old_ver
 
 
-#Add platform-specific <freVersion> tags, if necessary
 def add_fre_version_tag(etree_root):
     """
     Adds needed <freVersion> tags to platform elements
@@ -583,17 +585,17 @@ def delete_default_platforms(etree_root):
     except AttributeError as e:
 
         if setup_element is None:
-            print("Setup tag doesn't exist. Skipping...")
+            logging.info("Setup tag doesn't exist. Skipping...")
             return
         else:
-            print("No platforms listed under setup. Skipping...")
+            logging.info("No platforms listed under setup. Skipping...")
             return
 
     for i in range(len(platform_list)):
         platform_name = platform_list[i].get('name')
 
         if '.default' in platform_name or '-default' in platform_name:
-            print("Deleting platform: %s" % platform_name)
+            logging.info("Deleting platform: %s" % platform_name)
             setup_element.remove(platform_list[i])
 
 
@@ -638,7 +640,7 @@ def add_compiler_tag(etree_root, compiler_type='intel',
             if xi_include:
                 continue
             else:
-                print("Writing compiler tag for platform %s" % platform.get("name"))
+                logging.info("Writing compiler tag for platform %s" % platform.get("name"))
                 compiler_tag = ET.SubElement(platform, 'compiler', 
                                              attrib={'type': compiler_type,
                                                      'version': compiler_version})
@@ -691,7 +693,7 @@ def add_sourceGrid_attribute(etree_root):
                     comp_type = pp_comp.get('type') # Set to None if not found
 
                     if comp_type is not None and comp_type != 'stocks':
-                        print("Adding sourceGrid attribute...")
+                        logging.info("Adding sourceGrid attribute...")
 
                         if 'atmos' in comp_type:
                             pp_comp.set('sourceGrid', 'atmos-cubedsphere')
@@ -1218,7 +1220,7 @@ def do_resources_main(etree_root):
 
     for exp in etree_root.iter('experiment'):
         subelements = [elem.tag for elem in exp.iter() if elem is not exp]
-        print("Inserting resources tags for experiment " + str(exp.get('name')))
+        logging.info("Inserting resources tags for experiment " + str(exp.get('name')))
 
         if not 'compile' in subelements: 
             nml_container = Namelist() 
@@ -1455,7 +1457,6 @@ def do_resources_main(etree_root):
 
                                         if value == '' or value == None:
                                             del override_dict[key]
-                                #print(atm_overrides)
 
                                 #The following nested loop preserves values from experiment namelist
                                 #that were not overriden by the overrideParams attribute
@@ -1486,7 +1487,7 @@ def do_resources_main(etree_root):
                                 if ice_reg_ovr is not None:
                                     ice_reg_ovr.tail = "\n              "               
 
-                        #No <run> tag inside <regression> = Do nothing!
+                        # No <run> tag inside <regression> = Do nothing!
                         else:
                             pass
 
@@ -1494,7 +1495,8 @@ def do_resources_main(etree_root):
             else:
                 pass
 
-        else: #Don't do Build experiments
+        # Don't do Build experiments
+        else: 
             pass
         
 
@@ -1544,8 +1546,8 @@ def parse_overrides(override_str, override_container):
 
     #Sanity check - length of namelists, params, and values should be the same
     if not len(namelists) == len(params) == len(values):
-        print("WARNING! The overrideParams attribute is not set up correctly! \
-              Skipping regression.")
+        logging.warning("The overrideParams attribute is not set up correctly! \
+Skipping regression.")
         return None
 
     for index, namelist in enumerate(namelists):
@@ -1689,10 +1691,8 @@ class Metadata(object):
     """
     #"not_applicable_1" and "not_applicable_2" refer to "communityVersion" and "communityGrid" respectively
     #They are tagged as N/A, but it's not possible to use a '/' in __slots__
-    #Currently excludes 'realization' tag
 
     #NOTE: ORDER IS VERY IMPORTANT HERE!
-
 
     __slots__ = ["project", "realization", "source", "source_id", "source_type",
                  "experiment_name", "experiment_id", "comment", "variant_info", 
@@ -1870,7 +1870,6 @@ class Metadata(object):
             self.set_metadata(new_key, value)
 
 
-
     def delete_attributes(self, element):
         """
         Removes attributes from an Element object
@@ -1998,8 +1997,8 @@ def do_metadata_main(etree_root):
             if (exp.find('publicMetadata') is not None) and ((exp.find('scenario') is not None) \
             or (exp.find('communityComment') is not None) or (exp.find('description').attrib != {})):
 
-                print("WARNING! You have a mix of Bronx-10 and Bronx-11/12 metadata elements")
-                print("Skipping experiment %s" % experiment_name)
+                logging.warning("You have a mix of Bronx-10 and Bronx-11/12 metadata elements")
+                logging.warning("Skipping experiment %s" % experiment_name)
                 continue
 
         #---------------Bronx-11 metadata checks--------------#
@@ -2054,8 +2053,7 @@ def do_metadata_main(etree_root):
             pass
 
     if not executed_metadata:
-        print("No metadata to parse. Skipping...")
-
+        logging.info("No metadata to parse. Skipping...")
 
 
 # ----------------------------- XML POST-PARSING  --------------------------- #
@@ -2141,6 +2139,8 @@ def write_final_xml(xml_string, setup_include=False):
 if __name__ == '__main__':
 
     # GET THE COMMAND LINE ARGUMENTS AND READ IN THE INPUT XML #
+    # OPTION -x IS REQUIRED FOR ALL INPUT XMLs                 #
+    # OPTION -s IS REQUIRED IF THE XML IS A SETUP_INCLUDE XML  #
     parser = argparse.ArgumentParser(prog='freconvert', 
                                      description="A Python script that converts \
                                                   a user's XML to the latest \
@@ -2151,18 +2151,22 @@ if __name__ == '__main__':
                         help='Destination path of converted XML')
     parser.add_argument('-s', '--setup', action='store_true', 
                         help='Specifies a setup_include XML')
-    parser.add_argument('-v', '--verbosity', action='store_true',
+    parser.add_argument('-v', '--verbose', action='store_true',
                         help='Increase output verbosity.')
     parser.add_argument('-q', '--quiet', action='store_true', 
                         help='Very little verbosity')
  
     args = parser.parse_args()
+    if args.verbose:
+        logging.basicConfig(level=logging.INFO)
+    elif args.quiet:
+        logging.basicConfig(level=logging.ERROR)
 
     if not os.path.exists(args.input_xml):
-        print("ERROR! The file path for the input XML does not exist")
+        logging.error("The file path for the input XML does not exist")
         sys.exit(1) 
     elif not args.input_xml.endswith('.xml'):
-        print("ERROR! Not a valid XML file (Bad extension)")
+        logging.error("Not a valid XML file (Bad extension)")
         sys.exit(1)
 
     input_xml = args.input_xml
@@ -2172,21 +2176,19 @@ if __name__ == '__main__':
         modified_input_path = os.path.abspath(input_xml).replace('.xml', '')
         file_dest = modified_input_path + '_' + newest_fre_version + '.xml'
     else:
-        pass
+        file_dest = os.path.abspath(input_xml)
     
     with open(input_xml, 'r') as f:
         input_content = f.read()
 
-    if args.verbose:
-        print("Pre-parsing XML...")
-        time.sleep(1) 
+    logging.info("XML is being pre-parsed...")
     pre_parsed_xml = write_parsable_xml(input_content)
     
     try:
         tree = ET.ElementTree(ET.fromstring(pre_parsed_xml))
     except ET.ParseError as e:
-        print("\nERROR: %s" % str(e).upper()) 
-        print("The XML is non-conforming! Please correct issues and re-run freconvert.py")
+        logging.exception("The XML is non-conforming! Please correct \
+issues and re-run freconvert.py")
         print("Writing out the pre-parsed file for debugging.")
         file_dest = file_dest.replace(newest_fre_version + '.xml', 'pre_parsed_error.xml')
 
@@ -2199,84 +2201,67 @@ if __name__ == '__main__':
     root = tree.getroot()
     
     old_version = do_properties(root)
-    if not args.quiet:
-        print("Converting XML from %s to %s..." % (old_version, newest_fre_version))
-        time.sleep(3)
+    print("Converting XML from %s to %s..." % (old_version, newest_fre_version))
+    time.sleep(1)
 
     if old_version == 'bronx-10':
-        if args.verbose:
-            print("Checking for land F90 <csh> block...")
-            time.sleep(1)
+        logging.info("Checking for land F90 <csh> block...")
         do_land_f90(root)
-        if args.verbose:
-            print("Checking for 'default' platforms (will be removed)...")
-            time.sleep(1) 
+
+        logging.info("Checking for 'default' platforms (will be removed)...")
         delete_default_platforms(root)
-        if args.verbose:
-            print("Adding <freVersion> tags...")
-            time.sleep(1)
+
+        logging.info("Adding <freVersion> tags...")
         add_fre_version_tag(root)
-        if args.verbose:
-            print("Checking for existence of 'compiler' tag in platforms")
-            time.sleep(1)
+
+        logging.info("Checking for existence of 'compiler' tag in platforms")
         add_compiler_tag(root)
-        if args.verbose:
-            print("Checking for sourceGrid attributes...")
-            time.sleep(1)
+
+        logging.info("Checking for sourceGrid attributes...")
         add_sourceGrid_attribute(root)
-        if args.verbose:
-            print("Adding resources tags...")
-            time.sleep(1)
+
+        logging.info("Adding resources tags...")
         do_resources_main(root)
-        if args.verbose:
-            print("Checking for metadata...")
-            time.sleep(1)
-        do_metadata_main(root)  
+
+        logging.info("Checking for metadata...")
+        do_metadata_main(root)
+
         xml_string = ET.tostring(root)
         xml_string = convert_xml_text(xml_string, prev_version=old_version)
         final_xml = write_final_xml(xml_string, args.setup)
 
     elif old_version == 'bronx-11':
-        if args.verbose:
-            print("Checking for 'default' platforms (will be removed)...")
-            time.sleep(1)
+        logging.info("Checking for 'default' platforms (will be removed)...")
         delete_default_platforms(root)
-        if args.verbose:
-            print("Checking for metadata. Updating tags if necessary...")
-            time.sleep(1)
+
+        logging.info("Checking for metadata. Updating tags if necessary...")
         do_metadata_main(root)
+
         xml_string = ET.tostring(root)
         xml_string = convert_xml_text(xml_string, prev_version=old_version)
         final_xml = write_final_xml(xml_string, args.setup)
 
-    # No need to parse XML with ElementTree if Bronx-12 or Bronx-13. Just do string replacements.
+    # Just do string replacements if input XML is Bronx-12, 13, or 14.
     elif old_version == 'bronx-12':
-        if args.verbose:
-            print("Linking paths to F2. Performing final XML manipulations...")
-            time.sleep(1)
+        logging.info("Linking paths to F2. Performing final XML manipulations...")
         final_xml = convert_xml_text(input_content, prev_version=old_version)
     
-    elif old_version == 'bronx-13':
-        if args.verbose:
-            print("Making Slurm compatible...")
-            time.sleep(1)
+    elif old_version == 'bronx-13' or old_version == 'bronx-14':
+        logging.info("Making Slurm compatible...")
         final_xml = convert_xml_text(input_content, prev_version=old_version)
     
     elif old_version == newest_fre_version:
-        if not args.quiet:
-            print("XML is already at the newest version (%s)" % newest_fre_version)
+        logging.warning("XML is already at the newest version (%s)" % newest_fre_version)
         sys.exit(1)
 
     else:
-        print("ERROR! This version of FRE (%s) isn't supported for conversion!" % old_version)
+        logging.error("This version of FRE (%s) isn't supported for conversion!" % old_version)
         sys.exit(1)
    
-    print("Writing new XML...")
-    time.sleep(1)
+    logging.info("Writing new XML...")
 
     with open(file_dest, 'w') as f:
         f.write(final_xml)
 
-    if not args.quiet:
-        print("Converted XML written to %s" % (file_dest))
+    print("Converted XML written to %s" % (file_dest))
 
