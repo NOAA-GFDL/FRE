@@ -2176,7 +2176,7 @@ if __name__ == '__main__':
         modified_input_path = os.path.abspath(input_xml).replace('.xml', '')
         file_dest = modified_input_path + '_' + newest_fre_version + '.xml'
     else:
-        file_dest = os.path.abspath(input_xml)
+        pass
     
     with open(input_xml, 'r') as f:
         input_content = f.read()
@@ -2263,5 +2263,5 @@ issues and re-run freconvert.py")
     with open(file_dest, 'w') as f:
         f.write(final_xml)
 
-    print("Converted XML written to %s" % (file_dest))
+    print("Converted XML written to %s" % (os.path.abspath(file_dest)))
 
