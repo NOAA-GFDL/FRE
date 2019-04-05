@@ -34,7 +34,7 @@ use vars qw( $analysisdir $absfrepp $relfrepp $perlerrors );
 use vars
     qw( $archivedir $rootdir $workdir $stdoutdir $tempCache $platform $freVersion $batchSubmit );
 use vars
-    qw( $maxyrs $maxdisk $cubic $nlat $nlon $interpMethod $getgridspec $basenpes $call_fregrid $fredb_timeout );
+    qw( $maxyrs $maxdisk $cubic $nlat $nlon $interpMethod $getgridspec $basenpes $call_fregrid );
 use vars
     qw( $checktransfer $statefile $state $writestate $didsomething $userstartyear $userstartmo $call_tile_fregrid );
 use vars qw( $mosaic_type $sourceGrid $xyInterp $xyInterpRegridFile );
@@ -268,7 +268,6 @@ EOF
     $maxyrs        = 0;
     $maxdisk       = 0;
     $do_static     = 1;
-    $fredb_timeout = 60;
     $historyfiles  = "";
     %dtvars        = ();
     $basenpes      = 1;
@@ -478,34 +477,17 @@ EOF
             "\nDIRECTORIES: FRE4\nworkdir $workdir\nrootdir $rootdir\narchivedir $archivedir\nanalysisdir $analysisdir\noutscriptdir $outscriptdir\naoutscriptdir $aoutscriptdir\nhistDir $histDir\nptmpDir $ptmpDir\nstatedir $statedir\n\n"
             if $opt_v;
 
-        # ingest the experiment into curator -- Maybe..
-        # Build our command line options for fredb
-        my ( $exper_id, $realiz_id, $run_id );
+        # Warn users if MDBIswtich is set and give directions on how to manually fredb experiment
         if ($mdbi) {
-            print
-                "\nChecking Curator for the experiment to capture the tripleID\nThis may take a moment if experiment is being ingested for the first time.\n\n";
             my $fredb = qx{which fredb};
             chomp($fredb);
             my $output;
             my @fredb_cmd = (
                 "-x", $abs_xml_path, "-t", $opt_T,   "-p", $opt_P,
-                "-d", "curator",     "-q", "cobweb", $expt
+                "-d", "curator", $expt
             );
-            eval {
-                local $SIG{ALRM} = sub { die "timeout\n" };
-                alarm $fredb_timeout;
-                $output = qx{$fredb @fredb_cmd};
-                alarm 0;
-            };
-            if ($@) {
-                print "\nCurator timeout detected, passing\n";
-            }
-            else {
-                ( $exper_id, $realiz_id, $run_id ) = parse_triple_id($output);
-                $fre->setCurrentExperID($exper_id);
-                $fre->setCurrentRealizID($realiz_id);
-                $fre->setCurrentRunID($run_id);
-            }
+            print
+                "\nWARNING: Frepp no longer automatically injests experiments into Curator.\nYou can do this manually by running $fredb @fredb_cmd\n\n";
         } ## end if ($mdbi)
         my $refinedir = "$opt_d" . "_refineDiag";
         $ptmpDir .= $archivedir;
@@ -787,10 +769,6 @@ EOF
         $cshscripttmpl =~ s/set platform/set platform = $opt_P/;
         $cshscripttmpl =~ s/set target/set target = $opt_T/;
         $cshscripttmpl =~ s/set segment_months/'set segment_months = ' . segmentLengthInMonths()/e;
-        $cshscripttmpl =~ s/set experID/set experID = $exper_id/;
-        $cshscripttmpl =~ s/set realizID/set realizID = $realiz_id/;
-        $cshscripttmpl =~ s/set runID/set runID = $run_id/;
-        $cshscripttmpl =~ s/set tripleID/set tripleID = $exper_id$realiz_id$run_id/;
 
         if ($opt_r) {    #if a regression test, no further postprocessing
             $cshscripttmpl =~ s/(#INFO:max_years=)/$1$maxyrs/;
@@ -1701,9 +1679,6 @@ EOF
                         scriptDir   => $aoutscriptdir,
                         workDir     => $workdir,
                         archDir     => $archivedir,
-                        experID     => $exper_id,
-                        realizID    => $realiz_id,
-                        runID       => $run_id,
                         opt_t       => $hDate,
                         opt_O       => $opt_O,
                         opt_Y       => $opt_Y,
@@ -1757,9 +1732,6 @@ EOF
                             scriptDir   => $aoutscriptdir,
                             workDir     => $workdir,
                             archDir     => $archivedir,
-                            experID     => $exper_id,
-                            realizID    => $realiz_id,
-                            runID       => $run_id,
                             opt_t       => $hDate,
                             opt_O       => $opt_O,
                             opt_Y       => $opt_Y,
@@ -1813,9 +1785,6 @@ EOF
                         scriptDir   => $aoutscriptdir,
                         workDir     => $workdir,
                         archDir     => $archivedir,
-                        experID     => $exper_id,
-                        realizID    => $realiz_id,
-                        runID       => $run_id,
                         opt_t       => $hDate,
                         opt_O       => $opt_O,
                         opt_Y       => $opt_Y,
@@ -1868,9 +1837,6 @@ EOF
                         scriptDir   => $aoutscriptdir,
                         workDir     => $workdir,
                         archDir     => $archivedir,
-                        experID     => $exper_id,
-                        realizID    => $realiz_id,
-                        runID       => $run_id,
                         opt_t       => $hDate,
                         opt_O       => $opt_O,
                         opt_Y       => $opt_Y,
@@ -1929,9 +1895,6 @@ EOF
                             scriptDir   => $aoutscriptdir,
                             workDir     => $workdir,
                             archDir     => $archivedir,
-                            experID     => $exper_id,
-                            realizID    => $realiz_id,
-                            runID       => $run_id,
                             opt_t       => $hDate,
                             opt_O       => $opt_O,
                             opt_Y       => $opt_Y,
@@ -1990,9 +1953,6 @@ EOF
                         scriptDir   => $aoutscriptdir,
                         workDir     => $workdir,
                         archDir     => $archivedir,
-                        experID     => $exper_id,
-                        realizID    => $realiz_id,
-                        runID       => $run_id,
                         opt_t       => $hDate,
                         opt_O       => $opt_O,
                         opt_Y       => $opt_Y,
@@ -2050,9 +2010,6 @@ EOF
                         scriptDir   => $aoutscriptdir,
                         workDir     => $workdir,
                         archDir     => $archivedir,
-                        experID     => $exper_id,
-                        realizID    => $realiz_id,
-                        runID       => $run_id,
                         opt_t       => $hDate,
                         opt_O       => $opt_O,
                         opt_Y       => $opt_Y,
@@ -2110,9 +2067,6 @@ EOF
                         scriptDir   => $aoutscriptdir,
                         workDir     => $workdir,
                         archDir     => $archivedir,
-                        experID     => $exper_id,
-                        realizID    => $realiz_id,
-                        runID       => $run_id,
                         opt_t       => $hDate,
                         opt_O       => $opt_O,
                         opt_Y       => $opt_Y,
@@ -2169,9 +2123,6 @@ EOF
                         scriptDir   => $aoutscriptdir,
                         workDir     => $workdir,
                         archDir     => $archivedir,
-                        experID     => $exper_id,
-                        realizID    => $realiz_id,
-                        runID       => $run_id,
                         opt_t       => $hDate,
                         opt_O       => $opt_O,
                         opt_Y       => $opt_Y,
@@ -7741,22 +7692,6 @@ foreach historyfile ( `ls \$historyyear????.nc.cpio \$historyyear????.nc.tar`)
    cd \$work/\$hsmdate
 EOF
 
-        if ($mdbi) {
-            $csh .= <<EOF;
-   #run the scalar diagnostics
-   source /home/fms/local/opt/fre-refinediag/verona/detvitals/detVitals.csh
-   set refineStatus = \$status
-   if ( \$refineStatus < 0 ) then
-      echo "NOTE: RefineDiag requested no scalar processing after scalarDiagnostics have completed"
-      set refineRequestsExit = 1
-   else if ( \$refineStatus ) then
-      echo "ERROR: scalar diagnostics had an error status \$refineStatus"
-      set refineError = 1
-   endif
-
-EOF
-        }
-
         my @refineScripts = split ',', $opt_D;
         foreach my $s (@refineScripts) {
             if ( !-e "$s" ) { die "ERROR: Your refineDiag script does not exist: $s\n"; }
@@ -8002,30 +7937,4 @@ EOF
         }
         return ( $segTime, $segUnits );
     }
-
-    sub parse_triple_id {
-        my $output = shift;
-        my ( $exper_id, $realiz_id, $run_id );
-
-        # If the experiment exists in the database then this first
-        # for loop will capture the tripleID identifiers
-        for my $line ( split( /\n/, $output ) ) {
-            $exper_id = $line
-                if $line =~ /^exper_id_/;
-            $realiz_id = $line
-                if $line =~ /^realiz_id_/;
-            $run_id = $line
-                if $line =~ /^run_id_/;
-        }
-
-        # If the identifiers weren't captured previously, then the
-        # output will be parsed for the format returned from fredb
-        # when an experiment is first ingested into the database
-        if ( not $exper_id and not $realiz_id and not $run_id ) {
-            ( $exper_id, $realiz_id, $run_id ) = $output =~ /\[(.*),\s+(.*),\s+(.*)\]/;
-        }
-        return $exper_id, $realiz_id, $run_id
-
-    } ## end sub parse_triple_id
-
 }
