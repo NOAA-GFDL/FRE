@@ -72,7 +72,6 @@ banner $FRE_JOBID
 #FRE const(freCommandsVersion)
 
 #FRE const(project)
-#FRE const(windfallFlagInit)
 
 #FRE const(platform)
 #FRE const(target)
@@ -95,8 +94,6 @@ banner $FRE_JOBID
 #FRE const(timeStampOptions)
 #FRE const(baseDate)
 #FRE const(mailMode)
-#FRE const(windfallOptionsSet)
-#FRE const(windfallOptionsUnset)
 #FRE const(includeDir)
 #FRE const(includeDirRemote)
 
@@ -452,9 +449,6 @@ set continueFlag = 1
 
 set submitOptionsProject = ( --account=$project )
 
-set windfallFlag = $windfallFlagInit
-set submitOptionsWindfall = ( )
-
 set combineList = ( )
 set saveJobIds = ( )
 set argFiles = ( )
@@ -517,7 +511,6 @@ if ( $?flagRunTypeProduction ) then
          echo "<NOTE> : Writing queue information to the queue file '$queue_file' at `date +%s`"
          if ( $echoOn ) set echo
          echo "set continueFlag = $continueFlag" >> $queue_file
-         echo "set windfallFlag = $windfallFlag" >> $queue_file
          chmod 644 $queue_file
       else
          if ( $echoOn ) unset echo
@@ -532,14 +525,6 @@ if ( $?flagRunTypeProduction ) then
       echo "<NOTE> : Stopping execution"
       if ( $echoOn ) set echo
       exit 0
-   endif
-
-   if ( $windfallFlag != $windfallFlagInit ) then
-      if ( $windfallFlag ) then
-         set submitOptionsWindfall = ( $windfallOptionsSet )
-      else
-         set submitOptionsWindfall = ( $windfallOptionsUnset )
-      endif
    endif
 endif
 
@@ -880,16 +865,6 @@ while ( $irun <= $segmentsPerJob && $currentSeg <= $segmentsPerSimulation )
          echo "<NOTE> : Stopping execution"
          if ( $echoOn ) set echo
          exit 0
-      endif
-
-      if ( $windfallFlag != $windfallFlagInit ) then
-         if ( $windfallFlag ) then
-            set submitOptionsWindfall = ( $windfallOptionsSet )
-         else
-            set submitOptionsWindfall = ( $windfallOptionsUnset )
-         endif
-      else
-         set submitOptionsWindfall = ( )
       endif
    endif
 
@@ -1981,19 +1956,9 @@ if ( $?flagRunTypeProduction ) then
          exit 0
       endif
 
-      if ( $windfallFlag != $windfallFlagInit ) then
-         if ( $windfallFlag ) then
-            set submitOptionsWindfall = ( $windfallOptionsSet )
-         else
-            set submitOptionsWindfall = ( $windfallOptionsUnset )
-         endif
-      else
-         set submitOptionsWindfall = ( )
-      endif
-
       if ( -f $scriptName ) then
          if ( -r $scriptName ) then
-            set nextOptions = ( $submitOptionsProject $submitOptionsWindfall )
+            set nextOptions = ( $submitOptionsProject )
             set result = `submit -O "$nextOptions" $scriptName`
             if ( $status == 0 ) then
                if ( $echoOn ) unset echo
