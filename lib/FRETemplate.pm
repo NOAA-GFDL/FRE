@@ -304,7 +304,8 @@ my $schedulerResources = sub($$$$$$$$$)
             partition => $fre->propertyParameterized( 'FRE.scheduler.option.partition', $partition ),
             qos      => $fre->propertyParameterized( 'FRE.scheduler.option.qos', $qos ),
             mail    => $fre->propertyParameterized( 'FRE.scheduler.option.mail', $mailMode ),
-            dual    => $dual
+            dual    => $dual,
+            envVars => $fre->propertyParameterized('FRE.scheduler.option.envVars'),
         );
 
         if ($n) {
