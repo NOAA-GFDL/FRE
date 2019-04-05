@@ -373,8 +373,9 @@ def write_parsable_xml(xml_string):
     #Fix Entity Doctypes (Opening tags)
     xml_string = xml_string.replace('<!ENTITY', '<entity>')
 
-    #Replace occasional special characters, such as \r
+    #Replace occasional special characters, such as \r and \b
     xml_string = xml_string.replace('\r', r'\r')
+    xml_string = xml_string.replace('\b', r'\b')
 
     #Add new-line character at end of XML to separate the final 'root' tag
     xml_string = xml_string + "\n</root>"
@@ -2144,7 +2145,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(prog='freconvert', 
                                      description="A Python script that converts \
                                                   a user's XML to the latest \
-                                                  FRE version (bronx-14)")
+                                                  FRE version (bronx-15)")
     parser.add_argument('-x', '--input_xml', required=True, type=str, 
                         help='Path of XML to be converted.')
     parser.add_argument('-o', '--output_xml', type=str, 
