@@ -1,6 +1,6 @@
-#FRE XML Conversion Tool - Summary and Usage
+# FRE XML Conversion Tool - Summary and Usage
 
-##Why Use this tool?
+## Why Use this tool?
 
 The purpose of this Python script is to facilitate the transition of 
 FRE XML documents into the latest version of Bronx. Two events        
@@ -24,7 +24,7 @@ created to ease the pain of converting XML's to a version that
 supports F2 and Slurm, particularly harder conversions such as from   
 Bronx-10.                                                             
 
-##How does this tool work?
+## How does this tool work?
 
 The core functionality of this script is parsing the original input   
 XML, modifying its elements, and writing out the newly converted file.
@@ -61,13 +61,13 @@ Non-conforming input XML's will cause the script to throw an error
 and write out the pre-parsed XML to a new file, which may be used     
 for identifying the cause of the non-conformance.                     
 
-##How to use this tool
+## How to use this tool
 
 This script can be run using Python 2.7 or Python 3 and is designed to
 be invoked on the command line interface. The user must specify a minimum
 of one argument (or 2 circumstantially), as noted below:
 
-###ARGUMENTS
+### ARGUMENTS
 
 -x    --input_xml    (required)
 -s    --setup        (required if using a setup_include XML)
@@ -75,7 +75,7 @@ of one argument (or 2 circumstantially), as noted below:
 -v    --verbose      (optional)
 -q    --quiet        (optional)
 
-###EXAMPLES
+### EXAMPLES
 
 Example 1: Bronx-10 XML (no verbosity)
 ```
