@@ -293,12 +293,13 @@ my $schedulerResources = sub($$$$$$$)
         my $partition =       $fre->property("FRE.scheduler.$j.partition");
         my $dual     = ($f) ? $fre->property('FRE.scheduler.dual.option') : undef;
         my $mailMode = $fre->mailMode();
+        my $qos      = $f ? $fre->property('FRE.scheduler.dual.qos') : $q;
 
         my %option = (
             time => $fre->propertyParameterized( 'FRE.scheduler.option.time', $t ),
             cluster => $fre->propertyParameterized( 'FRE.scheduler.option.cluster', $cluster ),
             partition => $fre->propertyParameterized( 'FRE.scheduler.option.partition', $partition ),
-            qos      => $fre->propertyParameterized( 'FRE.scheduler.option.qos', $q ),
+            qos      => $fre->propertyParameterized( 'FRE.scheduler.option.qos', $qos ),
             mail    => $fre->propertyParameterized( 'FRE.scheduler.option.mail', $mailMode ),
             dual    => $dual,
             envVars => $fre->propertyParameterized('FRE.scheduler.option.envVars'),
