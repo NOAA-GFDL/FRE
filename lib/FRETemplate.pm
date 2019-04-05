@@ -280,29 +280,25 @@ my $schedulerAccount = sub($)
 
 };
 
-my $schedulerResources = sub($$$$$$$$$)
+my $schedulerResources = sub($$$$$$$)
 
-    # ------ arguments: $fre $jobType $ncores $time $partition $queue $dualFlag $windfall $urgent
+    # ------ arguments: $fre $jobType $ncores $time $cluster $qos $dualFlag
 {
 
-    my ( $fre, $j, $n, $t, $p, $q, $f, $windfall, $urgent ) = @_;
+    my ( $fre, $j, $n, $t, $c, $q, $f ) = @_;
 
     if ( $fre->property('FRE.scheduler.enabled') ) {
 
-        my $cluster = $p || $fre->property("FRE.scheduler.$j.cluster");
-        my $partition = $q || $fre->property("FRE.scheduler.$j.partition");
-        my $dual = ($f) ? $fre->property('FRE.scheduler.dual.option') : undef;
-        my $qos = $f        ? $fre->property('FRE.scheduler.qos.windfall')
-                : $windfall ? $fre->property('FRE.scheduler.qos.windfall')
-                : $urgent   ? $fre->property('FRE.scheduler.qos.urgent')
-                :             $fre->property('FRE.scheduler.qos.default');
+        my $cluster =   $c || $fre->property("FRE.scheduler.$j.cluster");
+        my $partition =       $fre->property("FRE.scheduler.$j.partition");
+        my $dual     = ($f) ? $fre->property('FRE.scheduler.dual.option') : undef;
         my $mailMode = $fre->mailMode();
 
         my %option = (
             time => $fre->propertyParameterized( 'FRE.scheduler.option.time', $t ),
             cluster => $fre->propertyParameterized( 'FRE.scheduler.option.cluster', $cluster ),
             partition => $fre->propertyParameterized( 'FRE.scheduler.option.partition', $partition ),
-            qos      => $fre->propertyParameterized( 'FRE.scheduler.option.qos', $qos ),
+            qos      => $fre->propertyParameterized( 'FRE.scheduler.option.qos', $q ),
             mail    => $fre->propertyParameterized( 'FRE.scheduler.option.mail', $mailMode ),
             dual    => $dual,
             envVars => $fre->propertyParameterized('FRE.scheduler.option.envVars'),
@@ -607,19 +603,19 @@ sub schedulerAccountAsString($$)
 
 }
 
-sub setSchedulerResources($$$$$$$$$$)
+sub setSchedulerResources($$$$$$$$)
 
-    # ------ arguments: $fre $refToScript $jobType $ncores $time $partition $queue $dualFlag $windfall $urgent
+    # ------ arguments: $fre $refToScript $jobType $ncores $time $cluster $qos $dualFlag
 {
 
-    my ( $fre, $r, $j, $n, $t, $p, $q, $f, $windfall, $urgent ) = @_;
+    my ( $fre, $r, $j, $n, $t, $c, $q, $f ) = @_;
 
     my $prefix           = FRETemplate::PRAGMA_PREFIX;
     my $schedulerOptions = FRETemplate::PRAGMA_SCHEDULER_OPTIONS;
     my $placeholder      = qr/^[ \t]*$prefix[ \t]+$schedulerOptions[ \t]*$/mo;
 
     my $schedulerPrefix = $fre->property('FRE.scheduler.prefix');
-    my $h = $schedulerResources->( $fre, $j, $n, $t, $p, $q, $f, $windfall, $urgent );
+    my $h = $schedulerResources->( $fre, $j, $n, $t, $c, $q, $f );
 
     foreach my $key ( sort keys %{$h} ) {
         my $value = $h->{$key};
@@ -628,14 +624,14 @@ sub setSchedulerResources($$$$$$$$$$)
 
 }
 
-sub schedulerResourcesAsString($$$$$$$$$)
+sub schedulerResourcesAsString($$$$$$$)
 
-    # ------ arguments: $fre $jobType $ncores $time $partition $queue $dualFlag $windfall $urgent
+    # ------ arguments: $fre $jobType $ncores $time $cluster $qos $dualFlag
 {
 
-    my ( $fre, $j, $n, $t, $p, $q, $f, $windfall, $urgent ) = @_;
+    my ( $fre, $j, $n, $t, $c, $q, $f ) = @_;
 
-    my ( $h, @result ) = ( $schedulerResources->( $fre, $j, $n, $t, $p, $q, $f, $windfall, $urgent ), () );
+    my ( $h, @result ) = ( $schedulerResources->( $fre, $j, $n, $t, $c, $q, $f ), () );
 
     foreach my $key ( sort keys %{$h} ) {
         my $value = $h->{$key};
