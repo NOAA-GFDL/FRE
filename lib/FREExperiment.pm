@@ -2268,7 +2268,7 @@ sub addResourceRequestsToMpiInfo {
     $info->{ioLayoutList}    = [ map { $resources->{$_}->{io_layout} } @components ];
     $info->{maskTableList}   = [ map { $resources->{$_}->{mask_table} } @components ];
     $info->{ranksPerEnsList} = [ map { $resources->{$_}->{ranks} } @components ];
-    $info->{ht}              = $resources->{ht};
+    $info->{htList}          = [ map { $resources->{$_}->{ht} } @components ];
 }
 
 # Get resource info from <runtime>/.../<resources> tag
@@ -2422,22 +2422,21 @@ sub getResourceRequests($$) {
             "Hyperthreading was requested but isn't supported on this platform." );
     }
     elsif ($ht) {
-        my $ok = 1;
         for my $comp (@enabled_components) {
+            $data{$comp}{ht} = 0;
             next unless $data{$comp}{ranks};
             if ( !$data{$comp}{threads} ) {
                 $fre->out( FREMsg::WARNING,
-                    "Hyperthreading was requested but component $comp requested no threads." );
-                $ok = 0;
+                    "Won't use hyperthreading for component $comp as it requested no threads" );
             }
             elsif ( $data{$comp}{threads} == 1 ) {
                 $fre->out( FREMsg::WARNING,
-                    "Hyperthreading was requested but component $comp requested only 1 thread." );
-                $ok = 0;
+                    "Won't use hyperthreading for component $comp as it requested only 1 thread" );
             }
-        }
-        if ($ok) {
-            $data{ht} = 1;
+            else {
+                $fre->out( FREMsg::NOTE, "Will use hyperthreading for component $comp" );
+                $data{$comp}{ht} = 1;
+            }
         }
     } ## end elsif ($ht)
 
