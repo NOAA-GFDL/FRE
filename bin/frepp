@@ -34,6 +34,7 @@ use vars qw( $analysisdir $absfrepp $relfrepp $perlerrors );
 use vars
     qw( $archivedir $rootdir $workdir $stdoutdir $tempCache $platform $freVersion $batchSubmit );
 use vars
+    qw( $maxyrs $maxdisk $cubic $nlat $nlon $interpMethod $xyInterpOptions $getgridspec $basenpes $fredb_timeout );
     qw( $maxyrs $maxdisk $cubic $nlat $nlon $interpMethod $getgridspec $basenpes $call_fregrid );
 use vars
     qw( $checktransfer $statefile $state $writestate $didsomething $userstartyear $userstartmo $call_tile_fregrid );
@@ -1100,6 +1101,9 @@ foreach non_regrid_var ( $non_regrid_vars )
     endif
   end
 end
+if ( $interp_method != '' ) then
+  set attCmds = ( $attCmds -a interp_method,,d,, )
+endif
 set echo
 EOF
 
@@ -1213,14 +1217,14 @@ foreach f ( \$fregrid_in*.nc )
 EOF
         if ( $basenpes == 1 ) {
             my $exec_fregrid .= <<EOF;
-$time_fregrid \$FREGRID --standard_dimension --input_mosaic \$input_mosaic --input_file \$fregrid_in --interp_method \$interp_method --remap_file \$remap_file --nlon \$nlon --nlat \$nlat --scalar_field \$interpvars \$fregrid_wt --output_file out.nc
+$time_fregrid \$FREGRID --standard_dimension --input_mosaic \$input_mosaic --input_file \$fregrid_in --interp_method \$interp_method --remap_file \$remap_file --nlon \$nlon --nlat \$nlat --scalar_field \$interpvars \$fregrid_wt --output_file out.nc \$interp_options
 EOF
             $call_tile_fregrid .= $exec_fregrid;
             $call_fregrid      .= $exec_fregrid;
         }
         else {
             my $exec_fregrid .= <<EOF;
-$time_fregrid mpirun -np $basenpes fregrid_parallel --standard_dimension --input_mosaic \$input_mosaic --input_file \$fregrid_in --interp_method \$interp_method --remap_file \$remap_file --nlon \$nlon --nlat \$nlat --scalar_field \$interpvars \$fregrid_wt --output_file out.nc
+$time_fregrid mpirun -np $basenpes fregrid_parallel --standard_dimension --input_mosaic \$input_mosaic --input_file \$fregrid_in --interp_method \$interp_method --remap_file \$remap_file --nlon \$nlon --nlat \$nlat --scalar_field \$interpvars \$fregrid_wt --output_file out.nc \$interp_options
 EOF
             $call_tile_fregrid .= $exec_fregrid;
             $call_fregrid      .= $exec_fregrid;
@@ -1397,6 +1401,7 @@ EOF
             $sourceGrid   = '';
             $xyInterp     = '';
             $interpMethod = '';
+            $xyInterpOptions = '';
 
             #xyInterp
             my $sourceGridAtt = $ppcNode->findvalue('@sourceGrid');
@@ -1503,6 +1508,10 @@ EOF
                 die
                     "ERROR: Component $component requested incompatible cmip and zInterp options.\n";
             }
+
+            # if custom xyInterpOptions are requested, pass them to fregrid
+            $xyInterpOptions = $ppcNode->findvalue('@xyInterpOptions');
+            print STDERR "\nNOTE: Custom xyInterp options: '$xyInterpOptions'\n\n" if $xyInterpOptions;
 
             #get list of all diagnostic output files from source attributes, remove duplicates
             my @sourceatts = $ppcNode->findnodes('*/@source');
@@ -4694,6 +4703,7 @@ end
    set fregrid_in = $hDates[0]\${histmonth}01.$diag_source
    set nlat = $nlat ; set nlon = $nlon
    set interp_method = $interpMethod
+   set interp_options = "$xyInterpOptions"
    set ncvars_arg = -st0123
    set variables = ( $variables )
    set fregrid_remap_file = $xyInterpRegridFile
@@ -4816,6 +4826,7 @@ EOF
     set fregrid_in = "$component.$range.\$monthf"
     set nlat = $nlat ; set nlon = $nlon
     set interp_method = $interpMethod
+    set interp_options = "$xyInterpOptions"
     set ncvars_arg = -st0123
     set variables = ( $variables )
     set fregrid_remap_file = $xyInterpRegridFile
@@ -5004,6 +5015,7 @@ end
     set fregrid_in = $yr2do.$diag_source
     set nlat = $nlat ; set nlon = $nlon
     set interp_method = $interpMethod
+    set interp_options = "$xyInterpOptions"
     set ncvars_arg = -st0123
     set variables = ( $variables )
     set fregrid_remap_file = $xyInterpRegridFile
@@ -5117,6 +5129,7 @@ EOF
     set fregrid_in = annual
     set nlat = $nlat ; set nlon = $nlon
     set interp_method = $interpMethod
+    set interp_options = "$xyInterpOptions"
     set ncvars_arg = -st0123
     set variables = ( $variables )
     set fregrid_remap_file = $xyInterpRegridFile
@@ -5743,6 +5756,7 @@ EOF
     set fregrid_in = $hDate.$source
     set nlat = $nlat ; set nlon = $nlon
     set interp_method = $interpMethod
+    set interp_options = "$xyInterpOptions"
     set ncvars_arg = -st0123
     set variables = ( $variables )
     set fregrid_remap_file = $xyInterpRegridFile
@@ -5783,6 +5797,7 @@ EOF
     set fregrid_in = 'all'
     set nlat = $nlat ; set nlon = $nlon
     set interp_method = $interpMethod
+    set interp_options = "$xyInterpOptions"
     set ncvars_arg = -st23
     set variables = ( $variables )
     set fregrid_remap_file = $xyInterpRegridFile
@@ -5825,6 +5840,7 @@ EOF
     set fregrid_in = $hDate.$source
     set nlat = $nlat ; set nlon = $nlon
     set interp_method = $interpMethod
+    set interp_options = "$xyInterpOptions"
     set ncvars_arg = -st0123
     set variables = ( $variables )
     set fregrid_remap_file = $xyInterpRegridFile
@@ -5865,6 +5881,7 @@ EOF
     set fregrid_in = 'all'
     set nlat = $nlat ; set nlon = $nlon
     set interp_method = $interpMethod
+    set interp_options = "$xyInterpOptions"
     set ncvars_arg = -st23
     set variables = ( $variables )
     set fregrid_remap_file = $xyInterpRegridFile
@@ -6406,6 +6423,7 @@ EOF
      set fregrid_in = \$tfile:r:r
      set nlat = $nlat ; set nlon = $nlon
      set interp_method = $interpMethod
+     set interp_options = "$xyInterpOptions"
      set ncvars_arg = -s2
      set variables = ( )
      set fregrid_remap_file = $xyInterpRegridFile
@@ -6455,6 +6473,7 @@ EOF
            set fregrid_in = \$file:r
            set nlat = $nlat ; set nlon = $nlon
            set interp_method = $interpMethod
+           set interp_options = "$xyInterpOptions"
            set ncvars_arg = -s2
            set variables = ( )
            set fregrid_remap_file = $xyInterpRegridFile
@@ -7183,6 +7202,7 @@ EOF
     set fregrid_in = $component.$tSEASONf
     set nlat = $nlat ; set nlon = $nlon
     set interp_method = $interpMethod
+    set interp_options = "$xyInterpOptions"
     set ncvars_arg = -st23
     set variables = ( $variables )
     set fregrid_remap_file = $xyInterpRegridFile
@@ -7291,6 +7311,7 @@ end
     set fregrid_in = $component.$dates
     set nlat = $nlat ; set nlon = $nlon
     set interp_method = $interpMethod
+    set interp_options = "$xyInterpOptions"
     set ncvars_arg = -st0123
     set variables = ( $variables )
     set fregrid_remap_file = $xyInterpRegridFile
