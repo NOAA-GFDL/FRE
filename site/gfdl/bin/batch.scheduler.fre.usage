@@ -108,17 +108,15 @@ use Getopt::Long( ':config', 'no_ignore_case', 'no_auto_abbrev' );
         my @lines = split( /\n/, $lines );
         foreach my $line (@lines) {
             my @out = split( /,/, $line );
-            my ( $gid, $id, $name, $user ) = ( $out[0], $out[1], $out[2], $out[5] );
+            my ( $id, $name, $user ) = ( $out[0], $out[1], $out[4] );
             if ( $name ne 'STDIN' ) {
-                if ($gid) {
-                    if ( $gid =~ /^gfdl/ ) {
-                        my $checkCommand = "checkjob $gid -v -v -v";
-                        chomp( my $checkCommandOutput = qx($checkCommand) );
-                        if ( $? == 0 ) {
-                            my @checkCommandOutput = split( /\n/, $checkCommandOutput );
-                            if ( scalar(@checkCommandOutput) > 0 ) {
-                                my @freppEnvs
-                                    = grep( /FRE_COMMANDS_HOME_FREPP/, @checkCommandOutput );
+                if ($id) {
+                    my $batchQuery = "squeue -h -j $id -o %o";
+                    chomp( my $script = qx($batchQuery) );
+                    if ( $? == 0 ) {
+                        if (-f $script and -r _) {
+                            if (open my $fh, '<', $script) {
+                                my @freppEnvs = grep /FRE_COMMANDS_HOME_FREPP/, <$fh>;
                                 if ( scalar(@freppEnvs) > 0
                                     && $freppEnvs[0]
                                     =~ m/^\s*setenv\s+FRE_COMMANDS_HOME_FREPP\s+(\S+)$/ ) {
@@ -129,22 +127,21 @@ use Getopt::Long( ':config', 'no_ignore_case', 'no_auto_abbrev' );
                                 }
                             }
                             else {
-                                print STDERR
-                                    "The job '$gid' info from the Moab is empty - ignored...\n"
+                                print STDERR "Couldn't open the script '$script' for job '$id' - ignored\n"
                                     if $opt{verbose};
                             }
-                        } ## end if ( $? == 0 )
+                        }
                         else {
-                            print STDERR
-                                "Can't get the job '$gid' info from the Moab - ignored...\n"
+                            print STDERR "The script '$script' for the job '$id' isn't readable - ignored\n"
                                 if $opt{verbose};
                         }
-                    } ## end if ( $gid =~ /^gfdl/ )
+                    } ## end if ( $? == 0 )
                     else {
-                        print STDERR "The job '$gid' has a wrong prefix - ignored...\n"
+                        print STDERR
+                            "Can't get the job script from the batch scheduler - ignored...\n"
                             if $opt{verbose};
                     }
-                } ## end if ($gid)
+                }
                 else {
                     print STDERR
                         "The job global id is empty (it is probably starting now) - ignored...\n"

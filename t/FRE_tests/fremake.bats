@@ -67,7 +67,7 @@ setup() {
         ncrc? )
             platform="ncrc"
             root_stem="/lustre/f2/scratch"
-            submit_cmd="sleep 1; msub"
+            submit_cmd="sleep 1; sbatch"
             ;;
         theia )
             platform="theia"
@@ -134,7 +134,7 @@ setup() {
         ncrc? )
             platform="ncrc"
             root_stem="/lustre/f2/scratch"
-            submit_cmd="sleep 1; msub"
+            submit_cmd="sleep 1; sbatch"
             ;;
         theia )
             platform="theia"
@@ -188,7 +188,7 @@ setup() {
         ncrc? )
             platform="ncrc"
             root_stem="/lustre/f2/scratch"
-            submit_cmd="sleep 1; msub"
+            submit_cmd="sleep 1; sbatch"
             ;;
         theia )
             platform="theia"
@@ -232,7 +232,7 @@ setup() {
         ncrc? )
             platform="ncrc"
             root_stem="/lustre/f2/scratch"
-            submit_cmd="sleep 1; msub"
+            submit_cmd="sleep 1; sbatch"
             ;;
         theia )
             platform="theia"
@@ -276,7 +276,7 @@ setup() {
         ncrc? )
             platform="ncrc"
             root_stem="/lustre/f2/scratch"
-            submit_cmd="sleep 1; msub"
+            submit_cmd="sleep 1; sbatch"
             ;;
         theia )
             platform="theia"
@@ -322,7 +322,7 @@ ${last_line_good}"
         ncrc? )
             platform="ncrc"
             root_stem="/lustre/f2/scratch"
-            submit_cmd="sleep 1; msub"
+            submit_cmd="sleep 1; sbatch"
             ;;
         theia )
             platform="theia"
@@ -367,7 +367,7 @@ ${last_line_good}"
         ncrc? )
             platform="ncrc"
             root_stem="/lustre/f2/scratch"
-            submit_cmd="sleep 1; msub"
+            submit_cmd="sleep 1; sbatch"
             ;;
         theia )
             platform="theia"

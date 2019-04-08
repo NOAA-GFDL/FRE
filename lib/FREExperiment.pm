@@ -2268,7 +2268,7 @@ sub addResourceRequestsToMpiInfo {
     $info->{ioLayoutList}    = [ map { $resources->{$_}->{io_layout} } @components ];
     $info->{maskTableList}   = [ map { $resources->{$_}->{mask_table} } @components ];
     $info->{ranksPerEnsList} = [ map { $resources->{$_}->{ranks} } @components ];
-    $info->{ht}              = $resources->{ht};
+    $info->{ntdsResList}     = [ map { $resources->{$_}->{resource_threads} } @components ];
 }
 
 # Get resource info from <runtime>/.../<resources> tag
@@ -2357,7 +2357,7 @@ sub getResourceRequests($$) {
         next unless $data{$comp}{threads} and $data{$comp}{threads} > 1;
         if ( !FRETargets::containsOpenMP( $fre->target ) ) {
             $fre->out( FREMsg::WARNING,
-                "Component $comp has requested $data{$comp}{threads} threads but not using OpenMP"
+                "Component $comp has requested $data{$comp}{threads} threads but not using OpenMP; setting to 1"
             );
             $data{$comp}{threads} = 1;
         }
@@ -2417,33 +2417,27 @@ sub getResourceRequests($$) {
     $fre->out( FREMsg::NOTE, "Setting npes=$data{npes}" );
 
     # Apply hyperthreading if desired and possible
-    if ( $ht and !$fre->property('FRE.mpi.runCommand.option.ht') ) {
+    for my $comp (@enabled_components) {
+        $data{$comp}{resource_threads} = $data{$comp}{threads} if $data{$comp}{threads};
+    }
+    if ( $ht and !$fre->property('FRE.mpi.runCommand.hyperthreading.allowed') ) {
         $fre->out( FREMsg::WARNING,
             "Hyperthreading was requested but isn't supported on this platform." );
     }
     elsif ($ht) {
-        my $ok = 1;
         for my $comp (@enabled_components) {
             next unless $data{$comp}{ranks};
             if ( !$data{$comp}{threads} ) {
                 $fre->out( FREMsg::WARNING,
-                    "Hyperthreading was requested but component $comp requested no threads." );
-                $ok = 0;
+                    "Won't use hyperthreading for component $comp as it requested no threads" );
             }
             elsif ( $data{$comp}{threads} == 1 ) {
                 $fre->out( FREMsg::WARNING,
-                    "Hyperthreading was requested but component $comp requested only 1 thread." );
-                $ok = 0;
+                    "Won't use hyperthreading for component $comp as it requested only 1 thread" );
             }
-        }
-        if ($ok) {
-            $data{ht} = 1;
-            for my $comp (@enabled_components) {
-                if ( $data{$comp}{ranks} ) {
-                    $fre->out( FREMsg::NOTE,
-                        "Using hyperthreading on component $comp -- will set threads to "
-                            . 2 * $data{$comp}{threads} );
-                }
+            else {
+                $data{$comp}{resource_threads} = POSIX::ceil( $data{$comp}{threads} / 2 );
+                $fre->out( FREMsg::NOTE, "Will use hyperthreading ($data{$comp}{resource_threads} physical threads) for component $comp" );
             }
         }
     } ## end elsif ($ht)

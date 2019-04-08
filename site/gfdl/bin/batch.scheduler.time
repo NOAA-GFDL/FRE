@@ -15,7 +15,6 @@ use strict;
 
 use File::Basename();
 use Getopt::Long( ':config', 'no_ignore_case', 'no_auto_abbrev' );
-use XML::LibXML();
 
 {
 
@@ -31,6 +30,7 @@ use XML::LibXML();
     use constant RETRIES_NUMBER => 60;
     use constant RETRY_DELAY    => 60;
 
+    use constant SECONDS_PER_DAY    => 86400;
     use constant SECONDS_PER_HOUR   => 3600;
     use constant SECONDS_PER_MINUTE => 60;
 
@@ -71,12 +71,33 @@ use XML::LibXML();
         # ------ arguments: $time
     {
         my $t = shift;
-        if ( $t =~ m/^(\d?\d):(\d?\d):(\d?\d)$/ ) {
-            return $1 * SECONDS_PER_HOUR + $2 * SECONDS_PER_MINUTE + $3;
+        # time format example output returned by Slurm:
+        # > 100 days    101-23:59:39
+        # > 10 days     10-23:59:52
+        # > day         2-11:27:03
+        # < day         9:59:13
+        # < hour        59:55
+        # < minute      0:55
+
+        my ($days, $hours, $minutes, $seconds) = (0, 0, 0, 0);
+        my @pieces = split /[-:]/, $t;
+        if (@pieces == 4) {
+            ($days, $hours, $minutes, $seconds) = @pieces;
+        }
+        elsif (@pieces == 3) {
+            ($hours, $minutes, $seconds) = @pieces;
+        }
+        elsif (@pieces == 2) {
+            ($minutes, $seconds) = @pieces;
         }
         else {
             return $t;
         }
+
+        return $days      * SECONDS_PER_DAY
+               + $hours   * SECONDS_PER_HOUR
+               + $minutes * SECONDS_PER_MINUTE
+               + $seconds;
     }
 
 }
@@ -86,6 +107,8 @@ use XML::LibXML();
 # //////////////////////////////////////////////////////////////////////////////
 
 {
+    # return if being imported (for testing)
+    return 1 unless $0 eq __FILE__;
 
     my %opt = (
         'total-time'     => 1,
@@ -100,42 +123,31 @@ use XML::LibXML();
 
     if ( scalar(@ARGV) == 1 ) {
         my $jobId        = $ARGV[0];
-        my $checkJobCall = "checkjob --xml $jobId";
-        my $parser       = XML::LibXML->new();
+        my $checkJobCall = $opt{'remaining-time'}
+                         ? "squeue -h -j $jobId -o %L"
+                         : "squeue -h -j $jobId -o %l";
         my $retry        = 0;
         while (1) {
             print STDERR "$checkJobCall\n" if $opt{verbose};
             chomp( my $res = qx($checkJobCall) );
             if ( $? == 0 ) {
                 print STDERR "$res\n" if $opt{verbose} > 1;
-                my $root = $parser->parse_string($res)->documentElement();
-                if ( my @jobs = $root->findnodes('/Data/job') ) {
-                    my $job = $jobs[0];
-                    my $totalTime
-                        = batch_scheduler_time::Seconds( $job->getAttribute('ReqAWDuration') );
-                    if ( $opt{'remaining-time'} ) {
-                        my $usedTime
-                            = batch_scheduler_time::Seconds( $job->getAttribute('AWDuration') );
-                        print $totalTime - $usedTime, "\n";
-                        exit 0;
-                    }
-                    else {
-                        print "$totalTime\n";
-                        exit 0;
-                    }
+                if ( $res ) {
+                    print batch_scheduler_time::Seconds( $res ), "\n";
+                    exit 0;
                 }
                 else {
-                    print STDERR "Unexpected information format\n";
+                    print STDERR "Job information from tool is unexpectedly empty\n";
                     exit 1;
                 }
             } ## end if ( $? == 0 )
             elsif ( $retry < $opt{'retries-number'} ) {
-                print STDERR "Retrying checkjob ($retry)...\n";
+                print STDERR "Retrying batch system query ($retry)...\n";
                 sleep $opt{'retry-delay'};
                 $retry++;
             }
             else {
-                print STDERR "No more checkjob retries\n";
+                print STDERR "No more retries\n";
                 exit 1;
             }
         } ## end while (1)

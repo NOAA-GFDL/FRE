@@ -22,10 +22,12 @@ use Getopt::Long( ':config', 'no_ignore_case', 'no_auto_abbrev' );
     use constant VERSION =>
         '$Id: batch.scheduler.fre.usage,v 1.1.2.6 2012/10/24 18:14:02 afy Exp $';
 
-    use constant OPTLIST => ( 'help|h', 'partition|P=s', 'verbose|v', 'version|V' );
+    use constant OPTLIST => ( 'help|h', 'partition|P=s', 'state|s=s', 'verbose|v', 'version|V' );
 
-    use constant PARTITIONS => ( 'c1:c2:c3', 'c1', 'c2', 'c3', 't1' );
-    use constant PARTITION_DEFAULT => 'c1:c2:c3';
+    use constant PARTITIONS => ( 'c3:c4', 'c3', 'c4' );
+    use constant PARTITION_DEFAULT => 'c3:c4';
+
+    use constant VALID_STATES => ( 'running', 'waiting' );
 
     my $self = File::Basename::basename($0);
 
@@ -40,6 +42,8 @@ use Getopt::Long( ':config', 'no_ignore_case', 'no_auto_abbrev' );
             "  Options:\n\n",
             "   -h,        --help                 print the help message and exit\n",
             "   -P STRING, --partition=STRING     report usage in the partition STRING (default is '$par')\n",
+            "   -s,        --state=STRING         check job in states.  Comma separated list, only \"running\"\n",
+            "                                     and \"waiting\" are valid states.  (default is \"running\")\n",
             "   -V,        --version              print the tool version and exit\n",
             "   -v         --verbose              increase verbosity\n\n"
         );
@@ -78,7 +82,7 @@ use Getopt::Long( ':config', 'no_ignore_case', 'no_auto_abbrev' );
         foreach my $version ( sort( keys( %{$r} ) ) ) {
             my @versionUsage = ();
             my %versionUsers = %{ $r->{$version} };
-            foreach my $versionUser ( keys(%versionUsers) ) {
+            foreach my $versionUser ( sort(keys(%versionUsers)) ) {
                 push @versionUsage, "$versionUser($versionUsers{$versionUser})";
             }
             my $versionUsage = join( ', ', @versionUsage );
@@ -86,6 +90,16 @@ use Getopt::Long( ':config', 'no_ignore_case', 'no_auto_abbrev' );
         }
     }
 
+    # Return valid states from the state string passed in.
+    sub get_valid_job_states($)
+
+            # ------ arguments: $string
+
+    {
+      my $inStates = lc shift;
+      # Return the intersection of VALID_STATES with the state list passed in
+      return map {my $b = $_; grep { $_ eq $b } split(',',$inStates) } batch_scheduler_fre_usage::VALID_STATES;
+    }
 }
 
 # //////////////////////////////////////////////////////////////////////////////
@@ -93,8 +107,9 @@ use Getopt::Long( ':config', 'no_ignore_case', 'no_auto_abbrev' );
 # //////////////////////////////////////////////////////////////////////////////
 
 {
-
-    my %opt = ( partition => batch_scheduler_fre_usage::PARTITION_DEFAULT );
+    # Default partition and job states to check for reporting
+    my %opt = ( partition => batch_scheduler_fre_usage::PARTITION_DEFAULT,
+                state => 'running' );
 
     Getopt::Long::GetOptions( \%opt, batch_scheduler_fre_usage::OPTLIST )
         or ( print STDERR batch_scheduler_fre_usage::Usage() and exit 1 );
@@ -114,9 +129,16 @@ use Getopt::Long( ':config', 'no_ignore_case', 'no_auto_abbrev' );
         exit 1;
     }
 
+    # Check if states passed in are valid
+    my @checkStates = batch_scheduler_fre_usage::get_valid_job_states($opt{state});
+    if (scalar(@checkStates) == 0) {
+      print STDERR "The states requested \"$opt{states}\" is not valid.  Expected at";
+      print STDERR "least one of \"" . join(", ", batch_scheduler_fre_usage::VALID_STATES) . "\".\n";
+    }
+
     my ( $binDir, $lines, $status ) = ( File::Basename::dirname($0), '', 0 );
     foreach my $partition ( split( /:/, $opt{partition} ) ) {
-        my $listCommand = "$binDir/batch.scheduler.list --partition=$partition --running";
+        my $listCommand = "$binDir/batch.scheduler.list --partition=$partition";
         $listCommand .= " --verbose" if $opt{verbose};
         $lines .= qx($listCommand);
         $status += $?;
@@ -128,8 +150,8 @@ use Getopt::Long( ':config', 'no_ignore_case', 'no_auto_abbrev' );
         my @lines = split( /\n/, $lines );
         foreach my $line (@lines) {
             my @out = split( /,/, $line );
-            my ( $gid, $id, $name, $user ) = ( $out[0], $out[1], $out[2], $out[5] );
-            if ( $name ne 'STDIN' ) {
+            my ( $gid, $id, $name, $state, $user ) = ( $out[0], $out[1], $out[2], $out[3], $out[5] );
+            if ( $name ne 'STDIN' && grep(/$state/,@checkStates) ) {
                 if ($gid) {
                     if ( $gid =~ /^gaea/ )    # any gaea site is OK
                     {

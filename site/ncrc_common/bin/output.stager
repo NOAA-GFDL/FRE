@@ -19,10 +19,11 @@ unalias *
 
 # ---------------- define constants depending on the run type
 
-if ( $?PBS_ENVIRONMENT ) then
-   if ( $PBS_ENVIRONMENT == 'PBS_BATCH' ) then
-      set -r jobName = $PBS_JOBNAME:t.o`echo $PBS_JOBID | sed -r 's/^([0-9]+).*$/\1/'`
-      set -r stdoutDir = $PBS_O_WORKDIR
+if ( $?SLURM_JOB_ID ) then
+   tty -s
+   if ($status) then
+      set -r jobName = $SLURM_JOB_NAME:t.o$SLURM_JOB_ID
+      set -r stdoutDir = $SLURM_SUBMIT_DIR
       set -r batch
    endif
 endif
@@ -765,13 +766,17 @@ else
    goto END
 endif
 
-if ( $freCommandsToLoad ) then
+if ( $freCommandsToLoad || $hsmToLoad || $xferToolToLoad ) then
    if ( -d $freCommandsModuleFilesDir && -r $freCommandsModuleFilesDir ) then
       set freCommandsModuleFile = $freCommandsModuleFilesDir/fre/$freCommandsVersion
       if ( -f $freCommandsModuleFile && -r $freCommandsModuleFile ) then
          module use $freCommandsModuleFilesDir
          module unload fre
          module load fre/$freCommandsVersion
+
+         set -r xferSrcPrefix = ""
+         set -r xferDstPrefix = "gfdl:"
+         alias gcp `which gcp`
       else
          if ( $echoOn ) unset echo
          echo "*ERROR*: The 'fre' modulefile '$freCommandsModuleFile' doesn't exist or not readable"
@@ -783,57 +788,6 @@ if ( $freCommandsToLoad ) then
    else
       if ( $echoOn ) unset echo
       echo "*ERROR*: The 'fre' modulefiles directory '$freCommandsModuleFilesDir' doesn't exist or not readable"
-      if ( $echoOn ) set echo
-      set exitStatus = 2
-      goto END
-   endif
-endif
-
-if ( $hsmToLoad ) then
-   if ( -d $hsmModuleFilesDir && -r $hsmModuleFilesDir ) then
-      set hsmModuleFile = $hsmModuleFilesDir/hsm/$hsmVersion
-      if ( -f $hsmModuleFile && -r $hsmModuleFile ) then
-         module use $hsmModuleFilesDir
-         module unload hsm
-         module load hsm/$hsmVersion
-      else
-         if ( $echoOn ) unset echo
-         echo "*ERROR*: The 'hsm' modulefile '$hsmModuleFile' doesn't exist or not readable"
-         if ( $echoOn ) set echo
-         set exitStatus = 2
-         goto END
-      endif
-      unset hsmModuleFile
-   else
-      if ( $echoOn ) unset echo
-      echo "*ERROR*: The 'hsm' modulefiles directory '$hsmModuleFilesDir' doesn't exist or not readable"
-      if ( $echoOn ) set echo
-      set exitStatus = 2
-      goto END
-   endif
-endif
-
-if ( $xferToolToLoad ) then
-   if ( -d $xferToolModuleFilesDir && -r $xferToolModuleFilesDir ) then
-      set xferToolModuleFile = $xferToolModuleFilesDir/gcp/$xferToolVersion
-      if ( -f $xferToolModuleFile && -r $xferToolModuleFile ) then
-         module use $xferToolModuleFilesDir
-         module unload gcp
-         module load gcp/$xferToolVersion
-         set -r xferSrcPrefix = ""
-         set -r xferDstPrefix = "gfdl:"
-         alias gcp `which gcp`
-      else
-         if ( $echoOn ) unset echo
-         echo "*ERROR*: The 'gcp' modulefile '$xferToolModuleFile' doesn't exist or not readable"
-         if ( $echoOn ) set echo
-         set exitStatus = 2
-         goto END
-      endif
-      unset xferToolModuleFile
-   else
-      if ( $echoOn ) unset echo
-      echo "*ERROR*: The 'gcp' modulefiles directory '$xferToolModuleFilesDir' doesn't exist or not readable"
       if ( $echoOn ) set echo
       set exitStatus = 2
       goto END
@@ -1707,7 +1661,9 @@ if ( $actionPPStartToConsider ) then
          endif
 
          set ppStarter = $FRE_COMMANDS_HOME/site/gfdl/bin/pp.starter
-         set ppStarterResult = `submit -O "$ppStarterOptions -v mppnccombineOptString='$mppnccombineOptString' -d $stdoutDirRemotePP -o $stdoutDirRemotePP/" $ppStarter`
+         # mppnccombineOptString is always set; need to combine it with the other --export variables
+         set ppStarterOptionsCombined = `echo $ppStarterOptions | sed "s/--export=/--export=mppnccombineOptString='$mppnccombineOptString',/"`
+         set ppStarterResult = `submit -O "$ppStarterOptionsCombined --chdir=$stdoutDirRemotePP --output=$stdoutDirRemotePP/%x.o%j" $ppStarter`
 
          if ( $status == 0 ) then
             if ( $echoOn ) unset echo
@@ -1751,7 +1707,7 @@ endif
 if ( ( $actionXferOn && ! $actionXferOk ) || ( $actionPPStartOn && ! $actionPPStartOk ) ) then
    if ( $stagingType == 'Chained' ) then
       set outputStager = `which output.stager`
-      set outputStagerResult = `submit -O "$xferOptions -v argFile=$argFile" $outputStager`
+      set outputStagerResult = `submit -O "$xferOptions --export=argFile=$argFile" $outputStager`
 
       if ( $status == 0 ) then
          if ( $echoOn ) unset echo
