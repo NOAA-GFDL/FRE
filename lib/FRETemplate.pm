@@ -126,12 +126,12 @@ my %FRETemplatePragmaCsh = (
 # ///////////////////////////////////////////////////////////////// Utilities //
 # //////////////////////////////////////////////////////////////////////////////
 
-my $schedulerSize = sub($$$$$$)
+my $schedulerSize = sub($$$$$$$)
 
-    # ------ arguments: $fre $jobType $couplerFlag $npes $refNPes $refNTds
+    # ------ arguments: $fre $jobType $couplerFlag $npes $refNPes $refNTds $refNTdsRes
 {
 
-    my ( $fre, $j, $cf, $np, $rp, $rt ) = @_;
+    my ( $fre, $j, $cf, $np, $rp, $rt, $rtr ) = @_;
     my $coresPerJobInc = $fre->property("FRE.scheduler.$j.coresPerJob.inc") || 1;
     my $coresPerJobMax = $fre->property("FRE.scheduler.$j.coresPerJob.max") || &POSIX::INT_MAX;
 
@@ -193,7 +193,6 @@ my $schedulerSize = sub($$$$$$)
         my ( $np, $nt ) = @_;
 
         if ( $np > 0 ) {
-
             # $procsM :: How may MPI processes we can have per node when using $nt threads
             # $nodesM :: How many nodes are needed for all MPI processes
             my $procsM = POSIX::floor( $coresPerJobInc / $nt );
@@ -236,14 +235,14 @@ my $schedulerSize = sub($$$$$$)
         my %option = ();
         if ( $fre->property("FRE.scheduler.option.size.$j.distributed") ) {
             my @nodeSpec
-                = ($cf) ? $coresDistributedList->( $rp, $rt ) : $coresDistributed->( $np, 1 );
+                = ($cf) ? $coresDistributedList->( $rp, $rtr ) : $coresDistributed->( $np, 1 );
             my $nodeSpecSize = scalar(@nodeSpec);
             $option{size}
                 = $fre->propertyParameterized( "FRE.scheduler.option.size.$j.$nodeSpecSize",
                 @nodeSpec );
         }
         else {
-            my $size = ($cf) ? $coresAggregatedList->( $rp, $rt ) : $coresAggregated->( $np, 1 );
+            my $size = ($cf) ? $coresAggregatedList->( $rp, $rtr ) : $coresAggregated->( $np, 1 );
             $option{size} = $fre->propertyParameterized( "FRE.scheduler.option.size.$j", $size );
         }
         return \%option;
@@ -527,19 +526,19 @@ sub setList($$$@)
     }
 }
 
-sub setSchedulerSize($$$$$$$)
+sub setSchedulerSize($$$$$$$$)
 
-    # ------ arguments: $fre $refToScript $jobType $couplerFlag $npes $refNPes $refNTds
+    # ------ arguments: $fre $refToScript $jobType $couplerFlag $npes $refNPes $refNTds refNTdsRes
 {
 
-    my ( $fre, $r, $j, $cf, $np, $rp, $rt ) = @_;
+    my ( $fre, $r, $j, $cf, $np, $rp, $rt, $rtr ) = @_;
 
     my $prefix           = FRETemplate::PRAGMA_PREFIX;
     my $schedulerOptions = FRETemplate::PRAGMA_SCHEDULER_OPTIONS;
     my $placeholder      = qr/^[ \t]*$prefix[ \t]+$schedulerOptions[ \t]*$/mo;
 
     my $schedulerPrefix = $fre->property('FRE.scheduler.prefix');
-    my $h = $schedulerSize->( $fre, $j, $cf, $np, $rp, $rt );
+    my $h = $schedulerSize->( $fre, $j, $cf, $np, $rp, $rt, $rtr );
 
     foreach my $key ( sort keys %{$h} ) {
         my $value = $h->{$key};
@@ -548,13 +547,13 @@ sub setSchedulerSize($$$$$$$)
 
 }
 
-sub schedulerSizeAsString($$$$$$)
+sub schedulerSizeAsString($$$$$$$)
 
-    # ------ arguments: $fre $jobType $couplerFlag $npes $refNPes $refNTds
+    # ------ arguments: $fre $jobType $couplerFlag $npes $refNPes $refNTds $refNTdsRes
 {
 
-    my ( $fre, $j, $cf, $np, $rp, $rt ) = @_;
-    my ( $h, @result ) = ( $schedulerSize->( $fre, $j, $cf, $np, $rp, $rt ), () );
+    my ( $fre, $j, $cf, $np, $rp, $rt, $rtr ) = @_;
+    my ( $h, @result ) = ( $schedulerSize->( $fre, $j, $cf, $np, $rp, $rt, $rtr ), () );
 
     foreach my $key ( sort keys %{$h} ) {
         my $value = $h->{$key};
@@ -756,9 +755,9 @@ sub setRunCommand($$$)
 {
 
     my ( $fre, $r, $mpiInfo ) = @_;
-    my ( $cf, $np, $rp, $rt, $layout, $io_layout, $mask_table, $ranks_per_ens )
+    my ( $cf, $np, $rp, $rt, $layout, $io_layout, $mask_table, $ranks_per_ens, $rt_res )
         = @{$mpiInfo}
-        { qw( coupler npes npesList ntdsList layoutList ioLayoutList maskTableList ranksPerEnsList )
+        { qw( coupler npes npesList ntdsList layoutList ioLayoutList maskTableList ranksPerEnsList ntdsResList )
         };
 
     my $prefix         = FRETemplate::PRAGMA_PREFIX;
@@ -772,20 +771,18 @@ sub setRunCommand($$$)
     my @components = split( ';', $fre->property('FRE.mpi.component.names') );
     my ( $runCommand, $runSizeInfo ) = ( $runCommandLauncher, "  set -r npes = $np\n" );
 
-    my $ht = $mpiInfo->{ht} ? '.true.' : '.false.';
-    $runSizeInfo .= "  set -r ht = $ht\n";
-
     foreach my $inx ( 0 .. $#components ) {
         my $component = $components[$inx];
         $runSizeInfo .= "  set -r ${component}_ranks = $ranks_per_ens->[$inx]\n";
         $runSizeInfo .= "  set -r tot_${component}_ranks = $rp->[$inx]\n";
-        $runSizeInfo .= "  set -r scheduler_${component}_threads = $rt->[$inx]\n" if $rt->[$inx];
-        # double the threads passed to the namelists if hyperthreading is used
-        $rt->[$inx] *= 2 if $rp->[$inx] and $mpiInfo->{ht};
         $runSizeInfo .= "  set -r ${component}_threads = $rt->[$inx]\n";
         $runSizeInfo .= "  set -r ${component}_layout = $layout->[$inx]\n";
         $runSizeInfo .= "  set -r ${component}_io_layout = $io_layout->[$inx]\n";
         $runSizeInfo .= "  set -r ${component}_mask_table = $mask_table->[$inx]\n";
+        # handle hyperthreading
+        my $ht_flag = ($rt_res->[$inx] < $rt->[$inx]) ? '.true.' : '.false.';
+        $runSizeInfo .= "  set -r ${component}_ht = $ht_flag\n";
+        $runSizeInfo .= "  set -r scheduler_${component}_threads = $rt_res->[$inx]\n";
     }
 
     if ($cf) {
