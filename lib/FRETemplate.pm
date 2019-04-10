@@ -781,7 +781,7 @@ sub setRunCommand($$$)
         $runSizeInfo .= "  set -r ${component}_mask_table = $mask_table->[$inx]\n";
         # handle hyperthreading
         my $ht_flag = ($rt_res->[$inx] < $rt->[$inx]) ? '.true.' : '.false.';
-        $runSizeInfo .= "  set -r ${component}_ht = $ht_flag\n";
+        $runSizeInfo .= "  set -r ${component}_hyperthread = $ht_flag\n";
         $runSizeInfo .= "  set -r scheduler_${component}_threads = $rt_res->[$inx]\n";
     }
 

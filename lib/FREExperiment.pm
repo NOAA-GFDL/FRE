@@ -2052,13 +2052,13 @@ sub extractRegressionLabels($$)
     }
 } ## end sub extractRegressionLabels($$)
 
-sub extractRegressionRunInfo($$$)
+sub extractRegressionRunInfo($$)
 
-    # ------ arguments: $object $label hyperthreading
+    # ------ arguments: $object $label
     # ------ called as object method
     # ------ return a reference to the regression run info
 {
-    my ( $r, $l, $ht ) = @_;
+    my ( $r, $l ) = @_;
     my ( $fre, $expName ) = ( $r->fre(), $r->name() );
     if ( my $nmls = $r->extractNamelists() ) {
         if ( my $regNode = $regressionRunNode->( $r, $l ) ) {
@@ -2066,7 +2066,7 @@ sub extractRegressionRunInfo($$$)
             if ( scalar(@runNodes) > 0 ) {
                 my ( $ok, %runs ) = ( 1, () );
                 for ( my $i = 0; $i < scalar(@runNodes); $i++ ) {
-                    my $resources = $r->getResourceRequests( $ht, $nmls, $runNodes[$i] ) or return;
+                    my $resources = $r->getResourceRequests( $nmls, $runNodes[$i] ) or return;
                     my $msl = $r->nodeValue( $runNodes[$i], '@months' );
                     my $dsl = $r->nodeValue( $runNodes[$i], '@days' );
                     my $hsl = $r->nodeValue( $runNodes[$i], '@hours' );
@@ -2147,17 +2147,17 @@ sub extractRegressionRunInfo($$$)
     }
 } ## end sub extractRegressionRunInfo($$$)
 
-sub extractProductionRunInfo($$)
+sub extractProductionRunInfo($)
 
-    # ------ arguments: $object hyperthreading
+    # ------ arguments: $object
     # ------ called as object method
     # ------ return a reference to the production run info
 {
-    my ( $r, $ht ) = @_;
+    my ( $r ) = @_;
     my ( $fre, $expName ) = ( $r->fre(), $r->name() );
     if ( my $nmls = $r->extractNamelists() ) {
         if ( my $prdNode = $productionRunNode->($r) ) {
-            my $resources = $r->getResourceRequests( $ht, $nmls ) or return;
+            my $resources = $r->getResourceRequests( $nmls ) or return;
             my $mpiInfo = $MPISizeParameters->( $r, $resources, $nmls->copy );
             addResourceRequestsToMpiInfo( $fre, $resources, $mpiInfo );
 
@@ -2272,19 +2272,19 @@ sub addResourceRequestsToMpiInfo {
 }
 
 # Get resource info from <runtime>/.../<resources> tag
-# and decides whether hyperthreading will be used if --ht option is present
-# ------ arguments: $exp hyperthreading namelists           -- for production
-# ------ arguments: $exp hyperthreading namelists $run_node -- for regression
+# and decides whether hyperthreading will be used
+# ------ arguments: $exp namelists           -- for production
+# ------ arguments: $exp namelists $run_node -- for regression
 # ------ returns: hashref containing resource specs or undef on failure
 sub getResourceRequests($$) {
-    my ( $exp, $ht, $namelists, $regression_run_node ) = @_;
+    my ( $exp, $namelists, $regression_run_node ) = @_;
     my $fre                = $exp->fre;
     my $site               = $fre->platformSite;
     my @components         = split( ';', $fre->property('FRE.mpi.component.names') );
     my @enabled            = split( ';', $fre->property('FRE.mpi.component.enabled') );
     my @enabled_components = map { $components[$_] } grep { $enabled[$_] } 0 .. $#enabled;
     my $concurrent         = $namelists->namelistBooleanGet( 'coupler_nml', 'concurrent' );
-    my @types              = (qw( ranks threads layout io_layout mask_table ));
+    my @types              = (qw( ranks threads hyperthread layout io_layout mask_table ));
     my %data;
     my $node;
 
@@ -2420,14 +2420,17 @@ sub getResourceRequests($$) {
     for my $comp (@enabled_components) {
         $data{$comp}{resource_threads} = $data{$comp}{threads} if $data{$comp}{threads};
     }
-    if ( $ht and !$fre->property('FRE.mpi.runCommand.hyperthreading.allowed') ) {
-        $fre->out( FREMsg::WARNING,
-            "Hyperthreading was requested but isn't supported on this platform." );
-    }
-    elsif ($ht) {
-        for my $comp (@enabled_components) {
-            next unless $data{$comp}{ranks};
-            if ( !$data{$comp}{threads} ) {
+    for my $comp (@enabled_components) {
+        if ($data{$comp}{hyperthread} && $data{$comp}{hyperthread} =~ /yes|true|on/i) {
+            if ( !$fre->property('FRE.mpi.runCommand.hyperthreading.allowed') ) {
+                $fre->out( FREMsg::WARNING,
+                    "Hyperthreading was requested but isn't supported on this platform." );
+            }
+            elsif (! $data{$comp}{ranks}) {
+                $fre->out( FREMsg::NOTE,
+                    "Won't use hyperthreading for component $comp as it requests no ranks." );
+            }
+            elsif ( !$data{$comp}{threads} ) {
                 $fre->out( FREMsg::WARNING,
                     "Won't use hyperthreading for component $comp as it requested no threads" );
             }
@@ -2440,7 +2443,7 @@ sub getResourceRequests($$) {
                 $fre->out( FREMsg::NOTE, "Will use hyperthreading ($data{$comp}{resource_threads} physical threads) for component $comp" );
             }
         }
-    } ## end elsif ($ht)
+    }
 
     return \%data;
 } ## end sub getResourceRequests($$)
