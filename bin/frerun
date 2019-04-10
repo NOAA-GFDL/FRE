@@ -371,7 +371,6 @@ use FREUtil();
             "   -w NUM,    --walltime=NUM              maximum wall time (in minutes) to use for input data staging (default depends on site)\n",
             "   -x FILE,   --xmlfile=FILE              experiment suite XML configuration FILE (default is '$cwd/$xml')\n",
             "              --cluster=STRING            cluster STRING to use for model runs\n",
-            "              --ht                        enable hyperthreading (off by default)\n\n",
             "  The platform and at least one experiment from the FILE must be listed as an argument.\n\n"
         );
     } ## end sub Usage
@@ -1622,7 +1621,7 @@ use FREUtil();
                 frerun::setAllShellCommands( \$runScript, $z );
                 FRETemplate::setVersionInfo( $fre, \$runScript, $0, $expName, %o );
                 FRETemplate::setSchedulerAccount( $fre, \$runScript );
-                if ( my $regInfo = $z->extractRegressionRunInfo( $l, $o{ht} ) ) {
+                if ( my $regInfo = $z->extractRegressionRunInfo( $l  ) ) {
                     my @runNos = keys %{$regInfo};
                     my ( $ok, $runsNmb ) = ( 1, scalar(@runNos) );
                     foreach my $runNo ( sort @runNos ) {
@@ -1736,7 +1735,7 @@ use FREUtil();
                 frerun::setAllShellCommands( \$runScript, $z );
                 FRETemplate::setVersionInfo( $fre, \$runScript, $0, $expName, %o );
                 FRETemplate::setSchedulerAccount( $fre, \$runScript );
-                if ( my $prdInfo = $z->extractProductionRunInfo( $o{ht} ) ) {
+                if ( my $prdInfo = $z->extractProductionRunInfo() ) {
                     ( $runScript, my $extension, $status )
                         = frerun::setProductionDirectories( $runScript, $z, %o );
                     if ($runScript) {
@@ -1952,10 +1951,54 @@ use FREUtil();
         delete $opt{dual};
     }
 
-    if ( $opt{ht} and ( !$opt{target} or $opt{target} !~ /openmp/ ) ) {
-        FREMsg::out( $opt{verbose}, FREMsg::WARNING,
-            "Option --ht must be used with openmp; the --ht option is ignored" );
-        delete $opt{ht};
+    if ( $opt{ht} ) {
+        FREMsg::out( $opt{verbose}, FREMsg::FATAL, <<EOF
+Option --ht has been removed. Hyperthreading is now specified in the <resources> tag,
+with the other resource specifications, as hyperthread="yes|true|on"; e.g.
+
+<resources jobWallclock="00:30:00">
+    <atm ranks="30" threads="2" hyperthread="on"  layout="1,30" io_layout="1,3"/>
+    <ocn ranks="30" threads="1" hyperthread="off" layout="1,30" io_layout="1,3"/>
+    <lnd                                          layout="1,30" io_layout="1,3"/>
+    <ice                                          layout="1,30" io_layout="1,3"/>
+</resources>
+
+For the above example, these shell variables will be set:
+
+set -r npes = 60
+set -r atm_ranks = 30
+set -r atm_threads = 2
+set -r atm_layout = 1,30
+set -r atm_io_layout = 1,3
+set -r atm_mask_table =
+set -r atm_hyperthread = .true.
+set -r ocn_ranks = 30
+set -r ocn_threads = 1
+set -r ocn_layout = 1,30
+set -r ocn_io_layout = 1,3
+set -r ocn_mask_table =
+set -r ocn_hyperthread = .false.
+set -r lnd_ranks =
+set -r lnd_threads =
+set -r lnd_layout = 1,30
+set -r lnd_io_layout = 1,3
+set -r lnd_mask_table =
+set -r lnd_hyperthread = .false.
+set -r ice_ranks =
+set -r ice_threads =
+set -r ice_layout = 1,30
+set -r ice_io_layout = 1,3
+set -r ice_mask_table =
+set -r ice_hyperthread = .false.
+
+If omitted, the default is off. Additionally, the behavior of hyperthreading
+has changed since Bronx-(11-14); previously hyperthreading requested the same number of nodes
+while doubling the threads passed to the namelists. To be more explicit,
+now hyperthreading does NOT double the threads passed to the namelists,
+and instead requests half (rounded up) of the cores corresponding to the physical threads.
+EOF
+        );
+        exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
     }
 
     my $fre = FRE->new( 'frerun', %opt ) or exit FREDefaults::STATUS_FRE_GENERIC_PROBLEM;
