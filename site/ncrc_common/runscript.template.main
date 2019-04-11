@@ -89,6 +89,7 @@ banner $FRE_JOBID
 #FRE const(timeStampOptions)
 #FRE const(baseDate)
 #FRE const(mailMode)
+#FRE const(mailList)
 #FRE const(includeDir)
 #FRE const(includeDirRemote)
 
@@ -269,7 +270,7 @@ set -r archExt = 'tar'
 
 # ---------------- batch scheduler output staging options
 
-set -r submitOptionsCommon = ( --mail-type=$mailMode )
+set -r submitOptionsCommon = ( --mail-type=$mailMode --mail-user=$mailList )
 set -r submitOptionsOutputStagerSave = ( $submitOptionsCommon --chdir=$stdoutDir --output=$stdoutDir/%x.o%j --clusters=$outputStagerSaveCluster --partition=$outputStagerSavePartition )
 set -r submitOptionsOutputStagerXfer = ( $submitOptionsCommon --chdir=$stdoutDir --output=$stdoutDir/%x.o%j --clusters=$outputStagerXferCluster --partition=$outputStagerXferPartition )
 set -r submitOptionsWorkDirCleaner =   ( $submitOptionsCommon --chdir=$stdoutDir --output=$stdoutDir/%x.o%j --partition=$workDirCleanerPartition )
@@ -992,7 +993,7 @@ while ( $irun <= $segmentsPerJob && $currentSeg <= $segmentsPerSimulation )
 
       if ( $?batch ) then
          if ( $echoOn ) unset echo
-         printf "$msg" | mailx -s "The MPI launcher has failed" $USER@noaa.gov
+         printf "$msg" | mailx -s "The MPI launcher has failed" $mailList
          printf "$msg"
          if ( $echoOn ) set echo
       endif
@@ -1148,7 +1149,7 @@ while ( $irun <= $segmentsPerJob && $currentSeg <= $segmentsPerSimulation )
             set msg = "${msg}*WARNING*: use the following command:\n\n"
             set msg = "${msg}*WARNING*: $outputStager $asciiArgFile\n"
             if ( $?batch ) then
-               printf "$msg" | mailx -s "Can't process ascii directory '$asciiArchDir'" $USER@noaa.gov
+               printf "$msg" | mailx -s "Can't process ascii directory '$asciiArchDir'" $mailList
             endif
             printf "$msg"
             if ( $echoOn ) set echo
@@ -1177,7 +1178,7 @@ while ( $irun <= $segmentsPerJob && $currentSeg <= $segmentsPerSimulation )
                set msg = "${msg}*WARNING*: use the following command:\n\n"
                set msg = "${msg}*WARNING*: $outputStager $asciiArgFile\n"
                if ( $?batch ) then
-                  printf "$msg" | mailx -s "Can't submit the output stager job to process the '$asciiArchDir' (saving)" $USER@noaa.gov
+                  printf "$msg" | mailx -s "Can't submit the output stager job to process the '$asciiArchDir' (saving)" $mailList
                endif
                printf "$msg"
                if ( $echoOn ) set echo
@@ -1202,7 +1203,7 @@ while ( $irun <= $segmentsPerJob && $currentSeg <= $segmentsPerSimulation )
                set msg = "${msg}*WARNING*: use the following command:\n\n"
                set msg = "${msg}*WARNING*: $outputStager $asciiArgFile\n"
                if ( $?batch ) then
-                  printf "$msg" | mailx -s "Can't submit the output stager job to process the '$asciiArchDir' (transfer)" $USER@noaa.gov
+                  printf "$msg" | mailx -s "Can't submit the output stager job to process the '$asciiArchDir' (transfer)" $mailList
                endif
                printf "$msg"
                if ( $echoOn ) set echo
@@ -1229,7 +1230,7 @@ while ( $irun <= $segmentsPerJob && $currentSeg <= $segmentsPerSimulation )
                set msg = "${msg}*WARNING*: use the following command:\n\n"
                set msg = "${msg}*WARNING*: $outputStager $asciiArgFile\n"
                if ( $?batch ) then
-                  printf "$msg" | mailx -s "Can't submit the output stager job to process the '$asciiArchDir'" $USER@noaa.gov
+                  printf "$msg" | mailx -s "Can't submit the output stager job to process the '$asciiArchDir'" $mailList
                endif
                printf "$msg"
                if ( $echoOn ) set echo
@@ -1317,7 +1318,7 @@ while ( $irun <= $segmentsPerJob && $currentSeg <= $segmentsPerSimulation )
                   set msg = "${msg}*ERROR*: $workDir\n\n"
                   set msg = "${msg}*ERROR*: To continue the model, you will need to recover the restart files manually.\n"
                   if ( $?batch ) then
-                     printf "$msg" | mailx -s "Can't save the restart directory '$restartArchDir'\n" $USER@noaa.gov
+                     printf "$msg" | mailx -s "Can't save the restart directory '$restartArchDir'\n" $mailList
                   endif
                   printf "$msg"
                   set restartSaveFailure = 1
@@ -1429,7 +1430,7 @@ while ( $irun <= $segmentsPerJob && $currentSeg <= $segmentsPerSimulation )
             set msg = "${msg}*WARNING*: use the following command:\n\n"
             set msg = "${msg}*WARNING*: $outputStager $restartArgFile\n"
             if ( $?batch ) then
-               printf "$msg" | mailx -s "Can't save the restart directory '$restartArchDir'\n" $USER@noaa.gov
+               printf "$msg" | mailx -s "Can't save the restart directory '$restartArchDir'\n" $mailList
             endif
             printf "$msg"
             if ( $echoOn ) set echo
@@ -1458,7 +1459,7 @@ while ( $irun <= $segmentsPerJob && $currentSeg <= $segmentsPerSimulation )
                set msg = "${msg}*WARNING*: use the following command:\n\n"
                set msg = "${msg}*WARNING*: $outputStager $restartArgFile\n"
                if ( $?batch ) then
-                  printf "$msg" | mailx -s "Can't submit the output stager job to process the '$restartArchDir' (saving)" $USER@noaa.gov
+                  printf "$msg" | mailx -s "Can't submit the output stager job to process the '$restartArchDir' (saving)" $mailList
                endif
                printf "$msg"
                if ( $echoOn ) set echo
@@ -1483,7 +1484,7 @@ while ( $irun <= $segmentsPerJob && $currentSeg <= $segmentsPerSimulation )
                set msg = "${msg}*WARNING*: use the following command:\n\n"
                set msg = "${msg}*WARNING*: $outputStager $restartArgFile\n"
                if ( $?batch ) then
-                  printf "$msg" | mailx -s "Can't submit the output stager job to process the '$restartArchDir' (transfer)" $USER@noaa.gov
+                  printf "$msg" | mailx -s "Can't submit the output stager job to process the '$restartArchDir' (transfer)" $mailList
                endif
                printf "$msg"
                if ( $echoOn ) set echo
@@ -1510,7 +1511,7 @@ while ( $irun <= $segmentsPerJob && $currentSeg <= $segmentsPerSimulation )
                set msg = "${msg}*WARNING*: use the following command:\n\n"
                set msg = "${msg}*WARNING*: $outputStager $restartArgFile\n"
                if ( $?batch ) then
-                  printf "$msg" | mailx -s "Can't submit the output stager job to process the '$restartArchDir'" $USER@noaa.gov
+                  printf "$msg" | mailx -s "Can't submit the output stager job to process the '$restartArchDir'" $mailList
                endif
                printf "$msg"
                if ( $echoOn ) set echo
@@ -1748,7 +1749,7 @@ while ( $irun <= $segmentsPerJob && $currentSeg <= $segmentsPerSimulation )
             set msg = "${msg}*WARNING*: use the following command:\n\n"
             set msg = "${msg}*WARNING*: $outputStager $historyArgFile\n"
             if ( $?batch ) then
-               printf "$msg" | mailx -s "Can't process the history directory '$historyArchDir'" $USER@noaa.gov
+               printf "$msg" | mailx -s "Can't process the history directory '$historyArchDir'" $mailList
             endif
             printf "$msg"
             if ( $echoOn ) set echo
@@ -1777,7 +1778,7 @@ while ( $irun <= $segmentsPerJob && $currentSeg <= $segmentsPerSimulation )
                set msg = "${msg}*WARNING*: use the following command:\n\n"
                set msg = "${msg}*WARNING*: $outputStager $historyArgFile\n"
                if ( $?batch ) then
-                  printf "$msg" | mailx -s "Can't submit the output stager job to process the '$historyArchDir' (saving)" $USER@noaa.gov
+                  printf "$msg" | mailx -s "Can't submit the output stager job to process the '$historyArchDir' (saving)" $mailList
                endif
                printf "$msg"
                if ( $echoOn ) set echo
@@ -1802,7 +1803,7 @@ while ( $irun <= $segmentsPerJob && $currentSeg <= $segmentsPerSimulation )
                set msg = "${msg}*WARNING*: use the following command:\n\n"
                set msg = "${msg}*WARNING*: $outputStager $historyArgFile\n"
                if ( $?batch ) then
-                  printf "$msg" | mailx -s "Can't submit the output stager job to process the '$historyArchDir' (transfer)" $USER@noaa.gov
+                  printf "$msg" | mailx -s "Can't submit the output stager job to process the '$historyArchDir' (transfer)" $mailList
                endif
                printf "$msg"
                if ( $echoOn ) set echo
@@ -1829,7 +1830,7 @@ while ( $irun <= $segmentsPerJob && $currentSeg <= $segmentsPerSimulation )
                set msg = "${msg}*WARNING*: use the following command:\n\n"
                set msg = "${msg}*WARNING*: $outputStager $historyArgFile\n"
                if ( $?batch ) then
-                  printf "$msg" | mailx -s "Can't submit the output stager job to process the '$historyArchDir'" $USER@noaa.gov
+                  printf "$msg" | mailx -s "Can't submit the output stager job to process the '$historyArchDir'" $mailList
                endif
                printf "$msg"
                if ( $echoOn ) set echo
