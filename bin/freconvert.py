@@ -9,12 +9,13 @@ FRE XML documents into the latest version of Bronx. Two events        |
 preceded the need for this tool.                                      |
                                                                       |
 1. On March 12, 2019, Gaea's F1 file system was officially rendered   |
-obsolete, designated as read-only, and scheduled for removal in       |
-April, 2019. It was replaced by the F2 file system.                   |
+obsolete, designated as read-only, and scheduled for unmounting on    |
+May 1, 2019. It was replaced by the F2 file system.                   |
                                                                       |
 2. It was decided that the MOAB batch scheduler would be discontinued |
-and be replaced by the Slurm scheduler. That transition is expected to|
-be completed by May, 2019.                                            |
+and be replaced by the Slurm scheduler on C3 and C4. The transition   |
+date for Slurm on C3 is April 15, 2019. The transition date for Slurm |
+on C4 is May 13, 2019.                                                |
                                                                       |
 Many components of FRE had explicitly referenced F1 file locations or |
 the MOAB scheduler, prompting the decision to push a new FRE upgrade  |
@@ -278,7 +279,6 @@ def fix_special_strings(regex_str, xml_string, char_to_replace, replacement):
 
     """
     regex_matches = re.findall(regex_str, xml_string, re.DOTALL)
-
     for match in regex_matches:        
         xml_string = re.sub(re.escape(match), 
                             re.sub(char_to_replace, replacement, match), 
@@ -329,6 +329,16 @@ def write_parsable_xml(xml_string):
     usually hidden within the comment and CDATA blocks), but which are
     temporarily exposed as text elements of regular XML tags.
 
+    On occasion, the backslash character must also be escaped, as its
+    usage may produce unexpected results.
+
+    Finally, the <description> tag is essentially a free-text element
+    within a FRE XML that may contain a sequence of characters that
+    would normally have to be pre-parsed, but in this case, isn't 
+    necessary. The strings '-->', ']>', and ']]>' would normally be 
+    temporarily converted via the string translation above, but this
+    case is an exception.
+
     PARAMETERS (1)
     --------------
     xml_string (required): input XML in string format
@@ -338,6 +348,7 @@ def write_parsable_xml(xml_string):
     A new XML string that is ready to be parsed by ElementTree
 
     """ 
+    xml_string = xml_string.replace('\\', 'BACKSLASH')
     xml_string = xml_string.replace('cubicToLatLon', 'xyInterp')  
     xml_string = xml_string.replace('<root>', '<xml_root>')
     xml_string = xml_string.replace('</root>', '</xml_root>')
@@ -360,6 +371,15 @@ def write_parsable_xml(xml_string):
     comment_regex = r'<xml_comment>(.*?)</xml_comment>'
     cdata_regex = r'<cdata>(.*?)</cdata>'
     entity_regex = r'<!ENTITY.*?>'
+    description_regex = r'<description>(.*?)</description>'
+
+    description_exceptions = {'</xml_comment>': '-->', '</cdata>': ']]&gt;', 
+                              '</doctype>': ']>'}
+
+    #Fix pre-parser exceptions that may be present in description text elements
+    for initial, replacement in description_exceptions.items():
+        xml_string = fix_special_strings(description_regex, xml_string,
+                                         initial, replacement)
 
     #Fix CDATA
     xml_string = fix_special_strings(cdata_regex, xml_string, '<', '&lt;')
@@ -372,10 +392,6 @@ def write_parsable_xml(xml_string):
     
     #Fix Entity Doctypes (Opening tags)
     xml_string = xml_string.replace('<!ENTITY', '<entity>')
-
-    #Replace occasional special characters, such as \r and \b
-    xml_string = xml_string.replace('\r', r'\r')
-    xml_string = xml_string.replace('\b', r'\b')
 
     #Add new-line character at end of XML to separate the final 'root' tag
     xml_string = xml_string + "\n</root>"
@@ -2064,11 +2080,13 @@ def write_final_xml(xml_string, setup_include=False):
     Parse a modified XML string back into regular form
 
     Basically the reverse of the write_parsable_xml function. 
-    Translates comments and CDATA tags back into their original form. 
+    Translates comments and CDATA tags back into their original form.
+    Restores native backslash characters.
     Restores '&lt;' back into '<' symbols.
-    Restores DOCTYPE and ENTITY strings
-    Fixes namespace renaming that ElementTree does by default
-    Remove extra <root> tags that ElementTree creates by default
+    Restores particular '&gt;' back into '>' symbols.
+    Restores DOCTYPE and ENTITY strings.
+    Fixes namespace renaming that ElementTree does by default.
+    Remove extra <root> tags that ElementTree creates by default.
     Perform other cleanups.
 
     PARAMETERS (2)
@@ -2082,39 +2100,42 @@ def write_final_xml(xml_string, setup_include=False):
     xml_string: The final XML string to be written out
 
     """
+    # Parse back the backslashes, '<', and '>' symbols
+    xml_string = xml_string.replace('BACKSLASH', '\\')
     xml_string = xml_string.replace('&lt;', '<')
+    xml_string = xml_string.replace('&gt;', '>')
  
-    #1. Parse <xml_comment> and </xml_comment> back to <!-- and --> respectively
+    # Parse <xml_comment> and </xml_comment> back to <!-- and --> respectively
     xml_string = xml_string.replace('<xml_comment>', '<!--')
     xml_string = xml_string.replace('</xml_comment>', '-->')
  
-    #2. Parse <cdata> and </cdata> back to <![CDATA[ and ]]> respectively.
+    # Parse <cdata> and </cdata> back to <![CDATA[ and ]]> respectively.
     xml_string = xml_string.replace('<cdata>', '<![CDATA[')
     xml_string = xml_string.replace('</cdata>', ']]>')
 
-    #3. Parse <doctype> and </doctype> back to '<!DOCTYPE' and ']>' respectively
+    # Parse <doctype> and </doctype> back to '<!DOCTYPE' and ']>' respectively
     xml_string = xml_string.replace('<doctype>', '<!DOCTYPE')
     xml_string = xml_string.replace('</doctype>', ']>')
 
-    #4. Parse <entity> and </entity> back to '<!ENTITY' and '>' respectively
+    # Parse <entity> and </entity> back to '<!ENTITY' and '>' respectively
     xml_string = xml_string.replace('<entity>', '<!ENTITY')
     xml_string = xml_string.replace('</entity>', '>')
 
-    #3. Restore any escaped chars from pre-XML parsing
+    # Restore any escaped chars from pre-XML parsing
     xml_string = xml_string.replace('&amp;', '&')
     xml_string = xml_string.replace('&gt;', '>')
 
-    #4. Remove <root> tags (restore first <root> with <?xml_version?> tag
+    # Remove <root> tags (restore first <root> with <?xml_version?> tag
     xml_string = re.sub('<root.*', '<?xml version="1.0"?>', xml_string)
     xml_string = xml_string.replace('</root>', '') 
    
     xml_string = xml_string.replace('<xml_root>', '<root>')
     xml_string = xml_string.replace('</xml_root>', '</root>')
 
-    #5. Remove instances of 'ns0:'; replace with 'xi:'
+    # Remove instances of 'ns0:'; replace with 'xi:'
     xml_string = xml_string.replace('<ns0:', '<xi:')
     
-    #6. Restore attribute xml:ns for the <experimentSuite> tag or <setup> tag
+    # Restore attribute xml:ns for the <experimentSuite> tag or <setup> tag
     if setup_include:
         ns_line = re.search('<setup.*(?=\>)', xml_string).group()
     else:
@@ -2123,11 +2144,11 @@ def write_final_xml(xml_string, setup_include=False):
     ns_att = ' xmlns:xi="http://www.w3.org/2001/XInclude"'
     xml_string = xml_string.replace(ns_line, ns_line + ns_att)
 
-    #7. Remove two whitespace characters before closing </publicMetadata> tag
+    # Remove two whitespace characters before closing </publicMetadata> tag
     xml_string = xml_string.replace('      </publicMetadata>',
                                     '    </publicMetadata>')
 
-    #8. Get rid of extra space between end tag slash.
+    # Get rid of extra space between end tag slash.
     xml_string = xml_string.replace(' />', '/>')
 
     return xml_string 
