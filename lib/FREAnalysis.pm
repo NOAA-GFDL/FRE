@@ -838,7 +838,28 @@ sub filltemplate {
             "       Check that all variables are set. The fre-analysis module may need to be loaded.\n";
         exit 1;
     }
-    my $tmpsch            = `cat $aScript`;
+
+    # convert MOAB headers
+    my $tmpcsh;
+    if (system "grep '#SBATCH' $aScript") {
+        print STDERR <<EOF;
+
+NOTICE: Analysis script $aScript
+NOTICE: doesn't have Slurm headers, so it be will be passed through
+NOTICE: the converter utility 'convert-moab-headers', then submitted to Slurm.
+NOTICE: However, please convert this script's MOAB headers to Slurm
+NOTICE: as soon as convenient. For help adding Slurm headers,
+NOTICE: try 'convert-moab-headers old_script > new_script',
+NOTICE: and refer to the Moab-to-Slurm wiki:
+NOTICE: http://wiki.gfdl.noaa.gov/index.php/Moab-to-Slurm_Conversion
+
+EOF
+        $tmpsch = `convert-moab-headers $aScript`;
+    }
+    else {
+        $tmpsch = `cat $aScript`;
+    }
+
     my $fremodule         = `echo \$LOADEDMODULES | tr ':' '\n' | egrep '^fre/.+'`;
     my $freanalysismodule = `echo \$LOADEDMODULES | tr ':' '\n' | egrep '^fre-analysis/.+'`;
 
@@ -985,18 +1006,6 @@ sub filltemplate {
             $tmpsch =~ s/set nlat_$ii\s*$/set nlat_$ii = $arrayofExptsH_ref->[$i]->{nlat}/m;
         } ## end for my $i ( 1 .. $iExpt)
     } ## end if ( $iExpt >= 1 )
-
-    if (! grep /#SBATCH/, $tmpsch) {
-        print STDERR <<EOF
-
-WARNING: MOAB will be turned off in June 2019!
-WARNING: Analysis script $aScript
-         doesn't have Slurm headers, so it be will be submitted to MOAB.
-WARNING: This analysis script will stop working once MOAB is turned off in June 2019.
-WARNING: For help adding Slurm headers, please see the Moab-to-Slurm wiki:
-         http://wiki.gfdl.noaa.gov/index.php/Moab-to-Slurm_Conversion\n\n
-EOF
-    }
 
     writescript( $tmpsch, $mode, $aScriptout, $aargu, $opt_s );
 } ## end sub filltemplate
