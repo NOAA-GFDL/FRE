@@ -304,6 +304,10 @@ my $schedulerResources = sub($$$$$$$)
             envVars => $fre->propertyParameterized('FRE.scheduler.option.envVars'),
         );
 
+        if ($fre->{mailList}) {
+            $option{mailList} = $fre->propertyParameterized('FRE.scheduler.option.mailList', $fre->{mailList});
+        }
+
         if ($n) {
             my $coresPerJobInc = $fre->property("FRE.scheduler.$j.coresPerJob.inc") || 1;
             my $coresPerJobMax = $fre->property("FRE.scheduler.$j.coresPerJob.max")
