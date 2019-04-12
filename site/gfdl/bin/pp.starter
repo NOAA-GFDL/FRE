@@ -126,6 +126,19 @@
       set -r mppnccombineOptString = "$mppnccombineOptsDefault"
     endif
 
+    if ( $?mailList ) then
+      if ( $echoOn ) unset echo
+      echo "<NOTE> : mailList = '$mailList'"
+      if ( $echoOn ) set echo
+      set -r mailList = $mailList
+      set -r mailListOption = "--mail-list=$mailList"
+    else
+      if ( $echoOn ) unset echo
+      echo "<NOTE> : The argument 'mailList' is not defined, so it won't be passed to frepp"
+      if ( $echoOn ) set echo
+      set -r mailListOption =
+    endif
+
   else if ( $# > 0 ) then
 
     alias getopt `which getopt` --shell=tcsh --unquote
@@ -257,7 +270,7 @@
   if ( ! $echoOn ) set echo
 
   # The -D '' is required for compatability with older fre-commands/bronx versions
-  pp -D '' -x $xmlFile -P $platform -T $target -d $dir -t $firstDate $expName
+  pp -D '' -x $xmlFile -P $platform -T $target -d $dir -t $firstDate $mailListOption $expName
 
   if ( $status == 0 ) then
     if ( $echoOn ) unset echo
