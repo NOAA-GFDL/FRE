@@ -1,0 +1,57 @@
+#!/usr/bin/env python3
+
+import os
+import math
+
+class SysMem:
+  def __init__(self):
+      self.mem = self.__getNodeMem()
+
+  def __getNodeMem(self) -> int:
+      """Get the amount memory availalbe to the process in Megabytes.  If
+      run under the control of a batch scheduler (currently only Slurm),
+      the command will returen the amount of memory allocated to the job."""
+      mem_mb = 0
+      # First, check if under the control of a batch scheduler
+      if os.getenv("SLURM_JOB_ID") is not None:
+          mem_mb = self.__getSlurmMem()
+      else:
+          # Get the free memory from the system
+          mem_mb = self.__getSysMem()
+      return mem_mb
+
+  def __getSlurmMem(self) -> int:
+      """Return the memory available in Kilobytes to the Slurm job per CPU."""
+      mem_mb = 0
+      # Slurm will set one of the following environment variable, if memory
+      # is restricted:
+      #    SLURM_MEM_PER_CPU
+      #    SLURM_MEM_PER_NODE
+      # The number recored in these environment variables is in MB,
+      if os.getenv("SLURM_MEM_PER_CPU") is not None:
+          mem_mb = os.getenv("SLURM_MEM_PER_CPU")
+      elif os.getenv("SLURM_MEM_PER_NODE") is not None:
+          mem_mb = os.getenv("SLURM_MEM_PER_NODE")
+          if os.getenv("SLURM_JOB_CPUS_PER_NODE") is not None:
+              mem_mb = mem_mb/os.getenv("SLURM_JOB_CPUS_PER_NODE")
+      return mem_mb
+
+  def __getSysMem(self) -> int:
+      """Open /proc/meminfo and get the free memory.  This is given in
+      Kilobytes, and then converted to Megabytes when returned."""
+      mem_mb = 0
+      with open('/proc/meminfo') as file:
+          for line in file:
+              if 'MemFree' in line:
+                  mem_mb = math.floor(int(line.split()[1])/1024)
+                  break
+      return mem_mb
+
+def getFreeMem() -> int:
+    """Return the Free memory available to the process, or batch job in
+    Megabytes."""
+    nodeMem=SysMem()
+    return nodeMem.mem
+
+if __name__ == "__main__":
+    print(getFreeMem())
