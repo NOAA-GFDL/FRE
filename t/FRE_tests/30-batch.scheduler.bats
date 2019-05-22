@@ -42,11 +42,11 @@ setup() {
     fi
     run batch.scheduler.list -M c3,gfdl
     print_output_and_status
-    [ "status" -eq 0 ]
+    [ "$status" -eq 0 ]
     run batch.scheduler.list -P batch,analysis
     print_output_and_status
-    [ "status" -eq 0 ]
+    [ "$status" -eq 0 ]
     run batch.scheduler.list -M es,gfdl -M rdtn,analysis
     print_output_and_status
-    [ "status" -eq -0]
+    [ "$status" -eq -0]
 }
