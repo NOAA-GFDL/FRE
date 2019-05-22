@@ -21,12 +21,12 @@ use XML::LibXML();
 
     package batch_scheduler_list;
 
-    use constant VERSION => '$Id: batch.scheduler.list,v 1.1.2.1 2012/08/29 22:01:36 afy Exp $';
+    use constant VERSION => 'v2.0.0_beta';
 
     use constant OPTLIST => (
         'help|h',          'name|n=s',  'feature|f=s', 'retries-number|N=i',
         'retry-delay|D=i', 'running|R', 'user|u=s',  'verbose|v+',
-        'version|V'
+        'version|V', 'partitions|P=s', 'clusters|M=s'
     );
 
     use constant RETRIES_NUMBER => 60;
@@ -47,6 +47,7 @@ use XML::LibXML();
             "   -n STRING, --name=STRING          list jobs with name STRING\n",
             "   -f STRING, --feature=STRING       list jobs with the feature request STRING\n",
             "   -u STRING, --user=STRING          list jobs owned by a user STRING\n",
+            "   -P STRING, --partitions STRING    list jobs in the partitions STRING\n",
             "   -R,        --running              list jobs in the running state only\n\n",
             "   -N NUM,    --retries-number=NUM   a number NUM of retries (default is '$rtn')\n",
             "   -D NUM,    --retry-delay=NUM      a delay NUM between retries (default is '$rtd'), in seconds\n\n",
@@ -125,9 +126,11 @@ use XML::LibXML();
     if ( $opt{help} ) { print batch_scheduler_list::Help() and exit 0; }
 
     if ( scalar(@ARGV) == 0 ) {
-        my $queryCall = 'squeue -h -o "%i,%j,%T,%V,%u,%f"';
+        my $queryCall = 'squeue -h -o "%i,%j,%T,%V,%u,%f,%q"';
         $queryCall .= " -u $opt{user}"        if $opt{user};
         $queryCall .= " -t running"           if $opt{running};
+        $queryCall .= " --clusters=$opt{clusters}" if $opt{clusters};
+        $queryCall .= " --partitions=$opt{partitions}" if $opt{partitions};
         my $retry  = 0;
         while (1) {
             print STDERR "$queryCall\n" if $opt{verbose};
@@ -135,7 +138,10 @@ use XML::LibXML();
             if ( $? == 0 ) {
                 print STDERR "$res\n" if $opt{verbose} > 1;
                 for ( split "\n", $res ) {
-                    my ($id, $name, $state, $time, $user, $features) = split ',';
+                    my ($id, $name, $state, $time, $user, $features, $qos) = split ',';
+                    if ($id =~ /CLUSTER:/) {
+                      next;
+                    }
                     if ($opt{feature}) {
                         next unless $features =~ /\b$opt{feature}\b/;
                     }
@@ -143,7 +149,7 @@ use XML::LibXML();
                         next unless $name eq $opt{name};
                     }
                     my $summary_state = batch_scheduler_list::State($state);
-                    print "$id,$name,$summary_state,$time,$user\n";
+                    print "$id,$name,$summary_state,$time,$user,$qos\n";
                 }
                 exit 0;
             }

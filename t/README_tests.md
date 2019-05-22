@@ -29,7 +29,7 @@ should be performed.  Not all tests can be performed on all systems.
    module load fre/test
    batch.scheduler.fre.usage
    echo $?
-   # A list of FRE versions and users (with a number in parenthesis) whouls be
+   # A list of FRE versions and users (with a number in parenthesis) should be
    # printed to stdout.  Exit status should be 0.
    ```
 
@@ -51,7 +51,7 @@ should be performed.  Not all tests can be performed on all systems.
    ```
 
 4. Verify ability to list waiting jobs (default prints running only), using the
-   `-s` option.  Valid on under Moab.
+   `-s` option.  Valid only under Moab.
    ```
    export FRE_COMMANDS_TEST=<FRE_DEV_LOCATION>
    module load fre/test

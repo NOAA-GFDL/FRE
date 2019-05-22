@@ -3,7 +3,7 @@
 
 # $Id: batch.scheduler.submit,v 1.1.2.13 2012/11/15 18:09:15 afy Exp $
 # ------------------------------------------------------------------------------
-# FMS/FRE Project: Program Wrapper to Submit a Moab Batch Scheduler Job
+# FMS/FRE Project: Program Wrapper to Submit a Batch Scheduler Job
 # ------------------------------------------------------------------------------
 # afy    Ver   1.00  Initial version                                June 11
 # afy    Ver   2.00  Elaborate the 'msub' call                      June 11
@@ -154,7 +154,7 @@ use Getopt::Long( ':config', 'no_ignore_case', 'no_auto_abbrev' );
         $listCommand .= " --verbose"                            if $o{verbose};
         $listCommand .= " --verbose"                            if $o{verbose} > 1;
         print STDERR "$listCommand\n" if $o{verbose};
-        my ( $myJobID, $retry ) = ( $ENV{MOAB_JOBID} || '', 0 );
+        my ( $myJobID, $retry ) = ( $ENV{SLURM_JOB_ID} || '', 0 );
 
         while (1) {
             chomp( my $lines = qx($listCommand) );
@@ -208,7 +208,7 @@ use Getopt::Long( ':config', 'no_ignore_case', 'no_auto_abbrev' );
             my ( $jobId, $jobTimestamp, $status ) = FindJob( $n, $q, %o );
             if ($status) {
                 if ( abs( $jobTimestamp - $baseTimestamp ) <= $o{'fail-range'} ) {
-                    print STDERR "WARNING: Moab false alarm has been detected!!!\n";
+                    print STDERR "WARNING: Scheduler false alarm has been detected!!!\n";
                     return ( $jobId, 1 );
                 }
                 else {

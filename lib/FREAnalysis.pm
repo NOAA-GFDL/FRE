@@ -671,10 +671,8 @@ sub writescript {
     my $status = system("chmod 755 $outscript");
     if ($status) { die "Sorry, I couldn't chmod $outscript"; }
 
-    # once MOAB is turned off, set this to always send to Slurm
-    my $batch_command = grep(/#SBATCH/, $out)
-        ? "sbatch --chdir \$HOME $outscript"
-        : "msub -d \$HOME $outscript";
+    # submit to Slurm
+    my $batch_command = "sbatch --chdir \$HOME $outscript";
 
     if ( substr( $mode, 0, 1 ) eq "i" ) {
         ####### The graphical analysis is specified in interactive mode #####
