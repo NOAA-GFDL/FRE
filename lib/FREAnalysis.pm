@@ -547,8 +547,8 @@ sub analysis {
                         $arrayofExptsH[$ii]{dataendyr}  = $availablechunkslast[$n];
                     }
 
-                    # only proceed if ending analysis time == -t time
-                    unless ( $arrayofExptsH[$ii]{time} =~ /^$availablechunkslast[$n]/ ) {
+                    # only proceed if ending analysis time == -t time, unless -Y or -Z are given
+                    if ( !$opt_Y and !$opt_Z and $arrayofExptsH[$ii]{time} !~ /^$availablechunkslast[$n]/ ) {
                         print STDERR
                             "ANALYSIS: skipping non-accumulative $aScriptout because ending analysis year ($availablechunkslast[$n]) != ending time specified on command-line -t ($arrayofExptsH[$ii]{time})\n";
                         next;
