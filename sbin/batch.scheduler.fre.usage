@@ -14,6 +14,8 @@ use File::Basename();
 use File::Spec();
 use Getopt::Long(':config', 'no_ignore_case', 'no_auto_abbrev');
 
+use Slurm::Utils;
+
 {
   # Helper routines to gather and report on which versions of FRE are in use
   # on a particular host.
@@ -21,7 +23,7 @@ use Getopt::Long(':config', 'no_ignore_case', 'no_auto_abbrev');
 
   use constant VERSION => 'v2.0.0_beta';
 
-  use constant OPTLIST => ( 'help|h', 'clusters|M=s', 'partitions|P=s', 'state|s=s', 'verbose|v', 'version|V' );
+  use constant OPTLIST => ( 'help|h', 'clusters|M=s', 'partitions|p=s', 'verbose|v', 'version|V' );
   use constant VALID_STATES => ( 'completed', 'pending', 'running' );
 
   my $self = File::Basename::basename($0);
@@ -35,10 +37,8 @@ use Getopt::Long(':config', 'no_ignore_case', 'no_auto_abbrev');
     "  Usage: $self [option]...\n\n",
     "  Options:\n\n",
     "   -h,        --help                 print the help message and exit\n",
-    "   -M STRING, --clusters=STRING      report usage in the cluster STRING (default is the Slurm default)\n",
-    "   -P STRING, --partitions=STRING     report usage in the partition STRING (default is all Slurm cluster partitions)\n",
-    "   -s,        --state=STRING         check job in states.  Comma separated list of states.  Valid\n",
-    "                                     states are: \"completed\", \"pending\", \"running\" and \"all\".\n",
+    "   -M STRING, --clusters=STRING      report usage in the cluster STRING (comma separated). Default is the Slurm default.\n",
+    "   -p STRING, --partitions=STRING    report usage in the partition STRING (comma separated). Default is Slurm default)\n",
     "   -V,        --version              print the tool version and exit (default is \"all\")\n",
     "   -v         --verbose              increase verbosity\n\n"
     );
@@ -53,35 +53,6 @@ use Getopt::Long(':config', 'no_ignore_case', 'no_auto_abbrev');
       "   Synopsis: The '$self' outputs a number of currently running jobs per user per FRE version\n",
       "@usage"
     );
-  }
-
-  sub string_list_intersect($@)
-  # ------ arguments: $string, @list
-  #
-  # Take a comma separated string and an list of strings, and return a comma
-  # separated string of where the two intersect.
-  {
-    my ($inString, @inList) = @_;
-    return join(',',map {my $b = $_; grep { $_ eq $b } split(',',$inString)} @inList);
-
-  }
-
-sub slurm_command_verify()
-  # Check if the slurm commands needed are found in PATH.  Return non-zero if
-  # all commands are not found.
-  {
-    my @slurmCmds = qw/sacctmgr squeue/;
-    my $myReturn = 0;
-    foreach my $cmd ( @slurmCmds ) {
-      my $myCmd = 'command -v $cmd';
-      my $cmdOutput = qx($myCmd);
-      if ( $? != 0 ) {
-        print $cmdOutput . "\n";
-        $myReturn += 1;
-        print STDERR "ERROR - Unable to find \"$cmd\" in PATH.\n"
-      }
-    }
-    return $myReturn;
   }
 
   sub Add($$$)
@@ -115,59 +86,6 @@ sub slurm_command_verify()
     }
   }
 
-  sub get_valid_job_states($)
-  # ------ arguments: $string
-  #
-  # Return valid states from the state string passed in.
-  {
-    my $inStates = lc shift;
-    # Return the intersection of VALID_STATES with the state list passed in
-    return string_list_intersect($inStates, batch_scheduler_fre_usage::VALID_STATES);
-  }
-
-  sub get_valid_slurm_cluster($)
-  # ------ arguments: $string
-  #
-  # Take a comma separated list (no spaces) of clusters, and check if all are
-  # on this site.
-  {
-    my $inClusters = shift;
-    # Get the list of valid clusters on this site.
-    my @clusters;
-    my @sacctmgr_out = qx/sacctmgr list clusters -n -P/;
-    if ($? == 0) {
-        @clusters = map { (split '\|', $_)[0] } @sacctmgr_out;
-    }
-    return string_list_intersect($inClusters, @clusters);
-  }
-
-  sub get_valid_slurm_partitions($;$)
-  # ------ arguments $string [$string]
-  #
-  # Take a comma separated list of partitions, and optional cluster, and return the
-  # valid paritions.
-  {
-    my ($inPartitions, $inClusters) = @_;
-    my @partitions;
-    if (defined($inClusters)) {
-        # Need to loop through clusters to get partitions
-        foreach my $cluster ( split(/,/,$inClusters) ) {
-            my @scontrol_out = qx/scontrol show partitions -M $cluster/;
-            if ($? == 0) {
-                push @partitions, map { $_ =~ /PartitionName=(\S+)/ } @scontrol_out;
-            }
-        }
-    } else {
-        my @scontrol_out = qx/scontrol show partitions/;
-        if ($? == 0) {
-            @partitions = map { $_ =~ /PartitionName=(\S+)/ } @scontrol_out;
-        }
-    }
-    # Return the intersection of clusters from sacctmgr and passed in by the
-    # user
-    #return map {my $b = $_; grep { $_ eq $b } split(',',$inPartitions)} @partitions;
-    return string_list_intersect($inPartitions, @partitions);
-  }
 }
 
 # //////////////////////////////////////////////////////////////////////////////
@@ -183,19 +101,16 @@ sub slurm_command_verify()
   if ( $opt{version} ) { print STDERR batch_scheduler_fre_usage::VERSION, "\n" and exit 0; }
   if ( $opt{help} ) { print STDERR batch_scheduler_fre_usage::Help() and exit 0; }
 
-  # Verify that slurm commands are in PATH
-  if (batch_scheduler_fre_usage::slurm_command_verify() > 0) {
-    print STDERR "Not all required slurm commands are in PATH.\n";
-    exit 1;
-  }
+  my @reqClusters = split(',', $opt{clusters});
+  @reqClusters = valid_slurm_clusters(@reqClusters);
 
-  my $reqClusters = batch_scheduler_fre_usage::get_valid_slurm_cluster($opt{clusters});
-  my $reqPartitions = batch_scheduler_fre_usage::get_valid_slurm_partitions($opt{partitions}, $reqClusters);
+  my @reqPartitions = split(',', $opt{partitions});
+  @reqPartitions = valid_slurm_partitions(@reqPartitions, @reqClusters);
 
   my $binDir = File::Basename::dirname($0);
   my $listCommand = File::Spec->rel2abs("$binDir/batch.scheduler.list");
-  $listCommand .= " --clusters=$reqClusters" if ($opt{clusters} && $reqClusters);
-  $listCommand .= " --partitions=$reqPartitions" if ($opt{partitions} && $reqPartitions);
+  $listCommand .= " --clusters=".join(',',@reqClusters) if ($opt{clusters} && @reqClusters);
+  $listCommand .= " --partitions=".join(',',@reqPartitions) if ($opt{partitions} && @reqPartitions);
   $listCommand .= " --verbose" if $opt{verbose};
   chomp(my $lines = qx($listCommand));
 
@@ -219,9 +134,9 @@ sub slurm_command_verify()
               batch_scheduler_fre_usage::Add(\%res, "cmip-prepublisher", $user);
             } elsif ($script =~ /^\/.*\/scripts\/analysis\/.*$/) {
               batch_scheduler_fre_usage::Add(\%res, "analysis", $user);
-            } elsif ($script =~ /^.*pp\.starter$/) {
-              my @ppStarterVersion = $script =~ /^\/.*\/fre-commands\/(\S+)\/site\/.*\/pp.starter$/;
-              batch_scheduler_fre_usage::Add(\%res, $ppStarterVersion[0], $user);
+            } elsif ($script =~ /^\/.*\/fre-commands\/(\S+)\/site\/.*$/) {
+              my @siteScriptVersion = $script =~ /^\/.*\/fre-commands\/(\S+)\/site\/.*$/;
+              batch_scheduler_fre_usage::Add(\%res, $siteScriptVersion[0], $user);
             } elsif (-f $script and -r _) {
               if (open my $fh, '<', $script) {
                 chomp(my @freppEnvs = map {/^\s*setenv\s+FRE_COMMANDS_HOME_FREPP\s+(\S+)\s*$/} <$fh>);
