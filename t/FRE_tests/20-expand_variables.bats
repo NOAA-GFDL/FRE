@@ -1,3 +1,4 @@
+#!/usr/bin/env bats
 # -*- mode: sh; eval: (sh-set-shell "sh"); -*-
 
 setup() {

@@ -1,3 +1,4 @@
+#!/usr/bin/env bats
 # -*- mode: sh; eval: (sh-set-shell "sh"); -*-
 
 # The output_good strings are configured with the exact number of spaces needed

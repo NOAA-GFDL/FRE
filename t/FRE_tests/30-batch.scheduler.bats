@@ -1,3 +1,4 @@
+#!/usr/bin/env bats
 # -*- mode: sh; eval: (sh-set-shell "sh"); -*-
 load test_helpers
 
@@ -35,7 +36,7 @@ setup() {
     [ "$status" -eq 0 ]
 }
 
-@test "batch.scheduler.list report partitions/cluster" {
+@test "batch.scheduler.list report cluster" {
     if [ "$skip_test" = "true" ]
     then
         skip "Cannot find slurm"
@@ -43,10 +44,35 @@ setup() {
     run batch.scheduler.list -M c3,gfdl
     print_output_and_status
     [ "$status" -eq 0 ]
-    run batch.scheduler.list -P batch,analysis
+}
+
+@test "batch.scheduler.list report partition" {
+    if [ "$skip_test" = "true" ]
+    then
+        skip "Cannot find slurm"
+    fi
+    run batch.scheduler.list -p batch,analysis
     print_output_and_status
     [ "$status" -eq 0 ]
-    run batch.scheduler.list -M es,gfdl -M rdtn,analysis
-    print_output_and_status
-    [ "$status" -eq -0]
 }
+
+@test "batch.scheduler.list report cluster/partition" {
+    if [ "$skip_test" = "true" ]
+    then
+        skip "Cannot find slurm"
+    fi
+    run batch.scheduler.list -M es,gfdl -p rdtn,analysis
+    print_output_and_status
+    [ "$status" -eq -0 ]
+}
+
+@test "batch.scheduler.list errors if unknown clusters given" {
+   if [ "$skip_test" = "true" ]
+   then
+      skip "Cannot find slurm"
+   fi
+   run batch.scheduler.list -M doesNotExist
+   print_output_and_status
+   [ $status -ne 0 ]
+}
+

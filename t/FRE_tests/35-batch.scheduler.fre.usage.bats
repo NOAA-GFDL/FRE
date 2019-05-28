@@ -1,3 +1,4 @@
+#!/usr/bin/env bats
 # -*- mode: sh; eval: (sh-set-shell "sh"); -*-
 load test_helpers
 
@@ -35,7 +36,7 @@ setup() {
     [ "$status" -eq 0 ]
 }
 
-@test "batch.scheduler.fre.usage report partitions/cluster" {
+@test "batch.scheduler.fre.usage report FRE versions for cluster" {
     if [ "$skip_test" = "true" ]
     then
         skip "Cannot find slurm"
@@ -43,10 +44,24 @@ setup() {
     run batch.scheduler.fre.usage -M c3,gfdl
     print_output_and_status
     [ "$status" -eq 0 ]
-    run batch.scheduler.fre.usage -P batch,analysis
+}
+
+@test "batch.scheduler.fre.usage report FRE versions for partitions" {
+    if [ "$skip_test" = "true" ]
+    then
+        skip "Cannot find slurm"
+    fi
+    run batch.scheduler.fre.usage -p batch,analysis
     print_output_and_status
     [ "$status" -eq 0 ]
-    run batch.scheduler.fre.usage -M es,gfdl -M rdtn,analysis
+}
+
+@test "batch.scheduler.fre.usage report FRE versions for partitions/cluster" {
+    if [ "$skip_test" = "true" ]
+    then
+        skip "Cannot find slurm"
+    fi
+    run batch.scheduler.fre.usage -M es,gfdl -p rdtn,analysis
     print_output_and_status
-    [ "$status" -eq -0]
+    [ "$status" -eq -0 ]
 }

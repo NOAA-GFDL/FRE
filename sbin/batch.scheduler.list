@@ -48,8 +48,8 @@ use Slurm::Utils;
             "  Options:\n\n",
             "   -n STRING, --name=STRING          list jobs with name STRING\n",
             "   -f STRING, --feature=STRING       list jobs with the feature request STRING\n",
-	    "   -u STRING, --user=STRING          list jobs owned by a user STRING\n",
-	    "   -M STRING, --clusters=STRING      list jobs in the cluster STRING (comma separated)\n",
+            "   -u STRING, --user=STRING          list jobs owned by a user STRING\n",
+            "   -M STRING, --clusters=STRING      list jobs in the cluster STRING (comma separated)\n",
             "   -p STRING, --partitions=STRING    list jobs in the partitions STRING (comma separated)\n",
             "   -R,        --running              list jobs in the running state only\n\n",
             "   -N NUM,    --retries-number=NUM   a number NUM of retries (default is '$rtn')\n",
@@ -95,8 +95,8 @@ use Slurm::Utils;
       # Check if all clusters are valid
       $opt{clusters} = valid_slurm_clusters(split(',',$opt{clusters}));
       if ( $opt{clusters} =~ /^\s*$/ ) {
-	print STDERR "No known Slurm clusters given.\n";
-	exit 1;
+        print STDERR "No known Slurm clusters given.\n";
+        exit 1;
       }
     }
 
@@ -111,10 +111,12 @@ use Slurm::Utils;
             print STDERR "$queryCall\n" if $opt{verbose};
             chomp( my $res = qx($queryCall) );
             if ( $? == 0 ) {
-                print STDERR "$res\n" if $opt{verbose} > 1;
+                print STDERR "$res\n\n" if $opt{verbose} > 1;
                 for ( split "\n", $res ) {
-                    my ($id, $name, $state, $time, $user, $features, $qos) = split ',';
+                    next if ( $_ =~ /^\s*$/ || $_ =~ /^CLUSTER:/ );
+                    my ($id, $name, $state, $time, $user, $features, $qos) = split(',', $_);
                     if ($id =~ /CLUSTER:/) {
+                      print "Hello\n";
                       next;
                     }
                     if ($opt{feature}) {
