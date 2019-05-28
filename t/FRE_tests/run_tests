@@ -78,29 +78,9 @@ do_tests () {
 
   local myExit=$(expr $frelist_exit + $fremake_exit + $frerun_exit)
 
-  # Run other tests, follow the filename pattern ??-*.bats
-  for t in ??-*.bats
-  do
-     command="bats -t ${t}"
-     echo $command
-     $command | tee ${t}.tap
-     local test_exit=$(evalTAP ${t}.tap)
-     myExit=$(expr $myExit + $test_exit)
-     rm -f ${t}.tap
-  done
-
-  # Run other tests, follow the filename pattern ??-*.bats
-  for t in *.t
-  do
-     command="prove ${t}"
-     echo $command
-     $command | tee ${t}.tap
-     local test_exit=$(evalTAP ${t}.tap)
-     myExit=$(expr $myExit + $test_exit)
-     rm -f ${t}.tap
-  done
-
-  prove ??-*.bats *.t
+  prove -v *.t ??-*.bats
+  local test_exit=$?
+  myExit=$(expr $myExit + $test_exit)
   
   return $myExit
 }

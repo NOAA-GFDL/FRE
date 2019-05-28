@@ -159,7 +159,9 @@ sub valid_slurm_partitions(\@;\@) {
   #
   # Take a comma separated list of partitions, and optional cluster, and return the
   # valid partitions.
-    my (@inPartitions, @inClusters) = (@{$_[0]}, @{$_[1]});
+  my @inPartitions = @{$_[0]};
+  my @inClusters;
+  @inClusters = @{$_[1]} if $_[1];
     my @partitions;
     if (@inClusters) {
         # Need to loop through clusters to get partitions
