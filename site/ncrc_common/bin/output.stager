@@ -974,15 +974,12 @@ if ( $actionCombineToDo ) then
 	       foreach f ( $inputFiles )
 		  set num = `ncks -m $f | grep -E ': type' | cut -f 1 -d ' ' | sed 's/://' | sort -u | wc -l`
 		  set nvars = ( $nvars $num )
-		  set unique_vars = `bash -c "comm -3 \
-            	  <(ncks -m $f | grep -E ': type' | cut -f 1 -d ' ' | sed 's/://' | sort -u) \
-            	  <(ncks -m $inputFiles[1] | grep -E ': type' | cut -f 1 -d ' ' | sed 's/://' | sort -u)"`
+		  if ( `list_ncvars.csh -st -01234 $f | sort -u` != `list_ncvars.csh -st -01234 $inputFiles[1] | sort -u` ) then
+		     set combineFlag = 0
+		     echo "WARNING: Variables differ between input files."
+                     echo "WARNING: Not combining $inputFiles"
+		  endif
 	       end
-	       if ( "$unique_vars" != "" ) then
-		  echo "WARNING: The following variables differ between input files: $unique_vars"
-		  echo "WARNING: Not combining $inputFiles"
-		  set combineFlag = 0
-	       endif
 	       foreach n ( $nvars )
 		  if ( $n != $nvars[1] ) then
 		    set combineFlag = 0
@@ -992,7 +989,6 @@ if ( $actionCombineToDo ) then
 	       unset n
 	       unset num
                unset nvars
-	       unset unique_vars
                if ( $combineFlag == 0 ) then
                   #send user email with warning if combineFlag = 0
                   echo "WARNING: Variables differ, not combining $inputFiles"
@@ -1161,6 +1157,7 @@ if ( $actionCombineToDo ) then
 
    echo "set actionCombineOk = 1" >> $argFile
 endif
+
 ################################################################################
 #------------ swap in unmasked grid info into masked ocean_static --------------
 ################################################################################
