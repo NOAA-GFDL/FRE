@@ -799,7 +799,18 @@ EOF
         else {
             if ($opt_v) { print "Getting namelists...\n"; }
             $nml = $exp->extractNamelists();
-            $caltype = $nml->namelistSingleQuotedStringGet( "coupler_nml", "calendar" ) || "julian";
+            if ($nml) {
+                $caltype = $nml->namelistSingleQuotedStringGet( "coupler_nml", "calendar" );
+                unless ($caltype) {
+                    $caltype = 'julian';
+                    print STDERR "\nWARNING: Using default calendar type 'julian' as couldn't find 'coupler_nml'/'calendar' namelist value.\n\n";
+                }
+            }
+            else {
+                $caltype = 'julian';
+                print STDERR "\nWARNING: Couldn't populate namelists; most likely your external namelists weren't transferred, or are improperly referenced in your XML!\n";
+                print STDERR "WARNING: Using default calendar type 'julian' as couldn't find 'coupler_nml'/'calendar' namelist value.\n\n";
+            }
             print STDERR "caltype = $caltype\n" if $opt_v;
         }
 
