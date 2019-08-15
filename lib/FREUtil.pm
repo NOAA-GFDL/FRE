@@ -862,7 +862,10 @@ sub jobID()
     # ------ arguments: none
     # ------ return the current job id, if it's available
 {
-    if ( exists $ENV{JOB_ID} ) {
+    if ( exists $ENV{SLURM_JOB_ID} ) {
+        return $ENV{SLURM_JOB_ID}
+    }
+    elsif ( exists $ENV{JOB_ID} ) {
         return $ENV{JOB_ID};
     }
     elsif ( exists $ENV{PBS_JOBID} ) {

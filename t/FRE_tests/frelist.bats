@@ -1,3 +1,4 @@
+#!/usr/bin/env bats
 # -*- mode: sh; eval: (sh-set-shell "sh"); -*-
 
 # The output_good strings are configured with the exact number of spaces needed
@@ -7,7 +8,7 @@
 load test_helpers
 
 setup() {
-    unique_string="date$(date +%s)pid$$"
+   unique_string="date$(date +%s)pid$$"
 }
 
 @test "frelist is in PATH" {
@@ -278,13 +279,10 @@ analysis: /archive/$userStr/.*/CM2.1U_Control-1990_E1.M_3A/${platform}-prod/anal
             REMOTE_SITE=gfdl-ws.intel
             ;;
         ncrc4 )
-            REMOTE_SITE=theia.intel
+            REMOTE_SITE=gfdl.ncrc4-intel
             ;;
         gfdl | gfdl-ws )
             REMOTE_SITE=ncrc4.intel
-            ;;
-        theia )
-            REMOTE_SITE=gfdl.theia-intel
             ;;
         * )
             skip "Unknown site '${FRE_SYSTEM_SITE}'."
@@ -297,10 +295,7 @@ analysis: /archive/$userStr/.*/CM2.1U_Control-1990_E1.M_3A/${platform}-prod/anal
         gfdl-ws.intel )
             execRoot="/home"
             ;;
-        theia.intel )
-            execRoot="/scratch4/GFDL/gfdlscr"
-            ;;
-        gfdl.theia-intel )
+        gfdl.ncrc4-intel )
             execRoot="/home"
             ;;
     esac
