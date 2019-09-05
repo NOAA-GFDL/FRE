@@ -23,7 +23,7 @@ Input outside the format should just return the input.
 
 use Test::More;
 
-use lib "$ENV{FRE_COMMANDS_HOME}/site/gfdl/bin";
+use lib "$ENV{FRE_COMMANDS_HOME}/sbin";
 require 'batch.scheduler.time';
 
 %test_data = (

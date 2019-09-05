@@ -547,8 +547,8 @@ sub analysis {
                         $arrayofExptsH[$ii]{dataendyr}  = $availablechunkslast[$n];
                     }
 
-                    # only proceed if ending analysis time == -t time
-                    unless ( $arrayofExptsH[$ii]{time} =~ /^$availablechunkslast[$n]/ ) {
+                    # only proceed if ending analysis time == -t time, unless -Y or -Z are given
+                    if ( !$opt_Y and !$opt_Z and $arrayofExptsH[$ii]{time} !~ /^$availablechunkslast[$n]/ ) {
                         print STDERR
                             "ANALYSIS: skipping non-accumulative $aScriptout because ending analysis year ($availablechunkslast[$n]) != ending time specified on command-line -t ($arrayofExptsH[$ii]{time})\n";
                         next;
@@ -671,10 +671,8 @@ sub writescript {
     my $status = system("chmod 755 $outscript");
     if ($status) { die "Sorry, I couldn't chmod $outscript"; }
 
-    # once MOAB is turned off, set this to always send to Slurm
-    my $batch_command = grep(/#SBATCH/, $out)
-        ? "sbatch --chdir \$HOME $outscript"
-        : "msub -d \$HOME $outscript";
+    # submit to Slurm
+    my $batch_command = "sbatch --chdir \$HOME $outscript";
 
     if ( substr( $mode, 0, 1 ) eq "i" ) {
         ####### The graphical analysis is specified in interactive mode #####
