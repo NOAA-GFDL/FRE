@@ -446,3 +446,132 @@ ${lines[$((num_lines-1))]}"
     rm -rf "${root_stem}/${USER}/FRE_tests-${unique_string}-temp"
     rm "${unique_string}-temp.xml"
 }
+
+@test "Create run script and verify default mail target" {
+    case "${default_platform%%.*}" in
+        ncrc? )
+            platform="ncrc"
+            root_stem="/lustre/f2/scratch"
+            submit_cmd="sleep 1; sbatch"
+            ;;
+        theia ) platform="theia"
+            root_stem="/scratch4/GFDL/gfdlscr"
+            submit_cmd="qsub"
+            ;;
+        gfdl-ws )
+            platform="gfdl-ws"
+            root_stem="/local2/tmp"
+            submit_cmd=""
+            ;;
+        * )
+            skip "No test for current platform"
+            ;;
+    esac
+
+
+    unique_stdout_xml CM2.1U.xml >rts.xml
+    run frerun -p ${default_platform} CM2.1U_Control-1990_E1.M_3B_snowmelt
+
+    script="${root_stem}/${USER}/FRE_tests-${unique_string}-temp/*/CM2.1U_Control-1990_E1.M_3B_snowmelt/${default_platform}-prod/scripts/run/CM2.1U_Control-1990_E1.M_3B_snowmelt"
+    grep "SBATCH --mail-user=$USER@noaa.gov" $script
+    [ "$status" -eq 0 ]
+
+    rm -rf "${root_stem}/${USER}/FRE_tests-${unique_string}-temp"
+    rm rts.xml
+}
+
+@test "Verify frerun error when using --mail-list with invalid email address" {
+    case "${default_platform%%.*}" in
+        ncrc? )
+            platform="ncrc"
+            root_stem="/lustre/f2/scratch"
+            submit_cmd="sleep 1; sbatch"
+            ;;
+        theia ) platform="theia"
+            root_stem="/scratch4/GFDL/gfdlscr"
+            submit_cmd="qsub"
+            ;;
+        gfdl-ws )
+            platform="gfdl-ws"
+            root_stem="/local2/tmp"
+            submit_cmd=""
+            ;;
+        * )
+            skip "No test for current platform"
+            ;;
+    esac
+
+
+    unique_stdout_xml CM2.1U.xml >rts.xml
+    run frerun -p ${default_platform} CM2.1U_Control-1990_E1.M_3B_snowmelt --mail-list ok@noaa.gov,not-real@yahoo
+    [ "$status" -eq 10 ]
+
+    rm -rf "${root_stem}/${USER}/FRE_tests-${unique_string}-temp"
+    rm rts.xml
+}
+
+@test "Create run script and verify user-specified email" {
+    case "${default_platform%%.*}" in
+        ncrc? )
+            platform="ncrc"
+            root_stem="/lustre/f2/scratch"
+            submit_cmd="sleep 1; sbatch"
+            ;;
+        theia ) platform="theia"
+            root_stem="/scratch4/GFDL/gfdlscr"
+            submit_cmd="qsub"
+            ;;
+        gfdl-ws )
+            platform="gfdl-ws"
+            root_stem="/local2/tmp"
+            submit_cmd=""
+            ;;
+        * )
+            skip "No test for current platform"
+            ;;
+    esac
+
+
+    unique_stdout_xml CM2.1U.xml >rts.xml
+    run frerun -p ${default_platform} CM2.1U_Control-1990_E1.M_3B_snowmelt --mail-list one@two.com
+
+    script="${root_stem}/${USER}/FRE_tests-${unique_string}-temp/*/CM2.1U_Control-1990_E1.M_3B_snowmelt/${default_platform}-prod/scripts/run/CM2.1U_Control-1990_E1.M_3B_snowmelt"
+    grep "SBATCH --mail-user=one@two.com" $script
+    [ "$status" -eq 0 ]
+
+    rm -rf "${root_stem}/${USER}/FRE_tests-${unique_string}-temp"
+    rm rts.xml
+}
+
+@test "Create run script and verify three user-specified emails" {
+    case "${default_platform%%.*}" in
+        ncrc? )
+            platform="ncrc"
+            root_stem="/lustre/f2/scratch"
+            submit_cmd="sleep 1; sbatch"
+            ;;
+        theia ) platform="theia"
+            root_stem="/scratch4/GFDL/gfdlscr"
+            submit_cmd="qsub"
+            ;;
+        gfdl-ws )
+            platform="gfdl-ws"
+            root_stem="/local2/tmp"
+            submit_cmd=""
+            ;;
+        * )
+            skip "No test for current platform"
+            ;;
+    esac
+
+
+    unique_stdout_xml CM2.1U.xml >rts.xml
+    run frerun -p ${default_platform} CM2.1U_Control-1990_E1.M_3B_snowmelt --mail-list one@two.com,foo@bar.edu,blue_green@algae.com
+
+    script="${root_stem}/${USER}/FRE_tests-${unique_string}-temp/*/CM2.1U_Control-1990_E1.M_3B_snowmelt/${default_platform}-prod/scripts/run/CM2.1U_Control-1990_E1.M_3B_snowmelt"
+    grep "SBATCH --mail-user=one@two.com,foo@bar.edu,blue_green@algae.com" $script
+    [ "$status" -eq 0 ]
+
+    rm -rf "${root_stem}/${USER}/FRE_tests-${unique_string}-temp"
+    rm rts.xml
+}
