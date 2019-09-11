@@ -27,6 +27,8 @@ use FRETemplate();
 use FREUtil();
 use FREXML();
 
+use Email::Valid;
+
 # //////////////////////////////////////////////////////////////////////////////
 # ////////////////////////////////////////////////////////// Global constants //
 # //////////////////////////////////////////////////////////////////////////////
@@ -41,7 +43,7 @@ use FREXML();
         'force-checkout|f', 'force-compile|F', 'keep-compiled|K', 'link|L!',
         'make-jobs|j=i',    'execute|E',       'help|h',          'ncores|n=i',
         'platform|p=s',     'submit|s',        'target|t=s',      'version|V',
-        'verbose|v+',       'walltime|w=i',    'xmlfile|x=s'
+        'verbose|v+',       'walltime|w=i',    'xmlfile|x=s',     'mail-list=s'
     );
 
     use constant WALLTIME_DEFAULT => 120;
@@ -89,7 +91,8 @@ use FREXML();
             "   -V,        --version                   print the tool version and exit\n",
             "   -v,        --verbose                   get verbose messages (repeat the option to increase verbosity level)\n",
             "   -w NUM,    --walltime=NUM              maximum wall time NUM (in minutes) to use (default is $wtm)\n",
-            "   -x FILE,   --xmlfile=FILE              experiment suite XML configuration FILE (default is '$cwd/$xml')\n\n",
+            "   -x FILE,   --xmlfile=FILE              experiment suite XML configuration FILE (default is '$cwd/$xml')\n",
+            "              --mail-list=STRING          email the comma-separated STRING list of emails rather than \$USER\@noaa.gov\n\n",
             "  All the option names may be abbreviated, a single leading dash is also acceptable.\n",
             "  The platform and at least one experiment from the FILE must be listed as arguments.\n\n"
         );
@@ -1155,6 +1158,16 @@ use FREXML();
             FREMsg::out( $opt{verbose}, FREMsg::FATAL, "The --xmlfile option's value is missing" );
             exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
         }
+    }
+
+    if ($opt{'mail-list'}) {
+        for (split ',', $opt{'mail-list'}) {
+            unless (Email::Valid->address($_)) {
+                FREMsg::out( $opt{verbose}, FREMsg::FATAL, "The email address '$_' specified in --mail-list isn't valid" );
+                exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
+            }
+        }
+        FREMsg::out( $opt{verbose}, FREMsg::NOTE, "The email list '$opt{'mail-list'}' will be used FRE notifications instead of the default '\$USER\@noaa.gov'" );
     }
 
     my $fre = FRE->new( 'fremake', %opt ) or exit FREDefaults::STATUS_FRE_GENERIC_PROBLEM;

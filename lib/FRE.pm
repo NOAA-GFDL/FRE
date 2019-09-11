@@ -504,6 +504,7 @@ sub new($$%)
                                     $fre->{compiler}   = $fre->platformValue('compiler/@type');
                                     $fre->{baseCsh}
                                         = $fre->default_platform_csh . $fre->platformValue('csh');
+                                    $fre->{mailList}   = $o{'mail-list'} || $fre->property('FRE.mailList.default') || do { FREMsg::out($o{verbose}, FREMsg::FATAL, "Required FRE property FRE.mailList.default doesn't exist; contact your local FRE support team"); return '' };
 
 # -------------------------------------------------------------------------------------------------- derive the mkmf template
                                     my $mkmfTemplate = $mkmfTemplateGet->(

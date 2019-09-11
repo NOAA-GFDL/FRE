@@ -407,3 +407,135 @@ ${last_line_good}"
     rm -rf "${root_stem}/${USER}/FRE_tests-${unique_string}-temp"
     rm "${unique_string}-temp.xml"
 }
+
+@test "Create compile script and verify default batch scheduler mail target" {
+    case "${default_platform%%.*}" in
+        ncrc? )
+            platform="ncrc"
+            root_stem="/lustre/f2/scratch"
+            submit_cmd="sleep 1; sbatch"
+            ;;
+        theia )
+            platform="theia"
+            root_stem="/scratch4/GFDL/gfdlscr"
+            submit_cmd="qsub"
+            ;;
+        gfdl-ws )
+            platform="gfdl-ws"
+            root_stem="/local2/tmp"
+            submit_cmd=""
+            ;;
+        * )
+            skip "No test for current platform"
+            ;;
+    esac
+
+    unique_stdout_xml CM2.1U.xml >"${unique_string}-temp.xml"
+    run fremake -x "${unique_string}-temp.xml" -p ${default_platform} -t prod CM2.1U_Control-1990_E1.M_3A
+    [ "$status" -eq 0 ]
+
+    script="${root_stem}/${USER}/FRE_tests-${unique_string}-temp/*/CM2.1U_Control-1990_E1.M_3A/${default_platform}-prod/exec/compile_CM2.1U_Control-1990_E1.M_3A.csh"
+    grep "SBATCH --mail-user=$USER@noaa.gov" $script
+    [ "$status" -eq 0 ]
+
+    rm -rf "${root_stem}/${USER}/FRE_tests-${unique_string}-temp"
+    rm "${unique_string}-temp.xml"
+}
+
+@test "Verify fremake error when using --mail-list with invalid email address" {
+    case "${default_platform%%.*}" in
+        ncrc? )
+            platform="ncrc"
+            root_stem="/lustre/f2/scratch"
+            submit_cmd="sleep 1; sbatch"
+            ;;
+        theia )
+            platform="theia"
+            root_stem="/scratch4/GFDL/gfdlscr"
+            submit_cmd="qsub"
+            ;;
+        gfdl-ws )
+            platform="gfdl-ws"
+            root_stem="/local2/tmp"
+            submit_cmd=""
+            ;;
+        * )
+            skip "No test for current platform"
+            ;;
+    esac
+
+    unique_stdout_xml CM2.1U.xml >"${unique_string}-temp.xml"
+    run fremake -x "${unique_string}-temp.xml" -p ${default_platform} -t prod CM2.1U_Control-1990_E1.M_3A --mail-list bad_address@no-domain
+    [ "$status" -eq 10 ]
+
+    rm -rf "${root_stem}/${USER}/FRE_tests-${unique_string}-temp"
+    rm "${unique_string}-temp.xml"
+}
+
+@test "Create compile script and verify one user-specified batch scheduler mail target" {
+    case "${default_platform%%.*}" in
+        ncrc? )
+            platform="ncrc"
+            root_stem="/lustre/f2/scratch"
+            submit_cmd="sleep 1; sbatch"
+            ;;
+        theia )
+            platform="theia"
+            root_stem="/scratch4/GFDL/gfdlscr"
+            submit_cmd="qsub"
+            ;;
+        gfdl-ws )
+            platform="gfdl-ws"
+            root_stem="/local2/tmp"
+            submit_cmd=""
+            ;;
+        * )
+            skip "No test for current platform"
+            ;;
+    esac
+
+    unique_stdout_xml CM2.1U.xml >"${unique_string}-temp.xml"
+    run fremake -x "${unique_string}-temp.xml" -p ${default_platform} -t prod CM2.1U_Control-1990_E1.M_3A --mail-list friendly_cats@gmail.com
+    [ "$status" -eq 0 ]
+
+    script="${root_stem}/${USER}/FRE_tests-${unique_string}-temp/*/CM2.1U_Control-1990_E1.M_3A/${default_platform}-prod/exec/compile_CM2.1U_Control-1990_E1.M_3A.csh"
+    grep "SBATCH --mail-user=friendly_cats@gmail.com" $script
+    [ "$status" -eq 0 ]
+
+    rm -rf "${root_stem}/${USER}/FRE_tests-${unique_string}-temp"
+    rm "${unique_string}-temp.xml"
+}
+
+@test "Create compile script and verify two user-specified batch scheduler mail targets" {
+    case "${default_platform%%.*}" in
+        ncrc? )
+            platform="ncrc"
+            root_stem="/lustre/f2/scratch"
+            submit_cmd="sleep 1; sbatch"
+            ;;
+        theia )
+            platform="theia"
+            root_stem="/scratch4/GFDL/gfdlscr"
+            submit_cmd="qsub"
+            ;;
+        gfdl-ws )
+            platform="gfdl-ws"
+            root_stem="/local2/tmp"
+            submit_cmd=""
+            ;;
+        * )
+            skip "No test for current platform"
+            ;;
+    esac
+
+    unique_stdout_xml CM2.1U.xml >"${unique_string}-temp.xml"
+    run fremake -x "${unique_string}-temp.xml" -p ${default_platform} -t prod CM2.1U_Control-1990_E1.M_3A --mail-list one@foo.com,two@bar.edu
+    [ "$status" -eq 0 ]
+
+    script="${root_stem}/${USER}/FRE_tests-${unique_string}-temp/*/CM2.1U_Control-1990_E1.M_3A/${default_platform}-prod/exec/compile_CM2.1U_Control-1990_E1.M_3A.csh"
+    grep "SBATCH --mail-user=one@foo.com,two@bar.edu" $script
+    [ "$status" -eq 0 ]
+
+    rm -rf "${root_stem}/${USER}/FRE_tests-${unique_string}-temp"
+    rm "${unique_string}-temp.xml"
+}
