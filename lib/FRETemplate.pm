@@ -302,6 +302,7 @@ my $schedulerResources = sub($$$$$$$)
             mail    => $fre->propertyParameterized( 'FRE.scheduler.option.mail', $mailMode ),
             dual    => $dual,
             envVars => $fre->propertyParameterized('FRE.scheduler.option.envVars'),
+            mailList => $fre->propertyParameterized('FRE.scheduler.option.mailList', $fre->{mailList}),
         );
 
         if ($n) {

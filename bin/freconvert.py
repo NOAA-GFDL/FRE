@@ -14,8 +14,8 @@ May 1, 2019. It was replaced by the F2 file system.                   |
                                                                       |
 2. It was decided that the MOAB batch scheduler would be discontinued |
 and be replaced by the Slurm scheduler on C3 and C4. The transition   |
-date for Slurm on C3 is April 15, 2019. The transition date for Slurm |
-on C4 is May 13, 2019.                                                |
+date for Slurm on C3 took place on April 15, 2019. The transition date|
+for Slurm on C4 took place May 13, 2019.                              |
                                                                       |
 Many components of FRE had explicitly referenced F1 file locations or |
 the MOAB scheduler, prompting the decision to push a new FRE upgrade  |
@@ -33,7 +33,7 @@ Summary of how this tool works|
 -----------------------------------------------------------------------
 The core functionality of this script is parsing the original input   |
 XML, modifying its elements, and writing out the newly converted file.|
-Transitioning from Bronx-12 or Bronx-13 requires very few XML tag     |
+Transitioning from Bronx-12, 13, 14 or 15 requires very few XML tag   |
 manipulations and is done via simple string substitution. On the other|
 hand, Bronx-10 and Bronx-11 XML's require more extensive work. Thus,  |
 the built-in Python module, ElementTree, is used to carry out major   |
@@ -112,7 +112,7 @@ import logging
 import argparse
 import xml.etree.ElementTree as ET
 
-newest_fre_version = 'bronx-15'
+newest_fre_version = 'bronx-16'
 
 configs_to_edit = ['atmos_npes', 'atmos_nthreads', 'ocean_npes',
                    'ocean_nthreads', 'layout', 'io_layout',
@@ -647,7 +647,11 @@ def add_compiler_tag(etree_root, compiler_type='intel',
     try:
         platform_list = etree_root.find('experimentSuite').find('setup').findall('platform')
     except AttributeError as e:
-        platform_list = etree_root.find('setup').findall('platform') 
+
+        if etree_root.find('setup') is not None:
+            platform_list = etree_root.find('setup').findall('platform')
+        else:
+            return
 
     for platform in platform_list:
         
@@ -2268,7 +2272,7 @@ issues and re-run freconvert.py")
         logging.info("Linking paths to F2. Performing final XML manipulations...")
         final_xml = convert_xml_text(input_content, prev_version=old_version)
     
-    elif old_version == 'bronx-13' or old_version == 'bronx-14':
+    elif old_version == 'bronx-13' or old_version == 'bronx-14' or old_version == 'bronx-15':
         logging.info("Making Slurm compatible...")
         final_xml = convert_xml_text(input_content, prev_version=old_version)
     

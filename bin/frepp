@@ -15,6 +15,7 @@ use Getopt::Long( ':config', 'no_ignore_case' );
 use Date::Manip;
 use XML::LibXML;
 use File::Spec;
+use Email::Valid;
 
 use lib ( File::Basename::fileparse( File::Spec->rel2abs($0) ) )[1] . "../lib";
 use FRE();
@@ -26,7 +27,7 @@ use FRETargets qw(standardize);
 use Env::Modulecmd;
 Env::Modulecmd::load('slurm');
 
-use vars qw( $expt $nml $err $username %dtvars $root);
+use vars qw( $expt $nml $err $mailList %dtvars $root);
 use vars
     qw( $mkdircommand $hDate $t0 $tEND $sim0 $ppRootDir $component $cpiomonTS $aggregateTS $historyfiles);
 use vars qw( $do_static $segTime $segUnits $caltype);
@@ -76,6 +77,7 @@ if ($@) {
         'AnalysisStartYear|Y=s',
         'AnalysisEndYear|Z=s',
 
+        'mail-list=s',
         'MailOnComplete|M',
         'Walltime|W=s',
         'debug|Q',
@@ -194,14 +196,15 @@ Usage:    $relfrepp -P|--platform platform [-AB:C:O:RY:Z:c:d:f:hlmMp:oqr:S:st:u:
                          This year overrides the endYear specifed in the <analysis> tag.
 
           OPTIONS FOR TIMING/DEBUGGING/STATISTICS/SCHEDULING
-          -M           = send mail to user when job is complete
-          -m opts      = Additional options to pass to the resource manager (e.g. msub, qsub, sbatch options)
-          -W time      = change the max wallclock time for the job, ie, -W 00:20:00
-          -u label     = specify unique output dir. frepp -u 2 yields .../pp_2/...
-          -Q           = don't print the error checks into the script.  For evaluating csh.
-          -q           = don't print the analysis figure checks to stdout.
-          -v           = verbose flag
-          -V           = very verbose flag
+          --mail-list string = send mail to comma-separated list instead of \$USER\@noaa.gov
+          -M                 = send mail to user when job is complete
+          -m opts            = Additional options to pass to the resource manager (e.g. msub, qsub, sbatch options)
+          -W time            = change the max wallclock time for the job, ie, -W 00:20:00
+          -u label           = specify unique output dir. frepp -u 2 yields .../pp_2/...
+          -Q                 = don't print the error checks into the script.  For evaluating csh.
+          -q                 = don't print the analysis figure checks to stdout.
+          -v                 = verbose flag
+          -V                 = very verbose flag
 
           GENERAL FRE OPTIONS
           -h           = show this help message, then exit
@@ -234,6 +237,24 @@ EOF
 
     chomp( my $beginTime = `date +\%s` );
 
+    if ($opt_V) { $opt_v = 1; }
+
+    if ($opt{'mail-list'}) {
+        # get rid of the quotes that are needed to pass through pp.starter
+        $opt{'mail-list'} =~ s/"//g;
+        for (split ',', $opt{'mail-list'}) {
+            unless (Email::Valid->address($_)) {
+                die "ERROR: The email address '$_' specified in --mail-list isn't valid\n";
+            }
+        }
+        $mailList = $opt{'mail-list'};
+        print STDERR "NOTE: The email list '$mailList' will be used for FRE notifications instead of the default '\$USER\@noaa.gov'\n";
+    }
+    else {
+        $mailList = "$ENV{'USER'}\@noaa.gov";
+        print STDERR "NOTE: '$mailList' will be used for FRE notifications\n" if $opt_v;
+    }
+
     $opt_x = 'rts.xml' unless $opt_x;    #set default filename for experiments xml file
     if ( !-f $opt_x ) {
         mailuser("XML file does not exist: $opt_x");
@@ -244,8 +265,6 @@ EOF
     if ( !$opt_t or ( "$opt_t" eq "" ) ) {
         print STDERR "WARNING: You did not specify a model date\n" unless $opt_A;
     }
-
-    if ($opt_V) { $opt_v = 1; }
 
     if ( $opt_M and $opt{plus} ) {
         print STDERR "NOTE: You have specified -M (mail on complete) and --plus; to avoid flooding your inbox, the -M option has been turned off.\n";
@@ -295,7 +314,6 @@ EOF
     my $version_head = "# FMS postprocessing script created at $createdate via:\n# $0 ";
     $version_head .= "-x $abs_xml_path ";
 
-    $username = $ENV{'USER'};
 
     #variables for timing statistics
     $opt_z = 1;
@@ -665,6 +683,7 @@ EOF
         if ($opt_r)       { $version_info .= "-r $opt_r "; }
         if ($opt_H)       { $version_info .= "-H "; }
         if ($opt_m)       { $version_info .= "-m '$opt_m' "; }
+        if ($opt{'mail-list'}) { $version_info .= "--mail-list $opt{'mail-list'}"; }
         $version_info .= "$expt";
         my $this_frepp_cmd = $version_info;
         $this_frepp_cmd =~ s/.*# //smg;
@@ -769,6 +788,7 @@ EOF
         $cshscripttmpl =~ s/set platform/set platform = $opt_P/;
         $cshscripttmpl =~ s/set target/set target = $opt_T/;
         $cshscripttmpl =~ s/set segment_months/'set segment_months = ' . segmentLengthInMonths()/e;
+        $cshscripttmpl =~ s/(#SBATCH --mail-user).*/$1=$mailList/;
 
         if ($opt_r) {    #if a regression test, no further postprocessing
             $cshscripttmpl =~ s/(#INFO:max_years=)/$1$maxyrs/;
@@ -935,7 +955,7 @@ EOF
         $checktransfer = <<EOF;
 if ( \$status ) then
          echo ERROR: data transfer attempt failed twice, exiting.
-         Mail -s "\$name year \$historyyear cannot be postprocessed" \$USER <<END
+         Mail -s "\$name year \$historyyear cannot be postprocessed" $mailList <<END
 Your FRE post-processing job ( \$JOB_ID ) has exited because of a data transfer failure.
 
 This job can be resubmitted via:
@@ -1292,7 +1312,7 @@ EOF
             $checktransfer = <<EOF;
 if ( \$status ) then
          echo ERROR: data transfer attempt failed twice, exiting.
-         Mail -s "\$name year \$historyyear component $component cannot be postprocessed" \$USER <<END
+         Mail -s "\$name year \$historyyear component $component cannot be postprocessed" $mailList <<END
 Your FRE post-processing job ( \$JOB_ID ) has exited because of a data transfer failure.
 
 This job can be resubmitted via:
@@ -2652,7 +2672,7 @@ foreach h ( $hf )
  set historyyear = `echo \$h | sed 's/[0-9][0-9][0-9][0-9].nc.tar//'`
  set availhf = ( `ls \$historyyear????.nc.cpio \$historyyear????.nc.tar` )
  if ( "\$availhf" == "" ) then
-   Mail -s "\$name year \$historyyear cannot be postprocessed" \$USER <<END
+   Mail -s "\$name year \$historyyear cannot be postprocessed" $mailList <<END
 Your FRE post-processing job ( \$JOB_ID ) has exited because no history files
 were found for year \$historyyear in directory:
 $opt_d
@@ -2860,7 +2880,7 @@ else if ( \$afields == $efields2 ) then
    echo NOTE: History data has the expected number of time levels for $diagfile
 else
    echo ERROR: Incomplete history data
-   Mail -s "\$name year \$historyyear cannot be postprocessed" \$USER <<END
+   Mail -s "\$name year \$historyyear cannot be postprocessed" $mailList <<END
 Your FRE post-processing job ( \$JOB_ID ) has exited because of incomplete
 history data.  FRE expected $efields time levels in $diagfile data, but
 found \$afields time levels for the interval $firsthisty$firsthistm$firsthistd-$tENDy$tENDm$tENDd.
@@ -3033,7 +3053,7 @@ endif
 if ( -f /home/gfdl/flags/fre/checkpoint.\$HOST || -f /home/gfdl/flags/fre/checkpoint.all || -f /home/gfdl/flags/fre/jobs/checkpoint.\$JOB_ID || -f \$HOME/fre.checkpoint.\$JOB_ID ) then
    set now = `date +\%s`
    echo "Exiting early by HPCS request at \$now, will resume with $checkpt"
-   Mail -s "\$name job \$JOB_ID has been checkpointed by frepp" \$USER <<END
+   Mail -s "\$name job \$JOB_ID has been checkpointed by frepp" $mailList <<END
 Your FRE post-processing job ( \$JOB_ID ) has been stopped and resubmitted
 to the batch queue.  It will be re-run by the operators as soon as possible
 and resume calculating $checkpt.
@@ -3168,7 +3188,7 @@ EOF
 if ( -e \$work/.errorssend ) then
 set errorlines = `cat \$work/.errorssend | wc -l`
 if ( \$errorlines ) then
-Mail -s "$relfrepp CSH ERROR: $expt $component $hDate" $username < \$work/.errorssend
+Mail -s "$relfrepp CSH ERROR: $expt $component $hDate" $mailList < \$work/.errorssend
 $writestate
 sleep 30
 endif
@@ -3193,7 +3213,7 @@ EOF
             if ( $jobid ) {
                 my $outpath = File::Spec->catfile($stdoutdir, 'postProcess', "$ENV{SLURM_JOB_NAME}.o$jobid");
                 my $str = <<EOF;
-Mail -s "$relfrepp PERL ERROR: $expt $hDate" $username <<END
+Mail -s "$relfrepp PERL ERROR: $expt $hDate" $mailList <<END
 Error message(s) have been reported by $relfrepp while
 creating postprocessing scripts for year $hDate of the
 experiment $expt, in the stdout file
@@ -7847,6 +7867,7 @@ EOF
 #SBATCH --output
 #SBATCH --chdir
 #SBATCH --mail-type=NONE
+#SBATCH --mail-user
 #INFO:component=
 #INFO:max_years=
 EOF

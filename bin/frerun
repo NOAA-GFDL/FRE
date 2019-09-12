@@ -279,6 +279,7 @@ use FREPlatforms();
 use FRETargets();
 use FRETemplate();
 use FREUtil();
+use Email::Valid;
 
 # //////////////////////////////////////////////////////////////////////////////
 # ////////////////////////////////////////////////////////// Global constants //
@@ -308,7 +309,7 @@ use FREUtil();
         'qos|q=s',                'submit|s',
         'target|t=s',             'version|V',
         'verbose|v+',             'walltime|w=i',
-        'xmlfile|x=s'
+        'xmlfile|x=s',            'mail-list=s'
     );
 
     use constant RUNSCRIPT_TEMPLATE_MAIN => 'runscript.template.main';
@@ -371,6 +372,7 @@ use FREUtil();
             "   -w NUM,    --walltime=NUM              maximum wall time (in minutes) to use for input data staging (default depends on site)\n",
             "   -x FILE,   --xmlfile=FILE              experiment suite XML configuration FILE (default is '$cwd/$xml')\n",
             "              --cluster=STRING            cluster STRING to use for model runs\n",
+            "              --mail-list=STRING          email the comma-separated STRING list of emails rather than \$USER\@noaa.gov\n",
             "  The platform and at least one experiment from the FILE must be listed as an argument.\n\n"
         );
     } ## end sub Usage
@@ -854,6 +856,7 @@ use FREUtil();
             FRETemplate::setVariable( $fre, \$s, 'archiveDir', $z->archiveDir() );
             FRETemplate::setVariable( $fre, \$s, 'executable', $execName );
             FRETemplate::setVariable( $fre, \$s, 'mailMode',   $fre->mailMode() );
+            FRETemplate::setVariable( $fre, \$s, 'mailList',   $fre->{mailList} );
             FRETemplate::setVariable( $fre, \$s, 'includeDir', $includeDir );
 
             FRETemplate::setVariable( $fre, \$s, 'platformRemote',   "'$remotePlatform'" );
@@ -1654,7 +1657,8 @@ use FREUtil();
                                     File::Basename::basename($scriptName),
                                     $stdoutTmpDir );
                                 FRETemplate::setFlag( $fre, \$rtScript, 'flagOutputFillGrid',
-                                    ( are_history_files_masked( $fre, $runInfo ) ? 'On' : 'Off' ) );
+                                    ( ! $o{'combine-history'} ? 'Off' :
+                                      are_history_files_masked( $fre, $runInfo ) ? 'On' : 'Off' ) );
                                 ( $rc, $status )
                                     = frerun::outputScriptExecuteOrSubmit( \$rtScript, $z,
                                     $scriptName, $stdoutName, %o );
@@ -1758,7 +1762,8 @@ use FREUtil();
                                 File::Basename::basename($scriptName),
                                 $stdoutTmpDir );
                             FRETemplate::setFlag( $fre, \$runScript, 'flagOutputFillGrid',
-                                ( are_history_files_masked( $fre, $prdInfo ) ? 'On' : 'Off' ) );
+                                ( ! $o{'combine-history'} ? 'Off' :
+                                  are_history_files_masked( $fre, $prdInfo ) ? 'On' : 'Off' ) );
                             ( $rc, $status )
                                 = frerun::outputScriptExecuteOrSubmit( \$runScript, $z, $scriptName,
                                 $stdoutName, %o );
@@ -2212,6 +2217,16 @@ EOF
             || $fre->property('FRE.scheduler.inputStager.runtime.default')
             || frerun::WALLTIME_DEFAULT;
         $opt{walltime} = $walltime;
+    }
+
+    if ($opt{'mail-list'}) {
+        for (split ',', $opt{'mail-list'}) {
+            unless (Email::Valid->address($_)) {
+                $fre->out( FREMsg::FATAL, "The email address '$_' specified in --mail-list isn't valid" );
+                exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
+            }
+        }
+        $fre->out( FREMsg::NOTE, "The email list '$opt{'mail-list'}' will be used FRE notifications instead of the default '\$USER\@noaa.gov'" );
     }
 
     my @exps = ();
