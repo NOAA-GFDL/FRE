@@ -647,7 +647,11 @@ def add_compiler_tag(etree_root, compiler_type='intel',
     try:
         platform_list = etree_root.find('experimentSuite').find('setup').findall('platform')
     except AttributeError as e:
-        platform_list = etree_root.find('setup').findall('platform') 
+
+        if etree_root.find('setup') is not None:
+            platform_list = etree_root.find('setup').findall('platform')
+        else:
+            return
 
     for platform in platform_list:
         
