@@ -18,6 +18,11 @@ use strict;
 use warnings FATAL => 'all';
 use Test::More;
 
+# don't run frerun test at gfdl
+if ($ENV{HSM_SITE} =~ /gfdl/) {
+    plan skip_all => 'Test irrelevant on PP/AN and not likely to work on workstations';
+}
+
 my $xml = 'xml/CM4_am4p0c96L33_OM4p5.xml';
 my $platform = 'ncrc4.intel16';
 my $exp = 'CM4_c96L33_am4p0_OMp5_2010_30d30_me_tlt_geo_kd15_fgnv0p1';
