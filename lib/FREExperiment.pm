@@ -2370,12 +2370,15 @@ sub getResourceRequests($$) {
         lnd => 2,
         ice => 2,
     );
-    my $ok;
+    my $ok = 0;
     for my $comp (@components) {
         my $message;
         my $N = grep !/^$/, values %{ $data{$comp} };
         if ( $data{$comp}{ranks} and $data{$comp}{threads} ) {
-            $ok = 1;
+            $ok = 1 if $ok >= 0;
+        }
+        if ( ($data{$comp}{ranks} and not $data{$comp}{threads}) or ($data{$comp}{threads} and not $data{$comp}{ranks})) {
+            $ok = -1;
         }
         if ( $N >= $complete_specs{$comp} ) {
             $message = "Component $comp has complete resource request specifications: ";
@@ -2394,9 +2397,9 @@ sub getResourceRequests($$) {
         chop $message for 1, 2;
         $fre->out( FREMsg::NOTE, $message );
     } ## end for my $comp (@components)
-    if ( !$ok ) {
+    if ( $ok != 1) {
         $fre->out( FREMsg::FATAL,
-            "A resource request tag was found but was incomplete. Ranks and threads must be specified for at least one model component. See FRE Documentation at http://wiki.gfdl.noaa.gov/index.php/FRE_User_Documentation#Resource_specification"
+            "A resource request tag was found but was incomplete. Ranks and threads must be specified for at least one model component. Also, threads must be non-zero if ranks are non-zero, and vice versa. See FRE Documentation at http://wiki.gfdl.noaa.gov/index.php/FRE_User_Documentation#Resource_specification"
         );
         return;
     }
