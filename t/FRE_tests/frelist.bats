@@ -482,7 +482,6 @@ source \$MODULESHOME/init/csh
 module use -a /home/fms/local/modulefiles
 module purge
 module load fre/$FRE_COMMANDS_VERSION
-module load fre-analysis
 module load git
 
 setenv NC_BLKSZ 64K
@@ -599,7 +598,6 @@ source $MODULESHOME/init/csh
 module use -a /home/fms/local/modulefiles
 module purge
 module load fre/bronx-12
-module load fre-analysis
 module load git
 
 setenv NC_BLKSZ 64K
