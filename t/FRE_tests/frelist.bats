@@ -112,8 +112,8 @@ CM2.1U_Control-1990_E1.M_3B_snowmelt_static_ocn6x5"
     [[ "$output_good" =~ "$output" ]]
 }
 
-@test "Capture bad project setting" {
-    output_good="*FATAL*: Your project name 'gfdl_YOURGROUPLETTER' appears to be invalid, please correct your XML's platform section."
+@test "Capture missing project setting" {
+    output_good="*FATAL*: Your project name is not specified and is required on this site; please correct your XML's platform section."
 
     # Skip if not on ncrc3 or ncrc4
     if [ "${FRE_SYSTEM_SITE}" != "ncrc" ]; then
@@ -129,7 +129,7 @@ CM2.1U_Control-1990_E1.M_3B_snowmelt_static_ocn6x5"
        esac
     fi
 
-    run frelist -p ${ncrc_site}.yourgroupletter -x CM2.1U.xml
+    run frelist -p ${ncrc_site}.nogroup -x CM2.1U.xml
     print_output_status_and_diff_expected
     [ "$status" -eq 30 ]
     [[ "$output_good" =~ "$output" ]]
