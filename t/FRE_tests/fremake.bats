@@ -420,11 +420,6 @@ ${last_line_good}"
             root_stem="/scratch4/GFDL/gfdlscr"
             submit_cmd="qsub"
             ;;
-        gfdl-ws )
-            platform="gfdl-ws"
-            root_stem="/local2/tmp"
-            submit_cmd=""
-            ;;
         * )
             skip "No test for current platform"
             ;;
@@ -484,11 +479,6 @@ ${last_line_good}"
             root_stem="/scratch4/GFDL/gfdlscr"
             submit_cmd="qsub"
             ;;
-        gfdl-ws )
-            platform="gfdl-ws"
-            root_stem="/local2/tmp"
-            submit_cmd=""
-            ;;
         * )
             skip "No test for current platform"
             ;;
@@ -517,11 +507,6 @@ ${last_line_good}"
             platform="theia"
             root_stem="/scratch4/GFDL/gfdlscr"
             submit_cmd="qsub"
-            ;;
-        gfdl-ws )
-            platform="gfdl-ws"
-            root_stem="/local2/tmp"
-            submit_cmd=""
             ;;
         * )
             skip "No test for current platform"
