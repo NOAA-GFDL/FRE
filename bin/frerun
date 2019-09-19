@@ -573,6 +573,31 @@ use Email::Valid;
         }
     } ## end sub getRemotePlatformCsh($$)
 
+    sub getRemoteProject($$)
+
+        # ------ arguments: $exp $platform
+    {
+        my ( $z, $p ) = @_;
+        my ( $fre,    $expName ) = ( $z->fre(),      $z->name() );
+        my ( $target, $xmlfile ) = ( $fre->target(), $fre->configFileAbsPathName() );
+        my $cmd
+            = "frelist --xmlfile=$xmlfile --platform=$p --target=$target --novalidate --get-project $expName";
+        my $res = qx($cmd);
+        chomp $res;
+        if ( $? == 0 ) {
+            $res =~ s/\s*//g;
+            if ( $res ) {
+                return $res;
+            }
+            else {
+                return '';
+            }
+        }
+        else {
+            return '';
+        }
+    }
+
     sub init($%)
 
         # ------ arguments: $exp %options
@@ -758,7 +783,7 @@ use Email::Valid;
 
 # --------------------------------------------------------------------- various remote settings for post-processing
 
-            my ( $remoteModuleFilesDir, $remoteVersion, $remotePlatformCsh ) = ( '', '', '', '' );
+            my ( $remoteModuleFilesDir, $remoteVersion, $remotePlatformCsh, $remoteProject ) = ( '', '', '', '', '' );
             if ( $flagOutputTransfer eq 'On' && $flagOutputPostProcess eq 'On' ) {
                 $remoteModuleFilesDir = $fre->property('FRE.tool.modules.use.remote');
                 $remotePlatformCsh = frerun::getRemotePlatformCsh( $z, $remotePlatform );
@@ -779,6 +804,14 @@ use Email::Valid;
                         "Unable to determine remote platform csh - please check your platform '$remotePlatform'"
                     );
                     return ( 0, FREDefaults::STATUS_FS_GENERIC_PROBLEM );
+                }
+                $remoteProject = frerun::getRemoteProject($z, $remotePlatform);
+                if ($remoteProject) {
+                    $fre->out( FREMsg::NOTE, "Remote project - $remoteProject" );
+                }
+                else {
+                    $remoteProject = $fre->project();
+                    $fre->out( FREMsg::NOTE, "Remote project not found; using $remoteProject" );
                 }
             } ## end if ( $flagOutputTransfer...)
 
@@ -844,6 +877,7 @@ use Email::Valid;
             FRETemplate::setVariable( $fre, \$s, 'freCommandsVersion', $ENV{FRE_COMMANDS_VERSION} );
 
             FRETemplate::setVariable( $fre, \$s, 'project', $fre->project() );
+            FRETemplate::setVariable( $fre, \$s, 'projectRemote', "'$remoteProject'" );
             FRETemplate::setVariable( $fre, \$s, 'clusterInit', $o{cluster} );
 
             FRETemplate::setVariable( $fre, \$s, 'platform',   $fre->platform() );

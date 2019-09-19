@@ -82,7 +82,7 @@ use FRETemplate();
         'novalidate',      'platform-csh|S', 'postfix|P',     'regression|r=s',
         'remote-user|R=s', 'quiet|q',        'validate|C',    'curator|c',
         'Xml|X',           'help|h',         'platform|p=s',  'target|t|T=s',
-        'version|V',       'verbose|v+',     'xmlfile|x=s'
+        'version|V',       'verbose|v+',     'xmlfile|x=s',   'get-project'
     );
 
     use constant DIRECTORIES     => FREDefaults::ExperimentDirs();
@@ -121,6 +121,7 @@ use FRETemplate();
             "              --nodes                     print number of nodes that would be requested\n",
             "   -S,        --platform-csh              print the platform csh setup (defined in the <csh> element) and exit\n",
             "   -P,        --postfix                   list all the regression runs with their labels, run numbers and postfixes\n",
+            "              --get-project               print the project (defined in the <platform>/<project> element) and exit\n",
             "   -r STRING, --regression=STRING         use regression tests STRING (usable for --postfix and --namelist options only)\n",
             "   -R STRING, --remote-user=STRING        use the remote user STRING for inter-site directory listings\n",
             "   -C,        --validate                  validate (i.e. check) the FILE against the XML schema and exit\n",
@@ -407,7 +408,7 @@ use FRETemplate();
         my @options = (
             'validate', 'platform-csh', 'Xml',     'directory',
             'evaluate', 'executable',   'postfix', 'namelist',
-            'description'
+            'description', 'get-project'
         );
 
         for ( my $i = 0; $i < scalar(@options) - 1; $i++ ) {
@@ -469,6 +470,11 @@ use FRETemplate();
         my $csh = $fre->baseCsh;
         $csh =~ s/\$\(name\)/$expNames[0]/g if scalar @expNamesRequested > 0;
         print "$csh\n" and exit FREDefaults::STATUS_OK;
+    }
+
+    if ( $opt{'get-project'} ) {
+        my $project = $fre->project();
+        print "$project\n" and exit FREDefaults::STATUS_OK;
     }
 
     my @exps = ();
