@@ -16,8 +16,9 @@ Bronx-16 was released on October 21, 2019. It contains mainly bug fixes, some Sl
   * Improved error message from frerun when incompatible ranks and threads are specified in the <resources> tag
 
 * Slurm updates
-  * Fix for output.stager to more accurately determine the memory available to pass to mppnccombine (should alleviate occasional out-of-memory output.stager errors seen)
   * Two pp.starter Slurm cross-site fixes: (again) use a default 022 umask and run under the user's primary group
+  * Submit the pp.starter job using the GFDL-side account (if specified)
+  * Fix for output.stager to more accurately determine the memory available to pass to mppnccombine (should alleviate occasional out-of-memory output.stager errors seen)
   * Many Slurm updates to FRE sub-tools that were not converted in Bronx-15 (output.retry, batch.scheduler.list, batch.scheduler.fre.usage, batch.scheduler.submit)
 
 * Updates and cleanup
