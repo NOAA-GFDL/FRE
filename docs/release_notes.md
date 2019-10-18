@@ -1,20 +1,49 @@
-# Bronx-13 Release Notes
+# Bronx-16 Release Notes
 
-FRE Bronx-13 was released on October 31, 2018. The major feature is support for the Gaea f2 filesystem. Additional features (including PPAN Slurm support) and bug fixes will be released as future patches.
+Bronx-16 was released on October 21, 2019. It contains mainly bug fixes, some Slurm adjustments, and a few small features.
 
-## Features
-* Support for the Gaea /lustre/f2 filesystem
-  * New default directory locations for the f2 filesystem
-  * Removed FRE-defined properties `$(CTMP)`, `$(CPERM)`, `$(CDATA)`, and `$(CHOME)`. No new FRE properties are being defined for f2; instead, please use the ORNL-defined environment variables `$SCRATCH`, `$DEV`, and `$PDATA` (or equivalently, `${SCRATCH}`, `${DEV}`, and `${PDATA}`)
+## FRE
+* Features
+  * User-specified email list for FRE notifications
+    * fremake, frerun, and frepp accept a comma-separated list of emails to email FRE notifications to (both Slurm-sent and FRE-native emails) instead of $USER@noaa.gov using the option --mail-list=user1@noaa.gov,user2@company.com
+    * email list will be passed from frerun to frepp via pp.starter
+  * output.stager to not combine distributed files if the variables differ (a current diag manager bug for some regional output).
+    * Users will be emailed if this problem is found.
 
-## Fixes
-* Fix for ardiff to handle colored ls output ("ls --color")
-* Fix to prevent bash environment variable functions from causing a runscript error
+* Bug fixes
+  * frepp to use the "julian" default calendar if coupler_nml cannot be found
+  * Fix for frerun --no-combine-history option (which had been broken since Bronx-12's ocean_static feature)
+  * Improved error message from frerun when incompatible ranks and threads are specified in the <resources> tag
 
-## Instructions for upgrading from Bronx-12
-All users now have F2 access. While F1 and F2 will both be available for a few months, we encourage users to start new experiments using Bronx-13. Compared to bronx-12, Bronx-13 requires no XML changes aside from F1->F2 directory locations.
-1. Migrate your input data to F2. Pdata directories are arranged by institution and group, e.g. `/lustre/f2/pdata/gfdl/gfdl_B`. As Pdata isn't backed up, please copy any input from GFDL's `/archive`
-1. Update the FRE directories in your XML. If you use FRE's default directories, no changes may be needed except Pdata. Since Pdata directories on F2 are now organized by institution, you'll need to add a `/gfdl` to your input file directory. e.g `$(CDATA)/fms` should be changed to `$PDATA/gfdl/fms`
-1. Double-check that no parts of your XML reference F1. While the $(CDATA) FRE property has been removed, the environment variable `$CDATA` continues to point to `/lustre/f1/pdata`. While F1 is still mounted, referencing F1 paths will still work; however, you *must* update the location before F1 is removed. Please take the time now to ensure your XML isn't dependent on F1.
-1. Update your XML to use bronx-13 by updating the `<platform>/<freVersion>` tag.
-1. Use FRE on your Bronx-13 XML as usual. `module load fre/bronx-13`
+* Slurm updates
+  * Fix for output.stager to more accurately determine the memory available to pass to mppnccombine (should alleviate occasional out-of-memory output.stager errors seen)
+  * Two pp.starter Slurm cross-site fixes: (again) use a default 022 umask and run under the user's primary group
+  * Many Slurm updates to FRE sub-tools that were not converted in Bronx-15 (output.retry, batch.scheduler.list, batch.scheduler.fre.usage, batch.scheduler.submit)
+
+* Updates and cleanup
+  * Perl update to 5.30.0
+  * Consolidation of some site-specific FRE sub-tools into general sub-tools (batch.scheduler.(time|list|fre.usage)
+  * Removal of unsupported sites olcf (titan), theia
+  * Remove group-checking for ptmp directory setup at GFDL
+
+## New hsm/1.2.4
+  * Check to see if work needs to be done before placing PTMP file locks
+  * Should alleviate the delays seen by some users where PTMP cache is complete but frepp jobs are still waiting for locks
+
+## FRE-NCtools
+* split_ncvars
+  * New option -u to split files without .nc extension (i.e. distributed output files)
+  * Deprecate old cshell and python split_ncvars (will print warning and call split_ncvars.pl)
+* list_ncvars
+  * Make the temporary input namelist file more unique, to help when running in parallel
+* make_hgrid
+  * support very high-resolution grid (e.g. 43200 x 21600 lat-lon grid)
+  * New option --do_cube_transform to re-orient tile #6 upwards
+  * New option --no_length_angle to not output dx, dy, angle_dx, and angle_dy
+* make_solo_mosaic
+  * Ability to create fold-north contact for MOM6 horizontal grid
+* make_remap_file
+  * New tool to create low-resolution remap file from high-resolution remap file
+  * Input and output mosaic files can be cubed-sphere or not
+* mppncscatter
+  * bug fix when data has record dimension
