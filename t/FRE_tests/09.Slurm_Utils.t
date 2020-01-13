@@ -17,7 +17,7 @@ use strict;
 use Slurm::Utils;
 
 # Check if Slurm is used on this site.  If not, skip all tests.
-my $myCmd = 'which squeue';
+my $myCmd = 'which squeue 2> /dev/null';
 my $cmdOutput = qx($myCmd);
 if ( $? != 0 ) {
   plan skip_all => 'Slurm is not used on this site';
