@@ -1,4 +1,4 @@
-#! /usr/bin/perl
+#! /usr/bin/env perl
 
 =pod
 
@@ -36,10 +36,10 @@ use FRE;
 use FREExperiment;
 
 my $Version = '1.1';
-my $Date = '01 Mar 2012';
+my $Date    = '01 Mar 2012';
 
-my $verbose = 0;
-my $xmlFile = '';
+my $verbose    = 0;
+my $xmlFile    = '';
 my $scriptFile = '';
 my $platform;
 
@@ -89,108 +89,124 @@ The FRE run platform.
 
 =cut
 
-GetOptions ("help|h" => sub{pod2usage(1)},
-	    "verbose|v" => \$verbose,
-	    "version|V" => sub{displayVersion($Version, $Date); exit(0);},
-	    "xmlfile|x=s" => \$xmlFile,
-	    "script|s=s" => \$scriptFile,
-	    "platform|p=s" => \$platform,
-	   ) or pod2usage(2);
+GetOptions(
+    "help|h"    => sub { pod2usage(1) },
+    "verbose|v" => \$verbose,
+    "version|V" => sub { displayVersion( $Version, $Date ); exit(0); },
+    "xmlfile|x=s"  => \$xmlFile,
+    "script|s=s"   => \$scriptFile,
+    "platform|p=s" => \$platform,
+) or pod2usage(2);
 
-
-# diag_table_chk can be called one of three ways:  
+# diag_table_chk can be called one of three ways:
 # 1) The diag_table file is given on the command line
 # 2) Extract the information from an XML file and experiment
 # 3) Use an existing run script to get the diag_table
 
-if ( $xmlFile and $scriptFile ) { # Make sure both -x and -s were not specified
-  pod2usage( { -message => "$0: cannot specify both '-s' and '-x'.",
-	       -verbose => 0,
-	     } );
+if ( $xmlFile and $scriptFile ) {    # Make sure both -x and -s were not specified
+    pod2usage(
+        {   -message => "$0: cannot specify both '-s' and '-x'.",
+            -verbose => 0,
+        }
+    );
 }
-if ( ! $xmlFile and ! $scriptFile ) { # If no XML or script file specified.
-  if ( $#ARGV < 0 ) {
-    pod2usage( { -message => "$0: diag_table file must be given as an argument.",
-		 -verbose => 0,
-	       } );
-  } else {
-    my $diag_table_file = $ARGV[0];
-
-    # Check if the diag table file exists, is not a directory and is readable.
-    die "*FATAL*: File $diag_table_file does not exist.\n" unless ( -e $diag_table_file );
-    die "*FATAL*: File $diag_table_file exists, but is unreadable.\n" unless ( -r $diag_table_file );
-    die "*FATAL*: $diag_table_file is not a file.\n" unless ( -f $diag_table_file );
-
-    # Announce what file we are going to read.
-    print "Reading file $diag_table_file\n\n";
-
-    # Open the file handler for the filename.
-    open(DIAG_TABLE, "<", $diag_table_file);
-  }
-} else { # We are using an XML or script file.
-  if ( $xmlFile ) {
+if ( !$xmlFile and !$scriptFile ) {    # If no XML or script file specified.
     if ( $#ARGV < 0 ) {
-      pod2usage( { -message => "$0: experiment must be given as an argument.",
-		   -verbose => 0,
-		 } );
-    } else {
-      my $inputExperiment = $ARGV[0];
-
-      my %freOps = ( xmlfile => $xmlFile, platform => $platform );
-      my $fre = FRE -> new('diag_table_chk',%freOps) or exit(1);
-      my $freExp = FREExperiment -> new($fre, $inputExperiment) or exit(1);
-      my $diagTableString = $freExp -> extractTable('diagTable');
-
-      # Treat the return string as a file.
-      open(DIAG_TABLE, "<", \$diagTableString);
+        pod2usage(
+            {   -message => "$0: diag_table file must be given as an argument.",
+                -verbose => 0,
+            }
+        );
     }
-  } else {
-    # Check if the diag table file exists, is not a directory and is readable.
-    die "*FATAL*: File $scriptFile does not exist.\n" unless ( -e $scriptFile );
-    die "*FATAL*: File $scriptFile exists, but is unreadable.\n" unless ( -r $scriptFile );
-    die "*FATAL*: $scriptFile is not a file.\n" unless ( -f $scriptFile );
+    else {
+        my $diag_table_file = $ARGV[0];
 
-    my $diagTableString = getDiagTableFromScript($scriptFile);
-    die "*FATAL*: Could not find the diag_table in the script $scriptFile.\n" unless ( $diagTableString );
+        # Check if the diag table file exists, is not a directory and is readable.
+        die "*FATAL*: File $diag_table_file does not exist.\n" unless ( -e $diag_table_file );
+        die "*FATAL*: File $diag_table_file exists, but is unreadable.\n"
+            unless ( -r $diag_table_file );
+        die "*FATAL*: $diag_table_file is not a file.\n" unless ( -f $diag_table_file );
 
-    # Treat the return string as a file.
-    open(DIAG_TABLE, "<", \$diagTableString);
-  }
-}
+        # Announce what file we are going to read.
+        print "Reading file $diag_table_file\n\n";
 
+        # Open the file handler for the filename.
+        open( DIAG_TABLE, "<", $diag_table_file );
+    }
+} ## end if ( !$xmlFile and !$scriptFile)
+else {    # We are using an XML or script file.
+    if ($xmlFile) {
+        if ( $#ARGV < 0 ) {
+            pod2usage(
+                {   -message => "$0: experiment must be given as an argument.",
+                    -verbose => 0,
+                }
+            );
+        }
+        else {
+            my $inputExperiment = $ARGV[0];
+
+            my %freOps = ( xmlfile => $xmlFile, platform => $platform );
+            my $fre = FRE->new( 'diag_table_chk', %freOps ) or exit(1);
+            my $freExp = FREExperiment->new( $fre, $inputExperiment ) or exit(1);
+            my $diagTableString = $freExp->extractTable('diagTable');
+
+            # Treat the return string as a file.
+            open( DIAG_TABLE, "<", \$diagTableString );
+        }
+    } ## end if ($xmlFile)
+    else {
+
+        # Check if the diag table file exists, is not a directory and is readable.
+        die "*FATAL*: File $scriptFile does not exist.\n"            unless ( -e $scriptFile );
+        die "*FATAL*: File $scriptFile exists, but is unreadable.\n" unless ( -r $scriptFile );
+        die "*FATAL*: $scriptFile is not a file.\n"                  unless ( -f $scriptFile );
+
+        my $diagTableString = getDiagTableFromScript($scriptFile);
+        die "*FATAL*: Could not find the diag_table in the script $scriptFile.\n"
+            unless ($diagTableString);
+
+        # Treat the return string as a file.
+        open( DIAG_TABLE, "<", \$diagTableString );
+    }
+} ## end else [ if ( !$xmlFile and !$scriptFile)]
 
 # Arrays to hold files and fields.
-my @files = ( {
-	       file_name => '',
-	       output_frequency => 0,
-	       output_frequency_units => 0,
-	       output_format => 0,
-	       time_units => 0,
-	       long_name => '',
-	       new_file_frequency => 0,
-	       new_file_frequency_units => 0,
-	       start_time_string => '',
-	       file_duration => 0,
-	       file_duration_units => 0,
-	      } );
+my @files = (
+    {   file_name                => '',
+        output_frequency         => 0,
+        output_frequency_units   => 0,
+        output_format            => 0,
+        time_units               => 0,
+        long_name                => '',
+        new_file_frequency       => 0,
+        new_file_frequency_units => 0,
+        start_time_string        => '',
+        file_duration            => 0,
+        file_duration_units      => 0,
+    }
+);
 
-my @fields = ( {
-		file_name => '',
-		module_name => '',
-		field_name => '',
-		output_name => '',
-		time_sampling => '',
-		time_method => '',
-		spatial_ops => '',
-		packing => 0,
-	       } );
+my @fields = (
+    {   file_name     => '',
+        module_name   => '',
+        field_name    => '',
+        output_name   => '',
+        time_sampling => '',
+        time_method   => '',
+        spatial_ops   => '',
+        packing       => 0,
+    }
+);
 
 # Other variables to hold useful information.
-my @warnings = ( { line_number => 0,
-		   message => '',
-		 } );
-my $tableName = 'NOT SET';
-my @globalDate = ( 'NOT SET' );
+my @warnings = (
+    {   line_number => 0,
+        message     => '',
+    }
+);
+my $tableName  = 'NOT SET';
+my @globalDate = ('NOT SET');
 
 # Errors in global descriptor and global date?
 my $tableNameError;
@@ -198,328 +214,419 @@ my $globalDateError;
 
 # Parse the data from the diag table file, and put it in the
 # appropiate array.
-while ( <DIAG_TABLE> ) {
-  my $line = $_;
-  if ( $. == 1  and (($line =~ /#/ or $line =~ /^$/ or $line =~ /,/) and $tableName =~ 'NOT SET') ) {
-    $tableNameError = 1; # Error with global descriptor name.
-    push @warnings, ( {
-		       line_number => $.,
-		       message => 'Global descriptor should be line 1 of the diag_table.',
-		      } );
-  } elsif ( $. == 2 and (($line =~ /#/ or $line =~ /^$/ or $line =~ /,/) and scalar(@globalDate) < 6) ) {
-    $globalDateError = 1; # Error with global date.
-    push @warnings, ( {
-		       line_number => $.,
-		       message => 'Global date should be line 2 of the diag_table.',
-		      } );
-  }
-  if ( $line =~ /#/ and $line !~ /^#/ ) {
-    push @warnings, ( {
-		       line_number => $.,
-		       message => 'Comment lines should begin with the hash (#) symbol.'
-		      } );
-    my $tmp_line = $line;
-    next if ( sanitizeString($tmp_line) =~ /^#/ );
-
-  }
-  next if ( $line =~ /^#/ or $line =~ /^\s*$/ );
-  my @line_data = parse_line(',', 0, $line);
-  if ( $line_data[$#line_data] =~ /^\s*$/ ) {
-    pop @line_data;
-  }
-
-  my $num_warnings = 0;
-
-  if ( $. == 1  and not $tableNameError ) { # Global descriptor is to be on line 1
-    my $temp_tableName = sanitizeString($line_data[0]);
-    if ( $temp_tableName =~ /\s/ ) {
-      $tableNameError = 1;
-      push @warnings, ( {
-			 line_number => $.,
-			 message => 'The table descriptor should not have any spaces.',
-			} );
-    } elsif ( $temp_tableName =~ /\$/ ) {
-      $tableName = "Set by Environment variable $temp_tableName";
-    } else {
-      $tableName = $temp_tableName;
+while (<DIAG_TABLE>) {
+    my $line = $_;
+    if ( $. == 1
+        and ( ( $line =~ /#/ or $line =~ /^$/ or $line =~ /,/ ) and $tableName =~ 'NOT SET' ) ) {
+        $tableNameError = 1;    # Error with global descriptor name.
+        push @warnings,
+            (
+            {   line_number => $.,
+                message     => 'Global descriptor should be line 1 of the diag_table.',
+            }
+            );
     }
-  } elsif ( $. == 2 ) { # Model date should be on line 2
-    my @date = split(/\s+/, sanitizeString($line_data[0]));
-    if ($#date >= 1 and not $globalDateError) {
-      my $message = verifyDate(@date);
-      if ( $message ) {
-	$globalDateError = 1;
-	push @warnings, ( {
-			   line_number => $.,
-			   message => "Invalid global date. $message",
-			  } );
-      } else {
-	@globalDate = @date;
-      }
-    } elsif ( $date[0] =~ /\$/ ) {
-      $globalDate[0] = "Set by Environment variable $date[0]";
+    elsif ( $. == 2
+        and ( ( $line =~ /#/ or $line =~ /^$/ or $line =~ /,/ ) and scalar(@globalDate) < 6 ) ) {
+        $globalDateError = 1;    # Error with global date.
+        push @warnings,
+            (
+            {   line_number => $.,
+                message     => 'Global date should be line 2 of the diag_table.',
+            }
+            );
     }
-  }
-  if ( ($. > 2) or (($. == 1 and $tableNameError) or ($. == 2 and $globalDateError)) )  {
-    if ( grep { lc($_) =~ /time/} @line_data ) { #This is a file
-      if ( lc($line_data[5]) !~ /time/ ) {
-	$num_warnings++;
-	push @warnings, ( {
-			   line_number => $.,
-			   message => 'The fifth element of a file description must be the string "time".',
-			  } );
-      }
-      # Check output_frequency :: Must be >= -1
-      if ( $line_data[1] < -1 ) {
-	$num_warnings++;
-	push @warnings, ( {
-			   line_number => $.,
-			   message => 'Invalid output frequency.  Must be >= -1.',
-			  } );
-      }
-      # check output_frequency units :: return from find_unit_ivalue() > 0
-      if ( find_unit_ivalue($line_data[2]) < 0 ) {
-	$num_warnings++;
-	$line_data[2] = sanitizeString($line_data[2]);
-	push @warnings, ( {
-			   line_number => $.,
-			   message => "Invalid output frequency unit. ($line_data[2]).",
-			  } );
-      }
-      # check output_format :: Must be in the range 1 <= output_format <= 2
-      if ( $line_data[3] < 1 or $line_data[3] > 2 ) {
-	$num_warnings++;
-	push @ warnings, ( {
-			    line_number => $.,
-			    message => "Output_format out of range. Must be in the range [1,2].",
-			   } );
-      }
-      # check time_units :: return from find_unit_ivalue() > 0
-      if ( find_unit_ivalue($line_data[4]) < 0 ) {
-	$num_warnings++;
-	$line_data[4] = sanitizeString($line_data[4]);
-	push @warnings, ( {
-			   line_number => $.,
-			   message => "Invalid time unit. ($line_data[4]).",
-			  } );
-      }
-      # The following are optional. (There may be a slight problem if the line ends with a ','.)
-      if ( $#line_data > 6 ) {
-	# Check new_file_frequency :: Must be > 0
-	if ( $line_data[6] < 0 ) {
-	  $num_warnings++;
-	  push @warnings, ( {
-			     line_number => $.,
-			     message => "Invalid new file frequency.  Must be > 0.",
-			    } );
-	}
-	# Check new_file_frequency_units :: return from find_unit_ivalue() > 0
-	if ( find_unit_ivalue($line_data[7]) < 0 ) {
-	  $num_warnings++;
-	  $line_data[7] =~ s/"//g;
-	  push @warnings, ( {
-			     line_number => $.,
-			     message => "Invalid new file frequency unit. ($line_data[7]).",
-			    } );
-	}
-	# More optional inputs
-	if ( $#line_data >= 8 ) {
-	  $num_warnings++;
-	  # remove quotes, beginning and ending space.
-	  my @start_time = split(/\s+/,sanitizeString($line_data[8]));
-	  # Check start_time_string :: Must be valid date string
-	  my $message = verifyDate(@start_time);
-	  if ( $message ) {
-	    push @warnings, ( {
-			       line_number => $.,
-			       message => "Invalid start time format. $message",
-			      } );
-	  }
-	  # The last two optional inputs
-	  if ( $#line_data > 8 ) {
-	    # Check file_duration :: Must be > 0
-	    if ( $line_data[9] < 0 ) {
-	      $num_warnings++;
-	      push @warnings, ( {
-				 line_number => $.,
-				 message => "Invalid file duration.  Must be > 0.",
-				} );
-	    }
-	    # Check file_duration_units :: return from find_unit_ivalue() > 0
-	    if ( find_unit_ivalue($line_data[10]) < 0 ) {
-	      $num_warnings++;
-	      $line_data[10] =~ s/"//g;
-	      push @ warnings, ( {
-				  line_number => $.,
-				  message => "Invalid file duration unit. ($line_data[10]).",
-				 } );
-	    }
-	  }
-	}
-      }
-      if ( $num_warnings == 0 ) {
-	push @files, ( {
-			file_name => sanitizeString($line_data[0]),
-			output_frequency => sanitizeString($line_data[1]),
-			output_frequency_units => sanitizeString($line_data[2]),
-			output_format => sanitizeString($line_data[3]),
-			time_units => sanitizeString($line_data[4]),
-			long_name => sanitizeString($line_data[5])
-		       } );
-	if ( $#line_data > 6 ) {
-	  $files[$#files]{new_file_frequency} = sanitizeString($line_data[6]);
-	  $files[$#files]{new_file_frequency_units} = sanitizeString($line_data[7]);
-	} else {
-	  $files[$#files]{new_file_frequency} = '';
-	  $files[$#files]{new_file_frequency_units} = '';
-	}
-	if ( $#line_data >= 8 ) {
-	  $files[$#files]{start_time_string} = sanitizeString($line_data[8]);
-	} else {
-	  $files[$#files]{start_time_string} = '';
-	}
-	if ( $#line_data > 8 ) {
-	  $files[$#files]{file_duration} = sanitizeString($line_data[9]);
-	  $files[$#files]{file_duration_units} = sanitizeString($line_data[10]);
-	} else {
-	  $files[$#files]{file_duration} = '';
-	  $files[$#files]{file_duration_units} = '';
-	}
-	#print "File found (",$files[$#files]{file_name},"), line ",$.,".\n";
-      }
-    } else { # This is a field.
-      # Make sure there are enough fields on the description line :: must be = 8.
-      if ( $#line_data != 7 ) {
-	$num_warnings++;
-	my $message;
-	# Are there too many?
-	if ( $#line_data > 7 ) {
-	  $message = "Too many fields on field description line. (" . scalar(@line_data) . " found)";
-	} else { # Nope, too few.
-	  $message = "Not enough fields on field description line. (" . scalar(@line_data) . " found)";
-	}
-	push @warnings, ( {
-			   line_number => $.,
-			   message => $message,
-			  } );
-      }
+    if ( $line =~ /#/ and $line !~ /^#/ ) {
+        push @warnings,
+            (
+            {   line_number => $.,
+                message     => 'Comment lines should begin with the hash (#) symbol.'
+            }
+            );
+        my $tmp_line = $line;
+        next if ( sanitizeString($tmp_line) =~ /^#/ );
 
-      # Verify that file_name exists in the files array
-      my $notfound = 1;
-      for (my $i=0; $i <= $#files; $i++) {
-	if ( $files[$i]{file_name} eq sanitizeString($line_data[3]) ) {
-	  $notfound = 0;
-	  last;
-	}
-      }
-      if ( $notfound ) {
-	$num_warnings++;
-	$line_data[3] = sanitizeString($line_data[3]);
-	push @warnings, ( {
-			   line_number => $.,
-			   message => "File ($line_data[3]) not defined.  It must be defined before any fields.",
-			  } );
-      }
-      # Verify time_method / time_avg is valid
-      if ( invalid_timeSample(sanitizeString($line_data[5])) ) {
-	$num_warnings++;
-	push @warnings, ( {
-			   line_number => $.,
-			   message => "Time sampling method must be one of (.true., mean, average, avg, .false., none, point, maximum, max, minimum, min, diurnal[#]).",
-			  } );
-      }
-      # Verify regional / globally output type is valid
-      if ( invalid_OutRegtion(sanitizeString($line_data[6])) ) {
-	$num_warnings++;
-	push @warnings, ( {
-			   line_number => $.,
-			   message => "Region to be output must be 'none' for globally, or '-1, -1, -1, -1, hmin,hmax' for vertical region, or 'xmin,xmax, ymin,ymax, hmin, hmax'.",
-			  } );
-      }
-      # Verify packing is valid :: must be in range [1,8]
-      if ( $line_data[7] < 1 or $line_data[7] > 8 ) {
-	$num_warnings++;
-	push @warnings, ( {
-			   line_number => $.,
-			   message => "Packing is out of the valid range.  Must be in the range [1,8]."
-			  } );
-      }
-      # Set the field hash object
-      my $field = {
-		   file_name => sanitizeString($line_data[3]),
-		   module_name => sanitizeString($line_data[0]),
-		   field_name => sanitizeString($line_data[1]),
-		   output_name => sanitizeString($line_data[2]),
-		   time_sampling => sanitizeString($line_data[4]),
-		   time_method => sanitizeString($line_data[5]),
-		   spatial_ops => sanitizeString($line_data[6]),
-		   packing => sanitizeString($line_data[7]),
-		  };
-      if ( &checkDuplicateField($field, @fields) ) {
-	$num_warnings++;
-	push @warnings, ( {
-			   line_number => $.,
-			   message => "Field ".$$field{module_name}."::".$$field{field_name}." is duplicated in file ".$$field{file_name}."."
-			  } );
-      }
-      if ( $num_warnings == 0 ) {
-	# push @fields, ( {
-	# 		 file_name => sanitizeString($line_data[3]),
-	# 		 module_name => sanitizeString($line_data[0]),
-	# 		 field_name => sanitizeString($line_data[1]),
-	# 		 output_name => sanitizeString($line_data[2]),
-	# 		 time_sampling => sanitizeString($line_data[4]),
-	# 		 time_method => sanitizeString($line_data[5]),
-	# 		 spatial_ops => sanitizeString($line_data[6]),
-	# 		 packing => sanitizeString($line_data[7]),
-	# 		} );
-	push @fields, $field;
-      }
     }
-  }
-}
+    next if ( $line =~ /^#/ or $line =~ /^\s*$/ );
+    my @line_data = parse_line( ',', 0, $line );
+    if ( $line_data[$#line_data] =~ /^\s*$/ ) {
+        pop @line_data;
+    }
 
-if ( $verbose ) {
-  my $files2output;
-  my $fields2output;
-  open(FILES, '>', \$files2output);
-  open(FIELDS, '>', \$fields2output);
+    my $num_warnings = 0;
 
-  my $file_name;
-  my $output_frequency;
-  my $output_frequency_units;
-  my $output_format;
-  my $time_units;
-  my $module_name;
-  my $field_name;
-  my $output_name;
-  my $time_sampling;
-  my $time_method;
-  my $spatial_ops;
-  my $packing;
+    if ( $. == 1 and not $tableNameError ) {    # Global descriptor is to be on line 1
+        my $temp_tableName = sanitizeString( $line_data[0] );
+        if ( $temp_tableName =~ /\s/ ) {
+            $tableNameError = 1;
+            push @warnings,
+                (
+                {   line_number => $.,
+                    message     => 'The table descriptor should not have any spaces.',
+                }
+                );
+        }
+        elsif ( $temp_tableName =~ /\$/ ) {
+            $tableName = "Set by Environment variable $temp_tableName";
+        }
+        else {
+            $tableName = $temp_tableName;
+        }
+    }
+    elsif ( $. == 2 ) {    # Model date should be on line 2
+        my @date = split( /\s+/, sanitizeString( $line_data[0] ) );
+        if ( $#date >= 1 and not $globalDateError ) {
+            my $message = verifyDate(@date);
+            if ($message) {
+                $globalDateError = 1;
+                push @warnings,
+                    (
+                    {   line_number => $.,
+                        message     => "Invalid global date. $message",
+                    }
+                    );
+            }
+            else {
+                @globalDate = @date;
+            }
+        }
+        elsif ( $date[0] =~ /\$/ ) {
+            $globalDate[0] = "Set by Environment variable $date[0]";
+        }
+    } ## end elsif ( $. == 2 )
+    if ( ( $. > 2 ) or ( ( $. == 1 and $tableNameError ) or ( $. == 2 and $globalDateError ) ) ) {
+        if ( grep { lc($_) =~ /time/ } @line_data ) {    #This is a file
+            if ( lc( $line_data[5] ) !~ /time/ ) {
+                $num_warnings++;
+                push @warnings,
+                    (
+                    {   line_number => $.,
+                        message =>
+                            'The fifth element of a file description must be the string "time".',
+                    }
+                    );
+            }
 
-format FILES_TOP =
+            # Check output_frequency :: Must be >= -1
+            if ( $line_data[1] < -1 ) {
+                $num_warnings++;
+                push @warnings,
+                    (
+                    {   line_number => $.,
+                        message     => 'Invalid output frequency.  Must be >= -1.',
+                    }
+                    );
+            }
+
+            # check output_frequency units :: return from find_unit_ivalue() > 0
+            if ( find_unit_ivalue( $line_data[2] ) < 0 ) {
+                $num_warnings++;
+                $line_data[2] = sanitizeString( $line_data[2] );
+                push @warnings,
+                    (
+                    {   line_number => $.,
+                        message     => "Invalid output frequency unit. ($line_data[2]).",
+                    }
+                    );
+            }
+
+            # check output_format :: Must be in the range 1 <= output_format <= 2
+            if ( $line_data[3] < 1 or $line_data[3] > 2 ) {
+                $num_warnings++;
+                push @warnings,
+                    (
+                    {   line_number => $.,
+                        message     => "Output_format out of range. Must be in the range [1,2].",
+                    }
+                    );
+            }
+
+            # check time_units :: return from find_unit_ivalue() > 0
+            if ( find_unit_ivalue( $line_data[4] ) < 0 ) {
+                $num_warnings++;
+                $line_data[4] = sanitizeString( $line_data[4] );
+                push @warnings,
+                    (
+                    {   line_number => $.,
+                        message     => "Invalid time unit. ($line_data[4]).",
+                    }
+                    );
+            }
+
+          # The following are optional. (There may be a slight problem if the line ends with a ','.)
+            if ( $#line_data > 6 ) {
+
+                # Check new_file_frequency :: Must be > 0
+                if ( $line_data[6] < 0 ) {
+                    $num_warnings++;
+                    push @warnings,
+                        (
+                        {   line_number => $.,
+                            message     => "Invalid new file frequency.  Must be > 0.",
+                        }
+                        );
+                }
+
+                # Check new_file_frequency_units :: return from find_unit_ivalue() > 0
+                if ( find_unit_ivalue( $line_data[7] ) < 0 ) {
+                    $num_warnings++;
+                    $line_data[7] =~ s/"//g;
+                    push @warnings,
+                        (
+                        {   line_number => $.,
+                            message     => "Invalid new file frequency unit. ($line_data[7]).",
+                        }
+                        );
+                }
+
+                # More optional inputs
+                if ( $#line_data >= 8 ) {
+                    $num_warnings++;
+
+                    # remove quotes, beginning and ending space.
+                    my @start_time = split( /\s+/, sanitizeString( $line_data[8] ) );
+
+                    # Check start_time_string :: Must be valid date string
+                    my $message = verifyDate(@start_time);
+                    if ($message) {
+                        push @warnings,
+                            (
+                            {   line_number => $.,
+                                message     => "Invalid start time format. $message",
+                            }
+                            );
+                    }
+
+                    # The last two optional inputs
+                    if ( $#line_data > 8 ) {
+
+                        # Check file_duration :: Must be > 0
+                        if ( $line_data[9] < 0 ) {
+                            $num_warnings++;
+                            push @warnings,
+                                (
+                                {   line_number => $.,
+                                    message     => "Invalid file duration.  Must be > 0.",
+                                }
+                                );
+                        }
+
+                        # Check file_duration_units :: return from find_unit_ivalue() > 0
+                        if ( find_unit_ivalue( $line_data[10] ) < 0 ) {
+                            $num_warnings++;
+                            $line_data[10] =~ s/"//g;
+                            push @warnings,
+                                (
+                                {   line_number => $.,
+                                    message     => "Invalid file duration unit. ($line_data[10]).",
+                                }
+                                );
+                        }
+                    } ## end if ( $#line_data > 8 )
+                } ## end if ( $#line_data >= 8 )
+            } ## end if ( $#line_data > 6 )
+            if ( $num_warnings == 0 ) {
+                push @files,
+                    (
+                    {   file_name              => sanitizeString( $line_data[0] ),
+                        output_frequency       => sanitizeString( $line_data[1] ),
+                        output_frequency_units => sanitizeString( $line_data[2] ),
+                        output_format          => sanitizeString( $line_data[3] ),
+                        time_units             => sanitizeString( $line_data[4] ),
+                        long_name              => sanitizeString( $line_data[5] )
+                    }
+                    );
+                if ( $#line_data > 6 ) {
+                    $files[$#files]{new_file_frequency}       = sanitizeString( $line_data[6] );
+                    $files[$#files]{new_file_frequency_units} = sanitizeString( $line_data[7] );
+                }
+                else {
+                    $files[$#files]{new_file_frequency}       = '';
+                    $files[$#files]{new_file_frequency_units} = '';
+                }
+                if ( $#line_data >= 8 ) {
+                    $files[$#files]{start_time_string} = sanitizeString( $line_data[8] );
+                }
+                else {
+                    $files[$#files]{start_time_string} = '';
+                }
+                if ( $#line_data > 8 ) {
+                    $files[$#files]{file_duration}       = sanitizeString( $line_data[9] );
+                    $files[$#files]{file_duration_units} = sanitizeString( $line_data[10] );
+                }
+                else {
+                    $files[$#files]{file_duration}       = '';
+                    $files[$#files]{file_duration_units} = '';
+                }
+
+                #print "File found (",$files[$#files]{file_name},"), line ",$.,".\n";
+            } ## end if ( $num_warnings == ...)
+        } ## end if ( grep { lc($_) =~ ...})
+        else {    # This is a field.
+                  # Make sure there are enough fields on the description line :: must be = 8.
+            if ( $#line_data != 7 ) {
+                $num_warnings++;
+                my $message;
+
+                # Are there too many?
+                if ( $#line_data > 7 ) {
+                    $message
+                        = "Too many fields on field description line. ("
+                        . scalar(@line_data)
+                        . " found)";
+                }
+                else {    # Nope, too few.
+                    $message
+                        = "Not enough fields on field description line. ("
+                        . scalar(@line_data)
+                        . " found)";
+                }
+                push @warnings,
+                    (
+                    {   line_number => $.,
+                        message     => $message,
+                    }
+                    );
+            } ## end if ( $#line_data != 7 )
+
+            # Verify that file_name exists in the files array
+            my $notfound = 1;
+            for ( my $i = 0; $i <= $#files; $i++ ) {
+                if ( $files[$i]{file_name} eq sanitizeString( $line_data[3] ) ) {
+                    $notfound = 0;
+                    last;
+                }
+            }
+            if ($notfound) {
+                $num_warnings++;
+                $line_data[3] = sanitizeString( $line_data[3] );
+                push @warnings,
+                    (
+                    {   line_number => $.,
+                        message =>
+                            "File ($line_data[3]) not defined.  It must be defined before any fields.",
+                    }
+                    );
+            }
+
+            # Verify time_method / time_avg is valid
+            if ( invalid_timeSample( sanitizeString( $line_data[5] ) ) ) {
+                $num_warnings++;
+                push @warnings,
+                    (
+                    {   line_number => $.,
+                        message =>
+                            "Time sampling method must be one of (.true., mean, average, avg, .false., none, point, maximum, max, minimum, min, diurnal[#]).",
+                    }
+                    );
+            }
+
+            # Verify regional / globally output type is valid
+            if ( invalid_OutRegtion( sanitizeString( $line_data[6] ) ) ) {
+                $num_warnings++;
+                push @warnings,
+                    (
+                    {   line_number => $.,
+                        message =>
+                            "Region to be output must be 'none' for globally, or '-1, -1, -1, -1, hmin,hmax' for vertical region, or 'xmin,xmax, ymin,ymax, hmin, hmax'.",
+                    }
+                    );
+            }
+
+            # Verify packing is valid :: must be in range [1,8]
+            if ( $line_data[7] < 1 or $line_data[7] > 8 ) {
+                $num_warnings++;
+                push @warnings,
+                    (
+                    {   line_number => $.,
+                        message => "Packing is out of the valid range.  Must be in the range [1,8]."
+                    }
+                    );
+            }
+
+            # Set the field hash object
+            my $field = {
+                file_name     => sanitizeString( $line_data[3] ),
+                module_name   => sanitizeString( $line_data[0] ),
+                field_name    => sanitizeString( $line_data[1] ),
+                output_name   => sanitizeString( $line_data[2] ),
+                time_sampling => sanitizeString( $line_data[4] ),
+                time_method   => sanitizeString( $line_data[5] ),
+                spatial_ops   => sanitizeString( $line_data[6] ),
+                packing       => sanitizeString( $line_data[7] ),
+            };
+            if ( &checkDuplicateField( $field, @fields ) ) {
+                $num_warnings++;
+                push @warnings,
+                    (
+                    {   line_number => $.,
+                        message     => "Field "
+                            . $$field{module_name} . "::"
+                            . $$field{field_name}
+                            . " is duplicated in file "
+                            . $$field{file_name} . "."
+                    }
+                    );
+            }
+            if ( $num_warnings == 0 ) {
+
+                # push @fields, ( {
+                # 		 file_name => sanitizeString($line_data[3]),
+                # 		 module_name => sanitizeString($line_data[0]),
+                # 		 field_name => sanitizeString($line_data[1]),
+                # 		 output_name => sanitizeString($line_data[2]),
+                # 		 time_sampling => sanitizeString($line_data[4]),
+                # 		 time_method => sanitizeString($line_data[5]),
+                # 		 spatial_ops => sanitizeString($line_data[6]),
+                # 		 packing => sanitizeString($line_data[7]),
+                # 		} );
+                push @fields, $field;
+            }
+        } ## end else [ if ( grep { lc($_) =~ ...})]
+    } ## end if ( ( $. > 2 ) or ( (...)))
+} ## end while (<DIAG_TABLE>)
+
+if ($verbose) {
+    my $files2output;
+    my $fields2output;
+    open( FILES,  '>', \$files2output );
+    open( FIELDS, '>', \$fields2output );
+
+    my $file_name;
+    my $output_frequency;
+    my $output_frequency_units;
+    my $output_format;
+    my $time_units;
+    my $module_name;
+    my $field_name;
+    my $output_name;
+    my $time_sampling;
+    my $time_method;
+    my $spatial_ops;
+    my $packing;
+
+    format FILES_TOP =
                         Files
                                    Output          Axis
 File Name                         Frequency   FMT  Units
 ------------------------------------------------------------
 .
 
-format FILES =
+    format FILES =
 @<<<<<<<<<<<<<<<<<<<<<<<<<<<<<< @>>> @<<<<<<< @||| @<<<<
 $file_name, $output_frequency, $output_frequency_units, $output_format, $time_units
 .
 
-  for ( my $file=1; $file <= $#files; $file++ ) {
-    $file_name = $files[$file]{file_name};
-    $output_frequency = $files[$file]{output_frequency};
-    $output_frequency_units = $files[$file]{output_frequency_units};
-    $output_format = $files[$file]{output_format};
-    $time_units = $files[$file]{time_units};
-    write FILES;
-  }
+    for ( my $file = 1; $file <= $#files; $file++ ) {
+        $file_name              = $files[$file]{file_name};
+        $output_frequency       = $files[$file]{output_frequency};
+        $output_frequency_units = $files[$file]{output_frequency_units};
+        $output_format          = $files[$file]{output_format};
+        $time_units             = $files[$file]{time_units};
+        write FILES;
+    }
 
-format FIELDS_TOP =
+    format FIELDS_TOP =
 
                                                    Fields
                                                              Output                   Sample Spatial
@@ -527,241 +634,266 @@ Field Name       Module      File Name                       Name             Sa
 -------------------------------------------------------------------------------------------------------------
 .
 
-format FIELDS =
+    format FIELDS =
 @<<<<<<<<<<<<<<< @<<<<<<<<<< @<<<<<<<<<<<<<<<<<<<<<<<<<<<<<< @<<<<<<<<<<<<<<< @<<<<< @<<<<<< @<<<     @<
 $field_name, $module_name, $file_name, $output_name, $time_sampling, $time_method, $spatial_ops, $packing
 .
 
-  for ( my $field=1; $field <=$#fields; $field++ ) {
-    $module_name = $fields[$field]{module_name};
-    $field_name = $fields[$field]{field_name};
-    $output_name = $fields[$field]{output_name};
-    $file_name = $fields[$field]{file_name};
-    $time_sampling = $fields[$field]{time_sampling};
-    $time_method = $fields[$field]{time_method};
-    $spatial_ops = $fields[$field]{spatial_ops};
-    $packing = $fields[$field]{packing};
-    write FIELDS;
-  }
-  # Output the files and fields
-  close(FILES);
-  close(FIELDS);
-  print $files2output;
-  print $fields2output;
-  print "\n";
-}
+    for ( my $field = 1; $field <= $#fields; $field++ ) {
+        $module_name   = $fields[$field]{module_name};
+        $field_name    = $fields[$field]{field_name};
+        $output_name   = $fields[$field]{output_name};
+        $file_name     = $fields[$field]{file_name};
+        $time_sampling = $fields[$field]{time_sampling};
+        $time_method   = $fields[$field]{time_method};
+        $spatial_ops   = $fields[$field]{spatial_ops};
+        $packing       = $fields[$field]{packing};
+        write FIELDS;
+    }
 
-print "Table Descriptor:\t",$tableName,"\n";
-print "Base Date:\t\t",join(' ',@globalDate),"\n";
-print "Number of files:\t",$#files,"\n";
-print "Max fields per file:\t",&find_maxFieldsPerFile(@fields),"\n";
-print "Total number of fields:\t",scalar(@fields),"\n";
-print "Max out per in field:\t",&find_maxOutPerInField(@fields),"\n";
-print "Number of warnings:\t",$#warnings,"\n";
+    # Output the files and fields
+    close(FILES);
+    close(FIELDS);
+    print $files2output;
+    print $fields2output;
+    print "\n";
+} ## end if ($verbose)
 
-if ( $#warnings ) {
-  for ( my $warning=1; $warning <= $#warnings; $warning++ ) {
-    print STDERR "WARNING($warnings[$warning]{line_number}): $warnings[$warning]{message}\n";
-  }
+print "Table Descriptor:\t", $tableName, "\n";
+print "Base Date:\t\t", join( ' ', @globalDate ), "\n";
+print "Number of files:\t", $#files, "\n";
+print "Max fields per file:\t", &find_maxFieldsPerFile(@fields), "\n";
+print "Total number of fields:\t", scalar(@fields), "\n";
+print "Max out per in field:\t", &find_maxOutPerInField(@fields), "\n";
+print "Number of warnings:\t", $#warnings, "\n";
+
+if ($#warnings) {
+    for ( my $warning = 1; $warning <= $#warnings; $warning++ ) {
+        print STDERR "WARNING($warnings[$warning]{line_number}): $warnings[$warning]{message}\n";
+    }
 }
 
 sub checkDuplicateField {
-  my $field = shift @_;
-  my @fields = @_;
+    my $field  = shift @_;
+    my @fields = @_;
 
-  my $return = 0;
-  foreach my $f ( @fields ) {
-    if ( $$f{module_name} eq $$field{module_name} and
-	 $$f{field_name}  eq $$field{field_name}  and
-	 $$f{output_name} eq $$field{output_name} and
-	 $$f{file_name}   eq $$field{file_name} ) {
-      $return = 1;
-      last
+    my $return = 0;
+    foreach my $f (@fields) {
+        if (    $$f{module_name} eq $$field{module_name}
+            and $$f{field_name} eq $$field{field_name}
+            and $$f{output_name} eq $$field{output_name}
+            and $$f{file_name} eq $$field{file_name} ) {
+            $return = 1;
+            last;
+        }
     }
-  }
 
-  return $return;
+    return $return;
 }
 
 sub getDiagTableFromScript {
-  my $myScriptFile = $_[0];
+    my $myScriptFile = $_[0];
 
-  open(RUNSCRIPT, "<", $myScriptFile);
-  local $/;
-  my $runscript = <RUNSCRIPT>;
-  close(RUNSCRIPT);
+    open( RUNSCRIPT, "<", $myScriptFile );
+    local $/;
+    my $runscript = <RUNSCRIPT>;
+    close(RUNSCRIPT);
 
-  my $diagTable = '';
-  if ( $runscript =~ m/cat >> diag_table <<EOF\n(.*?)EOF/s ) {
-    $diagTable = $1;
-  }
+    my $diagTable = '';
+    if ( $runscript =~ m/cat >> diag_table <<EOF\n(.*?)EOF/s ) {
+        $diagTable = $1;
+    }
 
-  return $diagTable;
+    return $diagTable;
 }
 
 sub invalid_timeSample {
-  my $timeSample = $_[0];
+    my $timeSample = $_[0];
 
-  switch ($timeSample) {
-    case (/^\.true\.$/i) { return 0; }
-    case (/^\.false\.$/i) { return 0; }
-    case (/^mean|average|avg$/) { return 0; }
-    case (/^none|point$/) { return 0; }
-    case (/^maximum|max$/) { return 0; }
-    case (/^minimum|min$/) { return 0; }
-    case (/^diurnal\d+$/) { return 0; }
-    else { return 1 };
-  }
+    switch ($timeSample) {
+        case (/^\.true\.$/i)        { return 0; }
+        case (/^\.false\.$/i)       { return 0; }
+        case (/^mean|average|avg$/) { return 0; }
+        case (/^none|point$/)       { return 0; }
+        case (/^maximum|max$/)      { return 0; }
+        case (/^minimum|min$/)      { return 0; }
+        case (/^diurnal\d+$/)       { return 0; }
+        else                        { return 1 }
+    }
 }
 
 # Check if region out is valid
 sub invalid_OutRegtion {
-  my $regionOutType = $_[0];
+    my $regionOutType = $_[0];
 
-  # 'none' is valid
-  return 0 if ( $regionOutType =~ /^none$/i );
+    # 'none' is valid
+    return 0 if ( $regionOutType =~ /^none$/i );
 
-  my @regionArray = split('\s+',$regionOutType);
-  return 1 if ( @regionArray != 6 );
+    my @regionArray = split( '\s+', $regionOutType );
+    return 1 if ( @regionArray != 6 );
 
-  # Make sure all elements are numbers
-  foreach my $var ( @regionArray ) {
-    return 1 if ( sanitizeString($var) !~ /^(-)?\d+(\.(\d*)?)?$/ );
-  }
+    # Make sure all elements are numbers
+    foreach my $var (@regionArray) {
+        return 1 if ( sanitizeString($var) !~ /^(-)?\d+(\.(\d*)?)?$/ );
+    }
 
-  return 0;
+    return 0;
 }
 
 # Verify that the given unit is understood.
 # A return value of -1 indicated an unknown unit.
 sub find_unit_ivalue {
-  my $unit_string = $_[0];
+    my $unit_string = $_[0];
 
-  switch ($unit_string) {
-    case (/seconds/) { return 1; }
-    case (/minutes/) { return 2; }
-    case (/hours/) { return 3; }
-    case (/days/) { return 4; }
-    case (/months/) { return 5; }
-    case (/years/) { return 6; }
-    else { return -1 }
-  }
+    switch ($unit_string) {
+        case (/seconds/) { return 1; }
+        case (/minutes/) { return 2; }
+        case (/hours/)   { return 3; }
+        case (/days/)    { return 4; }
+        case (/months/)  { return 5; }
+        case (/years/)   { return 6; }
+        else             { return -1 }
+    }
 }
 
 sub verifyDate {
-  # The date must already be in an array.  We will check the size here.
-  # The format should be (year, month, day, hour, min, sec)
-  my @date = @_;
-  my $leapYear = 0;
 
-  my @months = ( { month => 'January',
-		   days => 31 },
-		 { month => 'February',
-		   days => 28 },
-		 { month => 'March',
-		   days => 31 },
-		 { month => 'April',
-		   days => 30 },
-		 { month => 'May',
-		   days => 31 },
-		 { month => 'June',
-		   days => 30 },
-		 { month => 'July',
-		   days => 31 },
-		 { month => 'August',
-		   days => 31 },
-		 { month => 'September',
-		   days => 30 },
-		 { month => 'October',
-		   days => 31 },
-		 { month => 'November',
-		   days => 30 },
-		 { month => 'December',
-		   days => 31 } );
+    # The date must already be in an array.  We will check the size here.
+    # The format should be (year, month, day, hour, min, sec)
+    my @date     = @_;
+    my $leapYear = 0;
 
-  if ( scalar(@date) != 6 ) {
-    # Wrong number of elements in date.  Are we too big?
-    return 'Too many elements in date string.' if ( scalar(@date) > 6 ) ;
-    return 'Too few elements in date string.' if ( scalar(@date) < 6 );
-  }
+    my @months = (
+        {   month => 'January',
+            days  => 31
+        },
+        {   month => 'February',
+            days  => 28
+        },
+        {   month => 'March',
+            days  => 31
+        },
+        {   month => 'April',
+            days  => 30
+        },
+        {   month => 'May',
+            days  => 31
+        },
+        {   month => 'June',
+            days  => 30
+        },
+        {   month => 'July',
+            days  => 31
+        },
+        {   month => 'August',
+            days  => 31
+        },
+        {   month => 'September',
+            days  => 30
+        },
+        {   month => 'October',
+            days  => 31
+        },
+        {   month => 'November',
+            days  => 30
+        },
+        {   month => 'December',
+            days  => 31
+        }
+    );
 
-  return 'Year must be an integer greater than 0.' if ( $date[0] < 0 and $date[0] !~ /\d+/ );
+    if ( scalar(@date) != 6 ) {
 
-  # Correct number of days in February if this is a leap year.
-  $months[1]{days} = $months[1]{days} + 1 if ( isLeapYear($date[0]) );
+        # Wrong number of elements in date.  Are we too big?
+        return 'Too many elements in date string.' if ( scalar(@date) > 6 );
+        return 'Too few elements in date string.'  if ( scalar(@date) < 6 );
+    }
 
-  return 'Month must be in the range [1,12].' if ( $date[1] < 1 or $date[1] > 12 ) ;
+    return 'Year must be an integer greater than 0.' if ( $date[0] < 0 and $date[0] !~ /\d+/ );
 
-  return "Days must be in the range [1,$months[$date[1]-1]{days}] for $months[$date[1]-1]{month} in year $date[0]." if ( $date[2] < 1 or $date[2] > $months[$date[1]-1]{days} );
+    # Correct number of days in February if this is a leap year.
+    $months[1]{days} = $months[1]{days} + 1 if ( isLeapYear( $date[0] ) );
 
-  return 'Hours must be in the range [0,24].' if ( $date[3] < 0 or $date[3] > 24 );
+    return 'Month must be in the range [1,12].' if ( $date[1] < 1 or $date[1] > 12 );
 
-  return 'Minutes must be in the range [0,60].' if ( $date[4] < 0 or $date[4] > 60 );
+    return
+        "Days must be in the range [1,$months[$date[1]-1]{days}] for $months[$date[1]-1]{month} in year $date[0]."
+        if ( $date[2] < 1 or $date[2] > $months[ $date[1] - 1 ]{days} );
 
-  return 'Seconds must be in the range [0,60].' if ( $date[5] < 0 or $date[5] > 60 );
+    return 'Hours must be in the range [0,24].' if ( $date[3] < 0 or $date[3] > 24 );
 
-  return '';
-}
+    return 'Minutes must be in the range [0,60].' if ( $date[4] < 0 or $date[4] > 60 );
+
+    return 'Seconds must be in the range [0,60].' if ( $date[5] < 0 or $date[5] > 60 );
+
+    return '';
+} ## end sub verifyDate
 
 sub isLeapYear {
-  my $year = shift(@_);
+    my $year = shift(@_);
 
-  if ( ($year % 4 == 0) and ($year % 100 != 0) or ($year % 400 == 0) ) {
-    return 1;
-  } else {
-    return 0;
-  }
+    if ( ( $year % 4 == 0 ) and ( $year % 100 != 0 ) or ( $year % 400 == 0 ) ) {
+        return 1;
+    }
+    else {
+        return 0;
+    }
 }
 
 sub sanitizeString {
-  # Remove the quote marks and any additional space before and after
-  # the string.
-  my $string = shift(@_);
 
-  if ( length($string) ) {
-    $string =~ s/"//g;
-    $string =~ s/^\s+//;
-    $string =~ s/\s+$//;
-  }
-  return $string;
+    # Remove the quote marks and any additional space before and after
+    # the string.
+    my $string = shift(@_);
+
+    if ( length($string) ) {
+        $string =~ s/"//g;
+        $string =~ s/^\s+//;
+        $string =~ s/\s+$//;
+    }
+    return $string;
 }
 
 sub find_maxFieldsPerFile {
-  # find the maximum number of fields to be written to a file.
-  my @myFields = @_;
-  my %fieldsPerFile;
 
-  for ( my $field=1; $field <= $#myFields; $field++ ) {
-    if ( exists $fieldsPerFile{$myFields[$field]{file_name}} ) {
-      $fieldsPerFile{$myFields[$field]{file_name}} ++;
-    } else {
-      $fieldsPerFile{$myFields[$field]{file_name}} = 1;
+    # find the maximum number of fields to be written to a file.
+    my @myFields = @_;
+    my %fieldsPerFile;
+
+    for ( my $field = 1; $field <= $#myFields; $field++ ) {
+        if ( exists $fieldsPerFile{ $myFields[$field]{file_name} } ) {
+            $fieldsPerFile{ $myFields[$field]{file_name} }++;
+        }
+        else {
+            $fieldsPerFile{ $myFields[$field]{file_name} } = 1;
+        }
     }
-  }
 
-  return max(%fieldsPerFile);
+    return max(%fieldsPerFile);
 }
 
 sub find_maxOutPerInField {
-  # find the maximum numbers of output fields per input field
-  my @myFields = @_;
-  my %fields;
 
-  for ( my $field=1; $field <= $#myFields; $field++ ) {
-    if ( exists $fields{$myFields[$field]{module_name} . $myFields[$field]{field_name}} ) {
-      $fields{$myFields[$field]{module_name} . $myFields[$field]{field_name}} ++;
-    } else {
-      $fields{$myFields[$field]{module_name} . $myFields[$field]{field_name}} = 1;
+    # find the maximum numbers of output fields per input field
+    my @myFields = @_;
+    my %fields;
+
+    for ( my $field = 1; $field <= $#myFields; $field++ ) {
+        if ( exists $fields{ $myFields[$field]{module_name} . $myFields[$field]{field_name} } ) {
+            $fields{ $myFields[$field]{module_name} . $myFields[$field]{field_name} }++;
+        }
+        else {
+            $fields{ $myFields[$field]{module_name} . $myFields[$field]{field_name} } = 1;
+        }
     }
-  }
 
-  return max(%fields);
+    return max(%fields);
 }
 
 sub displayVersion {
-  my ($version, $date) = @_;
+    my ( $version, $date ) = @_;
 
-  print "calcPErequest $version ($date)\n";
+    print "calcPErequest $version ($date)\n";
 }
 
 __END__

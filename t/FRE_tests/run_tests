@@ -31,24 +31,24 @@ evalTAP () {
 # Run the FRE tests
 do_tests () {
   case $FRE_SYSTEM_SITE in
-	  gfdl )
-	    PATH=$PATH:/home/sdu/opt/bats/bin
-		  ;;
-	  gfdl-ws )
-		  PATH=$PATH:/home/sdu/opt/bats/bin
-		  ;;
+    gfdl )
+      PATH=$PATH:/home/sdu/opt/bats/bin
+      ;;
+    gfdl-ws )
+      PATH=$PATH:/home/sdu/opt/bats/bin
+      # Override FRE_SYSETM_TMP until the modulefiles do this for us.
+      FRE_SYSTEM_TMP=/tmp
+      ;;
     theia )
       PATH=${PATH}:/home/Seth.Underwood/opt/bats/0.4.0/bin
       ;;
-    ncrc3 )
-		  PATH=$PATH:/ncrc/home2/Seth.Underwood/opt/bats/0.4.0/bin
-      ;;
-    ncrc4 )
+    ncrc )
       PATH=$PATH:/ncrc/home2/Seth.Underwood/opt/bats/0.4.0/bin
       ;;
   esac
 
   export PATH
+  export FRE_SYSTEM_TMP
 
   pushd xml
 
@@ -78,6 +78,10 @@ do_tests () {
 
   local myExit=$(expr $frelist_exit + $fremake_exit + $frerun_exit)
 
+  prove -v *.t ??-*.bats
+  local test_exit=$?
+  myExit=$(expr $myExit + $test_exit)
+  
   return $myExit
 }
 
@@ -156,7 +160,7 @@ do_deploy () {
       git fetch origin
       if [[ $? -ne 0 ]]
       then
-        echo "Error whil attempting to fetch from origin in \"${freCommands_dir}\"."
+        echo "Error while attempting to fetch from origin in \"${freCommands_dir}\"."
         echo "Failing"
         myReturn=1
       else
@@ -177,6 +181,19 @@ do_deploy () {
           echo "Reverting . . ."
           revert_repo ${freCommands_dir} ${oldCommitHash}
           myReturn=1
+        else
+          # All passed, create the FREVersion.pm module
+          versionTag=$(git describe --tags)
+          if [[ $? -eq 0 ]]
+          then
+            sed -e "s/@@FRE_VERSION_STRING@@/${versionTag}/" lib/FREVersion.pm.in > lib/FREVersion.pm
+            if [[ $? -ne 0 ]]
+            then
+              echo "Unable to create FREVersion.pm file.  Sed failed."
+            fi
+          else
+            echo "Unable to get git version information"
+          fi 
         fi
       fi
     fi
@@ -189,7 +206,7 @@ do_deploy () {
 myExit=0
 
 # Settings to run tests if not run in GITLAB_CI
-if [ -z ${BITLAB_CI+x} ]
+if [ -z ${GITLAB_CI+x} ]
 then
   # Not running with gitlab CI
   CI_JOB_STAGE=test

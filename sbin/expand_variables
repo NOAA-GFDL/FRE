@@ -1,4 +1,4 @@
-#!/usr/bin/perl
+#!/usr/bin/env perl
 # -*- cperl -*-
 #
 # $Id: expand_variables,v 1.1.2.3 2012/08/07 23:48:26 afy Exp $
@@ -17,7 +17,7 @@ use strict;
 
 use Cwd();
 use File::Basename();
-use Getopt::Long(':config', 'no_ignore_case', 'no_auto_abbrev');
+use Getopt::Long( ':config', 'no_ignore_case', 'no_auto_abbrev' );
 
 # //////////////////////////////////////////////////////////////////////////////
 # ////////////////////////////////////////////////////////// Global constants //
@@ -25,16 +25,11 @@ use Getopt::Long(':config', 'no_ignore_case', 'no_auto_abbrev');
 
 {
 
-  package expand_variables;
+    package expand_variables;
 
-  use constant VERSION => '$Id: expand_variables,v 1.1.2.3 2012/08/07 23:48:26 afy Exp $';
+    use constant VERSION => '$Id: expand_variables,v 1.1.2.3 2012/08/07 23:48:26 afy Exp $';
 
-  use constant OPTLIST =>
-  (
-    'help|h',
-    'version|V',
-    'verbose|v+'
-  );
+    use constant OPTLIST => ( 'help|h', 'version|V', 'verbose|v+' );
 
 }
 
@@ -44,97 +39,89 @@ use Getopt::Long(':config', 'no_ignore_case', 'no_auto_abbrev');
 
 {
 
-  package expand_variables;
-  
-  my $self = File::Basename::basename($0);
+    package expand_variables;
 
-  sub Usage()
-  # ------ arguments: none
-  {
-    return
-    (
-      "\n",
-      "  Usage: $self [options] filename\n\n",
-      "  Options:\n\n",
-      "   -h, --help     print help message and exit\n",
-      "   -v, --verbose  get verbose messages (repeat to get more messages)\n", 
-      "   -V, --version  print the tool version and exit\n\n"
-    );
-  }
-  
-  sub Help()
-  # ------ arguments: none
-  {
-    my @usage = Usage();
-    return
-    (
-      "\n",
-      "   Synopsis: $self copies a text from the stdin to the stdout, expanding variables using (name,value) pairs from the filename\n",
-      "@usage",
-      "   The filename must contain lines with exactly two fields, separated by a tab or equal sign\n\n"
-    );
-  }
-  
-  sub Read($$$)
-  # ------ arguments: opened file handle, ref to hash, verbose flag
-  {
-    my ($f, $r, $v) = @_;
-    while (chomp(my $line = <$f>))
+    my $self = File::Basename::basename($0);
+
+    sub Usage()
+
+        # ------ arguments: none
     {
-      # Need to ignore any bash functions
-      if (length($line) > 1 and $line !~ m/^\w+\(\)=\(\)/)
-      {
-	if ($line =~ m/^(\w+)(?:\t|=)(.*)$/)
-	{
-	  print STDERR "$1 => $2\n" if $v > 1;
-          $r->{$1} = $2;
-	}
-	else
-	{
-	  print STDERR "Error in line $. ($line)\n";
-	  return 0;
-	}
-      }
+        return (
+            "\n",
+            "  Usage: $self [options] filename\n\n",
+            "  Options:\n\n",
+            "   -h, --help     print help message and exit\n",
+            "   -v, --verbose  get verbose messages (repeat to get more messages)\n",
+            "   -V, --version  print the tool version and exit\n\n"
+        );
     }
-    return 1;
-  }
-  
-  sub VariablesExpand($$$$$)
-  # ------ arguments: line number, ref to line, ref to keys array, ref to values array, verbose flag
-  {
-    my ($n, $l, $a, $b, $v) = @_;
-    if (index(${$l}, '$') >= 0)
+
+    sub Help()
+
+        # ------ arguments: none
     {
-      my $i = 0;
-      while ($i < scalar(@{$a}))
-      {
-        my ($key, $value) = ($a->[$i], $b->[$i]);
-        my ($keyPattern, $keyLenPlusOne) = ('$' . $key, length($key) + 1);
-        while (1)
-	{
-	  my $pos = index(${$l}, $keyPattern);
-	  if ($pos >= 0)
-	  {
-	    print STDERR "Line $n: expansion '$keyPattern' => '$value'\n" if $v;
-	    substr(${$l}, $pos, $keyLenPlusOne) = $value;
-	  }
-	  else
-	  {
-	    last;
-	  }
-	}
-	if (index(${$l}, '$') >= 0)
-	{
-	  $i++;
-	}
-	else
-	{
-	  last;
+        my @usage = Usage();
+        return (
+            "\n",
+            "   Synopsis: $self copies a text from the stdin to the stdout, expanding variables using (name,value) pairs from the filename\n",
+            "@usage",
+            "   The filename must contain lines with exactly two fields, separated by a tab or equal sign\n\n"
+        );
+    }
+
+    sub Read($$$)
+
+        # ------ arguments: opened file handle, ref to hash, verbose flag
+    {
+        my ( $f, $r, $v ) = @_;
+        while ( chomp( my $line = <$f> ) ) {
+
+            # Need to ignore any bash functions
+            if ( length($line) ) {
+                if ( $line =~ m/^(\w+)(?:\t|=)(.*)$/ ) {
+                    print STDERR "$1 => $2\n" if $v > 1;
+                    $r->{$1} = $2;
+                }
+                else {
+                    print STDERR "Error in line $. ($line)\n";
+                    return 0;
+                }
+            }
         }
-      }
+        return 1;
     }
-    return $l;
-  }
+
+    sub VariablesExpand($$$$$)
+
+  # ------ arguments: line number, ref to line, ref to keys array, ref to values array, verbose flag
+    {
+        my ( $n, $l, $a, $b, $v ) = @_;
+        if ( index( ${$l}, '$' ) >= 0 ) {
+            my $i = 0;
+            while ( $i < scalar( @{$a} ) ) {
+                my ( $key, $value ) = ( $a->[$i], $b->[$i] );
+                my ( $keyPattern, $keyLenPlusOne ) = ( '$' . $key, length($key) + 1 );
+                while (1) {
+                    my $pos = index( ${$l}, $keyPattern );
+                    if ( $pos >= 0 ) {
+                        print STDERR "Line $n: expansion '$keyPattern' => '$value'\n" if $v;
+                        substr( ${$l}, $pos, $keyLenPlusOne ) = $value;
+                    }
+                    else {
+                        last;
+                    }
+                }
+                if ( index( ${$l}, '$' ) >= 0 ) {
+                    $i++;
+                }
+                else {
+                    last;
+                }
+            } ## end while ( $i < scalar( @{$a...}))
+        } ## end if ( index( ${$l}, '$'...))
+        return $l;
+    } ## end sub VariablesExpand($$$$$)
 
 }
 
@@ -144,47 +131,42 @@ use Getopt::Long(':config', 'no_ignore_case', 'no_auto_abbrev');
 
 {
 
-  my %opt = ();
+    my %opt = ();
 
-  Getopt::Long::GetOptions(\%opt, expand_variables::OPTLIST) or (print STDERR expand_variables::Usage() and exit 1);
-  if ($opt{version}) {print STDERR expand_variables::VERSION,"\n" and exit 0;}
-  if ($opt{help}) {print STDERR expand_variables::Help() and exit 0;}
+    Getopt::Long::GetOptions( \%opt, expand_variables::OPTLIST )
+        or ( print STDERR expand_variables::Usage() and exit 1 );
+    if ( $opt{version} ) { print STDERR expand_variables::VERSION, "\n" and exit 0; }
+    if ( $opt{help} ) { print STDERR expand_variables::Help() and exit 0; }
 
-  if (scalar(@ARGV) == 1)
-  {
-    my $filename = $ARGV[0];
-    if (open my $handle, '<', $filename)
-    {
-      my %vars = ();
-      if (expand_variables::Read($handle, \%vars, $opt{verbose}))
-      {
-        close $handle;
-	my @keys = sort {length($b) <=> length($a)} keys %vars;
-	my @values = map($vars{$_}, @keys);
-	while (my $line = <STDIN>)
-	{
-	  expand_variables::VariablesExpand($., \$line, \@keys, \@values, $opt{verbose});
-	  print $line;
-	}
-	exit 0;
-      }
-      else
-      {
-        close $handle;
-	print STDERR "Error reading a file '$filename'\n";
-	exit 1;
-      }
+    if ( scalar(@ARGV) == 1 ) {
+        my $filename = $ARGV[0];
+        if ( open my $handle, '<', $filename ) {
+            my %vars = ();
+            if ( expand_variables::Read( $handle, \%vars, $opt{verbose} ) ) {
+                close $handle;
+                my @keys = sort { length($b) <=> length($a) } keys %vars;
+                my @values = map( $vars{$_}, @keys );
+                while ( my $line = <STDIN> ) {
+                    expand_variables::VariablesExpand( $., \$line, \@keys, \@values,
+                        $opt{verbose} );
+                    print $line;
+                }
+                exit 0;
+            }
+            else {
+                close $handle;
+                print STDERR "Error reading a file '$filename'\n";
+                exit 1;
+            }
+        }
+        else {
+            print STDERR "A file '$filename' is not found or not readable\n";
+            exit 1;
+        }
+    } ## end if ( scalar(@ARGV) == ...)
+    else {
+        print STDERR "A filename argument is absent or not a single one\n";
+        exit 1;
     }
-    else
-    {
-      print STDERR "A file '$filename' is not found or not readable\n";
-      exit 1;
-    }
-  }
-  else
-  {
-    print STDERR "A filename argument is absent or not a single one\n";
-    exit 1;
-  }
 
 }

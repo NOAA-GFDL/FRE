@@ -1,5 +1,5 @@
 #!/bin/csh -f
-# 
+#
 # $Id: batch_copy.csh,v 1.1.2.1 2012/03/26 15:36:06 afy Exp $
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: Batch File Copier
@@ -21,8 +21,9 @@
 
   # ---------------- define constants depending on the run type
 
-  if ( $?PBS_ENVIRONMENT ) then
-    if ( $PBS_ENVIRONMENT == 'PBS_BATCH' ) then
+  if ( $?SLURM_JOB_ID ) then
+    tty -s >& /dev/null
+    if ( $status ) then
       set -r batch
     endif
   endif
@@ -150,7 +151,7 @@
 	    echo "*ERROR*: Unable to create the '$dstDir' directory"
 	    if ( $echoOn ) set echo
 	    exit 1
-          endif 
+          endif
         endif
       else
 	if ( $echoOn ) unset echo

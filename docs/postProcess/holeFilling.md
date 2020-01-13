@@ -211,7 +211,7 @@ Executing 'sleep 2;msub ...
 Terminated
 ```
 
-**Downstream Effects**: The post-processing that whould have been
+**Downstream Effects**: The post-processing that would have been
 created during this segment is missing.
 
 **Hole Filling**: If this segment is required by a later segment, the
@@ -226,7 +226,7 @@ run the *frepp* command for this segment.  *Note*: the frepp command
 for this will be left in the segment's pp.starter standard out file.
 
 **TODO**: The FRE development team should check if something similar
-to the *batch.scheduler.submit* script that is used on the gaea and
-theia systems can be used on the PAN system.  This error usually
-happens due to moab not returning before the *msub* default time out
-limit is reached.
+to the *batch.scheduler.submit* script that is used on the gaea
+system can be used on the PAN system.  This error usually
+happens due to the batch server fails to return a job ID to the submit
+client command before the client's time out limit is reached.

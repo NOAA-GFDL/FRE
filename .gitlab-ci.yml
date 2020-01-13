@@ -4,9 +4,10 @@ before_script:
 .testScript: &testScript
   script:
     - source ${MODULESHOME}/init/bash
-    - module unuse ${FMS_HOME}/local/modulefiles
-    - module use ${FMS_HOME}/local/modulefiles_test
+    - module use ${FMS_HOME}/local/modulefiles
+    - if [ "X$(module avail slurm 2>&1)" != "X" ]; then module load slurm; fi
     - module load fre/test
+    - module list
     - cd t/FRE_tests
     - ./run_tests
 
@@ -34,7 +35,7 @@ ncrc4:
     FMS_HOME: /ncrc/home2/fms
   <<: *testScript
 
-theia:
+.theia:
   tags:
     - theia
   variables:
@@ -53,6 +54,8 @@ gfdl-ws:
     FRE_COMMANDS_TEST: ${CI_PROJECT_DIR}
     MODULESHOME: /usr/local/Modules/default
     FMS_HOME: /home/fms
+    FRE_PERL_TEST_VERSION: test
+  allow_failure: true
   <<: *testScript
 
 gfdl:
@@ -60,7 +63,7 @@ gfdl:
     - gfdl
   variables:
     FRE_COMMANDS_TEST: ${CI_PROJECT_DIR}
-    MODULESHOME: /usr/share/Modules
+    MODULESHOME: /usr/local/Modules/default
     FMS_HOME: /home/fms
   <<: *testScript
 
@@ -74,14 +77,14 @@ stage:ncrc:
       FRE_COMMANDS_DIR: /ncrc/home2/fms/local/opt/fre-commands/test
    <<: *deployScript
 
-stage:theia:
+.stage:theia:
    stage: deploy
    environment:
      name: stage_theia
    tags:
       - theia_deploy
    variables:
-      FRE_MOD_DIR: /home/fms/local/opt/fre-commands/test
+      FRE_COMMANDS_DIR: /home/fms/local/opt/fre-commands/test
    <<: *deployScript
 
 stage:gfdl:
@@ -91,5 +94,5 @@ stage:gfdl:
    tags:
       - gfdl-ws_deploy
    variables:
-      FRE_MOD_DIR: /home/fms/local/opt/fre-commands/test
+      FRE_COMMANDS_DIR: /home/fms/local/opt/fre-commands/test
    <<: *deployScript

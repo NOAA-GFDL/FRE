@@ -1,0 +1,83 @@
+#!/usr/bin/env python3
+
+import os
+import sys
+import math
+import argparse
+
+class SysMem:
+  def __init__(self, verbose=0):
+      self.verbose = verbose
+      self.mem = self.__getNodeMem()
+
+  def __getNodeMem(self) -> int:
+      """Get the amount memory availalbe to the process in Megabytes.  If
+      run under the control of a batch scheduler (currently only Slurm),
+      the command will returen the amount of memory allocated to the job."""
+      mem_mb = 0
+      # First, check if under the control of a batch scheduler
+      if os.getenv("SLURM_JOB_ID") is not None:
+          if self.verbose>0:
+              sys.stderr.write("Running within a Slurm job\n")
+          mem_mb = self.__getSlurmMem()
+      else:
+          # Get the free memory from the system
+          if self.verbose>0:
+              sys.stderr.write("Not within a Slurm job, using /proc\n")
+          mem_mb = self.__getSysMem()
+      return mem_mb
+
+  def __getSlurmMem(self) -> int:
+      """Return the memory available in Kilobytes to the Slurm job per CPU."""
+      mem_mb = 0
+      # Slurm will set one of the following environment variable, if memory
+      # is restricted:
+      #    SLURM_MEM_PER_CPU
+      #    SLURM_MEM_PER_NODE
+      # The number recored in these environment variables is in MB,
+      if os.getenv("SLURM_MEM_PER_CPU") is not None:
+          if self.verbose>1:
+              sys.stderr.write("Using SLURM_MEM_PER_CPU (={})\n".format(os.getenv("SLURM_MEM_PER_CPU")))
+          mem_mb = os.getenv("SLURM_MEM_PER_CPU")
+      elif os.getenv("SLURM_MEM_PER_NODE") is not None:
+          if self.verbose>1:
+              sys.stderr.write("Using SLURM_MEM_PER_NODE (={})\n".format(os.getenv("SLURM_MEM_PER_NODE")))
+          mem_mb = os.getenv("SLURM_MEM_PER_NODE")
+          if os.getenv("SLURM_JOB_CPUS_PER_NODE") is not None:
+              if self.verbose>1:
+                  sys.stderr.write("Using SLURM_JOB_CPUS_PER_NODE (={})\n".format(os.getenv("SLURM_JOB_CPUS_PER_NODE")))
+              mem_mb = math.floor(int(mem_mb)/int(os.getenv("SLURM_JOB_CPUS_PER_NODE")))
+      return mem_mb
+
+  def __getSysMem(self) -> int:
+      """Open /proc/meminfo and get the free memory.  This is given in
+      Kilobytes, and then converted to Megabytes when returned."""
+      mem_mb = 0
+      with open('/proc/meminfo') as file:
+          for line in file:
+              if 'MemFree' in line:
+                  mem_mb = math.floor(int(line.split()[1])/1024)
+                  break
+      return mem_mb
+
+def get_arg_parser():
+  parser=argparse.ArgumentParser(prog='getFreeMem',
+                                 description="Return the free memory in MB per CPU if a Slurm job, or the full system.",
+                                 usage='%(prog)s [-h]')
+  parser.add_argument('-v', '--verbose',
+                      dest='verbose',
+                      action='count',
+                      default=0,
+                      help='Print debugging information, or be verbose')
+  return parser
+
+def getFreeMem() -> int:
+    """Return the Free memory available to the process, or batch job in
+    Megabytes."""
+    argParser=get_arg_parser()
+    args=argParser.parse_args()
+    nodeMem=SysMem(verbose=args.verbose)
+    return nodeMem.mem
+
+if __name__ == "__main__":
+    print(getFreeMem())

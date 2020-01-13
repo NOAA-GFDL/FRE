@@ -1,0 +1,249 @@
+#!/usr/bin/env perl
+
+=head1 NAME
+
+convert-moab-headers input-script
+
+=head1 SYNOPSIS
+
+convert-moab-headers input-script > output-script
+
+=head1 DESCRIPTION
+
+In Bronx-15, frepp checks whether an analysis script template has Slurm headers; if not,
+it runs it through convert-moab-headers. Most analysis scripts use a small handful
+of scheduler options- e.g. job name, wallclock. convert-moab-headers will convert those cases,
+but will not work in other cases.
+
+convert-moab-headers reads each line of the input file
+
+1. If it's not a MOAB header, print it unchanged
+2. If it's a MOAB header that we can convert, print the #SBATCH header
+3. If it's a MOAB header that we can't convert, print out the reason why to STDERR,
+and log the anomaly to the central log server
+
+Additionally, all usage (i.e. what input files are being processed) will be logged to the central log server,
+so that we know which analysis scripts need to be converted (so that eventually, we can stop using this tool).
+
+=head1 OPTIONS
+
+=over
+
+=item B<-v>
+
+Print out debugging information to STDERR while it runs
+
+=back
+
+=cut
+
+use strict;
+use warnings FATAL => 'all';
+use autodie;
+use Try::Tiny;
+use Data::Dumper;
+use Getopt::Std;
+use Net::Domain qw( hostdomain );
+use IO::Socket;
+
+our %options = (qw(
+    -N      --job-name
+    -o      --output
+    -d      --chdir
+    -S      NULL
+    -E      NULL
+    -m      --mail-type
+));
+
+our %resource_options = (qw(
+    walltime    --time
+    partition   --clusters
+));
+
+my %opts;
+getopts('v', \%opts);
+my $in = shift or die "Usage: $0 [-v] input_file > output_file\n";
+
+# determine the logging details
+# Workstations need a particular configuration
+our %logger = do {
+    if (hostdomain() =~ m/^gfdl.noaa.gov.?$/ ) {
+        ( host     => 'nfs-arch.gfdl.noaa.gov',
+          protocol => 'tcp',
+          port     => 46516,
+        );
+    }
+    else {
+        ( host     => 'dtn-003.princeton.rdhpcs.noaa.gov',
+          protocol => 'udp',
+          port     => 46516,
+        );
+    }
+};
+
+# log the input file and $USER
+try {
+    my $logSocket = IO::Socket::INET->new(
+        Proto   => $logger{protocol},
+        PeerPort => $logger{port},
+        PeerAddr => $logger{host},
+    );
+    my $message = "convert-moab-headers user=$ENV{USER} file=$in";
+    $logSocket->send($message);
+}
+catch {
+    warn "Couldn't log to central log server: $_\n";
+};
+
+verbose("Starting $in");
+open my ($fh), $in;
+
+while (defined(my $line = <$fh>)) {
+    chomp $line;
+    if ($line =~ /^#PBS (.*)/) {
+        my ($old_opt, $old_arg) = split ' ', $1;
+        verbose("split '$1' into '$old_opt' and '$old_arg'") if $old_arg;
+        try {
+            if (my ($new_opt, $new_arg) = convert($old_opt, $old_arg)) {
+                if ($new_arg) {
+                    print "#SBATCH $new_opt=$new_arg\n";
+                }
+                else {
+                    print "#SBATCH $new_opt\n";
+                }
+            }
+        }
+        catch {
+            print STDERR "WARNING: Couldn't convert '$line' in '$in': $_";
+
+            # log the line we couldn't convert
+            try {
+                my $logSocket = IO::Socket::INET->new(
+                    Proto   => $logger{protocol},
+                    PeerPort => $logger{port},
+                    PeerAddr => $logger{host},
+                );
+                my $message = qq(convert-moab-headers user=$ENV{USER} file=$in alert="$line");
+                $logSocket->send($message);
+            }
+            catch {
+                warn "Couldn't log to central log server: $_\n";
+            };
+        };
+    }
+    else {
+        print "$line\n";
+    }
+}
+
+verbose("Finished $in");
+
+
+
+
+
+sub verbose {
+    my $message = shift;
+    print STDERR "DEBUG: $message\n" if $opts{v};
+}
+
+sub convert {
+    my ($old_opt, $old_arg) = @_;
+    if ($old_opt eq '-l') {
+        my $split = sub {
+            my $split = shift;
+            if ($split =~ /:/ and $split !~ /\d:\d/) {
+                my $ntasks = 1;
+                for (split ':', $split) {
+                    for (my ($a, $b) = split '=') {
+                        if ($a eq 'nodes' and $b == 1) {
+                        }
+                        elsif ($a eq 'ppn' and $b < 7) {
+                            $ntasks = $b;
+                        }
+                        else {
+                            die "Couldn't decide on converting -l $a=$b";
+                        }
+                    }
+                }
+                return ('--ntasks', $ntasks);
+            }
+            else {
+                my ($sub_opt, $sub_arg) = split '=', $split;
+                verbose("split '$split' into '$sub_opt' and '$sub_arg'");
+                if ($sub_opt eq 'size' and $sub_arg == 1) {
+                    return;
+                }
+                elsif ($sub_opt eq 'size' and $sub_arg <= 6) {
+                    return ('--ntasks', $sub_arg);
+                }
+                elsif (my $new_opt = $resource_options{$sub_opt}) {
+                    if ($new_opt eq '--time' and $sub_arg !~ /:/) {
+                        verbose("Dividing seconds=$sub_arg by 60");
+                        $sub_arg /= 60;
+                        verbose("Result is minutes=$sub_arg");
+                    }
+                    return ($new_opt, $sub_arg);
+                }
+                else {
+                    die "Couldn't convert: -l $sub_opt=$sub_arg";
+                }
+            }
+        };
+        
+        if ($old_arg !~ /,/) {
+            return $split->($old_arg);
+        }
+        for (split ',', $old_arg) {
+            return $split->($_);
+        }
+    }
+    elsif ($old_opt eq '-j' and $old_arg eq 'oe') {
+        return;
+    }
+    elsif ($old_opt eq '-r' and $old_arg eq 'y') {
+        return;
+    }
+    elsif ($old_opt eq '-r' and $old_arg eq 'n') {
+        return ('--no-requeue');
+    }
+    elsif ($old_opt eq '-q') {
+        if ($old_arg eq 'batch') {
+            return;
+        }
+        elsif ($old_arg =~ /bigvftmp|bigmem/) {
+            return ('--constraint', $old_arg);
+        }
+        elsif ($old_arg =~ /analysis|eslogin/) {
+            return ('--partition', $old_arg);
+        }
+        else {
+            die "Couldn't convert -q $old_arg";
+        }
+    }
+    elsif ($old_opt eq '-W' and $old_arg =~ /umask/) {
+        return;
+    }
+    elsif (my $new_opt = $options{$old_opt}) {
+        if ($new_opt eq '--output') {
+            $old_arg ||= '$HOME/%x.o%j';
+            $old_arg .= '%x.o%j' if $old_arg =~ m|/$|;
+        }
+        elsif ($new_opt eq '--mail-type') {
+            if ($old_arg eq 'a') {
+                return ($new_opt, 'fail');
+            }
+            elsif ($old_arg eq 'abe') {
+                return ($new_opt, 'all');
+            }
+            else {
+                die "Couldn't convert: -m $old_arg";
+            }
+        }
+        return if $new_opt eq 'NULL';
+        return ($new_opt, $old_arg);
+    }
+    else {
+        die "Couldn't convert: $old_opt $old_arg";
+    }
+}

@@ -19,10 +19,11 @@ unalias *
 
 # ---------------- define constants depending on the run type
 
-if ( $?PBS_ENVIRONMENT ) then
-   if ( $PBS_ENVIRONMENT == 'PBS_BATCH' ) then
-      set -r jobName = $PBS_JOBNAME:t.o`echo $PBS_JOBID | sed -r 's/^([0-9]+).*$/\1/'`
-      set -r stdoutDir = $PBS_O_WORKDIR
+if ( $?SLURM_JOB_ID ) then
+   tty -s
+   if ($status) then
+      set -r jobName = $SLURM_JOB_NAME:t.o$SLURM_JOB_ID
+      set -r stdoutDir = $SLURM_SUBMIT_DIR
       set -r batch
    endif
 endif
@@ -765,13 +766,17 @@ else
    goto END
 endif
 
-if ( $freCommandsToLoad ) then
+if ( $freCommandsToLoad || $hsmToLoad || $xferToolToLoad ) then
    if ( -d $freCommandsModuleFilesDir && -r $freCommandsModuleFilesDir ) then
       set freCommandsModuleFile = $freCommandsModuleFilesDir/fre/$freCommandsVersion
       if ( -f $freCommandsModuleFile && -r $freCommandsModuleFile ) then
          module use $freCommandsModuleFilesDir
          module unload fre
          module load fre/$freCommandsVersion
+
+         set -r xferSrcPrefix = ""
+         set -r xferDstPrefix = "gfdl:"
+         alias gcp `which gcp`
       else
          if ( $echoOn ) unset echo
          echo "*ERROR*: The 'fre' modulefile '$freCommandsModuleFile' doesn't exist or not readable"
@@ -789,62 +794,11 @@ if ( $freCommandsToLoad ) then
    endif
 endif
 
-if ( $hsmToLoad ) then
-   if ( -d $hsmModuleFilesDir && -r $hsmModuleFilesDir ) then
-      set hsmModuleFile = $hsmModuleFilesDir/hsm/$hsmVersion
-      if ( -f $hsmModuleFile && -r $hsmModuleFile ) then
-         module use $hsmModuleFilesDir
-         module unload hsm
-         module load hsm/$hsmVersion
-      else
-         if ( $echoOn ) unset echo
-         echo "*ERROR*: The 'hsm' modulefile '$hsmModuleFile' doesn't exist or not readable"
-         if ( $echoOn ) set echo
-         set exitStatus = 2
-         goto END
-      endif
-      unset hsmModuleFile
-   else
-      if ( $echoOn ) unset echo
-      echo "*ERROR*: The 'hsm' modulefiles directory '$hsmModuleFilesDir' doesn't exist or not readable"
-      if ( $echoOn ) set echo
-      set exitStatus = 2
-      goto END
-   endif
-endif
-
-if ( $xferToolToLoad ) then
-   if ( -d $xferToolModuleFilesDir && -r $xferToolModuleFilesDir ) then
-      set xferToolModuleFile = $xferToolModuleFilesDir/gcp/$xferToolVersion
-      if ( -f $xferToolModuleFile && -r $xferToolModuleFile ) then
-         module use $xferToolModuleFilesDir
-         module unload gcp
-         module load gcp/$xferToolVersion
-         set -r xferSrcPrefix = ""
-         set -r xferDstPrefix = "gfdl:"
-         alias xferTool `which gcp` --create-dirs --verbose
-      else
-         if ( $echoOn ) unset echo
-         echo "*ERROR*: The 'gcp' modulefile '$xferToolModuleFile' doesn't exist or not readable"
-         if ( $echoOn ) set echo
-         set exitStatus = 2
-         goto END
-      endif
-      unset xferToolModuleFile
-   else
-      if ( $echoOn ) unset echo
-      echo "*ERROR*: The 'gcp' modulefiles directory '$xferToolModuleFilesDir' doesn't exist or not readable"
-      if ( $echoOn ) set echo
-      set exitStatus = 2
-      goto END
-   endif
-endif
-
 ################################################################################
 #------------------------ global constants and aliases -------------------------
 ################################################################################
 
-if ( $HOST =~ gaea[0-9] || $HOST =~ gaea1[0-2] ) then
+if ( $HOST =~ gaea[0-9] || $HOST =~ gaea1[0-5] ) then
    set -r hostType = 'login'
 else if ( $HOST =~ gaea-ldtn* ) then
    set -r hostType = 'ldtn'
@@ -890,8 +844,8 @@ if ( $actionCombineToDo ) then
    endif
 
    set -r memoryDownscalingFactor = '1.00'
-   set -r memorySpec = ( `free -m | grep '-'` )
-   set -r combineMemory = `echo "$memorySpec[4] * $memoryDownscalingFactor" | bc -l | xargs printf "%.0f"`
+   set -r memorySpec = ( `getFreeMem` )
+   set -r combineMemory = `echo "$memorySpec * $memoryDownscalingFactor" | bc -l | xargs printf "%.0f"`
    set -r combinesPerJob = 2
 
    mppnccombine -V >& /dev/null
@@ -1003,48 +957,94 @@ if ( $actionCombineToDo ) then
       else
          set filesToCombine = ( )
       endif
-
       if ( $#filesToCombine > 0 ) then
          @ counter = 1
          set -r combineTimeBeg = `date "+%s"`
          foreach file ( $filesToCombine )
+	    set combineFlag = 1
             set inputFiles = ( `ls -1 | egrep "^$file$patternGrepTail"` )
             if ( $#inputFiles > 1 ) then
                rm --force $file
                slmnccompressed $inputFiles[1]
-               if ( $status == 0 ) then
-                  ( slmnccombine $inputFiles $file && ( echo $inputFiles | xargs rm --force ) || touch $file.$tagFail ) &
-               else if ( ($type == 'restart' && $file =~ 'icebergs.res*.nc') || ($type == 'history' && $file =~ '*iceberg_trajectories*.nc') ) then
-                  ( iceberg_comb $inputFiles $file && ( echo $inputFiles | xargs rm --force ) || touch $file.$tagFail ) &
-               else
-                  if ( $?mppnccombineWithBuffering ) then
-                     @ memoryPerOneBuffer = `mppnccombine -x $file $inputFiles`
-                     if ( $status == 0 ) then
-                        @ buffersNmb = ( $combineMemory / ( $combinesPerJob * $memoryPerOneBuffer ) ) + 1
-                        if ( $buffersNmb > $buffersNmbMax ) @ buffersNmb = $buffersNmbMax
-                        ( mppnccombine -k $buffersNmb $file $inputFiles && ( echo $inputFiles | xargs rm --force ) || touch $file.$tagFail ) &
-                        unset buffersNmb
+	       #save status of slmnccompressed
+	       set compress_stat = $status
+	       #check that number of variables and variable names in $inputFiles are the same
+               #if not, set flag to skip combine step
+	       set nvars = ()
+	       foreach f ( $inputFiles )
+		  set num = `ncks -m $f | grep -E ': type' | cut -f 1 -d ' ' | sed 's/://' | sort -u | wc -l`
+		  set nvars = ( $nvars $num )
+		  if ( `list_ncvars.csh -st -01234 $f | sort -u` != `list_ncvars.csh -st -01234 $inputFiles[1] | sort -u` ) then
+		     set combineFlag = 0
+		     echo "WARNING: Variables differ between input files."
+                     echo "WARNING: Not combining $inputFiles"
+		  endif
+	       end
+	       foreach n ( $nvars )
+		  if ( $n != $nvars[1] ) then
+		    set combineFlag = 0
+		    echo "WARNING: Number of variables differ, not combining $inputFiles"
+	          endif
+	       end
+	       unset n
+	       unset num
+               unset nvars
+               if ( $combineFlag == 0 ) then
+                  #send user email with warning if combineFlag = 0
+                  echo "WARNING: Variables differ, not combining $inputFiles"
+                  set msg =       "WARNING: Automatic message from the job '$jobName'\n"
+		  set msg = "${msg}WARNING: -----------------------------------------------------------------------\n"
+                  set msg = "${msg}WARNING: The number of variables or variable names differ in the following files:\n"
+                  set msg = "${msg}WARNING: \n"
+                  set msg = "${msg}WARNING: \t$inputFiles\n"
+                  set msg = "${msg}WARNING: \n"
+                  set msg = "${msg}WARNING: These files will not be combined but will still be available in the history file.\n"
+                  set msg = "${msg}WARNING: \n"
+                  set msg = "${msg}WARNING: The job stdout:\n"
+                  set msg = "${msg}WARNING: \n"
+                  set msg = "${msg}WARNING: \t$stdoutDir/$jobName\n"
+                  set msg = "${msg}WARNING: \n"
+                  set msg = "${msg}WARNING: -----------------------------------------------------------------------\n"
+                  set msg = "${msg}WARNING: This message has been generated by FRE\n"
+                  set msg = "${msg}WARNING: `date`"
+                  printf "$msg" | mailx -s "WARNING: Variables differ in $inputFiles" $USER@noaa.gov
+	       else 
+                  if ( $compress_stat == 0 ) then
+                     ( slmnccombine $inputFiles $file && ( echo $inputFiles | xargs rm --force ) || touch $file.$tagFail ) &
+                  else if ( ($type == 'restart' && $file =~ 'icebergs.res*.nc') || ($type == 'history' && $file =~ '*iceberg_trajectories*.nc') ) then
+                     ( iceberg_comb $inputFiles $file && ( echo $inputFiles | xargs rm --force ) || touch $file.$tagFail ) &
+                  else
+                     if ( $?mppnccombineWithBuffering ) then
+                        @ memoryPerOneBuffer = `mppnccombine -x $file $inputFiles`
+                        if ( $status == 0 ) then
+                           @ buffersNmb = ( $combineMemory / ( $combinesPerJob * $memoryPerOneBuffer ) ) + 1
+                           if ( $buffersNmb > $buffersNmbMax ) @ buffersNmb = $buffersNmbMax
+                           ( mppnccombine -k $buffersNmb $file $inputFiles && ( echo $inputFiles | xargs rm --force ) || touch $file.$tagFail ) &
+                           unset buffersNmb
+                        else
+                           ( mppnccombine $file $inputFiles && ( echo $inputFiles | xargs rm --force ) || touch $file.$tagFail ) &
+                           if ( $echoOn ) unset echo
+                           echo "WARNING: Unable to determine a mppnccombine buffer memory"
+                           if ( $echoOn ) set echo
+                        endif
+                        unset memoryPerOneBuffer
                      else
                         ( mppnccombine $file $inputFiles && ( echo $inputFiles | xargs rm --force ) || touch $file.$tagFail ) &
-                        if ( $echoOn ) unset echo
-                        echo "WARNING: Unable to determine a mppnccombine buffer memory"
-                        if ( $echoOn ) set echo
                      endif
-                     unset memoryPerOneBuffer
-                  else
-                     ( mppnccombine $file $inputFiles && ( echo $inputFiles | xargs rm --force ) || touch $file.$tagFail ) &
                   endif
-               endif
-               if ( $counter < $combinesPerJob ) then
-                  @ counter++
-               else
-                  @ counter = 1
-                  wait
-               endif
+                  if ( $counter < $combinesPerJob ) then
+                     @ counter++
+                  else
+                     @ counter = 1
+                     wait
+                  endif
+	       endif #combineFlag
             else if ( $#inputFiles > 0 ) then
                mv --force $inputFiles[1] $file
             endif
             unset inputFiles
+	    unset combineFlag
+	    unset compress_stat
          end
          wait
          unset counter
@@ -1195,7 +1195,7 @@ if ( $actionFillGridToDo ) then
 
       # use ocean_static.nc in gridSpec tarfile otherwise
       if ( $#ref_ocean_static == 0 ) then
-         tar -xf $gridSpec ./ocean_static.nc
+         tar --wildcards -xf $gridSpec '*ocean_static.nc'
          if ( $status ) then
             if ( $echoOn ) unset echo
             echo "*WARNING*: $error_intro Unfortunately, we couldn't extract ocean_static.nc from $gridSpec. Please add ocean_static.nc containing unmasked grid info fields to $gridSpec."
@@ -1207,16 +1207,43 @@ if ( $actionFillGridToDo ) then
 
       # do the swap
       if ( $#masked_ocean_static == 1 && $#ref_ocean_static == 1 ) then
-         ncks -A $ref_ocean_static $masked_ocean_static
-         if ( $status == 0 ) then
-            if ( $echoOn ) unset echo
-            echo "<NOTE> : Reference ocean static $ref_ocean_static has been appended to $masked_ocean_static"
-            if ( $echoOn ) set echo
+         # We want to append the data from the reference file fields
+         # to the history file, but only for fields that are
+         # in the history file already. Otherwise, we'll append data fields
+         # from reference files that aren't in the history file,
+         # and end up with fields in the history file with no metadata (which isn't desired).
+         # The first ncks gets the fields in the (masked) history file,
+         # the 2nd ncks gets the fields in the reference file,
+         # and the comm -12 gets the set that are in both.
+         # I couldn't figure out how to do this without temporary files using c-shell,
+         # but could with bash
+         set common_vars = `bash -c "comm -12 \
+            <(ncks -m $masked_ocean_static | grep -E ': type' | cut -f 1 -d ' ' | sed 's/://' | sort -u) \
+            <(ncks -m $ref_ocean_static | grep -E ': type' | cut -f 1 -d ' ' | sed 's/://' | sort -u)"`
+         if ($status == 0) then
+            set common_vars = `echo $common_vars | sed 's/ /,/g'`
+            if ( $common_vars != "" ) then
+               ncks -A -m -v $common_vars $ref_ocean_static $masked_ocean_static
+               if ( $status == 0 ) then
+                  if ( $echoOn ) unset echo
+                  echo "<NOTE> : Reference ocean static $ref_ocean_static has been appended to $masked_ocean_static"
+                  if ( $echoOn ) set echo
+               else
+                  if ( $echoOn ) unset echo
+                     echo "*ERROR*: $error_intro Unfortunately, we couldn't append $ref_ocean_static into $masked_ocean_static. This shouldn't happen, so please open a help desk ticket. $error_ending"
+                  if ( $echoOn ) set echo
+               endif
+            else
+               if ( $echoOn ) unset echo
+               echo "*ERROR*: $error_intro Unfortunately the variable intersection of $masked_ocean_static and $ref_ocean_static seems to be empty. This is probably a bug, so please submit a help desk ticket. $error_ending"
+               if ( $echoOn ) set echo
+            endif
          else
             if ( $echoOn ) unset echo
-               echo "*ERROR*: $error_intro Unfortunately, we couldn't append $ref_ocean_static into $masked_ocean_static. This shouldn't happen, so please open a help desk ticket. $error_ending"
+            echo "*ERROR*: $error_intro Unfortunately the variable intersection of $masked_ocean_static and $ref_ocean_static couldn't be determined. Please submit a help desk ticket. $error_ending"
             if ( $echoOn ) set echo
          endif
+         unset common_vars
       endif
 
       popd
@@ -1525,7 +1552,7 @@ if ( $actionXferToConsider ) then
    if ( $actionXferToPerform ) then
       if ( $hostType == 'login' || $hostType == 'rdtn' ) then
          if ( -f $archDir.$archExt && -r $archDir.$archExt ) then
-            xferTool $xferSrcPrefix$archDir.$archExt $xferDstPrefix$outputDirRemote:h/
+            gcp --create-dirs --verbose $xferSrcPrefix$archDir.$archExt $xferDstPrefix$outputDirRemote:h/
 
             if ( $status == 0 ) then
                if ( $echoOn ) unset echo
@@ -1540,7 +1567,7 @@ if ( $actionXferToConsider ) then
             endif
 
             if ( -f $archDir.$archExt.ok && -r $archDir.$archExt.ok && -s $archDir.$archExt.ok ) then
-               xferTool $xferSrcPrefix$archDir.$archExt.ok $xferDstPrefix$outputDirRemote:h/
+               gcp --create-dirs --verbose $xferSrcPrefix$archDir.$archExt.ok $xferDstPrefix$outputDirRemote:h/
 
                if ( $status == 0 ) then
                   if ( $echoOn ) unset echo
@@ -1594,7 +1621,7 @@ if ( $actionPPStartToConsider ) then
                set xmlFileRemote = $xmlFilesRemote[$inx]
 
                if ( -f "$xmlFile" && -r "$xmlFile" ) then
-                  xferTool --sync $xferSrcPrefix$xmlFile $xferDstPrefix$xmlFileRemote:h/
+                  gcp --create-dirs --verbose --sync $xferSrcPrefix$xmlFile $xferDstPrefix$xmlFileRemote:h/
                   if ( $status == 0 ) then
                      if ( $echoOn ) unset echo
                      echo "<NOTE> : The XML file '$xmlFile' has been copied to the remote XML file '$xmlFileRemote' successfully"
@@ -1632,7 +1659,7 @@ if ( $actionPPStartToConsider ) then
 
          if ( $includeDir != "" && $includeDirRemote != "" ) then
             if ( -d $includeDir && -r $includeDir ) then
-               xferTool -r -cd --sync $xferSrcPrefix$includeDir $xferDstPrefix$includeDirRemote:h/
+               gcp --verbose --recursive --sync $xferSrcPrefix$includeDir $xferDstPrefix$includeDirRemote/
                if ( $status == 0 ) then
                   echo "<NOTE> : The include directory $includeDir has been copied to the remote location $includeDirRemote successfully"
                else
@@ -1657,7 +1684,7 @@ if ( $actionPPStartToConsider ) then
          echo "dummy" >> $dummyFile
 
          if ( $status == 0 ) then
-            xferTool $xferSrcPrefix$dummyFile $xferDstPrefix$stdoutDirRemotePP/
+            gcp --create-dirs --verbose $xferSrcPrefix$dummyFile $xferDstPrefix$stdoutDirRemotePP/
             if ( $status == 0 ) then
                if ( $echoOn ) unset echo
                echo "<NOTE> : The remote directory '$stdoutDirRemotePP' has been created successfully"
@@ -1680,7 +1707,9 @@ if ( $actionPPStartToConsider ) then
          endif
 
          set ppStarter = $FRE_COMMANDS_HOME/site/gfdl/bin/pp.starter
-         set ppStarterResult = `submit -O "$ppStarterOptions -v mppnccombineOptString='$mppnccombineOptString' -d $stdoutDirRemotePP -o $stdoutDirRemotePP/" $ppStarter`
+         # mppnccombineOptString is always set; need to combine it with the other --export variables
+         set ppStarterOptionsCombined = `echo $ppStarterOptions | sed "s/--export=/--export=mppnccombineOptString='$mppnccombineOptString',/"`
+         set ppStarterResult = `submit -O "$ppStarterOptionsCombined --chdir=$stdoutDirRemotePP --output=$stdoutDirRemotePP/%x.o%j" $ppStarter`
 
          if ( $status == 0 ) then
             if ( $echoOn ) unset echo
@@ -1724,7 +1753,7 @@ endif
 if ( ( $actionXferOn && ! $actionXferOk ) || ( $actionPPStartOn && ! $actionPPStartOk ) ) then
    if ( $stagingType == 'Chained' ) then
       set outputStager = `which output.stager`
-      set outputStagerResult = `submit -O "$xferOptions -v argFile=$argFile" $outputStager`
+      set outputStagerResult = `submit -O "$xferOptions --export=argFile=$argFile" $outputStager`
 
       if ( $status == 0 ) then
          if ( $echoOn ) unset echo
