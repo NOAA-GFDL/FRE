@@ -1,0 +1,160 @@
+#!/usr/bin/env perl
+# -*- cperl -*-
+
+# $Id: batch.scheduler.time,v 1.1.2.1 2013/03/26 18:27:35 afy Exp $
+# ------------------------------------------------------------------------------
+# FMS/FRE Project: Program to Show Batch Scheduler Time-Related Parameters
+# ------------------------------------------------------------------------------
+# afy    Ver   1.00  Initial version                                March 13
+# ------------------------------------------------------------------------------
+# Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2000-2013
+# Designed and written by V. Balaji, Amy Langenhorst and Aleksey Yakovlev
+#
+
+use strict;
+
+use File::Basename();
+use Getopt::Long( ':config', 'no_ignore_case', 'no_auto_abbrev' );
+
+{
+
+    package batch_scheduler_time;
+
+    use constant VERSION => '$Id: batch.scheduler.time,v 1.1.2.1 2013/03/26 18:27:35 afy Exp $';
+
+    use constant OPTLIST => (
+        'total-time|t', 'remaining-time|r', 'retries-number|N=i', 'retry-delay|D=i',
+        'help|h',       'verbose|v+',       'version|V'
+    );
+
+    use constant RETRIES_NUMBER => 60;
+    use constant RETRY_DELAY    => 60;
+
+    use constant SECONDS_PER_DAY    => 86400;
+    use constant SECONDS_PER_HOUR   => 3600;
+    use constant SECONDS_PER_MINUTE => 60;
+
+    my $self = File::Basename::basename($0);
+
+    sub Usage()
+
+        # ------ arguments: none
+    {
+        my $rtn = RETRIES_NUMBER;
+        my $rtd = RETRY_DELAY;
+        return (
+            "\n",
+            "  Usage: $self [option] ... jobId\n\n",
+            "  Options:\n\n",
+            "   -t         --total-time           show total (requested) walltime for the given job\n",
+            "   -r         --remaining-time       show remaining walltime for the given job\n",
+            "   -N NUM,    --retries-number=NUM   a number NUM of retries (default is '$rtn')\n",
+            "   -D NUM,    --retry-delay=NUM      a delay NUM between retries (default is '$rtd'), in seconds\n\n",
+            "   -h,        --help                 print the help message and exit\n",
+            "   -v         --verbose              get verbose messages (repeat the option to increase verbosity level)\n",
+            "   -V,        --version              print the tool version and exit\n\n"
+        );
+    }
+
+    sub Help()
+
+        # ------ arguments: none
+    {
+        my @usage = Usage();
+        return ( "\n",
+            "   Synopsis: The '$self' shows time-related parameters for the given job.\n",
+            "@usage", );
+    }
+
+    sub Seconds($)
+
+        # ------ arguments: $time
+    {
+        my $t = shift;
+        # time format example output returned by Slurm:
+        # > 100 days    101-23:59:39
+        # > 10 days     10-23:59:52
+        # > day         2-11:27:03
+        # < day         9:59:13
+        # < hour        59:55
+        # < minute      0:55
+
+        my ($days, $hours, $minutes, $seconds) = (0, 0, 0, 0);
+        my @pieces = split /[-:]/, $t;
+        if (@pieces == 4) {
+            ($days, $hours, $minutes, $seconds) = @pieces;
+        }
+        elsif (@pieces == 3) {
+            ($hours, $minutes, $seconds) = @pieces;
+        }
+        elsif (@pieces == 2) {
+            ($minutes, $seconds) = @pieces;
+        }
+        else {
+            return $t;
+        }
+
+        return $days      * SECONDS_PER_DAY
+               + $hours   * SECONDS_PER_HOUR
+               + $minutes * SECONDS_PER_MINUTE
+               + $seconds;
+    }
+
+}
+
+# //////////////////////////////////////////////////////////////////////////////
+# ////////////////////////////////////////////////////////////////////// Main //
+# //////////////////////////////////////////////////////////////////////////////
+
+{
+    # return if being imported (for testing)
+    return 1 unless $0 eq __FILE__;
+
+    my %opt = (
+        'total-time'     => 1,
+        'retries-number' => batch_scheduler_time::RETRIES_NUMBER,
+        'retry-delay'    => batch_scheduler_time::RETRY_DELAY
+    );
+
+    Getopt::Long::GetOptions( \%opt, batch_scheduler_time::OPTLIST )
+        or ( print STDERR batch_scheduler_time::Usage() and exit 1 );
+    if ( $opt{version} ) { print STDERR batch_scheduler_time::VERSION, "\n" and exit 0; }
+    if ( $opt{help} ) { print STDERR batch_scheduler_time::Help() and exit 0; }
+
+    if ( scalar(@ARGV) == 1 ) {
+        my $jobId        = $ARGV[0];
+        my $checkJobCall = $opt{'remaining-time'}
+                         ? "squeue -h -j $jobId -o %L"
+                         : "squeue -h -j $jobId -o %l";
+        my $retry        = 0;
+        while (1) {
+            print STDERR "$checkJobCall\n" if $opt{verbose};
+            chomp( my $res = qx($checkJobCall) );
+            if ( $? == 0 ) {
+                print STDERR "$res\n" if $opt{verbose} > 1;
+                if ( $res ) {
+                    print batch_scheduler_time::Seconds( $res ), "\n";
+                    exit 0;
+                }
+                else {
+                    print STDERR "Job information from tool is unexpectedly empty\n";
+                    exit 1;
+                }
+            } ## end if ( $? == 0 )
+            elsif ( $retry < $opt{'retries-number'} ) {
+                print STDERR "Retrying batch system query ($retry)...\n";
+                sleep $opt{'retry-delay'};
+                $retry++;
+            }
+            else {
+                print STDERR "No more retries\n";
+                exit 1;
+            }
+        } ## end while (1)
+    } ## end if ( scalar(@ARGV) == ...)
+    else {
+        print STDERR "The tool needs a 'jobId' argument\n";
+        exit 1;
+    }
+
+}

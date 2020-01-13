@@ -1,3 +1,4 @@
+#!/usr/bin/env bats
 # -*- mode: sh; eval: (sh-set-shell "sh"); -*-
 
 # The output_good strings are configured with the exact number of spaces needed
@@ -20,22 +21,19 @@ add_submit_cmd_to_last_line_good() {
 
 @test "frerun is in PATH" {
     run which frerun
-    echo "Got: \"$output\""
-    echo "Exit status: $status"
+    print_output_and_status
     [ "$status" -eq 0 ]
 }
 
 @test "frerun print help message" {
     run frerun -h
-    echo "Got: \"$output\""
-    echo "Exit status: $status"
+    print_output_and_status
     [ "$status" -eq 0 ]
 }
 
 @test "frerun print version" {
     run frerun -V
-    echo "Got: \"$output\""
-    echo "Exit status: $status"
+    print_output_and_status
     [ "$status" -eq 0 ]
 }
 
@@ -51,9 +49,7 @@ add_submit_cmd_to_last_line_good() {
     esac
 
     run frerun
-    echo "Expected: \"$output_good\""
-    echo "Got:      \"$output\""
-    echo "Exit status: $status"
+    print_output_status_and_diff_expected
     [ "$status" -eq 11 ]
     [ "$output" = "$output_good" ]
 }
@@ -70,9 +66,7 @@ add_submit_cmd_to_last_line_good() {
 
     rm -f rts.xml
     run frerun -p ${default_platform} CM2.1U_Control-1990_E1.M_3A
-    echo "Expected: \"$output_good\""
-    echo "Got:      \"$output\""
-    echo "Exit status: $status"
+    print_output_status_and_diff_expected
     [ "$status" -eq 30 ]
     [ "$output" = "$output_good" ]
 }
@@ -81,8 +75,8 @@ add_submit_cmd_to_last_line_good() {
     case "${default_platform%%.*}" in
         ncrc? )
             platform="ncrc"
-            root_stem="/lustre/f1"
-            submit_cmd="sleep 1; msub"
+            root_stem="/lustre/f2/scratch"
+            submit_cmd="sleep 1; sbatch"
             ;;
         theia ) platform="theia"
             root_stem="/scratch4/GFDL/gfdlscr"
@@ -109,10 +103,7 @@ add_submit_cmd_to_last_line_good() {
     num_lines=${#lines[@]}
     last_line="${lines[$((${num_lines}-1))]}"
 
-    echo "Output:   \"$output\""
-    echo "Expected: \"$last_line_good\""
-    echo "Got:      \"$last_line\""
-    echo "Exit status: $status"
+    print_output_status_and_diff_expected_long "$last_line" "$last_line_good"
     [ "$status" -eq 0 ]
     string_matches_pattern "$last_line" "$last_line_good"
     rm -rf "${root_stem}/${USER}/FRE_tests-${unique_string}-temp"
@@ -132,9 +123,7 @@ add_submit_cmd_to_last_line_good() {
 
     [ ! -f nonexistent_file.xml ] # Assert file doesn't exist
     run frerun -x nonexistent_file.xml -p ${default_platform} CM2.1U_Control-1990_E1.M_3A
-    echo "Expected: \"$output_good\""
-    echo "Got:      \"$output\""
-    echo "Exit status: $status"
+    print_output_status_and_diff_expected
     [ "$status" -eq 30 ]
     [ "$output" = "$output_good" ]
 }
@@ -143,8 +132,8 @@ add_submit_cmd_to_last_line_good() {
     case "${default_platform%%.*}" in
         ncrc? )
             platform="ncrc"
-            root_stem="/lustre/f1"
-            submit_cmd="sleep 1; msub"
+            root_stem="/lustre/f2/scratch"
+            submit_cmd="sleep 1; sbatch"
             ;;
         theia )
             platform="theia"
@@ -172,10 +161,7 @@ add_submit_cmd_to_last_line_good() {
     num_lines=${#lines[@]}
     last_line="${lines[$((num_lines-1))]}"
 
-    echo "Output:   \"$output\""
-    echo "Expected: \"$last_line_good\""
-    echo "Got:      \"$last_line\""
-    echo "Exit status: $status"
+    print_output_status_and_diff_expected_long "$last_line" "$last_line_good"
     [ "$status" -eq 0 ]
     string_matches_pattern "$last_line" "$last_line_good"
     rm -rf "${root_stem}/${USER}/FRE_tests-${unique_string}-temp"
@@ -187,9 +173,7 @@ add_submit_cmd_to_last_line_good() {
     output_good="*FATAL*: The --platform option value 'nonexistent_platform.intel' is not valid"
 
     run frerun -x CM2.1U.xml -p nonexistent_platform.intel CM2.1U_Control-1990_E1.M_3B_snowmelt
-    echo "Expected: \"$output_good\""
-    echo "Got:      \"$output\""
-    echo "Exit status: $status"
+    print_output_status_and_diff_expected
     [ "$status" -eq 30 ]
     [ "$output" = "$output_good" ]
 }
@@ -198,8 +182,8 @@ add_submit_cmd_to_last_line_good() {
     case "${default_platform%%.*}" in
         ncrc? )
             platform="ncrc"
-            root_stem="/lustre/f1"
-            submit_cmd="sleep 1; msub"
+            root_stem="/lustre/f2/scratch"
+            submit_cmd="sleep 1; sbatch"
             ;;
         theia )
             platform="theia"
@@ -227,10 +211,7 @@ add_submit_cmd_to_last_line_good() {
     num_lines=${#lines[@]}
     last_line="${lines[$((num_lines-1))]}"
 
-    echo "Output:   \"$output\""
-    echo "Expected: \"$last_line_good\""
-    echo "Got:      \"$last_line\""
-    echo "Exit status: $status"
+    print_output_status_and_diff_expected_long "$last_line" "$last_line_good"
     [ "$status" -eq 0 ]
     string_matches_pattern "$last_line" "$last_line_good"
     rm -rf "${root_stem}/${USER}/FRE_tests-${unique_string}-temp"
@@ -241,8 +222,8 @@ add_submit_cmd_to_last_line_good() {
     case "${default_platform%%.*}" in
         ncrc? )
             platform="ncrc"
-            root_stem="/lustre/f1"
-            submit_cmd="sleep 1; msub"
+            root_stem="/lustre/f2/scratch"
+            submit_cmd="sleep 1; sbatch"
             ;;
         theia )
             platform="theia"
@@ -270,10 +251,7 @@ add_submit_cmd_to_last_line_good() {
     num_lines=${#lines[@]}
     last_line="${lines[$((num_lines-1))]}"
 
-    echo "Output:   \"$output\""
-    echo "Expected: \"$last_line_good\""
-    echo "Got:      \"$last_line\""
-    echo "Exit status: $status"
+    print_output_status_and_diff_expected_long "$last_line" "$last_line_good"
     [ "$status" -eq 0 ]
     string_matches_pattern "$last_line" "$last_line_good"
     rm -rf "${root_stem}/${USER}/FRE_tests-${unique_string}-temp"
@@ -284,8 +262,8 @@ add_submit_cmd_to_last_line_good() {
     case "${default_platform%%.*}" in
         ncrc? )
             platform="ncrc"
-            root_stem="/lustre/f1"
-            submit_cmd="sleep 1; msub"
+            root_stem="/lustre/f2/scratch"
+            submit_cmd="sleep 1; sbatch"
             ;;
         theia )
             platform="theia"
@@ -327,10 +305,7 @@ ${lines[$((num_lines-2))]}"
 ${lines[$((num_lines-1))]}"
     fi
 
-    echo "Output:   \"$output\""
-    echo "Expected: \"$last_3_lines_good\""
-    echo "Got:      \"$last_3_lines\""
-    echo "Exit status: $status"
+    print_output_status_and_diff_expected_long "$last_3_lines" "$last_3_lines_good"
     [ "$status" -eq 60 ]
     [ "$last_3_lines" = "$last_3_lines_good" ]
     rm -rf "${root_stem}/${USER}/FRE_tests-${unique_string}-temp"
@@ -341,8 +316,8 @@ ${lines[$((num_lines-1))]}"
     case "${default_platform%%.*}" in
         ncrc? )
             platform="ncrc"
-            root_stem="/lustre/f1"
-            submit_cmd="sleep 1; msub"
+            root_stem="/lustre/f2/scratch"
+            submit_cmd="sleep 1; sbatch"
             ;;
         theia )
             platform="theia"
@@ -375,10 +350,7 @@ ${lines[$((num_lines-1))]}"
     num_lines=${#lines[@]}
     last_line="${lines[$((num_lines-1))]}"
 
-    echo "Output:   \"$output\""
-    echo "Expected: \"$last_line_good\""
-    echo "Got:      \"$last_line\""
-    echo "Exit status: $status"
+    print_output_status_and_diff_expected_long "$last_line" "$last_line_good"
     [ "$status" -eq 0 ]
     [ "$last_line" = "$last_line_good" ]
     rm -rf "${root_stem}/${USER}/FRE_tests-${unique_string}-temp"
@@ -389,8 +361,8 @@ ${lines[$((num_lines-1))]}"
     case "${default_platform%%.*}" in
         ncrc? )
             platform="ncrc"
-            root_stem="/lustre/f1"
-            submit_cmd="sleep 1; msub"
+            root_stem="/lustre/f2/scratch"
+            submit_cmd="sleep 1; sbatch"
             ;;
         theia )
             platform="theia"
@@ -423,10 +395,7 @@ ${lines[$((num_lines-1))]}"
     num_lines=${#lines[@]}
     last_line="${lines[$((num_lines-1))]}"
 
-    echo "Output:   \"$output\""
-    echo "Expected: \"$last_line_good\""
-    echo "Got:      \"$last_line\""
-    echo "Exit status: $status"
+    print_output_status_and_diff_expected_long "$last_line" "$last_line_good"
     [ "$status" -eq 0 ]
     [ "$last_line" = "$last_line_good" ]
     rm -rf "${root_stem}/${USER}/FRE_tests-${unique_string}-temp"
@@ -437,8 +406,8 @@ ${lines[$((num_lines-1))]}"
     case "${default_platform%%.*}" in
         ncrc? )
             platform="ncrc"
-            root_stem="/lustre/f1"
-            submit_cmd="sleep 1; msub"
+            root_stem="/lustre/f2/scratch"
+            submit_cmd="sleep 1; sbatch"
             ;;
         theia )
             platform="theia"
@@ -471,12 +440,123 @@ ${lines[$((num_lines-1))]}"
     num_lines=${#lines[@]}
     last_line="${lines[$((num_lines-1))]}"
 
-    echo "Output:   \"$output\""
-    echo "Expected: \"$last_line_good\""
-    echo "Got:      \"$last_line\""
-    echo "Exit status: $status"
+    print_output_status_and_diff_expected_long "$last_line" "$last_line_good"
     [ "$status" -eq 0 ]
     string_matches_pattern "$last_line" "$last_line_good"
     rm -rf "${root_stem}/${USER}/FRE_tests-${unique_string}-temp"
     rm "${unique_string}-temp.xml"
+}
+
+@test "Create run script and verify default mail target" {
+    case "${default_platform%%.*}" in
+        ncrc? )
+            platform="ncrc"
+            root_stem="/lustre/f2/scratch"
+            submit_cmd="sleep 1; sbatch"
+            ;;
+        theia ) platform="theia"
+            root_stem="/scratch4/GFDL/gfdlscr"
+            submit_cmd="qsub"
+            ;;
+        * )
+            skip "No test for current platform"
+            ;;
+    esac
+
+
+    unique_stdout_xml CM2.1U.xml >rts.xml
+    run frerun -p ${default_platform} CM2.1U_Control-1990_E1.M_3B_snowmelt
+
+    script="${root_stem}/${USER}/FRE_tests-${unique_string}-temp/*/CM2.1U_Control-1990_E1.M_3B_snowmelt/${default_platform}-prod/scripts/run/CM2.1U_Control-1990_E1.M_3B_snowmelt"
+    grep "SBATCH --mail-user=$USER@noaa.gov" $script
+    [ "$status" -eq 0 ]
+
+    rm -rf "${root_stem}/${USER}/FRE_tests-${unique_string}-temp"
+    rm rts.xml
+}
+
+@test "Verify frerun error when using --mail-list with invalid email address" {
+    case "${default_platform%%.*}" in
+        ncrc? )
+            platform="ncrc"
+            root_stem="/lustre/f2/scratch"
+            submit_cmd="sleep 1; sbatch"
+            ;;
+        theia ) platform="theia"
+            root_stem="/scratch4/GFDL/gfdlscr"
+            submit_cmd="qsub"
+            ;;
+        gfdl-ws )
+            platform="gfdl-ws"
+            root_stem="/local2/tmp"
+            submit_cmd=""
+            ;;
+        * )
+            skip "No test for current platform"
+            ;;
+    esac
+
+
+    unique_stdout_xml CM2.1U.xml >rts.xml
+    run frerun -p ${default_platform} CM2.1U_Control-1990_E1.M_3B_snowmelt --mail-list ok@noaa.gov,not-real@yahoo
+    [ "$status" -eq 10 ]
+
+    rm -rf "${root_stem}/${USER}/FRE_tests-${unique_string}-temp"
+    rm rts.xml
+}
+
+@test "Create run script and verify user-specified email" {
+    case "${default_platform%%.*}" in
+        ncrc? )
+            platform="ncrc"
+            root_stem="/lustre/f2/scratch"
+            submit_cmd="sleep 1; sbatch"
+            ;;
+        theia ) platform="theia"
+            root_stem="/scratch4/GFDL/gfdlscr"
+            submit_cmd="qsub"
+            ;;
+        * )
+            skip "No test for current platform"
+            ;;
+    esac
+
+
+    unique_stdout_xml CM2.1U.xml >rts.xml
+    run frerun -p ${default_platform} CM2.1U_Control-1990_E1.M_3B_snowmelt --mail-list one@two.com
+
+    script="${root_stem}/${USER}/FRE_tests-${unique_string}-temp/*/CM2.1U_Control-1990_E1.M_3B_snowmelt/${default_platform}-prod/scripts/run/CM2.1U_Control-1990_E1.M_3B_snowmelt"
+    grep "SBATCH --mail-user=one@two.com" $script
+    [ "$status" -eq 0 ]
+
+    rm -rf "${root_stem}/${USER}/FRE_tests-${unique_string}-temp"
+    rm rts.xml
+}
+
+@test "Create run script and verify three user-specified emails" {
+    case "${default_platform%%.*}" in
+        ncrc? )
+            platform="ncrc"
+            root_stem="/lustre/f2/scratch"
+            submit_cmd="sleep 1; sbatch"
+            ;;
+        theia ) platform="theia"
+            root_stem="/scratch4/GFDL/gfdlscr"
+            submit_cmd="qsub"
+            ;;
+        * )
+            skip "No test for current platform"
+            ;;
+    esac
+
+
+    unique_stdout_xml CM2.1U.xml >rts.xml
+    run frerun -p ${default_platform} CM2.1U_Control-1990_E1.M_3B_snowmelt --mail-list one@two.com,foo@bar.edu,blue_green@algae.com
+
+    script="${root_stem}/${USER}/FRE_tests-${unique_string}-temp/*/CM2.1U_Control-1990_E1.M_3B_snowmelt/${default_platform}-prod/scripts/run/CM2.1U_Control-1990_E1.M_3B_snowmelt"
+    grep "SBATCH --mail-user=one@two.com,foo@bar.edu,blue_green@algae.com" $script
+    [ "$status" -eq 0 ]
+
+    rm -rf "${root_stem}/${USER}/FRE_tests-${unique_string}-temp"
+    rm rts.xml
 }
