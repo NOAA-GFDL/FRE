@@ -8,6 +8,7 @@
 # Seth Underwood
 #
 
+
   set -r echoOn = $?echo
   set -r runtimeBeg = `date "+%s"`
 
@@ -20,8 +21,9 @@
 
   # ---------------- define constants depending on the run type
 
-  if ( $?PBS_ENVIRONMENT ) then
-    if ( $PBS_ENVIRONMENT == 'PBS_BATCH' ) then
+  if ( $?SLURM_JOB_ID ) then
+    tty -s
+    if ($status) then
       set -r batch
     endif
   endif
@@ -125,6 +127,19 @@
       set -r mppnccombineOptString = "$mppnccombineOptsDefault"
     endif
 
+    if ( $?mailList ) then
+      if ( $echoOn ) unset echo
+      echo "<NOTE> : mailList = '$mailList'"
+      if ( $echoOn ) set echo
+      set -r mailList = $mailList
+      set -r mailListOption = "--mail-list=$mailList"
+    else
+      if ( $echoOn ) unset echo
+      echo "<NOTE> : The argument 'mailList' is not defined, so it won't be passed to frepp"
+      if ( $echoOn ) set echo
+      set -r mailListOption =
+    endif
+
   else if ( $# > 0 ) then
 
     alias getopt `which getopt` --shell=tcsh --unquote
@@ -208,6 +223,9 @@
 #----------------------------- environment setup -------------------------------
 ################################################################################
 
+  # Set the default umask of 022, which can be overridden in the platform cshell
+  umask 022
+
   # Use the freVersion to extract and load the platform/csh section.
   if ( $echoOn ) unset echo
   csh -c "source ${MODULESHOME}/init/csh; module load fre/${freVersion}; frelist --platform=${platform} --target=${target} --platform-csh --xmlfile=${xmlFile} ${expName}" | source /dev/stdin
@@ -255,8 +273,16 @@
 
   if ( ! $echoOn ) set echo
 
+  # Cross-site submit from gaea has group ID 500, not the user's primary group
+  # Get the user's primary group
+  set correctGroup = `id -gn $user`
+  if ( $correctGroup == "" ) then
+    echo "ERROR: Could not determine user id!"
+    exit 1
+  endif
+  # Then run frepp under the user's primary group using sg
   # The -D '' is required for compatability with older fre-commands/bronx versions
-  pp -D '' -x $xmlFile -P $platform -T $target -d $dir -t $firstDate $expName
+  sg $correctGroup "`alias pp` -D '' -x $xmlFile -P $platform -T $target -d $dir -t $firstDate $mailListOption $expName"
 
   if ( $status == 0 ) then
     if ( $echoOn ) unset echo
