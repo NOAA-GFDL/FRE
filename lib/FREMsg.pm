@@ -12,12 +12,6 @@
 # Designed and written by V. Balaji, Amy Langenhorst and Aleksey Yakovlev
 #
 
-=head1 NAME
-
-FRE-FREMsg
-
-=cut
-
 package FREMsg;
 
 use strict;
@@ -36,22 +30,6 @@ use constant PREFIX_LIST => ( '*FATAL*: ', 'WARNING: ', '<NOTE> : ', '<INFO> : '
 # //////////////////////////////////////////////////////////////////////////////
 # //////////////////////////////////////////////////////// Exported Functions //
 # //////////////////////////////////////////////////////////////////////////////
-
-=head2 FREMSg::out($verbose, $level, @strings)
-
-Output @strings provided that 0 <= $level <= $verbose +1
-
-verbose: Verbosity setting requested by the user on the command line.
-level: Verbosity level of the @strings to print.
-strings: List of strings to print.
-
-=head3 EXAMPLE
-
-FREMsg::out(-v, FREMsg::NOTE, "You are using rtsVersion=$versionCurrent");
-
-prints *FATAL* : You are using rtsVersion=$versionCurrent
-
-=cut
 
 sub out($$@)
 

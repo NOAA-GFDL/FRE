@@ -78,12 +78,6 @@
 # Designed and written by V. Balaji, Amy Langenhorst and Aleksey Yakovlev
 #
 
-=head1 NAME
-
-FRE-FRETemplate
-
-=cut
-
 package FRETemplate;
 
 use strict;
@@ -132,19 +126,11 @@ my %FRETemplatePragmaCsh = (
 # ///////////////////////////////////////////////////////////////// Utilities //
 # //////////////////////////////////////////////////////////////////////////////
 
-=head1 INTERNAL SUBROUTINES
-
-=head2 $schedulerSize->($fre, $jobType, $couplerFlag, $npes, $refNPes, $refNTds)
-
-fre: The FRE class object.
-
-
-=cut
-
 my $schedulerSize = sub($$$$$$$)
 
     # ------ arguments: $fre $jobType $couplerFlag $npes $refNPes $refNTds $refNTdsRes
 {
+
     my ( $fre, $j, $cf, $np, $rp, $rt, $rtr ) = @_;
     my $coresPerJobInc = $fre->property("FRE.scheduler.$j.coresPerJob.inc") || 1;
     my $coresPerJobMax = $fre->property("FRE.scheduler.$j.coresPerJob.max") || &POSIX::INT_MAX;
@@ -267,14 +253,11 @@ my $schedulerSize = sub($$$$$$$)
 
 };
 
-=head2 $schedulerAccount->($fre, $windfallFlag)
-
-fre: The FRE class object.
-
-=cut
 my $schedulerAccount = sub($)
+
     # ------ arguments: $fre
 {
+
     my ( $fre ) = @_;
 
     if ( $fre->property('FRE.scheduler.enabled') ) {
@@ -295,12 +278,6 @@ my $schedulerAccount = sub($)
     }
 
 };
-
-=head2 $schedulerResources->($fre, $jobType, $ncores, $time, $partition, $queue, $dualFlag)
-
-fre: The FRE class object.
-
-=cut
 
 my $schedulerResources = sub($$$$$$$)
 
@@ -352,13 +329,6 @@ my $schedulerResources = sub($$$$$$$)
 
 };
 
-=head2 $schdulerNames->($fre, $scriptName, $stdoutDir)
-
-fre: The FRE class object.
-
-=cut
-
-
 my $schedulerNames = sub($$$)
 
     # ------ arguments: $fre $scriptName $stdoutDir
@@ -388,12 +358,6 @@ my $schedulerNames = sub($$$)
     }
 
 };
-
-=head2 $prepareInputFile->($fre, $source, $target)
-
-fre: The FRE class object.
-
-=cut
 
 my $prepareInputFile = sub($$$)
 
@@ -476,12 +440,6 @@ my $prepareInputFile = sub($$$)
 
 };
 
-=head2 $checkNamelists->($fre, $nameListsHandle)
-
-fre: The FRE class object.
-
-=cut
-
 my $checkNamelists = sub($$)
 
     # ------ arguments: $fre $nameListsHandle
@@ -512,14 +470,6 @@ my $checkNamelists = sub($$)
 # //////////////////////////////////////////////////////// Exported Functions //
 # //////////////////////////////////////////////////////////////////////////////
 
-=head1 EXPORTED FUNCTIONS 
-
-=head2 $FRETemplate->setAlias($fre, refToScript, $name, $value)
-
-fre: The FRE class object.
-
-=cut
-
 sub setAlias($$$$)
 
     # ------ arguments: $fre $refToScript $name $value
@@ -532,10 +482,6 @@ sub setAlias($$$$)
     ${$r} =~ s/$placeholderPrefix$n$placeholderSuffix/$1alias $n $v/;
 }
 
-=head2 $FRETemplate->setFlag($fre, $refToScript, $name, $value) 
-
-=cut
-
 sub setFlag($$$$)
 
     # ------ arguments: $fre $refToScript $name $value
@@ -547,10 +493,6 @@ sub setFlag($$$$)
         = ( qr/^([ \t]*)$prefix[ \t]+$flag[ \t]*\([ \t]*/mo, qr/[ \t]*\)[ \t]*$/mo );
     ${$r} =~ s/$placeholderPrefix$n$placeholderSuffix/$1set -r $n$v/;
 }
-
-=head2 $FRETemplate->setVariable($fre, $refToScript, $name, $value)
-
-=cut
 
 sub setVariable($$$$)
 
@@ -567,12 +509,6 @@ sub setVariable($$$$)
         substr( ${$r}, $-[0], $+[0] - $-[0] ) = "$1$cmd $n = $v";
     }
 }
-
-=head2 $FRETemplate->setList($fre, $refToScript, $name, @value)
-
-fre: The FRE class object.
-
-=cut
 
 sub setList($$$@)
 
@@ -591,15 +527,9 @@ sub setList($$$@)
     }
 }
 
-=head2 $FRETemplate->setSchedulerSize($fre, $refToScript, $jobType, $couplerFlag, $npes, $refNPes, $refNTds)
+sub setSchedulerSize($$$$$$$$)
 
-fre: The FRE class object.
-
-=cut
-
-
-sub setSchedulerSize($$$$$$$)
-# ------ arguments: $fre $refToScript $jobType $couplerFlag $npes $refNPes $refNTds
+    # ------ arguments: $fre $refToScript $jobType $couplerFlag $npes $refNPes $refNTds refNTdsRes
 {
 
     my ( $fre, $r, $j, $cf, $np, $rp, $rt, $rtr ) = @_;
@@ -618,14 +548,9 @@ sub setSchedulerSize($$$$$$$)
 
 }
 
-=head2 $FRETemplate->schedulerSizeAsString($fre, $jobType, $couplerFlag, $npes, $refNPes, $refNTds)
+sub schedulerSizeAsString($$$$$$$)
 
-fre: The FRE class object.
-
-=cut
-
-sub schedulerSizeAsString($$$$$$)
-# ------ arguments: $fre $jobType $couplerFlag $npes $refNPes $refNTds
+    # ------ arguments: $fre $jobType $couplerFlag $npes $refNPes $refNTds $refNTdsRes
 {
 
     my ( $fre, $j, $cf, $np, $rp, $rt, $rtr ) = @_;
@@ -640,14 +565,9 @@ sub schedulerSizeAsString($$$$$$)
 
 }
 
-=head2 setSchedulerAccount($fre, $refToScript, $windfallFlag)
+sub setSchedulerAccount($$)
 
-fre: The FRE class object.
-
-=cut
-
-sub setSchedulerAccount($$$)
-# ------ arguments: $fre $refToScript $windfallFlag
+    # ------ arguments: $fre $refToScript
 {
 
     my ( $fre, $r ) = @_;
@@ -666,12 +586,6 @@ sub setSchedulerAccount($$$)
 
 }
 
-=head2 $FRETemplate->schedulerAccountAsString($fre, $windfallFlag)
-
-fre: The FRE class object.
-
-=cut
-
 sub schedulerAccountAsString($$)
 
     # ------ arguments: $fre $windfallFlag
@@ -689,12 +603,6 @@ sub schedulerAccountAsString($$)
     return join ' ', @result;
 
 }
-
-=head2 $FRETemplate->setSchedulerResources($fre, $refToScript, $jobType, $ncores, $time, $partition, $queue, $dualFlag)
-
-fre: The FRE class object.
-
-=cut
 
 sub setSchedulerResources($$$$$$$$)
 
@@ -717,13 +625,6 @@ sub setSchedulerResources($$$$$$$$)
 
 }
 
-=head2 $FRETemplate->schedulerResourcesAsString($fre, $jobType, $ncores, $time, $partition, $queue, $dualFlag)
-
-fre: The FRE class object.
-
-
-=cut
-
 sub schedulerResourcesAsString($$$$$$$)
 
     # ------ arguments: $fre $jobType $ncores $time $cluster $qos $dualFlag
@@ -741,12 +642,6 @@ sub schedulerResourcesAsString($$$$$$$)
     return join ' ', @result;
 
 }
-
-=head2 $FRETemplate->setSchedulerNames($fre, $refToScript, $scriptName, $stdoutDir)
-
-fre: The FRE class object.
-
-=cut
 
 sub setSchedulerNames($$$$)
 
@@ -769,12 +664,6 @@ sub setSchedulerNames($$$$)
 
 }
 
-=head2 $FRETemplate->schedulerNameAsString($fre, $scriptName, $stdoutDir)
-
-fre: The FRE class object.
-
-=cut
-
 sub schedulerNamesAsString($$$)
 
     # ------ arguments: $fre $scriptName $stdoutDir
@@ -792,12 +681,6 @@ sub schedulerNamesAsString($$$)
     return join ' ', @result;
 
 }
-
-=head2 setSchedulerMakeVerbose($fre, $refToScript)
-
-fre: The FRE class object.
-
-=cut
 
 sub setSchedulerMakeVerbose($$)
 
@@ -830,12 +713,6 @@ sub setSchedulerMakeVerbose($$)
     ${$r} =~ s/$placeholder/$makeVerbose/;
 
 } ## end sub setSchedulerMakeVerbose($$)
-
-=head2 setVersionInfo($fre, $refToScript, $caller, $expName, %options)
-
-fre: The FRE class object.
-
-=cut
 
 sub setVersionInfo($$$$%)
 
@@ -870,13 +747,8 @@ sub setVersionInfo($$$$%)
     $info .= ' ' . $n;
 
     ${$r} =~ s/$placeholder/$info/;
+
 } ## end sub setVersionInfo($$$$%)
-
-=head2 setRunCommand($fre, $refToScript, $mpiInfo)
-
-fre: The FRE class object.
-
-=cut
 
 sub setRunCommand($$$)
 
@@ -951,12 +823,6 @@ sub setRunCommand($$$)
 
 } ## end sub setRunCommand($$$)
 
-=head2 $FRETemplate->setInputDatasets($fre, $refToScript, $refToDatasetsArray)
-
-fre: The FRE class object.
-
-=cut
-
 sub setInputDatasets($$$)
 
     # ------ arguments: $fre $refToScript $refToDatasetsArray
@@ -1007,13 +873,8 @@ sub setInputDatasets($$$)
 
 } ## end sub setInputDatasets($$$)
 
-=head2 $FRETemplate->setTable($fre, $refToScript, $tableName, $tableData)
-
-fre: The FRE class object.
-
-=cut
-
 sub setTable($$$$)
+
     # ------ arguments: $fre $refToScript $tableName $tableData
 {
 
@@ -1030,13 +891,6 @@ sub setTable($$$$)
     }
 
 }
-
-=head2 $FRETemplate->setNamelists($fre, $refToScript, $namelistsHandle)
-
-fre: The FRE class object.
-
-=cut
-
 
 sub setNamelists($$$)
 
@@ -1069,13 +923,8 @@ sub setNamelists($$$)
         $nmlString .= '\EOF' . "\n";
         ${$r} =~ s/$placeholder/$nmlString/;
     }
+
 } ## end sub setNamelists($$$)
-
-=head2 $FRETemplate->setShellCommands($fre, $refToScript, $destinationName, $shellCommands)
-
-fre: The FRE class object.
-
-=cut
 
 sub setShellCommands($$$$)
 

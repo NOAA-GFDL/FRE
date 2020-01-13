@@ -10,12 +10,6 @@
 # Designed and written by V. Balaji, Amy Langenhorst and Aleksey Yakovlev
 #
 
-=head1 NAME
-
-FRE-FRETrace
-
-=cut
-
 package FRETrace;
 
 use strict;
@@ -37,19 +31,6 @@ use constant DBI_CMD_INSERT   => '
 # //////////////////////////////////////////////////////////////////////////////
 # //////////////////////////////////////////////////////// Exported Functions //
 # //////////////////////////////////////////////////////////////////////////////
-
-=head1 EXPORTED FUNCTIONS
-
-=head2 $FRETrace->insert($siteDir, $caller, $xmlfile, $refToOptions)
-
-siteDir: Site Directory.
-caller: The FRE command calling this method.
-xmlfile: XML File.
-refToOptions: Options.
-
-Connect and insert above arguments into database. 
-
-=cut
 
 sub insert($$$$)
 
