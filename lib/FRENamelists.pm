@@ -18,60 +18,57 @@ use strict;
 # ///////////////////////////////////////////////////////////////// Constants //
 # //////////////////////////////////////////////////////////////////////////////
 
-use constant PATTERN_BOOLEAN	=> qr/(\.true\.|\.false\.|t|f)/;
-use constant PATTERN_INTEGER	=> qr/([+-]?\d+)/;
-use constant PATTERN_SQSTRING	=> qr/'([^']*)'/;
-use constant PATTERN_DQSTRING	=> qr/"([^"]*)"/;
-use constant PATTERN_DATE	=> qr/(\d+\s*,\s*\d+\s*,\s*\d+\s*,\s*\d+\s*,\s*\d+\s*,\s*\d+)/;
-use constant PATTERN_LAYOUT	=> qr/((?:\d+|\$\w+)\s*,\s*(?:\d+|\$\w+))/;
-use constant PATTERN_TYPELESS	=> qr/(\S.*)/;
+use constant PATTERN_BOOLEAN  => qr/(\.true\.|\.false\.|t|f)/;
+use constant PATTERN_INTEGER  => qr/([+-]?\d+)/;
+use constant PATTERN_SQSTRING => qr/'([^']*)'/;
+use constant PATTERN_DQSTRING => qr/"([^"]*)"/;
+use constant PATTERN_DATE     => qr/(\d+\s*,\s*\d+\s*,\s*\d+\s*,\s*\d+\s*,\s*\d+\s*,\s*\d+)/;
+use constant PATTERN_LAYOUT   => qr/((?:\d+|\$\w+)\s*,\s*(?:\d+|\$\w+))/;
+use constant PATTERN_TYPELESS => qr/(\S.*)/;
 
-use constant PATTERN_TAIL_BREAK	=> qr/(\b)/;
-use constant PATTERN_TAIL_ALL	=> qr/((?:[,\n]\s*\w+(?:\s*\[\s*\d+(?:\s*,\s*\d+)*\s*\])?\s*=\s*.*)*)/;
+use constant PATTERN_TAIL_BREAK => qr/(\b)/;
+use constant PATTERN_TAIL_ALL =>
+    qr/((?:[,\n]\s*\w+(?:\s*\[\s*\d+(?:\s*,\s*\d+)*\s*\])?\s*=\s*.*)*)/;
 
 # //////////////////////////////////////////////////////////////////////////////
 # ///////////////////////////////////////////////////////////////// Utilities //
 # //////////////////////////////////////////////////////////////////////////////
 
 my $namelistValueGet = sub($$$$$)
-# ------ arguments: $object $namelistName $variable $pattern $tail
+
+    # ------ arguments: $object $namelistName $variable $pattern $tail
 {
-  my ($r, $n, $v, $p, $t) = @_;
-  my $content = $r->{$n};
-  $content =~ s/^\s*!.*$v.*$//gm;
-  if ($content =~ m/\b$v\s*=\s*$p$t/i)
-  {
-    return $1;
-  }
-  else
-  {
-    return undef;
-  }
+    my ( $r, $n, $v, $p, $t ) = @_;
+    my $content = $r->{$n};
+    $content =~ s/^\s*!.*$v.*$//gm;
+    if ( $content =~ m/\b$v\s*=\s*$p$t/i ) {
+        return $1;
+    }
+    else {
+        return undef;
+    }
 };
 
 my $namelistValuePut = sub($$$$$$)
-# ------ arguments: $object $namelistName $variable $value $pattern $tail
+
+    # ------ arguments: $object $namelistName $variable $value $pattern $tail
 {
-  my ($r, $n, $v, $x, $p, $t) = @_;
-  my ($content, $mark, @commentedLines) = ($r->{$n}, 'FRENamelists::PLACEHOLDER', ());
-  while ($content =~ m/^(\s*!.*$v.*)$/m)
-  {
-    substr($content, $-[0], $+[0] - $-[0]) = $mark;
-    push @commentedLines, $1;
-  }
-  if ($content =~ m/\b$v\s*=\s*$p$t/i)
-  {
-    substr($content, $-[0], $+[0] - $-[0]) = "$v = $x$2";
-  }
-  else
-  {
-    $content = "\t$v = $x\n" . $content;
-  }
-  foreach my $commentedLine (@commentedLines)
-  {
-    substr($content, $-[0], $+[0] - $-[0]) = $commentedLine if $content =~ m/$mark/;
-  }
-  $r->{$n} = $content;
+    my ( $r, $n, $v, $x, $p, $t ) = @_;
+    my ( $content, $mark, @commentedLines ) = ( $r->{$n}, 'FRENamelists::PLACEHOLDER', () );
+    while ( $content =~ m/^(\s*!.*$v.*)$/m ) {
+        substr( $content, $-[0], $+[0] - $-[0] ) = $mark;
+        push @commentedLines, $1;
+    }
+    if ( $content =~ m/\b$v\s*=\s*$p$t/i ) {
+        substr( $content, $-[0], $+[0] - $-[0] ) = "$v = $x$2";
+    }
+    else {
+        $content = "\t$v = $x\n" . $content;
+    }
+    foreach my $commentedLine (@commentedLines) {
+        substr( $content, $-[0], $+[0] - $-[0] ) = $commentedLine if $content =~ m/$mark/;
+    }
+    $r->{$n} = $content;
 };
 
 # //////////////////////////////////////////////////////////////////////////////
@@ -79,17 +76,19 @@ my $namelistValuePut = sub($$$$$$)
 # //////////////////////////////////////////////////////////////////////////////
 
 sub new($)
-# ------ arguments: $className
-# ------ create empty namelist set
+
+    # ------ arguments: $className
+    # ------ create empty namelist set
 {
-  my ($class, $r) = (shift, {});
-  bless $r, $class;
-  return $r;
+    my ( $class, $r ) = ( shift, {} );
+    bless $r, $class;
+    return $r;
 }
 
 sub DESTROY
-# ------ arguments: $object
-# ------ called automatically
+
+    # ------ arguments: $object
+    # ------ called automatically
 {
 }
 
@@ -98,38 +97,42 @@ sub DESTROY
 # //////////////////////////////////////////////////////////////////////////////
 
 sub copy($)
-# ------ arguments: $object
-# ------ return a deep copy of the object
+
+    # ------ arguments: $object
+    # ------ return a deep copy of the object
 {
-  my ($r, $s) = (shift, FRENamelists->new());
-  foreach my $name (keys %{$r}) {$s->{$name} = $r->{$name}}
-  return $s;
+    my ( $r, $s ) = ( shift, FRENamelists->new() );
+    foreach my $name ( keys %{$r} ) { $s->{$name} = $r->{$name} }
+    return $s;
 }
 
 sub names($)
-# ------ arguments: $object
-# ------ return a list of namelist names
+
+    # ------ arguments: $object
+    # ------ return a list of namelist names
 {
-  my $r = shift;
-  return sort keys %{$r};
+    my $r = shift;
+    return sort keys %{$r};
 }
 
 sub asFortranString($)
-# ------ arguments: $object
-# ------ called as object method
+
+    # ------ arguments: $object
+    # ------ called as object method
 {
-  my ($r, $s) = (shift, '');
-  foreach my $name (sort keys %{$r}) {$s .= $r->namelistAsFortranString($name)}
-  return $s;
+    my ( $r, $s ) = ( shift, '' );
+    foreach my $name ( sort keys %{$r} ) { $s .= $r->namelistAsFortranString($name) }
+    return $s;
 }
 
 sub asXMLString($)
-# ------ arguments: $object
-# ------ called as object method
+
+    # ------ arguments: $object
+    # ------ called as object method
 {
-  my ($r, $s) = (shift, '');
-  foreach my $name (sort keys %{$r}) {$s .= $r->namelistAsXMLString($name)}
-  return $s;
+    my ( $r, $s ) = ( shift, '' );
+    foreach my $name ( sort keys %{$r} ) { $s .= $r->namelistAsXMLString($name) }
+    return $s;
 }
 
 # //////////////////////////////////////////////////////////////////////////////
@@ -137,49 +140,54 @@ sub asXMLString($)
 # //////////////////////////////////////////////////////////////////////////////
 
 sub namelistExists($$)
-# ------ arguments: $object $namelistName
-# ------ called as object method
+
+    # ------ arguments: $object $namelistName
+    # ------ called as object method
 {
-  my ($r, $n) = @_;
-  return exists($r->{$n});
+    my ( $r, $n ) = @_;
+    return exists( $r->{$n} );
 }
 
 sub namelistGet($$)
-# ------ arguments: $object $namelistName
-# ------ called as object method
+
+    # ------ arguments: $object $namelistName
+    # ------ called as object method
 {
-  my ($r, $n) = @_;
-  return $r->{$n};
+    my ( $r, $n ) = @_;
+    return $r->{$n};
 }
 
 sub namelistPut($$$)
-# ------ arguments: $object $namelistName $namelistContent
-# ------ called as object method
+
+    # ------ arguments: $object $namelistName $namelistContent
+    # ------ called as object method
 {
-  my ($r, $n, $c) = @_;
-  $r->{$n} = $c;
+    my ( $r, $n, $c ) = @_;
+    $r->{$n} = $c;
 }
 
 sub namelistAsFortranString($$)
-# ------ arguments: $object $namelistName
-# ------ called as object method
+
+    # ------ arguments: $object $namelistName
+    # ------ called as object method
 {
-  my ($r, $n, $s) = (@_, '');
-  $s .= ' &' . $n . "\n";
-  $s .= $r->{$n} . "\n";
-  $s .= '/' . "\n\n";
-  return $s;
+    my ( $r, $n, $s ) = ( @_, '' );
+    $s .= ' &' . $n . "\n";
+    $s .= $r->{$n} . "\n";
+    $s .= '/' . "\n\n";
+    return $s;
 }
 
 sub namelistAsXMLString($$)
-# ------ arguments: $object $namelistName
-# ------ called as object method
+
+    # ------ arguments: $object $namelistName
+    # ------ called as object method
 {
-  my ($r, $n, $s) = (@_, '');
-  $s .= '<namelist name="' . $n . '">' . "\n";
-  $s .= $r->{$n} . "\n";
-  $s .= '</namelist>' . "\n";
-  return $s;
+    my ( $r, $n, $s ) = ( @_, '' );
+    $s .= '<namelist name="' . $n . '">' . "\n";
+    $s .= $r->{$n} . "\n";
+    $s .= '</namelist>' . "\n";
+    return $s;
 }
 
 # //////////////////////////////////////////////////////////////////////////////
@@ -187,95 +195,114 @@ sub namelistAsXMLString($$)
 # //////////////////////////////////////////////////////////////////////////////
 
 sub namelistBooleanGet($$$)
-# ------ arguments: $object $namelistName $variable
+
+    # ------ arguments: $object $namelistName $variable
 {
-  my $value = $namelistValueGet->(@_, FRENamelists::PATTERN_BOOLEAN, '');
-  if (defined($value))
-  {
-    return ($value =~ m/t/i) ? 1 : 0;
-  }
-  else
-  {
-    return undef;
-  }
+    my $value = $namelistValueGet->( @_, FRENamelists::PATTERN_BOOLEAN, '' );
+    if ( defined($value) ) {
+        return ( $value =~ m/t/i ) ? 1 : 0;
+    }
+    else {
+        return undef;
+    }
 }
 
 sub namelistBooleanPut($$$$)
-# ------ arguments: $object $namelistName $variable $value
+
+    # ------ arguments: $object $namelistName $variable $value
 {
-  $namelistValuePut->(@_[0,1,2], ($_[3]) ? '.true.' : '.false.', FRENamelists::PATTERN_BOOLEAN, '');
+    $namelistValuePut->(
+        @_[ 0, 1, 2 ],
+        ( $_[3] ) ? '.true.' : '.false.',
+        FRENamelists::PATTERN_BOOLEAN, ''
+    );
 }
 
 sub namelistIntegerGet($$$)
-# ------ arguments: $object $namelistName $variable
+
+    # ------ arguments: $object $namelistName $variable
 {
-  return $namelistValueGet->(@_, FRENamelists::PATTERN_INTEGER, FRENamelists::PATTERN_TAIL_BREAK);
-} 
+    return $namelistValueGet->( @_, FRENamelists::PATTERN_INTEGER,
+        FRENamelists::PATTERN_TAIL_BREAK );
+}
 
 sub namelistIntegerPut($$$$)
-# ------ arguments: $object $namelistName $variable $value
+
+    # ------ arguments: $object $namelistName $variable $value
 {
-  $namelistValuePut->(@_, FRENamelists::PATTERN_INTEGER, FRENamelists::PATTERN_TAIL_BREAK);
+    $namelistValuePut->( @_, FRENamelists::PATTERN_INTEGER, FRENamelists::PATTERN_TAIL_BREAK );
 }
 
 sub namelistDoubleQuotedStringGet($$$)
-# ------ arguments: $object $namelistName $variable
+
+    # ------ arguments: $object $namelistName $variable
 {
-  return $namelistValueGet->(@_, FRENamelists::PATTERN_DQSTRING, '');
-} 
+    return $namelistValueGet->( @_, FRENamelists::PATTERN_DQSTRING, '' );
+}
 
 sub namelistDoubleQuotedStringPut($$$$)
-# ------ arguments: $object $namelistName $variable $value
+
+    # ------ arguments: $object $namelistName $variable $value
 {
-  $namelistValuePut->(@_[0,1,2], "\"$_[3]\"", FRENamelists::PATTERN_DQSTRING, '');
+    $namelistValuePut->( @_[ 0, 1, 2 ], "\"$_[3]\"", FRENamelists::PATTERN_DQSTRING, '' );
 }
 
 sub namelistSingleQuotedStringGet($$$)
-# ------ arguments: $object $namelistName $variable
+
+    # ------ arguments: $object $namelistName $variable
 {
-  return $namelistValueGet->(@_, FRENamelists::PATTERN_SQSTRING, '');
-} 
+    return $namelistValueGet->( @_, FRENamelists::PATTERN_SQSTRING, '' );
+}
 
 sub namelistSingleQuotedStringPut($$$$)
-# ------ arguments: $object $namelistName $variable $value
+
+    # ------ arguments: $object $namelistName $variable $value
 {
-  $namelistValuePut->(@_[0,1,2], "'$_[3]'", FRENamelists::PATTERN_SQSTRING, '');
+    $namelistValuePut->( @_[ 0, 1, 2 ], "'$_[3]'", FRENamelists::PATTERN_SQSTRING, '' );
 }
 
 sub namelistDateGet($$$)
-# ------ arguments: $object $namelistName $variable
+
+    # ------ arguments: $object $namelistName $variable
 {
-  return $namelistValueGet->(@_, FRENamelists::PATTERN_DATE, FRENamelists::PATTERN_TAIL_BREAK);
-} 
+    return $namelistValueGet->( @_, FRENamelists::PATTERN_DATE, FRENamelists::PATTERN_TAIL_BREAK );
+}
 
 sub namelistDatePut($$$$)
-# ------ arguments: $object $namelistName $variable $value
+
+    # ------ arguments: $object $namelistName $variable $value
 {
-  $namelistValuePut->(@_, FRENamelists::PATTERN_DATE, FRENamelists::PATTERN_TAIL_BREAK);
+    $namelistValuePut->( @_, FRENamelists::PATTERN_DATE, FRENamelists::PATTERN_TAIL_BREAK );
 }
 
 sub namelistLayoutGet($$$)
-# ------ arguments: $object $namelistName $variable
+
+    # ------ arguments: $object $namelistName $variable
 {
-  return $namelistValueGet->(@_, FRENamelists::PATTERN_LAYOUT, FRENamelists::PATTERN_TAIL_BREAK);
-} 
+    return $namelistValueGet->( @_, FRENamelists::PATTERN_LAYOUT,
+        FRENamelists::PATTERN_TAIL_BREAK );
+}
 
 sub namelistLayoutPut($$$$)
-# ------ arguments: $object $namelistName $variable $value
+
+    # ------ arguments: $object $namelistName $variable $value
 {
-  $namelistValuePut->(@_, FRENamelists::PATTERN_LAYOUT, FRENamelists::PATTERN_TAIL_BREAK);
+    $namelistValuePut->( @_, FRENamelists::PATTERN_LAYOUT, FRENamelists::PATTERN_TAIL_BREAK );
 }
 
 sub namelistTypelessGet($$$)
-# ------ arguments: $object $namelistName $variable
+
+    # ------ arguments: $object $namelistName $variable
 {
-  return $namelistValueGet->(@_, FRENamelists::PATTERN_TYPELESS, FRENamelists::PATTERN_TAIL_ALL);
+    return $namelistValueGet->( @_, FRENamelists::PATTERN_TYPELESS,
+        FRENamelists::PATTERN_TAIL_ALL );
 }
 
 sub namelistTypelessPut($$$$)
-# ------ arguments: $object $namelistName $variable $value
+
+    # ------ arguments: $object $namelistName $variable $value
 {
-  $namelistValuePut->(@_, FRENamelists::PATTERN_TYPELESS, FRENamelists::PATTERN_TAIL_ALL);
+    $namelistValuePut->( @_, FRENamelists::PATTERN_TYPELESS, FRENamelists::PATTERN_TAIL_ALL );
 }
 
 # //////////////////////////////////////////////////////////////////////////////
@@ -288,28 +315,29 @@ sub namelistTypelessPut($$$$)
 #   like multiple definitions per line, embedded newlines, and others.
 #   See t/03.override_namelist.t
 sub mergeNamelistContent($$)
-# ------ arguments: $base_namelist_content $override_namelist_content
+
+    # ------ arguments: $base_namelist_content $override_namelist_content
 {
-    my ($base_namelist_content, $override_namelist_content) = @_;
+    my ( $base_namelist_content, $override_namelist_content ) = @_;
 
     # store the base namelist as a FRENamelist
     my $nmls = FRENamelists->new();
-    $nmls->namelistPut('nml', $base_namelist_content);
+    $nmls->namelistPut( 'nml', $base_namelist_content );
 
     # "parse" override namelist into key/value pairs
     # Note: this doesn't respect many namelist features (embedded newlines etc)
     my %override_namelist;
-    for (grep !/^\s*!/, split "\n", $override_namelist_content) {
+    for ( grep !/^\s*!/, split "\n", $override_namelist_content ) {
         $override_namelist{$1} = $2 if /\s*(\S+)\s*=\s*(\S.*)$/;
     }
 
     # combine namelists
-    $nmls->namelistTypelessPut('nml', $_, $override_namelist{$_})
+    $nmls->namelistTypelessPut( 'nml', $_, $override_namelist{$_} )
         for reverse sort keys %override_namelist;
 
     # return as string
     return $nmls->{'nml'};
-}
+} ## end sub mergeNamelistContent($$)
 
 # //////////////////////////////////////////////////////////////////////////////
 # //////////////////////////////////////////////////////////// Initialization //

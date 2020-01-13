@@ -1,0 +1,174 @@
+#!/usr/bin/env perl
+# -*- cperl -*-
+
+# ------------------------------------------------------------------------------
+# FMS/FRE Project: Program to Report the FRE Usage
+# ------------------------------------------------------------------------------
+# Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2000-2012, 2019
+# Designed and written by V. Balaji, Amy Langenhorst, Aleksey Yakovlev and
+# Seth Underwood
+
+use strict;
+
+use File::Basename();
+use File::Spec();
+use Getopt::Long(':config', 'no_ignore_case', 'no_auto_abbrev');
+
+use Slurm::Utils;
+
+{
+  # Helper routines to gather and report on which versions of FRE are in use
+  # on a particular host.
+  package batch_scheduler_fre_usage;
+
+  use constant VERSION => 'v2.0.0_beta';
+
+  use constant OPTLIST => ( 'help|h', 'clusters|M=s', 'partitions|p=s', 'verbose|v', 'version|V' );
+  use constant VALID_STATES => ( 'completed', 'pending', 'running' );
+
+  my $self = File::Basename::basename($0);
+
+  sub Usage()
+  # Print the usage information to the screen
+  {
+    my $par = 'Unknown'; # For now, until I can
+    return (
+    "\n",
+    "  Usage: $self [option]...\n\n",
+    "  Options:\n\n",
+    "   -h,        --help                 print the help message and exit\n",
+    "   -M STRING, --clusters=STRING      report usage in the cluster STRING (comma separated). Default is the Slurm default.\n",
+    "   -p STRING, --partitions=STRING    report usage in the partition STRING (comma separated). Default is Slurm default)\n",
+    "   -V,        --version              print the tool version and exit (default is \"all\")\n",
+    "   -v         --verbose              increase verbosity\n\n"
+    );
+  }
+
+  sub Help()
+  # Print the help information (same as usage, but with a synopsis).
+  {
+    my @usage = Usage();
+    return (
+      "\n",
+      "   Synopsis: The '$self' outputs a number of currently running jobs per user per FRE version\n",
+      "@usage"
+    );
+  }
+
+  sub Add($$$)
+  # ------ arguments: $refToHash $version $user
+  #
+  # Increase the count of mentions of a particular key in hash.
+  {
+    my ( $r, $k, $v ) = @_;
+    if (exists($r->{$k})) {
+      $r->{$k}->{$v}++;
+    }
+    else {
+      $r->{$k}->{$v} = 1;
+    }
+  }
+
+  sub Out($)
+  # ------ arguments: $refToHash
+  #
+  # Write out the information of usage, per FRE version.
+  {
+    my $r = shift;
+    foreach my $version (sort(keys(%{$r}))) {
+      my @versionUsage = ();
+      my %versionUsers = %{ $r->{$version} };
+      foreach my $versionUser ( sort(keys(%versionUsers)) ) {
+        push @versionUsage, "$versionUser($versionUsers{$versionUser})";
+      }
+      my $versionUsage = join( ', ', @versionUsage );
+      printf "%-56s%s\n", $version, $versionUsage;
+    }
+  }
+
+}
+
+# //////////////////////////////////////////////////////////////////////////////
+# ////////////////////////////////////////////////////////////////////// Main //
+# //////////////////////////////////////////////////////////////////////////////
+
+{
+  # Default options.  Can be used if changing the default cluster/partitions
+  my %opt = ();
+
+  Getopt::Long::GetOptions(\%opt, batch_scheduler_fre_usage::OPTLIST)
+    or ( print STDERR batch_scheduler_fre_usage::Usage() and exit 1 );
+  if ( $opt{version} ) { print STDERR batch_scheduler_fre_usage::VERSION, "\n" and exit 0; }
+  if ( $opt{help} ) { print STDERR batch_scheduler_fre_usage::Help() and exit 0; }
+
+  my @reqClusters = split(',', $opt{clusters});
+  @reqClusters = valid_slurm_clusters(@reqClusters);
+
+  my @reqPartitions = split(',', $opt{partitions});
+  @reqPartitions = valid_slurm_partitions(@reqPartitions, @reqClusters);
+
+  my $binDir = File::Basename::dirname($0);
+  my $listCommand = File::Spec->rel2abs("$binDir/batch.scheduler.list");
+  $listCommand .= " --clusters=".join(',',@reqClusters) if ($opt{clusters} && @reqClusters);
+  $listCommand .= " --partitions=".join(',',@reqPartitions) if ($opt{partitions} && @reqPartitions);
+  $listCommand .= " --verbose" if $opt{verbose};
+  chomp(my $lines = qx($listCommand));
+
+  if ($? == 0) {
+    my %res = ();
+    my @lines = split(/\n/, $lines);
+    foreach my $line (@lines) {
+      my @out = split(/,/, $line);
+      my ($id, $name, $user, $qos) = ($out[0], $out[1], $out[4], $out[6]);
+      if ($qos ne 'interactive') {
+        if ($id) {
+          my $batchQueryCommand = "squeue -h -j $id -o '%o|%k'";
+          chomp(my $batchQueryOutput = qx($batchQueryCommand));
+          if ($?==0) {
+            my ($script, $comment) = split('\|', $batchQueryOutput);
+            # Slurm will include options in the command.  We only want the command
+            $script = (split(/\s+/, $script))[0];
+            if ($comment && $comment !~ /\(null\)/) {
+              batch_scheduler_fre_usage::Add(\%res, $comment, $user);
+            } elsif ($script =~ /^\/.*\/cmip-prepublisher-batch$/) {
+              batch_scheduler_fre_usage::Add(\%res, "cmip-prepublisher", $user);
+            } elsif ($script =~ /^\/.*\/scripts\/analysis\/.*$/) {
+              batch_scheduler_fre_usage::Add(\%res, "analysis", $user);
+            } elsif ($script =~ /^\/.*\/fre-commands\/(\S+)\/site\/.*$/) {
+              my @siteScriptVersion = $script =~ /^\/.*\/fre-commands\/(\S+)\/site\/.*$/;
+              batch_scheduler_fre_usage::Add(\%res, $siteScriptVersion[0], $user);
+            } elsif (-f $script and -r _) {
+              if (open my $fh, '<', $script) {
+                chomp(my @freppEnvs = map {/^\s*setenv\s+FRE_COMMANDS_HOME_FREPP\s+(\S+)\s*$/} <$fh>);
+                seek $fh, 0, 0;
+                chomp(my @freEnvs = map {$_ =~ /^\s*set\s+-r\s+freCommandsVersion\s+=\s+(\S+)\s*$/} <$fh>);
+                if (scalar(@freEnvs) > 0) {
+                  batch_scheduler_fre_usage::Add(\%res, $freEnvs[0], $user);
+                } elsif (scalar(@freppEnvs) > 0) {
+                  my @freppVersion = split('/', $freppEnvs[0]);
+                  batch_scheduler_fre_usage::Add(\%res, $freppVersion[-1], $user);
+                } else {
+                  batch_scheduler_fre_usage::Add(\%res, "unknown", $user);
+                }
+              } else {
+                print STDERR "Couldn't open the script '$script' for job '$id' - ignored\n" if $opt{verbose};
+              }
+            } else {
+              print STDERR "The script '$script' for the job '$id' isn't readable - ignored\n" if $opt{verbose};
+            }
+          } else {
+            print STDERR "Can't get the job script from the batch scheduler - ignored...\n" if $opt{verbose};
+          }
+        } else {
+          print STDERR "The job global id is empty (it is probably starting now) - ignored...\n" if $opt{verbose};
+        }
+      } else {
+        print STDERR "The job '$id' is interactive - ignored...\n" if $opt{verbose};
+      }
+    }
+    batch_scheduler_fre_usage::Out(\%res);
+  } else {
+    print STDERR "Can't get the job list from the scheduler\n";
+    exit 1;
+  }
+}

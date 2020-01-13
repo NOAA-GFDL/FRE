@@ -15,12 +15,8 @@ echo '<NOTE> : ====== FRE OUTPUT RETRYER ======'
 echo "<NOTE> : Starting at $HOST on `date`"
 if ( $echoOn ) set echo
 
-if ( $?PBS_ENVIRONMENT ) then
-   if ( $PBS_ENVIRONMENT == 'PBS_BATCH' ) then
-      set -r callerJobName = $PBS_JOBNAME
-   else
-      set -r callerJobName = ""
-   endif
+if ( $?SLURM_JOB_NAME ) then
+   set -r callerJobName = $SLURM_JOB_NAME
 else
    set -r callerJobName = ""
 endif
@@ -45,7 +41,7 @@ else
    echo "  of regression and unique directories, named by regression prefixes and integer numbers."
    echo "  These unique and regression directories also normally contain 'run' subdirectory."
    echo "  Any of these 'run' directories can serve as an argument for this tool."
-   echo "  The optional 'FRE_JOBID' argument consists of experiment name and PBS job number"
+   echo "  The optional 'FRE_JOBID' argument consists of experiment name and batch job number"
    if ( $echoOn ) set echo
    exit 1
 endif
@@ -132,7 +128,7 @@ if ( $listStatus == 0 && $submitStatus == 0 && $outputStagerStatus == 0 ) then
                         if ( $status == 0 ) then
                            if ( $#saveJobInfo > 0 ) then
                               if ( $echoOn ) unset echo
-                              echo "WARNING: Save job '$saveJobInfo[1]' in the '$saveJobInfo[4]' state is found - skipping ..."
+                              echo "WARNING: Save job '$saveJobInfo[1]' in the '$saveJobInfo[3]' state is found - skipping ..."
                               if ( $echoOn ) set echo
                            else
                               @ actionCombineDone = ( $actionCombineOn * $?actionCombineOk || ! $actionCombineOn )
@@ -149,7 +145,7 @@ if ( $listStatus == 0 && $submitStatus == 0 && $outputStagerStatus == 0 ) then
                                  if ( $status == 0 ) then
                                     if ( $#xferJobInfo > 0 ) then
                                        if ( $echoOn ) unset echo
-                                       echo "WARNING: Xfer job '$xferJobInfo[1]' in the '$xferJobInfo[4]' state is found - skipping ..."
+                                       echo "WARNING: Xfer job '$xferJobInfo[1]' in the '$xferJobInfo[3]' state is found - skipping ..."
                                        if ( $echoOn ) set echo
                                     else
                                        @ actionXferDone    = ( $actionXferOn    * $?actionXferOk    || ! $actionXferOn    )
@@ -163,7 +159,7 @@ if ( $listStatus == 0 && $submitStatus == 0 && $outputStagerStatus == 0 ) then
                                           rm -f $argFile
                                        else if ( $xferRetry >= 0 ) then
                                           if ( $xferRetry <= $xferRetries ) then
-                                             set xferResult = `submit -O "$xferOptions -v argFile=$argFile" $outputStager`
+                                             set xferResult = `submit -O "$xferOptions --export=argFile=$argFile" $outputStager`
 
                                              if ( $status == 0 ) then
                                                 if ( $echoOn ) unset echo
@@ -200,7 +196,7 @@ if ( $listStatus == 0 && $submitStatus == 0 && $outputStagerStatus == 0 ) then
                                  unset xferJobInfo
                               else if ( $saveRetry >= 0 ) then
                                  if ( $saveRetry <= $saveRetries ) then
-                                    set saveResult = `submit -O "$saveOptions -v argFile=$argFile" $outputStager`
+                                    set saveResult = `submit -O "$saveOptions --export=argFile=$argFile" $outputStager`
 
                                     if ( $status == 0 ) then
                                        if ( $echoOn ) unset echo
@@ -223,7 +219,7 @@ if ( $listStatus == 0 && $submitStatus == 0 && $outputStagerStatus == 0 ) then
                                                 @ inx += 6
                                              end
 
-                                             set xferResult = `submit -O "$xferOptions -v argFile=$argFile -l depend=afterok:$saveResult" $outputStager`
+                                             set xferResult = `submit -O "$xferOptions --export=argFile=$argFile -l depend=afterok:$saveResult" $outputStager`
 
                                              if ( $status == 0 ) then
                                                 if ( $echoOn ) unset echo

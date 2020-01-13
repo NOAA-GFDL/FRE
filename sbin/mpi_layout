@@ -1,4 +1,4 @@
-#! /usr/bin/perl
+#! /usr/bin/env perl
 
 # =========================================================================
 # Copyright (C) 2010-2012 Seth Underwood
@@ -27,141 +27,165 @@ use List::Util qw(max);
 
 # main
 {
-  # Version and Date information
-  my $Version = '2.2';
-  my $Date = '04 Jan 2012';
 
-  # What host am I running on:
-  my $host = `hostname`;
-  if ( $host =~ /c1ms/ or $host =~ /gaea[1-4]/ ) {
-    $host = 1;
-  } else {
-    $host = 2;
-  }
-  # Host specific global variables
-  our $grid_order;
-  my $cores_per_node;
-  my $cores_per_NUMA;
-  if ( $host == 1 ) {
-    $grid_order = '/opt/xt-tools/craypat/5.0.2/cpatx/sbin/grid_order';
-    $cores_per_node = 24;
-    $cores_per_NUMA = 6;
-  } else {
-    $grid_order = '/opt/cray/perftools/5.2.3/bin/grid_order';
-    $cores_per_node = 32;
-    $cores_per_NUMA = 8;
-  }
+    # Version and Date information
+    my $Version = '2.2';
+    my $Date    = '04 Jan 2012';
 
-  # Global Variables (but not really global)
-  my $xDeCom;
-  my @atm_layout = (0,0);
-  my @ocn_layout = (0,0);
-  my @atm_cpn;
-  my @ocn_cpn;
-  my $NUMA_rows = $cores_per_node/$cores_per_NUMA;
-  my $fh;
-
-  # Variables for CLI Options
-  my $help;
-  my $version;
-  my $atm_pes;
-  my $ocn_pes;
-  my $alayout;
-  my $olayout;
-  my $acpn;
-  my $ocpn;
-  my $file='MPICH_RANK_ORDER';
-  my $stdout;
-  my $debug;
-
-  GetOptions("help|h" => \$help,
-	     "version|v" => \$version,
-	     "file|f=s" => \$file,
-	     "stdout|s" => \$stdout,
-	     "atm=i" => \$atm_pes,
-	     "atm_layout=s" => \$alayout,
-	     "atm_cpn=s" => \$acpn,
-	     "ocn=i" => \$ocn_pes,
-	     "ocn_layout=s" => \$olayout,
-	     "ocn_cpn=s" => \$ocpn,
-	     "grid_order=s" => \$grid_order,
-	     "debug|d" => \$debug) or pod2usage(2);
-  pod2usage(1) if $help;
-  displayVersion($Version, $Date) and exit(0) if ( $version );
-
-  # Verify that both atm_pes and alayout and/or both ocn_pes and olayout have been given.
-  die("ERROR: Need to specify both --atm and --atm_layout\n") if ( ($atm_pes and !$alayout) or (!$atm_pes and $alayout) );
-  die("ERROR: Need to specify both --ocn and --ocn_layout\n") if ( ($ocn_pes and !$olayout) or (!$ocn_pes and $olayout) );
-  die("ERROR: Need to specify both --atm and --atm_layout and/or both --ocn and --ocn_layout\n") unless ( ($atm_pes and $alayout) or ($ocn_pes and $olayout) );
-
-  # Check that the atmoshphere parameters are valid.
-  if ( $atm_pes ) {
-    @atm_layout = split(/,/,$alayout);
-    die("ERROR: atm_layout needs to be exactly two numbers (X,Y)\n") if ( scalar(@atm_layout) != 2 or ($atm_layout[0] !~ /\d+/ or $atm_layout[1] !~ /\d+/) );
-    my $errMsg = '';
-    die("ERROR: $errMsg\n") if ( &verifyLayout('atm', $atm_pes, \@atm_layout, \$errMsg) );
-    my $cpn;
-    if ( $acpn ) {
-      $cpn = $acpn;
-    } else {
-      $cpn = $cores_per_node;
+    # What host am I running on:
+    my $host = `hostname`;
+    if ( $host =~ /c1ms/ or $host =~ /gaea[1-4]/ ) {
+        $host = 1;
     }
-    @atm_cpn = split(/,/,$cpn);
-    die("ERROR: $errMsg\n") if ( &genCellPack('atm', $cores_per_node, \@atm_cpn, \@atm_layout, \$errMsg) );
-  }
-
-  # Check that the ocean parameters are valid.
-  if ( $ocn_pes ) {
-    @ocn_layout = split(/,/,$olayout);
-    die("ERROR: ocn_layout needs to be exactly two numbers (X,Y)\n") if ( scalar(@ocn_layout) != 2 or ($ocn_layout[0] !~ /\d+/ or $ocn_layout[1] !~ /\d+/) );
-    my $errMsg = '';
-    die("ERROR: $errMsg\n") if ( &verifyLayout('ocn', $ocn_pes, \@ocn_layout, \$errMsg) );
-    my $cpn;
-    if ( $ocpn ) {
-      $cpn = $ocpn;
-    } else {
-      $cpn = $cores_per_node;
+    else {
+        $host = 2;
     }
-    @ocn_cpn = split(/,/,$cpn);
-    die("ERROR: $errMsg\n") if ( &genCellPack('ocn', $cores_per_node, \@ocn_cpn, \@ocn_layout, \$errMsg) );
-  }
 
-  # Verify $file does not already exist, and file can be written. (unless -s is given)
-  if ( $stdout ) {
-    $fh = *STDOUT;
-  } else {
-    die("ERROR: $file already exists.  Move $file out of the way and try again.\n") if ( -e $file );
-    open MPICH_RANK_ORDER, '>', $file or die("ERROR: Cannot open $file for writing.\n");
-    $fh = *MPICH_RANK_ORDER;
-  }
-
-  # Print header warning/information.
-  writeHeader($fh, '#');
-
-  # Verify and display the atmosphere layout.
-  if ( $atm_pes ) {
-    print($fh "# Atmosphere MPI Layout for:\n# atm_pes = $atm_pes\n# atm_layout = " . join(', ',@atm_layout) . "\n");
-    &displayLayout('atm', 0, \@atm_cpn, \@atm_layout, $fh, $debug);
-  }
-
-  # Verify and display the ocean layout.
-  if ( $ocn_pes ) {
-    my $pe_offset;
-    if ( $atm_pes ) {
-      $pe_offset = $atm_pes;
-    } else {
-      $pe_offset = 0;
+    # Host specific global variables
+    our $grid_order;
+    my $cores_per_node;
+    my $cores_per_NUMA;
+    if ( $host == 1 ) {
+        $grid_order     = '/opt/xt-tools/craypat/5.0.2/cpatx/sbin/grid_order';
+        $cores_per_node = 24;
+        $cores_per_NUMA = 6;
     }
-    print($fh "# Ocean MPI Layout for:\n# ocn_pes = $ocn_pes\n# ocn_layout = " . join(', ',@ocn_layout) . "\n");
-    &displayLayout('ocn', $pe_offset, \@ocn_cpn, \@ocn_layout, $fh, $debug);
-  }
+    else {
+        $grid_order     = '/opt/cray/perftools/5.2.3/bin/grid_order';
+        $cores_per_node = 32;
+        $cores_per_NUMA = 8;
+    }
 
-  # Print warning about file name and location (same as header, but to STDERR)
-  writeHeader(*STDERR, 'INFO:');
+    # Global Variables (but not really global)
+    my $xDeCom;
+    my @atm_layout = ( 0, 0 );
+    my @ocn_layout = ( 0, 0 );
+    my @atm_cpn;
+    my @ocn_cpn;
+    my $NUMA_rows = $cores_per_node / $cores_per_NUMA;
+    my $fh;
 
-  if ( ! $stdout ) {
-    close $fh;
-  }
+    # Variables for CLI Options
+    my $help;
+    my $version;
+    my $atm_pes;
+    my $ocn_pes;
+    my $alayout;
+    my $olayout;
+    my $acpn;
+    my $ocpn;
+    my $file = 'MPICH_RANK_ORDER';
+    my $stdout;
+    my $debug;
+
+    GetOptions(
+        "help|h"       => \$help,
+        "version|v"    => \$version,
+        "file|f=s"     => \$file,
+        "stdout|s"     => \$stdout,
+        "atm=i"        => \$atm_pes,
+        "atm_layout=s" => \$alayout,
+        "atm_cpn=s"    => \$acpn,
+        "ocn=i"        => \$ocn_pes,
+        "ocn_layout=s" => \$olayout,
+        "ocn_cpn=s"    => \$ocpn,
+        "grid_order=s" => \$grid_order,
+        "debug|d"      => \$debug
+    ) or pod2usage(2);
+    pod2usage(1) if $help;
+    displayVersion( $Version, $Date ) and exit(0) if ($version);
+
+    # Verify that both atm_pes and alayout and/or both ocn_pes and olayout have been given.
+    die("ERROR: Need to specify both --atm and --atm_layout\n")
+        if ( ( $atm_pes and !$alayout ) or ( !$atm_pes and $alayout ) );
+    die("ERROR: Need to specify both --ocn and --ocn_layout\n")
+        if ( ( $ocn_pes and !$olayout ) or ( !$ocn_pes and $olayout ) );
+    die("ERROR: Need to specify both --atm and --atm_layout and/or both --ocn and --ocn_layout\n")
+        unless ( ( $atm_pes and $alayout ) or ( $ocn_pes and $olayout ) );
+
+    # Check that the atmoshphere parameters are valid.
+    if ($atm_pes) {
+        @atm_layout = split( /,/, $alayout );
+        die("ERROR: atm_layout needs to be exactly two numbers (X,Y)\n")
+            if ( scalar(@atm_layout) != 2
+            or ( $atm_layout[0] !~ /\d+/ or $atm_layout[1] !~ /\d+/ ) );
+        my $errMsg = '';
+        die("ERROR: $errMsg\n") if ( &verifyLayout( 'atm', $atm_pes, \@atm_layout, \$errMsg ) );
+        my $cpn;
+        if ($acpn) {
+            $cpn = $acpn;
+        }
+        else {
+            $cpn = $cores_per_node;
+        }
+        @atm_cpn = split( /,/, $cpn );
+        die("ERROR: $errMsg\n")
+            if ( &genCellPack( 'atm', $cores_per_node, \@atm_cpn, \@atm_layout, \$errMsg ) );
+    }
+
+    # Check that the ocean parameters are valid.
+    if ($ocn_pes) {
+        @ocn_layout = split( /,/, $olayout );
+        die("ERROR: ocn_layout needs to be exactly two numbers (X,Y)\n")
+            if ( scalar(@ocn_layout) != 2
+            or ( $ocn_layout[0] !~ /\d+/ or $ocn_layout[1] !~ /\d+/ ) );
+        my $errMsg = '';
+        die("ERROR: $errMsg\n") if ( &verifyLayout( 'ocn', $ocn_pes, \@ocn_layout, \$errMsg ) );
+        my $cpn;
+        if ($ocpn) {
+            $cpn = $ocpn;
+        }
+        else {
+            $cpn = $cores_per_node;
+        }
+        @ocn_cpn = split( /,/, $cpn );
+        die("ERROR: $errMsg\n")
+            if ( &genCellPack( 'ocn', $cores_per_node, \@ocn_cpn, \@ocn_layout, \$errMsg ) );
+    }
+
+    # Verify $file does not already exist, and file can be written. (unless -s is given)
+    if ($stdout) {
+        $fh = *STDOUT;
+    }
+    else {
+        die("ERROR: $file already exists.  Move $file out of the way and try again.\n")
+            if ( -e $file );
+        open MPICH_RANK_ORDER, '>', $file or die("ERROR: Cannot open $file for writing.\n");
+        $fh = *MPICH_RANK_ORDER;
+    }
+
+    # Print header warning/information.
+    writeHeader( $fh, '#' );
+
+    # Verify and display the atmosphere layout.
+    if ($atm_pes) {
+        print(    $fh "# Atmosphere MPI Layout for:\n# atm_pes = $atm_pes\n# atm_layout = "
+                . join( ', ', @atm_layout )
+                . "\n" );
+        &displayLayout( 'atm', 0, \@atm_cpn, \@atm_layout, $fh, $debug );
+    }
+
+    # Verify and display the ocean layout.
+    if ($ocn_pes) {
+        my $pe_offset;
+        if ($atm_pes) {
+            $pe_offset = $atm_pes;
+        }
+        else {
+            $pe_offset = 0;
+        }
+        print(    $fh "# Ocean MPI Layout for:\n# ocn_pes = $ocn_pes\n# ocn_layout = "
+                . join( ', ', @ocn_layout )
+                . "\n" );
+        &displayLayout( 'ocn', $pe_offset, \@ocn_cpn, \@ocn_layout, $fh, $debug );
+    }
+
+    # Print warning about file name and location (same as header, but to STDERR)
+    writeHeader( *STDERR, 'INFO:' );
+
+    if ( !$stdout ) {
+        close $fh;
+    }
 }
 
 # **********************************************************************
@@ -169,125 +193,133 @@ use List::Util qw(max);
 #    Write the header information to warn about file placement.
 #    Subroutine errors start at 201
 sub genCellPack($$$$$) {
-  my ($name, $cores_per_node, $cpn, $layout, $errMsg) = @_;
-  my $ret = 0;
+    my ( $name, $cores_per_node, $cpn, $layout, $errMsg ) = @_;
+    my $ret = 0;
 
-  # Make sure @$cpn contains all numbers
-  for (my $i=0; $i < scalar(@$cpn); $i++ ) {
-    if ( $$cpn[$i] !~ /\d+/ or $$cpn[$i] <= 0 ) {
-      $$errMsg = "Not a valid core per node value (must be an integer > 0).";
-      $ret = 201;
+    # Make sure @$cpn contains all numbers
+    for ( my $i = 0; $i < scalar(@$cpn); $i++ ) {
+        if ( $$cpn[$i] !~ /\d+/ or $$cpn[$i] <= 0 ) {
+            $$errMsg = "Not a valid core per node value (must be an integer > 0).";
+            $ret     = 201;
+        }
     }
-  }
 
-  # Do the following only if there wasn't an error from the above block.
-  if ( ! $ret ) {
-    if ( scalar(@$cpn) == 1 ) {
-      my $cpn_orig = $$cpn[0];
-      my $dnom = 0;
+    # Do the following only if there wasn't an error from the above block.
+    if ( !$ret ) {
+        if ( scalar(@$cpn) == 1 ) {
+            my $cpn_orig = $$cpn[0];
+            my $dnom     = 0;
 
-      # check if any multiples of $cores_per_node is a perfect divison of the @$layout[0].
-      # &multiples() returns an array ordered from larges to smallest. (Only if $$cpn[0]
-      # is the same as $cores_per_node.
-      if ( $$cpn[0] == $cores_per_node ) {
-	my @multiples = &multiples($cores_per_node);
-	for ( my $i=0; $i < scalar(@multiples); $i++ ) {
-	  if ( $$layout[0] % $multiples[$i] == 0 ) {
-	    $dnom = $multiples[$i];
-	    last;
-	  }
-	}
-      }
+            # check if any multiples of $cores_per_node is a perfect divison of the @$layout[0].
+            # &multiples() returns an array ordered from larges to smallest. (Only if $$cpn[0]
+            # is the same as $cores_per_node.
+            if ( $$cpn[0] == $cores_per_node ) {
+                my @multiples = &multiples($cores_per_node);
+                for ( my $i = 0; $i < scalar(@multiples); $i++ ) {
+                    if ( $$layout[0] % $multiples[$i] == 0 ) {
+                        $dnom = $multiples[$i];
+                        last;
+                    }
+                }
+            }
 
-      if ( $dnom == 0 ) { # None of the @standardSplits are divisors of $$layout[0].
-	# Now looking the largest factor of $$cpn less than $$layout[0]
-	my @multiples = &multiples($$cpn[0]);
-	for ( my $i=0; $i<scalar(@multiples); $i++ ) {
-	  if ( $multiples[$i] <= $$layout[0] ) {
-	    $dnom = $multiples[$i];
-	    last;
-	  }
-	}
-      }
+            if ( $dnom == 0 ) {    # None of the @standardSplits are divisors of $$layout[0].
+                                   # Now looking the largest factor of $$cpn less than $$layout[0]
+                my @multiples = &multiples( $$cpn[0] );
+                for ( my $i = 0; $i < scalar(@multiples); $i++ ) {
+                    if ( $multiples[$i] <= $$layout[0] ) {
+                        $dnom = $multiples[$i];
+                        last;
+                    }
+                }
+            }
 
-      if ( $dnom == 0 ) {
-	$$errMsg = "Cannot create a MPI layout with the values given.";
-	$ret = 202;
-      }
+            if ( $dnom == 0 ) {
+                $$errMsg = "Cannot create a MPI layout with the values given.";
+                $ret     = 202;
+            }
 
-      if ( ! $ret ) { # Do only if there were no errors above.
-	$$cpn[0] = $dnom;
-	$$cpn[1] = $cpn_orig/$dnom;
-	$$cpn[2] = 1 if ( scalar(@$layout) == 3 );
-      }
-    } else {
-      # We assume the user knows what he is doing, since this is an undocumented option.
-      # just verify product(@$cpn) <= $cores_per_node and go!.
-      my $prod = 1;
-      $prod *= $_ foreach @$cpn;
-      if ( $prod > $cores_per_node or $prod <= 0 ) {
-	$$errMsg = "Not a valid core per node value.";
-	$ret = 203;
-      } else {
-	$$cpn[2] = 1 if ( scalar(@$layout) == 3 );
-      }
-    }
-  }
+            if ( !$ret ) {    # Do only if there were no errors above.
+                $$cpn[0] = $dnom;
+                $$cpn[1] = $cpn_orig / $dnom;
+                $$cpn[2] = 1 if ( scalar(@$layout) == 3 );
+            }
+        } ## end if ( scalar(@$cpn) == ...)
+        else {
 
-  return $ret;
-}
+            # We assume the user knows what he is doing, since this is an undocumented option.
+            # just verify product(@$cpn) <= $cores_per_node and go!.
+            my $prod = 1;
+            $prod *= $_ foreach @$cpn;
+            if ( $prod > $cores_per_node or $prod <= 0 ) {
+                $$errMsg = "Not a valid core per node value.";
+                $ret     = 203;
+            }
+            else {
+                $$cpn[2] = 1 if ( scalar(@$layout) == 3 );
+            }
+        }
+    } ## end if ( !$ret )
+
+    return $ret;
+} ## end sub genCellPack($$$$$)
 
 # **********************************************************************
 # sub multiples
 #    Calculate all possible multiples (less than the acutal value)
 sub multiples($) {
-  my ($num) = @_;
-  my %mults;
+    my ($num) = @_;
+    my %mults;
 
-  for ( my $i=2; $i < $num/2; $i++ ) {
-    if ( $num % $i == 0 ) {
-      my $tmp = $num/$i;
-      $mults{$i}++;
-      $mults{$tmp}++ unless ( $tmp == $num );
+    for ( my $i = 2; $i < $num / 2; $i++ ) {
+        if ( $num % $i == 0 ) {
+            my $tmp = $num / $i;
+            $mults{$i}++;
+            $mults{$tmp}++ unless ( $tmp == $num );
+        }
     }
-  }
 
-  if ( ! scalar(keys(%mults)) ) {
-    $mults{$num}++;
-  }
-  return sort({$a < $b} keys(%mults));
+    if ( !scalar( keys(%mults) ) ) {
+        $mults{$num}++;
+    }
+    return sort( { $a < $b } keys(%mults) );
 }
+
 # **********************************************************************
 
 # **********************************************************************
 # sub writeHeader
 #    Write the header information to warn about file placement.
 sub writeHeader {
-  my ($fh, $note) = @_;
+    my ( $fh, $note ) = @_;
 
-  print($fh "$note To use this file, it must be named MPICH_RANK_ORDER and placed\n");
-  print($fh "$note in the working directory where the aprun command will be executed.\n");
-  print($fh "$note Also, the environment variable MPICH_RANK_REORDER_METHOD must be set to '3'.\n\n");
+    print( $fh "$note To use this file, it must be named MPICH_RANK_ORDER and placed\n" );
+    print( $fh "$note in the working directory where the aprun command will be executed.\n" );
+    print( $fh
+            "$note Also, the environment variable MPICH_RANK_REORDER_METHOD must be set to '3'.\n\n"
+    );
 }
 
 # **********************************************************************
 # sub displayLayout
 #    Calculate and display the layout
 sub displayLayout($$$$$$) {
-  my ($name, $mpiStart, $cpn, $layout, $fh, $debug) = @_;
+    my ( $name, $mpiStart, $cpn, $layout, $fh, $debug ) = @_;
 
-  my $cell = join(',',@$cpn);
-  my $grid = join(',',@$layout);
+    my $cell = join( ',', @$cpn );
+    my $grid = join( ',', @$layout );
 
-  my $grid_order_output = qx($::grid_order -C -c $cell -g $grid);
+    my $grid_order_output = qx($::grid_order -C -c $cell -g $grid);
 
-  if ( $mpiStart == 0 ) {
-    print($fh "$grid_order_output\n");
-  } else {
-    print($fh &increaseMPIrank($grid_order_output,$mpiStart) . "\n");
-  }
+    if ( $mpiStart == 0 ) {
+        print( $fh "$grid_order_output\n" );
+    }
+    else {
+        print( $fh &increaseMPIrank( $grid_order_output, $mpiStart ) . "\n" );
+    }
 
 }
+
 # **********************************************************************
 
 # **********************************************************************
@@ -295,22 +327,24 @@ sub displayLayout($$$$$$) {
 #    Increase the value for the MPI rank.  Useful for when both atm and
 #    ocn are to be in the MPICH_RANK_ORDER file.
 sub increaseMPIrank($$) {
-  my ($gridOrder, $add) = @_;
-  my @newGridOrder;
+    my ( $gridOrder, $add ) = @_;
+    my @newGridOrder;
 
-  foreach my $line ( split(/\n/,$gridOrder) ) {
-    if ( $line =~ /^#/ ) {
-      push(@newGridOrder,$line);
-    } else {
-      my @newline;
-      foreach my $value ( split(/,/,$line) ) {
-	push(@newline,$value+$add);
-      }
-      push(@newGridOrder,join(',',@newline));
+    foreach my $line ( split( /\n/, $gridOrder ) ) {
+        if ( $line =~ /^#/ ) {
+            push( @newGridOrder, $line );
+        }
+        else {
+            my @newline;
+            foreach my $value ( split( /,/, $line ) ) {
+                push( @newline, $value + $add );
+            }
+            push( @newGridOrder, join( ',', @newline ) );
+        }
     }
-  }
-  return join("\n",@newGridOrder);
+    return join( "\n", @newGridOrder );
 }
+
 # **********************************************************************
 
 # **********************************************************************
@@ -319,56 +353,66 @@ sub increaseMPIrank($$) {
 #    Returns the x decomposition.
 #    subroutine errors start at 101
 sub verifyLayout($$$$) {
-  my ($name, $pes, $layout, $errMsg) = @_;
-  my $ret = 0;
+    my ( $name, $pes, $layout, $errMsg ) = @_;
+    my $ret = 0;
 
-  if ( $$layout[0] * $$layout[1] == 0 ) {
-    if ( $$layout[0] == $$layout[1] ) {
-      $$errMsg = "Only one value in ${name}_layout can be zero.\n";
-      $ret = 101;
-    } elsif ( $$layout[0] == 0 ) {
-      if ( $pes % $$layout[1] ) {
-	$$errMsg = "This layout does not work for the number of ${name}_pes given.";
-	$ret = 102;
-      } else {
-	$$layout[0] = $pes / $$layout[1];
-      }
-    } else {
-      if ( $pes % $$layout[0] ) {
-	$$errMsg = "This layout does not work for the number of ${name}_pes given.";
-	$ret = 103;
-      } else {
-	$$layout[1] = $pes / $$layout[0];
-      }
+    if ( $$layout[0] * $$layout[1] == 0 ) {
+        if ( $$layout[0] == $$layout[1] ) {
+            $$errMsg = "Only one value in ${name}_layout can be zero.\n";
+            $ret     = 101;
+        }
+        elsif ( $$layout[0] == 0 ) {
+            if ( $pes % $$layout[1] ) {
+                $$errMsg = "This layout does not work for the number of ${name}_pes given.";
+                $ret     = 102;
+            }
+            else {
+                $$layout[0] = $pes / $$layout[1];
+            }
+        }
+        else {
+            if ( $pes % $$layout[0] ) {
+                $$errMsg = "This layout does not work for the number of ${name}_pes given.";
+                $ret     = 103;
+            }
+            else {
+                $$layout[1] = $pes / $$layout[0];
+            }
+        }
+    } ## end if ( $$layout[0] * $$layout...)
+    elsif ( $$layout[0] * $$layout[1] != $pes ) {
+        if ( $name =~ 'atm' and $$layout[0] * $$layout[1] * 6 == $pes ) {
+            push( @$layout, 6 );
+        }
+        else {
+            $$errMsg = "This layout does not work for the number of ${name}_pes given.";
+            $ret     = 104;
+        }
     }
-  } elsif ( $$layout[0] * $$layout[1] != $pes ) {
-    if ( $name =~ 'atm' and $$layout[0] * $$layout[1] * 6 == $pes ) {
-      push(@$layout,6);
-    } else {
-      $$errMsg = "This layout does not work for the number of ${name}_pes given.";
-      $ret = 104
-    }
-  }
-  return $ret;
-}
+    return $ret;
+} ## end sub verifyLayout($$$$)
+
 # **********************************************************************
 
 # **********************************************************************
 # sub displayVersion
 #    Print the version to STDOUT.
 sub displayVersion {
-  my ($version, $date) = @_;
+    my ( $version, $date ) = @_;
 
-  # Handle SVN Revision and Date differently
-  if ( $version =~ /LastChangedRevision: (\d+)/ ) {
-    $version = $1;
-  }
-  if ( $date =~ /LastChangedDate: \d\d\d\d-\d\d-\d\d \d\d:\d\d:\d\d -\d\d\d\d \(\w\w\w, (\d\d \w+ \d\d\d\d)/ ) {
-    $date = $1;
-  }
+    # Handle SVN Revision and Date differently
+    if ( $version =~ /LastChangedRevision: (\d+)/ ) {
+        $version = $1;
+    }
+    if ( $date
+        =~ /LastChangedDate: \d\d\d\d-\d\d-\d\d \d\d:\d\d:\d\d -\d\d\d\d \(\w\w\w, (\d\d \w+ \d\d\d\d)/
+        ) {
+        $date = $1;
+    }
 
-  print "mpi_layout $version ($date)\n";
+    print "mpi_layout $version ($date)\n";
 }
+
 # **********************************************************************
 
 # **********************************************************************
@@ -376,15 +420,16 @@ sub displayVersion {
 # Remove the quote marks and any additional space before and after
 # the string.
 sub sanitizeString($) {
-  my ($string) = @_;
+    my ($string) = @_;
 
-  if ( length($string) ) {
-    $string =~ s/"//g;
-    $string =~ s/^\s+//;
-    $string =~ s/\s+$//;
-  }
-  return $string;
+    if ( length($string) ) {
+        $string =~ s/"//g;
+        $string =~ s/^\s+//;
+        $string =~ s/\s+$//;
+    }
+    return $string;
 }
+
 # **********************************************************************
 
 __END__

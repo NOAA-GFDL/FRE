@@ -1,4 +1,4 @@
-#!/usr/bin/perl
+#!/usr/bin/env perl
 
 # =========================================================================
 # Copyright (C) 2010, 2011 Seth Underwood
@@ -27,143 +27,159 @@ use List::Util qw(max);
 
 #### main
 {
-  my $Version = '3.1.1';
-  my $Date = '28 Dec 2011';
+    my $Version = '3.1.1';
+    my $Date    = '28 Dec 2011';
 
+    # Variables to hold passed in values.
+    my $help            = 0;
+    my $version         = 0;
+    my $verbose         = 0;
+    my $omp_num_threads = 1;
+    my $mpi_threads     = 1;
+    my $atm_pes         = 0;
+    my $ocn_pes         = 0;
+    my $host            = '';
+    my $aprun           = 0;
+    my $force           = 0;
 
-  # Variables to hold passed in values.
-  my $help = 0;
-  my $version = 0;
-  my $verbose = 0;
-  my $omp_num_threads = 1;
-  my $mpi_threads = 1;
-  my $atm_pes = 0;
-  my $ocn_pes = 0;
-  my $host = '';
-  my $aprun = 0;
-  my $force = 0;
+    # Get Options
+    my $optParser = new Getopt::Long::Parser;
+    $optParser->configure( 'posix_default', 'no_ignore_case' );
+    $optParser->getoptions(
+        "help|h"    => sub { pod2usage(1) },
+        "version|V" => sub { displayVersion( $Version, $Date ); exit(0); },
+        "verbose|v" => \$verbose,
+        "host|H=s"  => \$host,
+        "mpi|M=i"   => \$mpi_threads,
+        "atm|A=i"   => \$atm_pes,
+        "ocn|O=i"   => \$ocn_pes,
+        "omp|o=i"   => \$omp_num_threads,
+        "aprun|a"   => \$aprun,
+        "force|f"   => \$force,
+    ) or pod2usage(2);
 
-  # Get Options
-  my $optParser = new Getopt::Long::Parser;
-  $optParser -> configure('posix_default','no_ignore_case');
-  $optParser -> getoptions("help|h" => sub{pod2usage(1)},
-			   "version|V" => sub{displayVersion($Version, $Date); exit(0);},
-			   "verbose|v" => \$verbose,
-			   "host|H=s" => \$host,
-			   "mpi|M=i" => \$mpi_threads,
-			   "atm|A=i" => \$atm_pes,
-			   "ocn|O=i" => \$ocn_pes,
-			   "omp|o=i" => \$omp_num_threads,
-			   "aprun|a" => \$aprun,
-			   "force|f" => \$force,
-			  ) or pod2usage(2);
+    # Use $mpi_threads if no $atm_pes given.
+    $mpi_threads = $atm_pes if ($atm_pes);
 
-  # Use $mpi_threads if no $atm_pes given.
-  $mpi_threads = $atm_pes if ( $atm_pes );
+    # Hash to hold cores per node
+    my %num_cores_per_node = (
+        jaguar   => 4,
+        jaguarpf => 12,
+        gaea     => 24,
+        gaea2    => 32,
+    );
+    my %valid_omp_threads = (
+        jaguar   => '1, 2, or 4',
+        jaguarpf => '1, 2, 3, 4, 6, or 12',
+        gaea     => '1, 2, 3, 4, 6, 12, or 24',
+        gaea2    => '1, 2, 4, 8, 16, or 32',
+    );
 
-  # Hash to hold cores per node
-  my %num_cores_per_node = (
-			    jaguar => 4,
-			    jaguarpf => 12,
-			    gaea => 24,
-			    gaea2 => 32,
-			   );
-  my %valid_omp_threads = (
-			   jaguar => '1, 2, or 4',
-			   jaguarpf => '1, 2, 3, 4, 6, or 12',
-			   gaea => '1, 2, 3, 4, 6, 12, or 24',
-			   gaea2 => '1, 2, 4, 8, 16, or 32',
-			  );
+    # Hash to hold results.
+    my %request_pes;
 
-  # Hash to hold results.
-  my %request_pes;
-
-  # If both $atm_pes and $ocn_pes are blank, use $mpi_threads.
-  if ( $num_cores_per_node{$host} ) {
-    $request_pes{$host} = 0;
-    $request_pes{$host} = calc_request_pes($mpi_threads, $omp_num_threads, $num_cores_per_node{$host}, $force);
-    if ( $request_pes{$host} >= 0 ) {
-      $request_pes{$host} += calc_request_pes($ocn_pes, 1, $num_cores_per_node{$host}) if ( $ocn_pes );
+    # If both $atm_pes and $ocn_pes are blank, use $mpi_threads.
+    if ( $num_cores_per_node{$host} ) {
+        $request_pes{$host} = 0;
+        $request_pes{$host}
+            = calc_request_pes( $mpi_threads, $omp_num_threads, $num_cores_per_node{$host},
+            $force );
+        if ( $request_pes{$host} >= 0 ) {
+            $request_pes{$host} += calc_request_pes( $ocn_pes, 1, $num_cores_per_node{$host} )
+                if ($ocn_pes);
+        }
     }
-  }
-  else {
-    print "WARNING: Unknown host '$host'.  Showing default list of hosts.\n\n" if ( $host );
-    foreach my $myhost ( keys(%num_cores_per_node) ) {
-      $request_pes{$myhost} = 0;
-      $request_pes{$myhost} = calc_request_pes($mpi_threads, $omp_num_threads, $num_cores_per_node{$myhost}, $force);
-      if ( $request_pes{$myhost} >= 0 ) {
-	$request_pes{$myhost} += calc_request_pes($ocn_pes, 1, $num_cores_per_node{$myhost}) if ( $ocn_pes );
-      }
+    else {
+        print "WARNING: Unknown host '$host'.  Showing default list of hosts.\n\n" if ($host);
+        foreach my $myhost ( keys(%num_cores_per_node) ) {
+            $request_pes{$myhost} = 0;
+            $request_pes{$myhost}
+                = calc_request_pes( $mpi_threads, $omp_num_threads, $num_cores_per_node{$myhost},
+                $force );
+            if ( $request_pes{$myhost} >= 0 ) {
+                $request_pes{$myhost}
+                    += calc_request_pes( $ocn_pes, 1, $num_cores_per_node{$myhost} )
+                    if ($ocn_pes);
+            }
+        }
     }
-  }
 
-  # Display ocn and atm pes if given.
-  if ( ! $aprun or ( $aprun and $verbose ) ) {
-    if ( $atm_pes ) {
-      print "Atmosphere PEs = $atm_pes\n";
-    } else {
-      print "MPI PEs = $mpi_threads\n";
-    }
-    if ( $ocn_pes ) {
-      print "Ocean PEs = $ocn_pes\n";
-    }
-    print "OMP_NUM_THREADS = $omp_num_threads\n";
-    print "Need to request (host: num_pes [(wasting: num_pes)])\n";
+    # Display ocn and atm pes if given.
+    if ( !$aprun or ( $aprun and $verbose ) ) {
+        if ($atm_pes) {
+            print "Atmosphere PEs = $atm_pes\n";
+        }
+        else {
+            print "MPI PEs = $mpi_threads\n";
+        }
+        if ($ocn_pes) {
+            print "Ocean PEs = $ocn_pes\n";
+        }
+        print "OMP_NUM_THREADS = $omp_num_threads\n";
+        print "Need to request (host: num_pes [(wasting: num_pes)])\n";
 
-    foreach my $myhost ( sort keys(%request_pes) ) {
-      if ( $request_pes{$myhost} > 0 ) {
-	my $wasted = calc_wasted_pes($request_pes{$myhost}, $mpi_threads, $ocn_pes, $omp_num_threads, $num_cores_per_node{$myhost});
-	print "$myhost: $request_pes{$myhost} PEs ";
-	print "(wasting: $wasted PEs)" if ( $wasted );
-	print "\n";
-      } elsif ( $request_pes{$myhost} == -2 ) {
-	print "$myhost: Configuration not efficient. (Try setting number of OpenMP threads to $valid_omp_threads{$myhost}.)\n"
-      } else {
-	print "$myhost: Cannot run on this host.\n";
-      }
-    }
-  }
+        foreach my $myhost ( sort keys(%request_pes) ) {
+            if ( $request_pes{$myhost} > 0 ) {
+                my $wasted = calc_wasted_pes( $request_pes{$myhost}, $mpi_threads, $ocn_pes,
+                    $omp_num_threads, $num_cores_per_node{$myhost} );
+                print "$myhost: $request_pes{$myhost} PEs ";
+                print "(wasting: $wasted PEs)" if ($wasted);
+                print "\n";
+            }
+            elsif ( $request_pes{$myhost} == -2 ) {
+                print
+                    "$myhost: Configuration not efficient. (Try setting number of OpenMP threads to $valid_omp_threads{$myhost}.)\n";
+            }
+            else {
+                print "$myhost: Cannot run on this host.\n";
+            }
+        }
+    } ## end if ( !$aprun or ( $aprun...))
 
-  # Display if only able to run on selected host(s).
-  if ( $aprun ) {
-    print "\naprun command:\n" if ( $verbose );
-    if ( max(values(%request_pes)) > 0 ) {
-      print "aprun -n $mpi_threads -d $omp_num_threads " . './${executable:t}';
-      print " : -n $ocn_pes " . './${executable:t}' if ( $ocn_pes );
-      print "\n";
-    } else {
-      print STDERR "ERROR: Not able to run on selected host(s) with the given configuration.\n";
+    # Display if only able to run on selected host(s).
+    if ($aprun) {
+        print "\naprun command:\n" if ($verbose);
+        if ( max( values(%request_pes) ) > 0 ) {
+            print "aprun -n $mpi_threads -d $omp_num_threads " . './${executable:t}';
+            print " : -n $ocn_pes " . './${executable:t}' if ($ocn_pes);
+            print "\n";
+        }
+        else {
+            print STDERR
+                "ERROR: Not able to run on selected host(s) with the given configuration.\n";
+        }
     }
-  }
 }
 
 sub calc_wasted_pes {
-  my ($req, $atm, $ocn, $omp, $cpm) = @_;
+    my ( $req, $atm, $ocn, $omp, $cpm ) = @_;
 
-  my $wasted = $req - ($atm*$omp + $ocn);
+    my $wasted = $req - ( $atm * $omp + $ocn );
 
-  return $wasted;
+    return $wasted;
 }
 
 sub calc_request_pes {
-  my ($mpi, $omp, $cpn, $force) = @_;
-  my $rvalue;
+    my ( $mpi, $omp, $cpn, $force ) = @_;
+    my $rvalue;
 
-  if ( $omp > $cpn ) {
-    $rvalue = -1;
-  } elsif ( $cpn % $omp and !$force ) {
-    $rvalue = -2;
-  } else {
-    $rvalue = ceil($mpi/floor($cpn/$omp))*$cpn;
-  }
+    if ( $omp > $cpn ) {
+        $rvalue = -1;
+    }
+    elsif ( $cpn % $omp and !$force ) {
+        $rvalue = -2;
+    }
+    else {
+        $rvalue = ceil( $mpi / floor( $cpn / $omp ) ) * $cpn;
+    }
 
-  return $rvalue;
+    return $rvalue;
 }
 
 sub displayVersion {
-  my ($version, $date) = @_;
+    my ( $version, $date ) = @_;
 
-  print "calcPErequest $version ($date)\n";
+    print "calcPErequest $version ($date)\n";
 }
 __END__
 

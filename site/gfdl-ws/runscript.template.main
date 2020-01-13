@@ -186,6 +186,7 @@ alias findModuleInfo `which find_module_info` --verbose
 alias prepareDir `which prepare_dir.csh`
 alias timeStamp `which time_stamp.csh` $timeStampOptions
 alias workDirCleaner `which batch_rmdir.csh`
+alias adjust_dry_mass_tool `which adjust_dry_mass.csh`
 
 # ---------------- FRE runscript site-dependent helper scripts
 
@@ -513,12 +514,13 @@ touch data_table
 set months = $monthslist[1]
 set days = $dayslist[1]
 set hours = $hourslist[1]
+set adjust_dry_mass = `adjust_dry_mass_tool`
 
 set | sort > $envFile
 sleep $envFileDelay
 set -r | sort >> $envFile
 sleep $envFileDelay
-env --unset=TERMCAP | sort >> $envFile
+env --unset=TERMCAP | grep -e '^[a-zA-Z0-9_]*=' | sort >> $envFile
 
 expandVariables $envFile < input.nml.unexpanded > input.nml || exit 1
 
@@ -583,12 +585,13 @@ while ( $irun <= $segmentsPerJob && $currentSeg <= $segmentsPerSimulation )
    set months = $monthslist[$irun]
    set days = $dayslist[$irun]
    set hours = $hourslist[$irun]
+   set adjust_dry_mass = `adjust_dry_mass_tool`
 
    set | sort > $envFile
    sleep $envFileDelay
    set -r | sort >> $envFile
    sleep $envFileDelay
-   env --unset=TERMCAP | sort >> $envFile
+   env --unset=TERMCAP | grep -e '^[a-zA-Z0-9_]*=' | sort >> $envFile
 
    expandVariables $envFile < input.nml.unexpanded > input.nml || exit 1
 
