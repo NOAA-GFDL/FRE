@@ -34,7 +34,7 @@ def run(command,success=0):
 def diff(file1,file2):
     sys.stderr.write("Comparing files %s and %s.\n" % (file1,file2))
     try:
-        run([nccmp,"-d","-f","-w","format",file1,file2])
+        run([nccmp,"-m","-d","-f","-w","format",file1,file2])
     except RunError as e:
         if unknown_file_format in str(e):
             run(["diff",file1,file2])
@@ -132,6 +132,9 @@ def main(file1,file2):
     print("Files that failed:")
     for f in failed:
         print("\t%s" % f)
+
+    if failed:
+        sys.exit(1)
 
 
 if __name__ == "__main__":
