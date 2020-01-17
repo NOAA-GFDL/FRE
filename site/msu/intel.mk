@@ -52,6 +52,8 @@ LD = ifort
 # INCLUDES
 # A list of -I Include directories to be added to the the compile
 # command.
+# how to make this not hard-coded?
+INCLUDES = -I/apps/intel-2019/openmpi-4.0.2/include
 
 # ISA
 # The Intel Instruction Set Archetecture (ISA) compile options to use.
@@ -92,7 +94,8 @@ FPPFLAGS = -fpp -Wp,-w $(INCLUDES)
 # Fortran Compiler flags for the NetCDF library
 FPPFLAGS += $(shell nf-config --fflags)
 # Fortran Compiler flags for the MPICH MPI library
-FPPFLAGS += $(shell pkg-config --cflags-only-I mpich2-c)
+# not sure if mpich is needed but commenting it out removes error
+#FPPFLAGS += $(shell pkg-config --cflags-only-I mpich2-c)
 
 # Base set of Fortran compiler flags
 FFLAGS := -fno-alias -stack_temps -safe_cray_ptr -ftz -assume byterecl -i4 -r8 -nowarn -g -sox -traceback
@@ -113,7 +116,8 @@ CPPFLAGS = -D__IFC $(INCLUDES)
 # C Compiler flags for the NetCDF library
 CPPFLAGS += $(shell nc-config --cflags)
 # C Compiler flags for the MPICH MPI library
-CPPFLAGS += $(shell pkg-config --cflags-only-I mpich2-c)
+# not sure if mpich is needed but commenting it out removes error
+#CPPFLAGS += $(shell pkg-config --cflags-only-I mpich2-c)
 
 # Base set of C compiler flags
 CFLAGS := -sox -traceback
@@ -144,7 +148,10 @@ LIBS =
 # NetCDF library flags
 LIBS += $(shell nf-config --flibs)
 # MPICH MPI library flags
-$(shell pkg-config --libs mpich2-f90)
+# not sure if mpich is needed but commenting it out removes error
+#$(shell pkg-config --libs mpich2-f90)
+# how to make this not hard-coded?
+LIBS += -L/apps/intel-2019/openmpi-4.0.2/lib -lmpi -lmpi_mpifh
 
 # Get compile flags based on target macros.
 ifdef REPRO
