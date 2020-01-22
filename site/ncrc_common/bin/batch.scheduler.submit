@@ -144,8 +144,7 @@ use Getopt::Long( ':config', 'no_ignore_case', 'no_auto_abbrev' );
         # ------ arguments: job name, job queue, options hash
     {
         my ( $n, $q, %o ) = @_;
-        my $binDir      = File::Basename::dirname($0);
-        my $listCommand = "$binDir/batch.scheduler.list --user=$ENV{USER}";
+        my $listCommand = "batch.scheduler.list --user=$ENV{USER}";
         $listCommand .= " --name=$n"  if $n;
         $listCommand .= " --queue=$q" if $q;
         $listCommand .= " --retries-number=$o{'list-retries-number'}"
@@ -165,7 +164,7 @@ use Getopt::Long( ':config', 'no_ignore_case', 'no_auto_abbrev' );
                         = sort { ( split( /,/, $b ) )[4] <=> ( split( /,/, $a ) )[4] } @lines;
                     print STDERR join( "\n", @linesSorted ), "\n";
                     my @fields = split( /,/, $linesSorted[0] );
-                    return ( $fields[0], $fields[4], 1 );
+                    return ( $fields[0], $fields[3], 1 );
                 }
                 elsif ( $retry < $o{'fail-retries-number'} ) {
                     print STDERR
@@ -201,7 +200,8 @@ use Getopt::Long( ':config', 'no_ignore_case', 'no_auto_abbrev' );
         chomp( my $res           = qx($command) );
         if ( $? == 0 ) {
             $res =~ s/^\n//s;
-            return ( $res, 1 );
+            my ($jobId) = $res =~ /\b(\d+)\b/;
+            return ( $jobId, 1 );
         }
         else {
             sleep $o{'fail-init-delay'};
@@ -256,7 +256,7 @@ use Getopt::Long( ':config', 'no_ignore_case', 'no_auto_abbrev' );
         if ( -f $absFileName ) {
             if ( -r $absFileName ) {
                 if ( my $name
-                    = batch_scheduler_submit::FindOptionValue( $absFileName, $opt{options}, '--job-name' ) )
+                    = batch_scheduler_submit::FindOptionValue( $absFileName, $opt{options}, '--job-name=' ) )
                 {
                     my ( $queue, $retry ) = (
                         batch_scheduler_submit::FindOptionValue(
