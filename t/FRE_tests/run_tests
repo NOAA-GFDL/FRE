@@ -182,17 +182,28 @@ do_deploy () {
           revert_repo ${freCommands_dir} ${oldCommitHash}
           myReturn=1
         else
-          # All passed, create the FREVersion.pm module
-          versionTag=$(git describe --tags)
-          if [[ $? -eq 0 ]]
+          # Update submodules
+          git submodule update --init --recursive
+          # If submodule can't be updated, revert
+          if [[ $? -ne 0 ]]
           then
-            sed -e "s/@@FRE_VERSION_STRING@@/${versionTag}/" lib/FREVersion.pm.in > lib/FREVersion.pm
-            if [[ $? -ne 0 ]]
-            then
-              echo "Unable to create FREVersion.pm file.  Sed failed."
-            fi
+            echo "Failed submodule update in \"${freCommands_dir}\"."
+            echo "Reverting . . ."
+            revert_repo ${freCommands_dir} ${oldCommitHash}
+            myReturn=1
           else
-            echo "Unable to get git version information"
+            # All passed, create the FREVersion.pm module
+            versionTag=$(git describe --tags)
+            if [[ $? -eq 0 ]]
+            then
+              sed -e "s/@@FRE_VERSION_STRING@@/${versionTag}/" lib/FREVersion.pm.in > lib/FREVersion.pm
+              if [[ $? -ne 0 ]]
+              then
+                echo "Unable to create FREVersion.pm file.  Sed failed."
+              fi
+            else
+              echo "Unable to get git version information"
+            fi
           fi 
         fi
       fi
