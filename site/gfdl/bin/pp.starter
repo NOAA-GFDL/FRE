@@ -287,19 +287,33 @@
 ################################################################################
   set year = `echo $firstDate | sed 's/[0-9][0-9][0-9][0-9]$//'`
   foreach historyfile ( `ls $historyDir/$year????.nc.tar` )
-    time hsmget -v -t -a $historyDir -p $ptmpDir$historyDir -w $TMPDIR$historyDir $historyfile:t:r/\*
-  end
+    if ( ! $echoOn ) set echo
+    time hsmget -v -t -a $historyDir -p $ptmpDir$historyDir -w $TMPDIR$historyDir $historyfile:t:r/dummy\*
+    if ( ! $echoOn ) unset echo
 
-  if ( $status == 0 ) then
-    if ( $echoOn ) unset echo
-    echo "<NOTE> : History files have been staged to PTMP successfully"
-    if ( $echoOn ) set echo
-  else
-    if ( $echoOn ) unset echo
-    echo "*ERROR*: Can't stage history files to PTMP"
-    if ( $echoOn ) set echo
-    exit 1
-  endif
+    if ( $status == 0 ) then
+      if ( $echoOn ) unset echo
+      echo "<NOTE> : History files in $historyfile have been staged to PTMP successfully"
+      if ( $echoOn ) set echo
+    else
+      if ( $echoOn ) unset echo
+      echo "WARNING: During history file ($historyfile) staging to PTMP, hsmget reported failure. Retrying..."
+      if ( $echoOn ) set echo
+      if ( ! $echoOn ) set echo
+      time hsmget -v -t -a $historyDir -p $ptmpDir$historyDir -w $TMPDIR$historyDir $historyfile:t:r/dummy\*
+      if ( ! $echoOn ) unset echo
+      if ( $status == 0 ) then
+        if ( $echoOn ) unset echo
+        echo "<NOTE> : History files in $historyfile have been staged to PTMP successfully"
+        if ( $echoOn ) set echo
+      else
+        if ( $echoOn ) unset echo
+        echo "*ERROR*: Can't stage history files in $historyfile to PTMP"
+        if ( $echoOn ) set echo
+        exit 1
+      endif
+    endif
+  end
 
 ################################################################################
 #--------------------------- the post-processor call ---------------------------
