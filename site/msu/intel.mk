@@ -5,10 +5,10 @@
 
 ############
 # Command Macros
-FC = ifort
-CC = icc
-CXX = icpc
-LD = ifort
+FC = mpifort
+CC = mpicc
+CXX = mpicxx
+LD = mpifort
 
 #######################
 # Build target macros
@@ -52,8 +52,6 @@ LD = ifort
 # INCLUDES
 # A list of -I Include directories to be added to the the compile
 # command.
-# how to make this not hard-coded?
-INCLUDES = -I/apps/intel-2019/openmpi-4.0.2/include
 
 # ISA
 # The Intel Instruction Set Archetecture (ISA) compile options to use.
@@ -150,8 +148,6 @@ LIBS += $(shell nf-config --flibs)
 # MPICH MPI library flags
 # not sure if mpich is needed but commenting it out removes error
 #$(shell pkg-config --libs mpich2-f90)
-# how to make this not hard-coded?
-LIBS += -L/apps/intel-2019/openmpi-4.0.2/lib -lmpi -lmpi_mpifh
 
 # Get compile flags based on target macros.
 ifdef REPRO
