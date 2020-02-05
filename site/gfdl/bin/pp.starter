@@ -26,6 +26,9 @@
     if ($status) then
       set -r batch
     endif
+    set -r job_id = $SLURM_JOB_ID
+  else
+    set -r job_id = INTERACTIVE
   endif
 
 ################################################################################
@@ -137,6 +140,7 @@
       if ( $echoOn ) unset echo
       echo "<NOTE> : The argument 'mailList' is not defined, so it won't be passed to frepp"
       if ( $echoOn ) set echo
+      set -r mailList = $USER@noaa.gov
       set -r mailListOption =
     endif
 
@@ -154,6 +158,7 @@
     set firstDate = ""
     set freVersion = ""
     set mppnccombineOptString = '-64 -h 16384 -m'
+    set mailList = $USER@noaa.gov
     set mailListOption = ""
 
     while ( 1 )
@@ -285,12 +290,17 @@
 ################################################################################
 #------------------------ stage history files to PTMP --------------------------
 ################################################################################
-  set year = `echo $firstDate | sed 's/[0-9][0-9][0-9][0-9]$//'`
+  # By frepp conventions, if the date string is 6 chars or less, it's a year.
+  # Otherwise it includes month and day, MMDD.
+  if (`echo $firstDate | awk '{print length($0)}'` < 7) then
+      set year = `printf "%04d" $firstDate`
+  else
+      set year = `echo $firstDate | sed 's/[0-9][0-9][0-9][0-9]$//'`
+  endif
   foreach historyfile ( `ls $historyDir/$year????.nc.tar` )
-    if ( ! $echoOn ) set echo
+    # We want to stage the history files to PTMP without transferring to VFTMP.
+    # Calling hsmget on a file with wildards that doesn't exist does this (but does print a warning).
     time hsmget -v -t -a $historyDir -p $ptmpDir$historyDir -w $TMPDIR$historyDir $historyfile:t:r/dummy\*
-    if ( ! $echoOn ) unset echo
-
     if ( $status == 0 ) then
       if ( $echoOn ) unset echo
       echo "<NOTE> : History files in $historyfile have been staged to PTMP successfully"
@@ -299,9 +309,7 @@
       if ( $echoOn ) unset echo
       echo "WARNING: During history file ($historyfile) staging to PTMP, hsmget reported failure. Retrying..."
       if ( $echoOn ) set echo
-      if ( ! $echoOn ) set echo
       time hsmget -v -t -a $historyDir -p $ptmpDir$historyDir -w $TMPDIR$historyDir $historyfile:t:r/dummy\*
-      if ( ! $echoOn ) unset echo
       if ( $status == 0 ) then
         if ( $echoOn ) unset echo
         echo "<NOTE> : History files in $historyfile have been staged to PTMP successfully"
@@ -310,6 +318,19 @@
         if ( $echoOn ) unset echo
         echo "*ERROR*: Can't stage history files in $historyfile to PTMP"
         if ( $echoOn ) set echo
+        set -r stdoutDir = `frelist --directory=stdout --platform=${platform} --target=${target} --xmlfile=${xmlFile} ${expName}`/postProcess
+        Mail -s "$expName year $year cannot be postprocessed" $mailList <<END
+Your FRE post-processing starter job ($job_id) has exited because of a data transfer failure.
+
+It can be restarted via:
+
+$0 -x $xmlFile -P $platform -T $target -F $freVersion -t $firstDate $expName
+
+Job details:
+$expName running on $HOST
+Batch job stdout directory:
+$stdoutDir
+END
         exit 1
       endif
     endif
