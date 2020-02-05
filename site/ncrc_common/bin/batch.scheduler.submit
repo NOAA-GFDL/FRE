@@ -125,7 +125,7 @@ use Getopt::Long( ':config', 'no_ignore_case', 'no_auto_abbrev' );
         # ------ arguments: absolute filename, options string, option marker
     {
         my ( $f, $o, $x ) = @_;
-        my @values = ( $o =~ m/$x\b(\S+)/g );
+        my @values = ( $o =~ m/$x=?\b(\S+)/g );
         if ( scalar(@values) > 0 ) {
             return $values[$#values];
         }
@@ -142,6 +142,7 @@ use Getopt::Long( ':config', 'no_ignore_case', 'no_auto_abbrev' );
     sub FindJob($$%)
 
         # ------ arguments: job name, job queue, options hash
+        # ------ returns:   job id, job submitted time, status
     {
         my ( $n, $q, %o ) = @_;
         my $listCommand = "batch.scheduler.list --user=$ENV{USER}";
@@ -256,7 +257,7 @@ use Getopt::Long( ':config', 'no_ignore_case', 'no_auto_abbrev' );
         if ( -f $absFileName ) {
             if ( -r $absFileName ) {
                 if ( my $name
-                    = batch_scheduler_submit::FindOptionValue( $absFileName, $opt{options}, '--job-name=' ) )
+                    = batch_scheduler_submit::FindOptionValue( $absFileName, $opt{options}, '--job-name' ) )
                 {
                     my ( $queue, $retry ) = (
                         batch_scheduler_submit::FindOptionValue(
