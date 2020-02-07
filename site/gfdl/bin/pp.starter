@@ -26,6 +26,9 @@
     if ($status) then
       set -r batch
     endif
+    set -r job_id = $SLURM_JOB_ID
+  else
+    set -r job_id = INTERACTIVE
   endif
 
 ################################################################################
@@ -137,7 +140,8 @@
       if ( $echoOn ) unset echo
       echo "<NOTE> : The argument 'mailList' is not defined, so it won't be passed to frepp"
       if ( $echoOn ) set echo
-      set -r mailListOption =
+      set -r mailList = $USER@noaa.gov
+      set -r mailListOption = ""
     endif
 
   else if ( $# > 0 ) then
@@ -154,6 +158,8 @@
     set firstDate = ""
     set freVersion = ""
     set mppnccombineOptString = '-64 -h 16384 -m'
+    set mailList = $USER@noaa.gov
+    set mailListOption = ""
 
     while ( 1 )
       switch ( $argv[1] )
@@ -237,15 +243,29 @@
 
   # Get the archive directory using frelist, and verify it
   # exists and is a directory
-  set -r dir = "`frelist --directory=archive --platform=${platform} --target=${target} --xmlfile=${xmlFile} ${expName}`/history"
+  set -r historyDir = "`frelist --directory=archive --platform=${platform} --target=${target} --xmlfile=${xmlFile} ${expName}`/history"
   if ( $status != 0 ) then
     if ( $echoOn ) unset echo
     echo "*ERROR*: Unable to determine the archive directory for experiment '${expName}' in xml '${xmlFile}'"
     if ( $echoOn ) set echo
     exit 1
-  else if ( ! -d ${dir} ) then
+  else if ( ! -d ${historyDir} ) then
     if ( $echoOn ) unset echo
-    echo "*ERROR*: Archive directory '${dir}' does not exist or isn't a directory"
+    echo "*ERROR*: Archive directory '${historyDir}' does not exist or isn't a directory"
+    if ( $echoOn ) set echo
+    exit 1
+  endif
+
+  # Get the PTMP directory using frelist, and verify it exists and is a directory
+  set -r ptmpDir = `frelist --directory=ptmp --platform=${platform} --target=${target} --xmlfile=${xmlFile} ${expName}`
+  if ( $status != 0 ) then
+    if ( $echoOn ) unset echo
+    echo "*ERROR*: Unable to determine the PTMP directory for experiment '${expName}' in xml '${xmlFile}'"
+    if ( $echoOn ) set echo
+    exit 1
+  else if ( ! -d ${ptmpDir} ) then
+    if ( $echoOn ) unset echo
+    echo "*ERROR*: PTMP directory '${ptmpDir}' does not exist or isn't a directory"
     if ( $echoOn ) set echo
     exit 1
   endif
@@ -268,6 +288,56 @@
   unset fre_version
 
 ################################################################################
+#------------------------ stage history files to PTMP --------------------------
+################################################################################
+  # By frepp conventions, if the date string is 6 chars or less, it's a year.
+  # Otherwise it includes month and day, MMDD.
+  if (`echo $firstDate | awk '{print length($0)}'` < 7) then
+      set year = `printf "%04d" $firstDate`
+  else
+      set year = `echo $firstDate | sed 's/[0-9][0-9][0-9][0-9]$//'`
+  endif
+  foreach historyfile ( `ls $historyDir/$year????.nc.tar` )
+    # We want to stage the history files to PTMP without transferring to VFTMP.
+    # Calling hsmget on a file with wildards that doesn't exist does this,
+    # e.g. "dummy*" as below, but prints a warning.
+    time hsmget -v -t -a $historyDir -p $ptmpDir$historyDir -w $TMPDIR$historyDir $historyfile:t:r/dummy\*
+    if ( $status == 0 ) then
+      if ( $echoOn ) unset echo
+      echo "<NOTE> : History files in $historyfile have been staged to PTMP successfully"
+      if ( $echoOn ) set echo
+    else
+      if ( $echoOn ) unset echo
+      echo "WARNING: During history file ($historyfile) staging to PTMP, hsmget reported failure. Retrying..."
+      if ( $echoOn ) set echo
+      time hsmget -v -t -a $historyDir -p $ptmpDir$historyDir -w $TMPDIR$historyDir $historyfile:t:r/dummy\*
+      if ( $status == 0 ) then
+        if ( $echoOn ) unset echo
+        echo "<NOTE> : History files in $historyfile have been staged to PTMP successfully"
+        if ( $echoOn ) set echo
+      else
+        if ( $echoOn ) unset echo
+        echo "*ERROR*: Can't stage history files in $historyfile to PTMP"
+        if ( $echoOn ) set echo
+        set -r stdoutDir = `frelist --directory=stdout --platform=${platform} --target=${target} --xmlfile=${xmlFile} ${expName}`/postProcess
+        Mail -s "$expName year $year cannot be postprocessed" $mailList <<END
+Your FRE post-processing starter job ($job_id) has exited because of a data transfer failure.
+
+It can be restarted via:
+
+$0 -x $xmlFile -P $platform -T $target -F $freVersion -t $firstDate $expName
+
+Job details:
+$expName running on $HOST
+Batch job stdout directory:
+$stdoutDir
+END
+        exit 1
+      endif
+    endif
+  end
+
+################################################################################
 #--------------------------- the post-processor call ---------------------------
 ################################################################################
 
@@ -282,7 +352,7 @@
   endif
   # Then run frepp under the user's primary group using sg
   # The -D '' is required for compatability with older fre-commands/bronx versions
-  sg $correctGroup "`alias pp` -D '' -x $xmlFile -P $platform -T $target -d $dir -t $firstDate $mailListOption $expName"
+  sg $correctGroup "`alias pp` -D '' -x $xmlFile -P $platform -T $target -d $historyDir -t $firstDate $mailListOption $expName"
 
   if ( $status == 0 ) then
     if ( $echoOn ) unset echo
