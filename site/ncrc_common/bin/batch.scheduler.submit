@@ -161,9 +161,12 @@ use Getopt::Long( ':config', 'no_ignore_case', 'no_auto_abbrev' );
             if ( $? == 0 ) {
                 my @lines = grep( ( split( /,/, $_ ) )[0] ne $myJobID, split( /\n/, $lines ) );
                 if ( scalar(@lines) > 0 ) {
+                    # sort descending by submission time, so latest job is first
                     my @linesSorted
-                        = sort { ( split( /,/, $b ) )[4] <=> ( split( /,/, $a ) )[4] } @lines;
+                        = sort { ( split( /,/, $b ) )[3] <=> ( split( /,/, $a ) )[3] } @lines;
                     print STDERR join( "\n", @linesSorted ), "\n";
+                    # return the latest job: return job ID and job submission timestamp
+                    # batch.scheduler.list's output format: job-id, job-name, job-state, submit-timestamp, user
                     my @fields = split( /,/, $linesSorted[0] );
                     return ( $fields[0], $fields[3], 1 );
                 }
@@ -210,6 +213,7 @@ use Getopt::Long( ':config', 'no_ignore_case', 'no_auto_abbrev' );
             if ($status) {
                 if ( abs( $jobTimestamp - $baseTimestamp ) <= $o{'fail-range'} ) {
                     print STDERR "WARNING: Scheduler false alarm has been detected!!!\n";
+                    print STDERR "WARNING: The batch submitter didn't return a job ID as expected, but a recent job in the scheduler with the same name was found, so we're assuming that's the one we just tried to submit\n";
                     return ( $jobId, 1 );
                 }
                 else {
@@ -217,6 +221,7 @@ use Getopt::Long( ':config', 'no_ignore_case', 'no_auto_abbrev' );
                     print STDERR "WARNING: Base timestamp = '$baseTimestamp', range = '$range'\n";
                     print STDERR
                         "WARNING: A candidate job with timestamp '$jobTimestamp' has been found - ignored...\n";
+                    print STDERR "WARNING: The batch submitter didn't return a job ID as expected. A job with the same name was found in the scheduler, but it's not recent (timestamp '$jobTimestamp') so we're assuming it's not the job we just tried to submit.\n";
                     return ( '', 0 );
                 }
             }
