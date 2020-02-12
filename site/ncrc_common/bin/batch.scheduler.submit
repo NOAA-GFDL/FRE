@@ -202,10 +202,10 @@ use Getopt::Long( ':config', 'no_ignore_case', 'no_auto_abbrev' );
         print STDERR "$command\n" if $o{verbose};
         chomp( my $baseTimestamp = qx(date +%s) );
         chomp( my $res           = qx($command) );
-        if ( $? == 0 ) {
-            $res =~ s/^\n//s;
-            my ($jobId) = $res =~ /\b(\d+)\b/;
-            return ( $jobId, 1 );
+        # capture the job id from the sbatch stdout
+        # if the sbatch fails, or job id isn't in the stdout, go to the fallback else logic
+        if ( $? == 0 and $res =~ /\b(\d+)\b/) {
+            return ( $1, 1 );
         }
         else {
             sleep $o{'fail-init-delay'};
