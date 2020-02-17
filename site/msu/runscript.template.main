@@ -1,5 +1,6 @@
 #!/bin/csh -fx
 #FRE scheduler-options
+#SBATCH --exclusive
 #
 # ------------------------------------------------------------------------------
 # FMS/FRE Project: Runscript Template - NCRC Version
@@ -28,14 +29,6 @@ unalias *
 if ( $echoOn ) unset echo
 #FRE const(modulesHomeDir)
 source $modulesHomeDir/init/tcsh
-
-# April 2019 Chris Slurm semi-temporary updates
-# needed for CmrsEnv (at least)
-module use /sw/gaea/modulefiles
-# needed for gcp (at least)
-module use -a /usw/eslogin/modulefiles-c4
-# needed for $SCRATCH etc
-module load CmrsEnv
 
 module load banner
 setenv COLUMNS 148
@@ -400,9 +393,12 @@ if ( $status == 0 ) then
    if ( $echoOn ) set echo
 else
    if ( $echoOn ) unset echo
-   echo "*ERROR*: The script '$scriptName' must load a 'gcp' module"
+   #echo "*ERROR*: The script '$scriptName' must load a 'gcp' module"
+   echo "WARNING: gcp isn't available"
+   set -r xferToolModuleFilesDir
+   set -r xferToolVersion
    if ( $echoOn ) set echo
-   exit 1
+   #exit 1
 endif
 
 unset gcpInfo

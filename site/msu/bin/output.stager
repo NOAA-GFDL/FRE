@@ -1,7 +1,7 @@
 #!/bin/csh -fx
 #
 # ------------------------------------------------------------------------------
-# FMS/FRE Project: Output Stager - NCRC Version
+# FMS/FRE Project: Output Stager - MSU Version
 # ------------------------------------------------------------------------------
 # Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2000-2013, 2015-2017
 # Designed and written by V. Balaji, Amy Langenhorst, Aleksey Yakovlev
@@ -798,12 +798,10 @@ endif
 #------------------------ global constants and aliases -------------------------
 ################################################################################
 
-if ( $HOST =~ gaea[0-9] || $HOST =~ gaea1[0-5] ) then
+if ( $HOST =~ *login* ) then
    set -r hostType = 'login'
-else if ( $HOST =~ gaea-ldtn* ) then
-   set -r hostType = 'ldtn'
-else if ( $HOST =~ rdtn* ) then
-   set -r hostType = 'rdtn'
+else if ( $HOST =~ *dtn* ) then
+   set -r hostType = 'dtn'
 else
    if ( $echoOn ) unset echo
    echo "*ERROR*: Unknown host type"
@@ -829,7 +827,7 @@ if ( $actionCombineToDo ) then
    set -r tagFail = 'fail'
    set -r patternGrepFail = '\.'$tagFail'$'
 
-   if ( $hostType == 'login' || $hostType == 'ldtn' ) then
+   if ( $hostType == 'login' || $hostType == 'dtn' ) then
       alias mppnccombine `which mppnccombine` $mppnccombineOptString
       alias slmnccombine `which combine-ncc`
       alias slmnccompressed `which is-compressed`
@@ -1550,7 +1548,7 @@ endif
 
 if ( $actionXferToConsider ) then
    if ( $actionXferToPerform ) then
-      if ( $hostType == 'login' || $hostType == 'rdtn' ) then
+      if ( $hostType == 'login' || $hostType == 'dtn' ) then
          if ( -f $archDir.$archExt && -r $archDir.$archExt ) then
             gcp --create-dirs --verbose $xferSrcPrefix$archDir.$archExt $xferDstPrefix$outputDirRemote:h/
 
@@ -1610,7 +1608,7 @@ endif
 
 if ( $actionPPStartToConsider ) then
    if ( $actionPPStartToPerform ) then
-      if ( $hostType == 'login' || $hostType == 'rdtn' ) then
+      if ( $hostType == 'login' || $hostType == 'dtn' ) then
          # ---------------- copy XML files to GFDL
 
          if ( $#xmlFiles == $#xmlFilesRemote ) then
