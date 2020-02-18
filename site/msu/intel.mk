@@ -97,6 +97,11 @@ FPPFLAGS += $(shell nf-config --fflags)
 
 # Base set of Fortran compiler flags
 FFLAGS := -fno-alias -stack_temps -safe_cray_ptr -ftz -assume byterecl -i4 -r8 -nowarn -g -sox -traceback
+# Fortran HDF compiler flags
+# Only the land needs this, so it would be better to apply it only for the land
+FFLAGS += $(shell h5fc -show | cut -d' ' -f2)
+# that -I needs to be only for the land, not the rest
+#ifort -I/apps/intel-2019/hdf5-1.10.5/include -L/apps/intel-2019/hdf5-1.10.5/lib /apps/intel-2019/hdf5-1.10.5/lib/libhdf5hl_fortran.a /apps/intel-2019/hdf5-1.10.5/lib/libhdf5_hl.a /apps/intel-2019/hdf5-1.10.5/lib/libhdf5_fortran.a /apps/intel-2019/hdf5-1.10.5/lib/libhdf5.a -lz -ldl -lm -Wl,-rpath -Wl,/apps/intel-2019/hdf5-1.10.5/lib
 
 # Flags based on perforance target (production (OPT), reproduction (REPRO), or debug (DEBUG)
 FFLAGS_OPT = -O2
@@ -145,6 +150,10 @@ LDFLAGS_COVERAGE = -prof-gen=srcpos
 LIBS =
 # NetCDF library flags
 LIBS += $(shell nf-config --flibs)
+# HDF5 library flags
+LIBS += -lhdf5 -lhdf5_fortran -lhdf5_hl -lhdf5hl_fortran
+# Intel math library flags
+LIBS += -lmkl_blas95_lp64 -lmkl_lapack95_lp64 -lmkl_intel_lp64 -lmkl_core -lmkl_sequential
 # MPICH MPI library flags
 # not sure if mpich is needed but commenting it out removes error
 #$(shell pkg-config --libs mpich2-f90)
