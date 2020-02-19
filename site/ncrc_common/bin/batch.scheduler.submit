@@ -125,7 +125,7 @@ use Getopt::Long( ':config', 'no_ignore_case', 'no_auto_abbrev' );
         # ------ arguments: absolute filename, options string, option marker
     {
         my ( $f, $o, $x ) = @_;
-        my @values = ( $o =~ m/$x\b(\S+)/g );
+        my @values = ( $o =~ m/$x=?\b(\S+)/g );
         if ( scalar(@values) > 0 ) {
             return $values[$#values];
         }
@@ -142,10 +142,10 @@ use Getopt::Long( ':config', 'no_ignore_case', 'no_auto_abbrev' );
     sub FindJob($$%)
 
         # ------ arguments: job name, job queue, options hash
+        # ------ returns:   job id, job submitted time, status
     {
         my ( $n, $q, %o ) = @_;
-        my $binDir      = File::Basename::dirname($0);
-        my $listCommand = "$binDir/batch.scheduler.list --user=$ENV{USER}";
+        my $listCommand = "batch.scheduler.list --user=$ENV{USER}";
         $listCommand .= " --name=$n"  if $n;
         $listCommand .= " --queue=$q" if $q;
         $listCommand .= " --retries-number=$o{'list-retries-number'}"
@@ -161,11 +161,14 @@ use Getopt::Long( ':config', 'no_ignore_case', 'no_auto_abbrev' );
             if ( $? == 0 ) {
                 my @lines = grep( ( split( /,/, $_ ) )[0] ne $myJobID, split( /\n/, $lines ) );
                 if ( scalar(@lines) > 0 ) {
+                    # sort descending by submission time, so latest job is first
                     my @linesSorted
-                        = sort { ( split( /,/, $b ) )[4] <=> ( split( /,/, $a ) )[4] } @lines;
+                        = sort { ( split( /,/, $b ) )[3] <=> ( split( /,/, $a ) )[3] } @lines;
                     print STDERR join( "\n", @linesSorted ), "\n";
+                    # return the latest job: return job ID and job submission timestamp
+                    # batch.scheduler.list's output format: job-id, job-name, job-state, submit-timestamp, user
                     my @fields = split( /,/, $linesSorted[0] );
-                    return ( $fields[0], $fields[4], 1 );
+                    return ( $fields[0], $fields[3], 1 );
                 }
                 elsif ( $retry < $o{'fail-retries-number'} ) {
                     print STDERR
@@ -199,9 +202,10 @@ use Getopt::Long( ':config', 'no_ignore_case', 'no_auto_abbrev' );
         print STDERR "$command\n" if $o{verbose};
         chomp( my $baseTimestamp = qx(date +%s) );
         chomp( my $res           = qx($command) );
-        if ( $? == 0 ) {
-            $res =~ s/^\n//s;
-            return ( $res, 1 );
+        # capture the job id from the sbatch stdout
+        # if the sbatch fails, or job id isn't in the stdout, go to the fallback else logic
+        if ( $? == 0 and $res =~ /\b(\d+)\b/) {
+            return ( $1, 1 );
         }
         else {
             sleep $o{'fail-init-delay'};
@@ -209,6 +213,7 @@ use Getopt::Long( ':config', 'no_ignore_case', 'no_auto_abbrev' );
             if ($status) {
                 if ( abs( $jobTimestamp - $baseTimestamp ) <= $o{'fail-range'} ) {
                     print STDERR "WARNING: Scheduler false alarm has been detected!!!\n";
+                    print STDERR "WARNING: The batch submitter didn't return a job ID as expected, but a recent job in the scheduler with the same name was found, so we're assuming that's the one we just tried to submit\n";
                     return ( $jobId, 1 );
                 }
                 else {
@@ -216,6 +221,7 @@ use Getopt::Long( ':config', 'no_ignore_case', 'no_auto_abbrev' );
                     print STDERR "WARNING: Base timestamp = '$baseTimestamp', range = '$range'\n";
                     print STDERR
                         "WARNING: A candidate job with timestamp '$jobTimestamp' has been found - ignored...\n";
+                    print STDERR "WARNING: The batch submitter didn't return a job ID as expected. A job with the same name was found in the scheduler, but it's not recent (timestamp '$jobTimestamp') so we're assuming it's not the job we just tried to submit.\n";
                     return ( '', 0 );
                 }
             }
