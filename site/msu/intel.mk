@@ -58,7 +58,7 @@ LD = mpifort
 # If blank, than use the default ISA settings for the host.  Current
 # default is to use SSE2.
 ifndef ISA
-ISA = -msse2
+ISA = -xsse2
 endif
 
 # COVERAGE
