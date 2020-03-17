@@ -17,6 +17,9 @@ if ( $echoOn ) set echo
 
 unalias *
 
+# ---------------- catch interrupt signals
+onintr CATCH_SIGINT
+
 # ---------------- define constants depending on the run type
 
 if ( $?SLURM_JOB_ID ) then
@@ -1827,3 +1830,15 @@ else
 endif
 
 exit $exitStatus
+
+################################################################################
+#--------------------------------- handle SIGINT -------------------------------
+# Interpret SIGINT as request to requeue job by Operators (added March 2020)   -
+################################################################################
+
+CATCH_SIGINT:
+
+unlock
+scontrol requeue $SLURM_JOB_ID
+
+exit 0
