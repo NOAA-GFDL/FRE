@@ -5,10 +5,10 @@
 
 ############
 # Command Macros
-FC = mpifort
-CC = mpicc
-CXX = mpicxx
-LD = mpifort
+FC = mpiifort
+CC = mpiicc
+CXX = mpiicxx
+LD = mpiifort
 
 #######################
 # Build target macros
