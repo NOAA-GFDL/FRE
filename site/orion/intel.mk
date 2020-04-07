@@ -105,7 +105,7 @@ FFLAGS += $(shell h5fc -show | cut -d' ' -f2)
 
 # Flags based on perforance target (production (OPT), reproduction (REPRO), or debug (DEBUG)
 FFLAGS_OPT = -O2
-FFLAGS_REPRO = -fpmodel source -O2
+FFLAGS_REPRO = -O2
 FFLAGS_DEBUG = -O0 -check -check noarg_temp_created -check nopointer -warn -warn noerrors -debug variable_locations -fpe0 -ftrapuv
 
 # Flags to add additional build options
