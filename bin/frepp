@@ -7997,7 +7997,7 @@ EOF
 
     sub epmt_transform {
 	my $scriptfile = shift;
-	paipex_tag_file($scriptfile);
+	papiex_tag_file($scriptfile);
 	rename("$scriptfile.tags", $scriptfile);
     }
 }
@@ -8102,10 +8102,14 @@ op_list = [
     untar
 ]
 
-#for op in op_list:
-#    print(op['op_name'],op['r_string'])
+jtag_dict = {'exp_name' : 'set name =',
+             'exp_component' : '#INFO:component=',
+             'exp_time' : 'set oname =',
+             'exp_platform' : 'set platform =',
+             'exp_target' : 'set target =',
+             'exp_seg_months' : 'set segment_months ='}
 
-def paipex_tag_file(fin_name):
+def papiex_tag_file(fin_name):
 
     fout_name = fin_name + '.tags'
 
@@ -8128,7 +8132,28 @@ def paipex_tag_file(fin_name):
     for op in op_list:
         op['op_instance'] = 0
 
+    # Reset the EPMT_JOB_TAGS root
+    EPMT_JOB_TAGS = "setenv EPMT_JOB_TAGS '"
+
+    # Since all the information needed is in the top of the file, form the EPMT_JOB_TAG first
     for line in lines:
+      # No information of interest after this line
+      if '#platform_csh' in line: break
+      for k,v in jtag_dict.items():
+        if v in line:
+          l = len(v)
+          EPMT_JOB_TAGS = EPMT_JOB_TAGS + k + ":" + line[l:].lstrip() + ";"
+
+    l = len(EPMT_JOB_TAGS)
+    EPMT_JOB_TAGS = EPMT_JOB_TAGS[:(l-1)] + "'"
+
+    for line in lines:
+
+        # Place the EPMT_JOB_TAGS
+        if '#INFO:max_years' in pline:
+           script.append('')
+           script.append(EPMT_JOB_TAGS)
+           script.append('')
 
         # Refine the PAPIEX_TAGS for a particular operation
         if "PAPIEX_TAGS" in line:
