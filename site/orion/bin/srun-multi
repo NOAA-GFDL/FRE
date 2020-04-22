@@ -461,7 +461,10 @@ def task_allocator(components, args, hw, node=None, globalrank=None, noderank=No
 					for testsocket in range(hw.socketspernode - 1):
 						if socketalloc[(socketidx + testsocket) + 1 % hw.socketspernode] < hw.cpuspersocket:
 							socketidx = (socketidx + testsocket) + 1 % hw.socketspernode
-				threadlist.append(socketalloc[socketidx] % hw.cpuspersocket + socketidx * hw.cpuspersocket)
+				# 2020-4-22: original logic for mapping tasks across sockets, assuming CPUs are sequential within socket
+				#threadlist.append(socketalloc[socketidx] % hw.cpuspersocket + socketidx * hw.cpuspersocket)
+				# adjusted logic for Orion's numbering scheme, which interleaves among the sockets
+				threadlist.append((socketalloc[socketidx] % hw.cpuspersocket) * hw.socketspernode + socketidx % hw.socketspernode)
 				socketalloc[socketidx] = socketalloc[socketidx] + 1
 		elif args.dist2 == 'block':
 			# Slurm will fully fill sockets
