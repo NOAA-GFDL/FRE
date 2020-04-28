@@ -1,50 +1,25 @@
-# Bronx-16 Release Notes
+# Bronx-17 Release Notes
 
-Bronx-16 was released on October 21, 2019. It contains mainly bug fixes, some Slurm adjustments, and a few small features.
+Bronx-17 was released on April 30, 2020 as an interim update, while Bronx-18 will contain the more typical assortment of updates and bug fixes. Bronx-17’s updates are limited to mkmf and make templates, intended to support recent Intel compilers (18, 19, 20).
 
-## FRE
-* Features
-  * User-specified email list for FRE notifications
-    * fremake, frerun, and frepp accept a comma-separated list of emails to email FRE notifications to (both Slurm-sent and FRE-native emails) instead of $USER@noaa.gov using the option --mail-list=user1@noaa.gov,user2@company.com
-    * email list will be passed from frerun to frepp via pp.starter
-  * output.stager to not combine distributed files if the variables differ (a current diag manager bug for some regional output).
-    * Users will be emailed if this problem is found.
+## Make template updates
+* Use Intel ISA `-xsse2` instead of `-msse2`. `-xsse2` is slightly more restrictive than `-msse2` and is needed to preserve run-to-run (e.g. processor layout, core count) reproducibility for newer Intel compilers (18+). No reproducibility issues with this update have been observed during MSD testing. Additionally, testing has shown that:
+  * Intel compilers 16-20 reproduce each other using `-xsse2`
+  * `-xsse2` preserves similar behavior compared to Intel 16 `-msse2`
+  * Intel 16 produces the same answers using `-xsse2` or `-msse2`
 
-* Bug fixes
-  * frepp to use the "julian" default calendar if coupler_nml cannot be found
-  * Fix for frerun --no-combine-history option (which had been broken since Bronx-12's ocean_static feature)
-  * Improved error message from frerun when incompatible ranks and threads are specified in the <resources> tag
+  **No user action needed. Please report any reproducibility issues to your FMS liaison.**
+* Added preprocessor macro `-DHAVE_SCHED_GETAFFINITY`, which is needed for shared FMS code release 2020.01 or later.
 
-* Slurm updates
-  * Two pp.starter Slurm cross-site fixes: (again) use a default 022 umask and run under the user's primary group
-  * Submit the pp.starter job using the GFDL-side account (if specified)
-  * Fix for output.stager to more accurately determine the memory available to pass to mppnccombine (should alleviate occasional out-of-memory output.stager errors seen)
-  * Many Slurm updates to FRE sub-tools that were not converted in Bronx-15 (output.retry, batch.scheduler.list, batch.scheduler.fre.usage, batch.scheduler.submit)
+  **No user action needed. Feel free to remove this macro from your XML if defined.**
+* Added preprocessor macro `-Duse_netCDF`
 
-* Updates and cleanup
-  * Perl update to 5.30.0
-  * Consolidation of some site-specific FRE sub-tools into general sub-tools (batch.scheduler.(time|list|fre.usage)
-  * Removal of unsupported sites olcf (titan), theia
-  * Remove group-checking for ptmp directory setup at GFDL
+  **No user action needed. Feel free to remove this macro from your XML if defined.**
 
-## New hsm/1.2.4
-  * Check to see if work needs to be done before placing PTMP file locks
-  * Should alleviate the delays seen by some users where PTMP cache is complete but frepp jobs are still waiting for locks
+## fremake updates
+* Removed `--git`/`-g` option from the `mkmf` call, which had added a macro definition `-D_FILE_VERSION` to the CPPDEFs. Differences in quoting behavior among MPI wrappers was the motivation to remove this feature.
 
-## FRE-NCtools
-* split_ncvars
-  * New option -u to split files without .nc extension (i.e. distributed output files)
-  * Deprecate old cshell and python split_ncvars (will print warning and call split_ncvars.pl)
-* list_ncvars
-  * Make the temporary input namelist file more unique, to help when running in parallel
-* make_hgrid
-  * support very high-resolution grid (e.g. 43200 x 21600 lat-lon grid)
-  * New option --do_cube_transform to re-orient tile #6 upwards
-  * New option --no_length_angle to not output dx, dy, angle_dx, and angle_dy
-* make_solo_mosaic
-  * Ability to create fold-north contact for MOM6 horizontal grid
-* make_remap_file
-  * New tool to create low-resolution remap file from high-resolution remap file
-  * Input and output mosaic files can be cubed-sphere or not
-* mppncscatter
-  * bug fix when data has record dimension
+  **No user action needed. However, if you have the `-D_FILE_VERSION` macro set within the `<makeOverrides>` tag in your XML, please remove it, especially if using Intel MPI.**
+
+## Update to freconvert.py (XML conversion tool) to update XMLs to Bronx-17
+There were no XML changes since Bronx-15, so if updating from a Bronx-15/16 XML, simply update the `<platform>/<freVersion>` tag.
