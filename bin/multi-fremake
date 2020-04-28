@@ -1,0 +1,73 @@
+#!/usr/bin/env python
+#!/usr/bin/env python
+## \date November 6, 2019
+## \author Tom Robinson
+## \email thomas.robinson@noaa.gov
+## \description Runs multiple fremakess with a single command set up like frerun.
+
+import argparse
+import subprocess
+from multiprocessing import Pool
+
+## Executes the fremake compile script using subprocess.call
+def fremake(fmake):
+ fmake.append("--execute")
+ subprocess.call(fmake)
+
+parser = argparse.ArgumentParser(description='Run multiple fremakes at once.  Automatically runs with the --execute option')
+#parser.add_argument('integers', metavar='N', type=int, nargs='+',
+#                   help='an integer for the accumulator')
+parser.add_argument('-x', type=str, help='XML file', required=True)
+parser.add_argument('-p', type=str, help='comma separated fre platforms', required=True)
+parser.add_argument('-t', type=str, help='comma separated fre targets', required=True)
+parser.add_argument('-e', type=str, help='compile experiment', required=True)
+parser.add_argument('--no-link', action='store_true', help='Do not link for execuable')
+parser.add_argument('--force-checkout', action='store_true', help='For a checkout of the code')
+parser.add_argument('--force-compile', action='store_true', help='For a new compile script')
+## Parse the arguments
+args = parser.parse_args()
+
+xml = args.x
+ps = args.p
+ts =  args.t
+exps = args.e
+if args.no_link:
+     print("The --no-link option is not applicable to mutli_fremake_2step.  Ignoring.")
+fc = "--force-compile"
+nl = "--no-link"
+## Store the platforms and targets in a list
+p=ps.split(',')
+t=ts.split(',')
+e=exps.split(',')
+## Create all combinations for fremake
+i=1
+for exp in e:
+ print(len(e),i)
+ fmake = []
+ for plat in p:
+     for targ in t:
+          if args.force_compile:
+             if i!=len(e):
+               fmake.append(['fremake', exp, '-x', xml, '-p', plat, '-t', targ, fc, nl])
+             else:
+               fmake.append(['fremake', exp, '-x', xml, '-p', plat, '-t', targ, fc])
+          else:
+             if i!=len(e):
+               fmake.append(['fremake', exp, '-x', xml, '-p', plat, '-t', targ, nl])
+             else:
+               fmake.append(['fremake', exp, '-x', xml, '-p', plat, '-t', targ])
+#          fmake.append({'x':xml , 'e':exp , 'nl':nl , 'p':plat , 't':targ})
+## Run fremake once to checkout the code.  
+## \note This CAN NOT be done in parallel
+ fm = fmake[0]
+ if args.force_checkout:
+     fm.append("--force-checkout")
+ print (fmake)
+ subprocess.call(fm)
+## Use multiprocess pool to run the compiles concurrently
+ num_procs = len(fmake)
+ print num_procs
+ if __name__ == '__main__':
+    pool = Pool(processes=num_procs)                         # Create a multiprocessing Pool
+    pool.map(fremake, fmake)  # process data_inputs iterable with pool
+ i=i+1

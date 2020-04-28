@@ -1,0 +1,43 @@
+#!/usr/bin/env python
+## \date November 6, 2019
+## \author Tom Robinson
+## \email thomas.robinson@noaa.gov
+## \description Runs multiple frechecks with a single command set up like frecheck.
+import argparse
+import subprocess
+
+parser = argparse.ArgumentParser(description='Run multiple frechecks.')
+#parser.add_argument('integers', metavar='N', type=int, nargs='+',
+#                   help='an integer for the accumulator')
+parser.add_argument('-x', type=str, help='XML file', required=True)
+parser.add_argument('-p', type=str, help='comma separated fre platforms', required=True)
+parser.add_argument('-t', type=str, help='comma separated fre targets', required=True)
+parser.add_argument('-e', type=str, help='compile experiment', required=True)
+parser.add_argument('--regression','-r', type=str, help='Regression test name', required=False)
+## Parse the arguments
+args = parser.parse_args()
+
+xml = args.x
+ps = args.p
+ts =  args.t
+es = args.e
+
+## Store the platforms and targets in a list
+p=ps.split(',')
+t=ts.split(',')
+e=es.split(',')
+## Create all combinations for frecheck
+fchk = []
+## Loop through and run frechecks
+for plat in p:
+     for targ in t:
+       for exp in e:
+          fchk=[]
+          fchk.append(['frecheck', exp, '-x', xml, '-p', plat, '-t', targ])
+## Add optional arguments if they are present
+          if args.regression:
+               fchk[0].append('-r')
+               fchk[0].append(args.regression)
+## Run frecheck
+          subprocess.call(fchk[0])
+
