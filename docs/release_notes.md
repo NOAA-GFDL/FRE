@@ -3,13 +3,13 @@
 Bronx-17 was released on April 30, 2020 as an interim update, while Bronx-18 will contain the more typical assortment of updates and bug fixes. Bronx-17’s updates are limited to mkmf and make templates, intended to support recent Intel compilers (18, 19, 20).
 
 ## Make template updates
-* Use Intel ISA `-xsse2` instead of `-msse2`. `-xsse2` is slightly more restrictive than `-msse2` and is needed to preserve run-to-run (e.g. processor layout, core count) reproducibility for newer Intel compilers (18+). No reproducibility issues with this update have been observed during MSD testing. Additionally, testing has shown that:
+* Use Intel ISA `-xsse2` instead of `-msse2`. `-xsse2` is slightly more restrictive than `-msse2` and is needed to preserve run-to-run (e.g. processor layout, core count) reproducibility for newer Intel compilers (18+). No reproducibility issues with this update have been observed during MSD testing; additionally, testing has shown that:
   * generally, `-xsse2` preserves similar behavior compared to Intel 16 `-msse2`
-  * Intel 16 produces the same answers using `-xsse2` or `-msse2` (prod/openmp)
-  * Intel 16, 17, and 18 reproduce using `-xsse2` (prod/openmp)
-  * Intel 16 and 17 reproduce using `-xsse2` and `-msse2` (prod/openmp)
-  * Intel 19 and 20 reproduce using `-xsse2` (prod/openmp)
-  * Intel 19 reproduces Intel 16 using `-xsse2` (using debug compilations)
+  * Intel 16 produces the same answers using `-xsse2` or `-msse2` (prod/openmp/repro)
+  * Intel 16, 17, and 18 reproduce using `-xsse2` (prod/openmp/repro)
+  * Intel 16 and 17 reproduce using `-xsse2` and `-msse2` (prod/openmp/repro)
+  * Intel 19 and 20 reproduce using `-xsse2` (prod/openmp/repro)
+  * Intel 19 does not reproduces Intel 16 using `-xsse2` (except using debug compilations)
 
   **No user action needed. Please report any reproducibility issues to your FMS liaison.**
 * Added preprocessor macro `-DHAVE_SCHED_GETAFFINITY`, which is needed for shared FMS code release 2020.01 or later.
