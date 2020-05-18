@@ -87,7 +87,7 @@ my $xmlLoad = sub($$)
 {
     my ( $x, $v ) = @_;
     my $document = undef;
-    my $parser = XML::LibXML->new( line_numbers => 1, xinclude => 1 );
+    my $parser = XML::LibXML->new( line_numbers => 1, xinclude => 1, expand_entities => 1 );
     eval { $document = $parser->parse_file($x) };
     if ( $@ eq '' ) {
         return $document;
