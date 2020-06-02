@@ -803,11 +803,7 @@ endif
 
 if ( $HOST =~ gaea[0-9] || $HOST =~ gaea1[0-5] ) then
    set -r hostType = 'login'
-else if ( $HOST =~ gaea-ldtn* ) then
-   set -r hostType = $SLURM_JOB_PARTITION
-else if ( $HOST =~ rdtn* ) then
-   set -r hostType = $SLURM_JOB_PARTITION
-else if ( $HOST =~ dtn* ) then
+else if ( $HOST =~ *dtn* ) then
    set -r hostType = $SLURM_JOB_PARTITION
 else
    if ( $echoOn ) unset echo
@@ -1841,6 +1837,8 @@ exit $exitStatus
 CATCH_SIGINT:
 
 unlock
-scontrol requeue $SLURM_JOB_ID
+if ( $?SLURM_JOB_ID ) then
+   scontrol requeue $SLURM_JOB_ID
+endif
 
 exit 0
