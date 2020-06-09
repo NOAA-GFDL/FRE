@@ -18,6 +18,8 @@ if ( $echoOn ) set echo
 unalias *
 
 # ---------------- catch interrupt signals
+# define temporary unlock alias if SIGINT is caught before its definition (line ~150)
+alias unlock echo nothing to unlock
 onintr CATCH_SIGINT
 
 # ---------------- define constants depending on the run type
@@ -1837,6 +1839,8 @@ exit $exitStatus
 CATCH_SIGINT:
 
 unlock
-scontrol requeue $SLURM_JOB_ID
+if ( $?SLURM_JOB_ID ) then
+   scontrol requeue $SLURM_JOB_ID
+endif
 
 exit 0
