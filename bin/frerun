@@ -842,6 +842,34 @@ use Email::Valid;
                 return ( 0, FREDefaults::STATUS_FS_GENERIC_PROBLEM );
             }
 
+# ------------------------------------------------------------------------ verify transfer capability if needed
+            if ( $flagOutputTransfer eq 'On' and $fre->property('FRE.tool.gcp.precheck') ) {
+                FREMsg::out( 1, FREMsg::NOTE, '' );
+                FREMsg::out( 1, FREMsg::NOTE,
+                    'This site requires verifying transfer capability to remote site.',
+                    "Please answer any prompts and renew certificates as instructed.\n"
+                );
+                sleep 2;
+                my $test_file = '.fre-transfer-test.txt';
+                open my $fh, '>', $test_file;
+                print $fh "This is a test file to verify transfer capability among FRE sites. Feel free to delete\n";
+                close $fh;
+                system "gcp -v $test_file gfdl:";
+                if ( $? == 0 ) {
+                    FREMsg::out( 1, FREMsg::NOTE, '' );
+                    FREMsg::out( 1, FREMsg::NOTE, 'Transfer ability to remote site is verified!' );
+                }
+                else {
+                    $fre->out(FREMsg::WARNING, '');
+                    $fre->out(FREMsg::WARNING, "Transfer ability to remote site could not be verified, so transfer jobs may fail!" );
+                    $fre->out(FREMsg::WARNING, '');
+                    sleep 2;
+                }
+            }
+            else {
+                $fre->out( FREMsg::NOTE, "No need to verify transfer capability to remote site." )
+            }
+
 # ------------------------------------------------------------------------- setting constants/variables
 
             FRETemplate::setFlag( $fre, \$s, 'flagRunType',
