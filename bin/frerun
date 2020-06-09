@@ -850,21 +850,24 @@ use Email::Valid;
                     "Please answer any prompts and renew certificates as instructed.\n"
                 );
                 sleep 2;
-                my $test_file = '.fre-transfer-test.txt';
+                my $test_file = File::Spec->catfile($ENV{FRE_SYSTEM_TMP}, 'fre-transfer-test.' . $ENV{USER} . '.txt');
                 open my $fh, '>', $test_file;
                 print $fh "This is a test file to verify transfer capability among FRE sites. Feel free to delete\n";
                 close $fh;
-                system "gcp -v $test_file gfdl:";
+                my $cmd = "gcp -v $test_file gfdl:.fre-transfer-test.txt";
+                $fre->out(FREMsg::NOTE, $cmd);
+                system $cmd;
                 if ( $? == 0 ) {
                     FREMsg::out( 1, FREMsg::NOTE, '' );
-                    FREMsg::out( 1, FREMsg::NOTE, 'Transfer ability to remote site is verified!' );
+                    FREMsg::out( 1, FREMsg::NOTE, 'Verified transfer ability to remote site!' );
                 }
                 else {
                     $fre->out(FREMsg::WARNING, '');
-                    $fre->out(FREMsg::WARNING, "Transfer ability to remote site could not be verified, so transfer jobs may fail!" );
+                    $fre->out(FREMsg::WARNING, "Could not verify transfer ability to remote site; transfer jobs may fail!" );
                     $fre->out(FREMsg::WARNING, '');
                     sleep 2;
                 }
+                unlink $test_file;
             }
             else {
                 $fre->out( FREMsg::NOTE, "No need to verify transfer capability to remote site." )
