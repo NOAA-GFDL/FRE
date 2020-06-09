@@ -849,11 +849,18 @@ use Email::Valid;
                     'This site requires verifying transfer capability to remote site.',
                     "Please answer any prompts and renew certificates as instructed.\n"
                 );
-                sleep 2;
-                my $test_file = File::Spec->catfile($ENV{FRE_SYSTEM_TMP}, 'fre-transfer-test.' . $ENV{USER} . '.txt');
-                open my $fh, '>', $test_file;
+                my $test_file = File::Spec->catfile(
+                    $ENV{FRE_SYSTEM_TMP}, 'fre-transfer-test.' . $ENV{USER} . '.txt' );
+                my $fh;
+                unless ( open $fh, '>', $test_file ) {
+                    $fre->out(
+                        FREMsg::FATAL,
+                        "Unable to write a test file to $ENV{FRE_SYSTEM_TMP} to verify transfer capability");
+                    exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
+                }
                 print $fh "This is a test file to verify transfer capability among FRE sites. Feel free to delete\n";
                 close $fh;
+                sleep 2;
                 my $cmd = "gcp -v $test_file gfdl:.fre-transfer-test.txt";
                 $fre->out(FREMsg::NOTE, $cmd);
                 system $cmd;
@@ -867,7 +874,8 @@ use Email::Valid;
                     $fre->out(FREMsg::WARNING, '');
                     sleep 2;
                 }
-                unlink $test_file;
+                unlink $test_file
+                    or $fre->out( FREMsg::WARNING, "Unable to delete test file $test_file" );
             }
             else {
                 $fre->out( FREMsg::NOTE, "No need to verify transfer capability to remote site." )
