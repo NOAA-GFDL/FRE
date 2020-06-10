@@ -86,6 +86,7 @@ banner $FRE_JOBID
 #FRE const(mailList)
 #FRE const(includeDir)
 #FRE const(includeDirRemote)
+#FRE const(userRemote)
 
 #FRE const(platformRemote)
 #FRE const(stdoutDirRemote)
@@ -253,17 +254,11 @@ set -r patternGrepRegion = '^rregion'
 
 # ---------------- search and replacement patterns for sed
 
-set -r patternSedHome = 's/^\/(autofs|ncrc)\/.+\/'$USER'\//\/home\/'$USER'\/ncrc\//'
-set -r patternSedSCRATCH = 's|^'$SCRATCH'/?([^/]*/)?'$USER'/|/home/'$USER'/ncrc/|'
-set -r patternSedDEV = 's|^'$DEV'/?([^/]*/)?'$USER'/|/home/'$USER'/ncrc/|'
-# Halloween 2019. Temporarily handle F2's test filesystem
-set temp_scratch = /lustre/f2-tds/scratch/
-set temp_dev     = /lustre/f2-tds/dev/
-set -r temp_patternSedSCRATCH = 's|^'$temp_scratch'/?([^/]*/)?'$USER'/|/home/'$USER'/ncrc/|'
-set -r temp_patternSedDEV     = 's|^'$temp_dev'/?([^/]*/)?'$USER'/|/home/'$USER'/ncrc/|'
+set -r patternSedHome    = 's|^/home/'$USER'/|/home/'$userRemote'/orion/|'
+set -r patternSedSCRATCH = 's|^'$SCRATCH'/'$USER'/|/home/'$userRemote'/orion/|'
 # to not break legacy csh inserts
 set -r patternSedCTMP = "$patternSedSCRATCH"
-set -r patternSedCPERM = "$patternSedDEV"
+set -r patternSedCPERM = "$patternSedSCRATCH"
 
 # ---------------- archive extension
 
@@ -805,7 +800,7 @@ endif
 if ( $?flagOutputXferOn && $?flagOutputPostProcessOn ) then
    set xmlFilesRemote = ( )
    foreach xmlFile ( $xmlFiles )
-      set xmlFileRemote = `echo $xmlFile | sed -r "$patternSedHome;$patternSedSCRATCH;$patternSedDEV;$temp_patternSedSCRATCH;$temp_patternSedDEV"`
+      set xmlFileRemote = `echo $xmlFile | sed -r "$patternSedHome;$patternSedSCRATCH"`
       if ( $echoOn ) unset echo
       echo "<NOTE> : The file '$xmlFile' will be copied to the file '$xmlFileRemote' @ GFDL to be used in the post-processing..."
       if ( $echoOn ) set echo
