@@ -2054,13 +2054,6 @@ EOF
         exit FREDefaults::STATUS_FRE_GENERIC_PROBLEM;
     }
 
-    # Is this a site that requires the remote-user option to be used on the command line?
-    if ( $fre->property('FRE.option.remoteuser.required') and not exists( $opt{'remote-user'} ) ) {
-        FREMsg::out( $opt{verbose}, FREMsg::FATAL,
-            "The --remote-user option is required on this site" );
-        exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
-    }
-
     if ( $opt{'submit-chained'} || $opt{'submit-staged'} ) {
         if ( $fre->property('FRE.input.staging.enabled') ) {
             if ( $opt{'submit-staged'} ) {
@@ -2263,6 +2256,13 @@ EOF
             }
         }
         $fre->out( FREMsg::NOTE, "The email list '$opt{'mail-list'}' will be used FRE notifications instead of the default '\$USER\@noaa.gov'" );
+    }
+
+    # Is this a site that requires the remote-user option to be used on the command line?
+    if ( $fre->property('FRE.option.remoteuser.required') and $opt{'transfer'} and not exists( $opt{'remote-user'} ) ) {
+        FREMsg::out( $opt{verbose}, FREMsg::FATAL,
+            "The --remote-user option is required on this site when transfers are enabled" );
+        exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
     }
 
     my @exps = ();
