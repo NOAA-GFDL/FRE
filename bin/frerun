@@ -817,7 +817,7 @@ use Email::Valid;
                 }
             } ## end if ( $flagOutputTransfer...)
 
-            # ------------------------------------------------------------ verify include directory
+# ------------------------------------------------------------------------ verify include directory
             my ( $includeDir, $includeDirRemote ) = ( $z->includeDir, $remoteDirs[3] );
             if ( !-e $includeDir ) {
                 $fre->out( FREMsg::NOTE, sprintf "Include directory '$includeDir' doesn't exist" );
@@ -840,6 +840,40 @@ use Email::Valid;
                 $fre->out( FREMsg::FATAL,
                     sprintf "Include directory '$includeDir' exists, but isn't a directory" );
                 return ( 0, FREDefaults::STATUS_FS_GENERIC_PROBLEM );
+            }
+
+# ------------------------------------------------------------------------ verify transfer capability if needed
+            if ( $flagOutputTransfer eq 'On' and $fre->property('FRE.tool.gcp.precheck') ) {
+                FREMsg::out( 1, FREMsg::NOTE, '' );
+                FREMsg::out( 1, FREMsg::NOTE,
+                    'This site requires verifying transfer capability to remote site; checking now...',
+                );
+                my $cmd = 'gcp --auth';
+                $fre->out(FREMsg::NOTE, $cmd);
+                system $cmd;
+                if ( $? == 0 ) {
+                    FREMsg::out( 1, FREMsg::NOTE, '' );
+                    FREMsg::out( 1, FREMsg::NOTE, 'Verified transfer certificates to remote site!' );
+                }
+                else {
+                    FREMsg::out( 1, FREMsg::NOTE, 'Transfer certificates must be updated.',
+                        'Please answer any prompts and renew certificates as instructed.' );
+                    my $cmd = "gcp --auth $ENV{FRE_SYSTEM_SITE}: gfdl:";
+                    $fre->out(FREMsg::NOTE, $cmd);
+                    system $cmd;
+                    if ( $? == 0 ) {
+                        FREMsg::out( 1, FREMsg::NOTE, 'Successfully updated transfer certificates!' );
+                    }
+                    else {
+                        $fre->out(FREMsg::WARNING, '');
+                        $fre->out(FREMsg::WARNING, 'Transfer certificates not updated; transfer jobs may fail!' );
+                        $fre->out(FREMsg::WARNING, '');
+                    }
+                    sleep 2;
+                }
+            }
+            else {
+                $fre->out( FREMsg::NOTE, "No need to verify transfer capability to remote site." )
             }
 
 # ------------------------------------------------------------------------- setting constants/variables
