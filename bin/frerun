@@ -846,36 +846,31 @@ use Email::Valid;
             if ( $flagOutputTransfer eq 'On' and $fre->property('FRE.tool.gcp.precheck') ) {
                 FREMsg::out( 1, FREMsg::NOTE, '' );
                 FREMsg::out( 1, FREMsg::NOTE,
-                    'This site requires verifying transfer capability to remote site.',
-                    "Please answer any prompts and renew certificates as instructed.\n"
+                    'This site requires verifying transfer capability to remote site; checking now...',
                 );
-                my $test_file = File::Spec->catfile(
-                    $ENV{FRE_SYSTEM_TMP}, 'fre-transfer-test.' . $ENV{USER} . '.txt' );
-                my $fh;
-                unless ( open $fh, '>', $test_file ) {
-                    $fre->out(
-                        FREMsg::FATAL,
-                        "Unable to write a test file to $ENV{FRE_SYSTEM_TMP} to verify transfer capability");
-                    exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
-                }
-                print $fh "This is a test file to verify transfer capability among FRE sites. Feel free to delete\n";
-                close $fh;
-                sleep 2;
-                my $cmd = "gcp -v $test_file gfdl:.fre-transfer-test.txt";
+                my $cmd = 'gcp --auth';
                 $fre->out(FREMsg::NOTE, $cmd);
                 system $cmd;
                 if ( $? == 0 ) {
                     FREMsg::out( 1, FREMsg::NOTE, '' );
-                    FREMsg::out( 1, FREMsg::NOTE, 'Verified transfer ability to remote site!' );
+                    FREMsg::out( 1, FREMsg::NOTE, 'Verified transfer certificates to remote site!' );
                 }
                 else {
-                    $fre->out(FREMsg::WARNING, '');
-                    $fre->out(FREMsg::WARNING, "Could not verify transfer ability to remote site; transfer jobs may fail!" );
-                    $fre->out(FREMsg::WARNING, '');
+                    FREMsg::out( 1, FREMsg::NOTE, 'Transfer certificates must be updated.',
+                        'Please answer any prompts and renew certificates as instructed.' );
+                    my $cmd = "gcp --auth $ENV{FRE_SYSTEM_SITE}: gfdl:";
+                    $fre->out(FREMsg::NOTE, $cmd);
+                    system $cmd;
+                    if ( $? == 0 ) {
+                        FREMsg::out( 1, FREMsg::NOTE, 'Successfully updated transfer certificates!' );
+                    }
+                    else {
+                        $fre->out(FREMsg::WARNING, '');
+                        $fre->out(FREMsg::WARNING, 'Transfer certificates not updated; transfer jobs may fail!' );
+                        $fre->out(FREMsg::WARNING, '');
+                    }
                     sleep 2;
                 }
-                unlink $test_file
-                    or $fre->out( FREMsg::WARNING, "Unable to delete test file $test_file" );
             }
             else {
                 $fre->out( FREMsg::NOTE, "No need to verify transfer capability to remote site." )
