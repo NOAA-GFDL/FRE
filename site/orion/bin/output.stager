@@ -777,6 +777,9 @@ if ( $freCommandsToLoad || $hsmToLoad || $xferToolToLoad ) then
          set -r xferSrcPrefix = ""
          set -r xferDstPrefix = "gfdl:"
          alias gcp `which gcp`
+         if ( $actionPPStartToDo ) then
+           alias callTool `which ssh` external-ppan-submit.princeton.rdhpcs.noaa.gov
+         endif
       else
          if ( $echoOn ) unset echo
          echo "*ERROR*: The 'fre' modulefile '$freCommandsModuleFile' doesn't exist or not readable"
@@ -1677,43 +1680,26 @@ if ( $actionPPStartToConsider ) then
          # ---------------- create the stdout directory for the pp.starter and submit the pp.starter job
 
          set stdoutDirRemotePP = $stdoutDirRemote/postProcess
-
-         set dummyFile = /tmp/dummy.txt.$$
-         echo "dummy" >> $dummyFile
-
-         if ( $status == 0 ) then
-            gcp --create-dirs --verbose $xferSrcPrefix$dummyFile $xferDstPrefix$stdoutDirRemotePP/
-            if ( $status == 0 ) then
-               if ( $echoOn ) unset echo
-               echo "<NOTE> : The remote directory '$stdoutDirRemotePP' has been created successfully"
-               if ( $echoOn ) set echo
-               rm -f $dummyFile
-            else
-               if ( $echoOn ) unset echo
-               echo "-ERROR-: Can't create the remote directory '$stdoutDirRemotePP'"
-               if ( $echoOn ) set echo
-               rm -f $dummyFile
-               set exitStatus = 4
-               goto END
-            endif
-        else
-            if ( $echoOn ) unset echo
-            echo "*ERROR*: The file '$dummyFile' can't be created"
-            if ( $echoOn ) set echo
-            set exitStatus = 2
-            goto END
-         endif
-
-         set ppStarter = $FRE_COMMANDS_HOME/site/gfdl/bin/pp.starter
          # mppnccombineOptString is always set; need to combine it with the other --export variables
          set ppStarterOptionsCombined = `echo $ppStarterOptions | sed "s/--export=/--export=mppnccombineOptString='$mppnccombineOptString',/"`
-         set ppStarterResult = `submit -O "$ppStarterOptionsCombined --chdir=$stdoutDirRemotePP --output=$stdoutDirRemotePP/%x.o%j" $ppStarter`
+
+         set ppCommandFile = $FRE_SYSTEM_TMP/fre-pp-starter.txt.$$
+         echo "mkdir -p $stdoutDirRemotePP"                 > $ppCommandFile
+         echo "source /usr/local/Modules/default/init/csh" >> $ppCommandFile
+         echo "module load slurm"                          >> $ppCommandFile
+         echo "module use -a /home/fms/local/modulefiles"  >> $ppCommandFile
+         echo "module load fre/$freCommandsVersion"        >> $ppCommandFile
+         echo 'set ppStarter = `which pp.starter`'         >> $ppCommandFile
+         echo "sbatch $ppStarterOptionsCombined --chdir=$stdoutDirRemotePP --output=$stdoutDirRemotePP/%x.o%j" '$ppStarter' >> $ppCommandFile
+         set ppStarterResult = `callTool < $ppCommandFile`
 
          if ( $status == 0 ) then
+            rm -f $ppCommandFile
             if ( $echoOn ) unset echo
             echo "<NOTE> : The post-processor starter job '$ppStarterResult' to process the '$outputDirRemote:h' has been submitted successfully"
             if ( $echoOn ) set echo
          else
+            rm -f $ppCommandFile
             if ( $echoOn ) unset echo
             echo "-ERROR-: Can't submit the post-processor starter job to process the '$outputDirRemote:h'"
             if ( $echoOn ) set echo
