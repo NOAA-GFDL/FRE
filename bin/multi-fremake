@@ -18,9 +18,9 @@ parser.add_argument('-x', type=str, help='XML file', required=True)
 parser.add_argument('-p', type=str, help='comma separated fre platforms', required=True)
 parser.add_argument('-t', type=str, help='comma separated fre targets', required=True)
 parser.add_argument('-e', type=str, help='compile experiment', required=True)
-parser.add_argument('--no-link', action='store_true', help='Do not link for execuable')
 parser.add_argument('--force-checkout', action='store_true', help='For a checkout of the code')
 parser.add_argument('--force-compile', action='store_true', help='For a new compile script')
+parser.add_argument('-n', '--parallel', type=int, default=4, help='Number of compiles to run simultaneously (default 4)')
 
 ## Parse the arguments
 args = parser.parse_args()
@@ -29,8 +29,6 @@ xml = args.x
 ps = args.p
 ts =  args.t
 exps = args.e
-if args.no_link:
-     print("The --no-link option is not applicable to mutli_fremake_2step.  Ignoring.")
 fc = "--force-compile"
 nl = "--no-link"
 
@@ -66,9 +64,7 @@ for exp in e:
  subprocess.call(fm)
 
 ## Use multiprocess pool to run the compiles concurrently
- num_procs = len(fmake)
- print num_procs
  if __name__ == '__main__':
-    pool = Pool(processes=num_procs)                         # Create a multiprocessing Pool
+    pool = Pool(processes=args.parallel)                         # Create a multiprocessing Pool
     pool.map(fremake, fmake)  # process data_inputs iterable with pool
  i=i+1
