@@ -1,0 +1,70 @@
+#!/usr/bin/env python3
+## \date November 6, 2019
+## \author Tom Robinson
+## \email thomas.robinson@noaa.gov
+## \description Runs multiple freruns with a single command set up like frerun.
+import argparse
+import subprocess
+
+parser = argparse.ArgumentParser(description='Run multiple freruns with a single command.')
+parser.add_argument('-x', type=str, help='XML file', required=True)
+parser.add_argument('-p', type=str, help='comma separated fre platforms', required=True)
+parser.add_argument('-t', type=str, help='comma separated fre targets', required=True)
+parser.add_argument('-e', type=str, help='List of experiments to run', required=True)
+parser.add_argument('--regression','-r', type=str, help='Regression test name', required=False)
+parser.add_argument('--submit','-s', action='store_true', help='Submit to the queue for running')
+parser.add_argument('--no-transfer', action='store_true', help='Do not transfer output to archive')
+parser.add_argument('--no-combine', action='store_true', help='Do not combine the output')
+group = parser.add_mutually_exclusive_group()
+group.add_argument("-o", "--overwrite", action="store_true", help='Overwrite the state directory and previous output')
+group.add_argument("-u", "--unique", action="store_true", help='Create a unique experiment state/output directory')
+group.add_argument("--extend", action="store_true", help='Extend a previous run')
+
+## Parse the arguments
+args = parser.parse_args()
+
+xml = args.x
+ps = args.p
+ts =  args.t
+es = args.e
+
+s='-s'
+nt='--no-transfer'
+nc='--no-combine'
+over='--overwrite'
+uniq='--unique'
+ext='--extend'
+
+## Store the platforms and targets in a list
+p=ps.split(',')
+t=ts.split(',')
+e=es.split(',')
+
+## Create all combinations for frerun
+frun = []
+
+## Loop through and run freruns
+for plat in p:
+     for targ in t:
+       for exp in e:
+          frun=[]
+          frun.append(['frerun', exp, '-x', xml, '-p', plat, '-t', targ])
+          ## Add optional arguments if they are present
+          if args.regression:
+               frun[0].append('-r')
+               frun[0].append(args.regression)
+          if args.submit:
+               frun[0].append(s)
+          if args.no_transfer:
+               frun[0].append(nt)
+          if args.no_combine:
+               frun[0].append(nc)
+          if args.overwrite:
+               frun[0].append(over)
+          if args.unique:
+               frun[0].append(uniq)
+          if args.extend:
+               frun[0].append(ext)
+
+## Run frerun
+          subprocess.call(frun[0])
