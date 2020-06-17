@@ -784,6 +784,18 @@ sub setRunCommand($$$)
         my $ht_flag = ($rt_res->[$inx] < $rt->[$inx]) ? '.true.' : '.false.';
         $runSizeInfo .= "  set -r ${component}_hyperthread = $ht_flag\n";
         $runSizeInfo .= "  set -r scheduler_${component}_threads = $rt_res->[$inx]\n";
+        # set atm_(ny|ny)blocks to sensible values
+        # if atm threads is unset or zero in the <resources> tag,
+        #   FREExperiment:MPISizeParameters(Compatible|Generic) will set it to 1
+        if ( $component eq 'atm' ) {
+            $runSizeInfo .= "  set -r atm_nxblocks = 1\n";
+            if (FRETargets::containsOpenMP( $fre->target() )) {
+                $runSizeInfo .= sprintf "  set -r atm_nyblocks = %d\n", 2 * $rt->[$inx];
+            }
+            else {
+                $runSizeInfo .= "  set -r atm_nyblocks = 1\n";
+            }
+        }
     }
 
     if ($cf) {

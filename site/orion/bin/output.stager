@@ -1,7 +1,7 @@
 #!/bin/csh -fx
 #
 # ------------------------------------------------------------------------------
-# FMS/FRE Project: Output Stager - NCRC Version
+# FMS/FRE Project: Output Stager - MSU Version
 # ------------------------------------------------------------------------------
 # Copyright (C) NOAA Geophysical Fluid Dynamics Laboratory, 2000-2013, 2015-2017
 # Designed and written by V. Balaji, Amy Langenhorst, Aleksey Yakovlev
@@ -16,11 +16,6 @@ echo "<NOTE> : Starting at $HOST on `date`"
 if ( $echoOn ) set echo
 
 unalias *
-
-# ---------------- catch interrupt signals
-# define temporary unlock alias if SIGINT is caught before its definition (line ~150)
-alias unlock echo nothing to unlock
-onintr CATCH_SIGINT
 
 # ---------------- define constants depending on the run type
 
@@ -141,7 +136,7 @@ else
    exit 1
 endif
 
-alias lock `which lockfile` -60 -r 10 -l 58200
+alias lock `which lockfile` -60 -r 10 -l 86400
 
 if ( $status == 0 ) then
    set -r lockingIsPresent
@@ -782,6 +777,9 @@ if ( $freCommandsToLoad || $hsmToLoad || $xferToolToLoad ) then
          set -r xferSrcPrefix = ""
          set -r xferDstPrefix = "gfdl:"
          alias gcp `which gcp`
+         if ( $actionPPStartToDo ) then
+           alias callTool `which ssh` external-ppan-submit.princeton.rdhpcs.noaa.gov
+         endif
       else
          if ( $echoOn ) unset echo
          echo "*ERROR*: The 'fre' modulefile '$freCommandsModuleFile' doesn't exist or not readable"
@@ -803,10 +801,10 @@ endif
 #------------------------ global constants and aliases -------------------------
 ################################################################################
 
-if ( $HOST =~ gaea[0-9] || $HOST =~ gaea1[0-5] ) then
+if ( $HOST =~ *login* ) then
    set -r hostType = 'login'
 else if ( $HOST =~ *dtn* ) then
-   set -r hostType = $SLURM_JOB_PARTITION
+   set -r hostType = 'dtn'
 else
    if ( $echoOn ) unset echo
    echo "*ERROR*: Unknown host type"
@@ -832,7 +830,7 @@ if ( $actionCombineToDo ) then
    set -r tagFail = 'fail'
    set -r patternGrepFail = '\.'$tagFail'$'
 
-   if ( $hostType == 'login' || $hostType == 'ldtn' ) then
+   if ( $hostType == 'login' || $hostType == 'dtn' ) then
       alias mppnccombine `which mppnccombine` $mppnccombineOptString
       alias slmnccombine `which combine-ncc`
       alias slmnccompressed `which is-compressed`
@@ -1553,7 +1551,7 @@ endif
 
 if ( $actionXferToConsider ) then
    if ( $actionXferToPerform ) then
-      if ( $hostType == 'login' || $hostType == 'rdtn' ) then
+      if ( $hostType == 'login' || $hostType == 'dtn' ) then
          if ( -f $archDir.$archExt && -r $archDir.$archExt ) then
             gcp --create-dirs --verbose $xferSrcPrefix$archDir.$archExt $xferDstPrefix$outputDirRemote:h/
 
@@ -1613,7 +1611,7 @@ endif
 
 if ( $actionPPStartToConsider ) then
    if ( $actionPPStartToPerform ) then
-      if ( $hostType == 'login' || $hostType == 'rdtn' ) then
+      if ( $hostType == 'login' || $hostType == 'dtn' ) then
          # ---------------- copy XML files to GFDL
 
          if ( $#xmlFiles == $#xmlFilesRemote ) then
@@ -1682,43 +1680,26 @@ if ( $actionPPStartToConsider ) then
          # ---------------- create the stdout directory for the pp.starter and submit the pp.starter job
 
          set stdoutDirRemotePP = $stdoutDirRemote/postProcess
-
-         set dummyFile = /tmp/dummy.txt.$$
-         echo "dummy" >> $dummyFile
-
-         if ( $status == 0 ) then
-            gcp --create-dirs --verbose $xferSrcPrefix$dummyFile $xferDstPrefix$stdoutDirRemotePP/
-            if ( $status == 0 ) then
-               if ( $echoOn ) unset echo
-               echo "<NOTE> : The remote directory '$stdoutDirRemotePP' has been created successfully"
-               if ( $echoOn ) set echo
-               rm -f $dummyFile
-            else
-               if ( $echoOn ) unset echo
-               echo "-ERROR-: Can't create the remote directory '$stdoutDirRemotePP'"
-               if ( $echoOn ) set echo
-               rm -f $dummyFile
-               set exitStatus = 4
-               goto END
-            endif
-        else
-            if ( $echoOn ) unset echo
-            echo "*ERROR*: The file '$dummyFile' can't be created"
-            if ( $echoOn ) set echo
-            set exitStatus = 2
-            goto END
-         endif
-
-         set ppStarter = $FRE_COMMANDS_HOME/site/gfdl/bin/pp.starter
          # mppnccombineOptString is always set; need to combine it with the other --export variables
          set ppStarterOptionsCombined = `echo $ppStarterOptions | sed "s/--export=/--export=mppnccombineOptString='$mppnccombineOptString',/"`
-         set ppStarterResult = `submit -O "$ppStarterOptionsCombined --chdir=$stdoutDirRemotePP --output=$stdoutDirRemotePP/%x.o%j" $ppStarter`
+
+         set ppCommandFile = $FRE_SYSTEM_TMP/fre-pp-starter.txt.$$
+         echo "mkdir -p $stdoutDirRemotePP"                 > $ppCommandFile
+         echo "source /usr/local/Modules/default/init/csh" >> $ppCommandFile
+         echo "module load slurm"                          >> $ppCommandFile
+         echo "module use -a /home/fms/local/modulefiles"  >> $ppCommandFile
+         echo "module load fre/$freCommandsVersion"        >> $ppCommandFile
+         echo 'set ppStarter = `which pp.starter`'         >> $ppCommandFile
+         echo "sbatch $ppStarterOptionsCombined --chdir=$stdoutDirRemotePP --output=$stdoutDirRemotePP/%x.o%j" '$ppStarter' >> $ppCommandFile
+         set ppStarterResult = `callTool < $ppCommandFile`
 
          if ( $status == 0 ) then
+            rm -f $ppCommandFile
             if ( $echoOn ) unset echo
             echo "<NOTE> : The post-processor starter job '$ppStarterResult' to process the '$outputDirRemote:h' has been submitted successfully"
             if ( $echoOn ) set echo
          else
+            rm -f $ppCommandFile
             if ( $echoOn ) unset echo
             echo "-ERROR-: Can't submit the post-processor starter job to process the '$outputDirRemote:h'"
             if ( $echoOn ) set echo
@@ -1830,17 +1811,3 @@ else
 endif
 
 exit $exitStatus
-
-################################################################################
-#--------------------------------- handle SIGINT -------------------------------
-# Interpret SIGINT as request to requeue job by Operators (added March 2020)   -
-################################################################################
-
-CATCH_SIGINT:
-
-unlock
-if ( $?SLURM_JOB_ID ) then
-   scontrol requeue $SLURM_JOB_ID
-endif
-
-exit 0

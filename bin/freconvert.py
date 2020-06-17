@@ -112,7 +112,7 @@ import logging
 import argparse
 import xml.etree.ElementTree as ET
 
-newest_fre_version = 'bronx-17'
+newest_fre_version = 'bronx-18'
 
 configs_to_edit = ['atmos_npes', 'atmos_nthreads', 'ocean_npes',
                    'ocean_nthreads', 'layout', 'io_layout',
@@ -2272,7 +2272,7 @@ issues and re-run freconvert.py")
         logging.info("Linking paths to F2. Performing final XML manipulations...")
         final_xml = convert_xml_text(input_content, prev_version=old_version)
     
-    elif old_version == 'bronx-13' or old_version == 'bronx-14' or old_version == 'bronx-15' or old_version == 'bronx-16':
+    elif old_version == 'bronx-13' or old_version == 'bronx-14' or old_version == 'bronx-15' or old_version == 'bronx-16' or old_version == 'bronx-17':
         logging.info("Making Slurm compatible/Updating XML...")
         final_xml = convert_xml_text(input_content, prev_version=old_version)
     

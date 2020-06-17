@@ -3086,6 +3086,7 @@ if ( \$status != 0 ) then
  @ errors_found += 1
  echo "ERROR: $msg"
  echo "ERROR: $msg" >> \$work/.errors
+ exit 1
 endif
 
 EOF
@@ -7997,7 +7998,7 @@ EOF
 
     sub epmt_transform {
 	my $scriptfile = shift;
-	papiex_tag_file($scriptfile);
+	papiex_tag_file($scriptfile, $fre->property('FRE.tool.modules.use'));
 	rename("$scriptfile.tags", $scriptfile);
     }
 }
@@ -8109,7 +8110,7 @@ jtag_dict = {'exp_name' : 'set name =',
              'exp_target' : 'set target =',
              'exp_seg_months' : 'set segment_months ='}
 
-def papiex_tag_file(fin_name):
+def papiex_tag_file(fin_name, fms_modulefiles):
 
     fout_name = fin_name + '.tags'
 
@@ -8133,9 +8134,10 @@ def papiex_tag_file(fin_name):
         op['op_instance'] = 0
 
     # Reset the EPMT_JOB_TAGS root
-    EPMT_JOB_TAGS = "setenv EPMT_JOB_TAGS '"
+    EPMT_JOB_TAGS = "epmt annotate EPMT_JOB_TAGS='"
 
     # Since all the information needed is in the top of the file, form the EPMT_JOB_TAG first
+    sname = {}
     for line in lines:
       # No information of interest after this line
       if '#platform_csh' in line: break
@@ -8143,15 +8145,23 @@ def papiex_tag_file(fin_name):
         if v in line:
           l = len(v)
           EPMT_JOB_TAGS = EPMT_JOB_TAGS + k + ":" + line[l:].lstrip() + ";"
+          if k == 'exp_name': sname['exp_name'] = line[l:].lstrip()
+          if k == 'exp_component': sname['exp_component'] = line[l:].lstrip()
+          if k == 'exp_time': sname['exp_time'] = line[l:].lstrip()
 
-    l = len(EPMT_JOB_TAGS)
-    EPMT_JOB_TAGS = EPMT_JOB_TAGS[:(l-1)] + "'"
+    EPMT_JOB_TAGS = EPMT_JOB_TAGS + 'script_name:' \
+                                  + sname['exp_name'] +"_" \
+                                  + sname['exp_component'] +"_" \
+                                  + sname['exp_time'] + "'"
 
     for line in lines:
 
         # Place the EPMT_JOB_TAGS
         if '#INFO:max_years' in pline:
            script.append('')
+           script.append('source $MODULESHOME/init/csh')
+           script.append('module use ' + fms_modulefiles)
+           script.append('module load epmt')
            script.append(EPMT_JOB_TAGS)
            script.append('')
 
