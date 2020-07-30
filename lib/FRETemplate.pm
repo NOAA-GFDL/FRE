@@ -824,15 +824,6 @@ sub setRunCommand($$$)
     FRETemplate::setAlias( $fre, $r, 'runCommand', $runCommand );
     ${$r} =~ s/$placeholder/$runSizeInfo/;
 
-    # 2019-2-19 ceb temporarily run srun-multi --test first
-    if ($runCommand =~ /multi/) {
-        (my $runCommandTest = $runCommand) =~ s/srun-multi`/srun-multi` --test --cpu-bind=verbose/;
-        FRETemplate::setAlias( $fre, $r, 'runCommandTest', $runCommandTest );
-    }
-    else {
-        FRETemplate::setAlias( $fre, $r, 'runCommandTest', "echo Not using srun-multi" )
-    }
-
 } ## end sub setRunCommand($$$)
 
 sub setInputDatasets($$$)
