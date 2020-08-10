@@ -796,6 +796,12 @@ EOF
         $cshscripttmpl =~ s/(#SBATCH --mail-user).*/$1=$mailList/;
         $cshscripttmpl =~ s|(#SBATCH --comment).*|$1=fre/$ENV{'FRE_COMMANDS_VERSION'}|;
 
+        # if using XTMP filesystem for PTMP location, let scheduler know via Slurm --comment directive
+        # so it can set $TMPDIR accordingly
+        if ($ptmpDir =~ m|/xtmp|) {
+            $cshscripttmpl =~ s|(#SBATCH --comment)=?(.*)|$1=$2,xtmp|;
+        }
+
         if ($opt_r) {    #if a regression test, no further postprocessing
             $cshscripttmpl =~ s/(#INFO:max_years=)/$1$maxyrs/;
             writescript( $cshscripttmpl, $outscript, "$batchSubmit$opt_w $opt_m", $statefile );
