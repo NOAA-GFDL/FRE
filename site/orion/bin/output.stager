@@ -778,7 +778,8 @@ if ( $freCommandsToLoad || $hsmToLoad || $xferToolToLoad ) then
          set -r xferDstPrefix = "gfdl:"
          alias gcp `which gcp`
          if ( $actionPPStartToDo ) then
-           alias callTool `which ssh` external-ppan-submit.princeton.rdhpcs.noaa.gov
+           set remoteUser = `echo $stdoutDirRemote | cut -d/ -f3`
+           alias callTool `which ssh` -l $remoteUser external-ppan-submit.princeton.rdhpcs.noaa.gov
          endif
       else
          if ( $echoOn ) unset echo
@@ -1695,8 +1696,9 @@ if ( $actionPPStartToConsider ) then
 
          if ( $status == 0 ) then
             rm -f $ppCommandFile
+            set jobID = `echo $ppStarterResult | grep -Eo "\b[0-9]+\b"`
             if ( $echoOn ) unset echo
-            echo "<NOTE> : The post-processor starter job '$ppStarterResult' to process the '$outputDirRemote:h' has been submitted successfully"
+            echo "<NOTE> : The post-processor starter job '$jobID' to process '$outputDirRemote:h' has been submitted successfully"
             if ( $echoOn ) set echo
          else
             rm -f $ppCommandFile
