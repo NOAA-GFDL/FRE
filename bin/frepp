@@ -103,7 +103,7 @@ if ($@) {
         'novalidate',
         'version',
 
-	'epmt'
+	    'epmt!'
     );
 
 }
@@ -112,7 +112,8 @@ if ($@) {
 
     my %opt = (
         'xmlfile' => FREDefaults::XMLFile(),
-        'target'  => FREDefaults::Target()
+        'target'  => FREDefaults::Target(),
+        'epmt'    => 1
     );
 
     Getopt::Long::GetOptions( \%opt, frepp::OPTLIST ) or ( print 'bad opts' and die "\n" );
@@ -208,6 +209,7 @@ Usage:    $relfrepp -P|--platform platform [-AB:C:O:RY:Z:c:d:f:hlmMp:oqr:S:st:u:
           -q                 = don't print the analysis figure checks to stdout.
           -v                 = verbose flag
           -V                 = very verbose flag
+          --no-epmt          = Turn off EPMT statistics generation
 
           GENERAL FRE OPTIONS
           -h           = show this help message, then exit
@@ -793,6 +795,12 @@ EOF
         $cshscripttmpl =~ s/set segment_months/'set segment_months = ' . segmentLengthInMonths()/e;
         $cshscripttmpl =~ s/(#SBATCH --mail-user).*/$1=$mailList/;
         $cshscripttmpl =~ s|(#SBATCH --comment).*|$1=fre/$ENV{'FRE_COMMANDS_VERSION'}|;
+
+        # if using XTMP filesystem for PTMP location, let scheduler know via Slurm --comment directive
+        # so it can set $TMPDIR accordingly
+        if ($ptmpDir =~ m|/xtmp|) {
+            $cshscripttmpl =~ s|(#SBATCH --comment)=?(.*)|$1=$2,xtmp|;
+        }
 
         if ($opt_r) {    #if a regression test, no further postprocessing
             $cshscripttmpl =~ s/(#INFO:max_years=)/$1$maxyrs/;
@@ -3086,6 +3094,7 @@ if ( \$status != 0 ) then
  @ errors_found += 1
  echo "ERROR: $msg"
  echo "ERROR: $msg" >> \$work/.errors
+ exit 1
 endif
 
 EOF
@@ -7818,7 +7827,7 @@ EOF
         ( my $volume, my $directory, my $filename ) = File::Spec->splitpath($outscript);
         if ( !-e $directory ) { mkdir $directory || die "Cannot make directory $directory\n"; }
 
-	$script =~ s|(#SBATCH --comment)(.*)|$1=$2,epmt| if $opt{epmt};
+	$script =~ s|(#SBATCH --comment)=?(.*)|$1=$2,epmt| if $opt{epmt};
 
         open( OUT, "> $outscript" );
         print OUT $script;
@@ -7997,7 +8006,7 @@ EOF
 
     sub epmt_transform {
 	my $scriptfile = shift;
-	papiex_tag_file($scriptfile);
+	papiex_tag_file($scriptfile, $fre->property('FRE.tool.modules.use'));
 	rename("$scriptfile.tags", $scriptfile);
     }
 }
@@ -8109,7 +8118,7 @@ jtag_dict = {'exp_name' : 'set name =',
              'exp_target' : 'set target =',
              'exp_seg_months' : 'set segment_months ='}
 
-def papiex_tag_file(fin_name):
+def papiex_tag_file(fin_name, fms_modulefiles):
 
     fout_name = fin_name + '.tags'
 
@@ -8153,14 +8162,23 @@ def papiex_tag_file(fin_name):
                                   + sname['exp_component'] +"_" \
                                   + sname['exp_time'] + "'"
 
+    epmt_instrument = 'setenv PAPIEX_OPTIONS $PAPIEX_OLD_OPTIONS; setenv LD_PRELOAD $PAPIEX_LD_PRELOAD; setenv PAPIEX_OUTPUT $PAPIEX_OLD_OUTPUT;'
+    epmt_uninstrument = 'unsetenv PAPIEX_OUTPUT PAPIEX_OPTIONS LD_PRELOAD'
+
+
     for line in lines:
 
         # Place the EPMT_JOB_TAGS
         if '#INFO:max_years' in pline:
            script.append('')
            script.append('source $MODULESHOME/init/csh')
+           script.append('module use ' + fms_modulefiles)
            script.append('module load epmt')
+           script.append('set PAPIEX_OLD_OUTPUT=$PAPIEX_OUTPUT')
+           script.append('set PAPIEX_OLD_OPTIONS=$PAPIEX_OPTIONS')
+           script.append(epmt_uninstrument)
            script.append(EPMT_JOB_TAGS)
+           script.append(epmt_instrument)
            script.append('')
 
         # Refine the PAPIEX_TAGS for a particular operation
