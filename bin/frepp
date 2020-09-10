@@ -8162,6 +8162,10 @@ def papiex_tag_file(fin_name, fms_modulefiles):
                                   + sname['exp_component'] +"_" \
                                   + sname['exp_time'] + "'"
 
+    epmt_instrument = 'setenv PAPIEX_OPTIONS $PAPIEX_OLD_OPTIONS; setenv LD_PRELOAD $PAPIEX_LD_PRELOAD; setenv PAPIEX_OUTPUT $PAPIEX_OLD_OUTPUT;'
+    epmt_uninstrument = 'unsetenv PAPIEX_OUTPUT PAPIEX_OPTIONS LD_PRELOAD'
+
+
     for line in lines:
 
         # Place the EPMT_JOB_TAGS
@@ -8170,7 +8174,11 @@ def papiex_tag_file(fin_name, fms_modulefiles):
            script.append('source $MODULESHOME/init/csh')
            script.append('module use ' + fms_modulefiles)
            script.append('module load epmt')
+           script.append('set PAPIEX_OLD_OUTPUT=$PAPIEX_OUTPUT')
+           script.append('set PAPIEX_OLD_OPTIONS=$PAPIEX_OPTIONS')
+           script.append(epmt_uninstrument)
            script.append(EPMT_JOB_TAGS)
+           script.append(epmt_instrument)
            script.append('')
 
         # Refine the PAPIEX_TAGS for a particular operation
