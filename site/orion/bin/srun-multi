@@ -1,4 +1,4 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python
 #
 # srun-multi
 #
@@ -29,6 +29,8 @@
 # - Each component requires setting the number of tasks (no back-calculating at the moment)
 #
 
+from __future__ import print_function
+
 import os
 import sys
 import re
@@ -52,6 +54,7 @@ export = None
 output = None
 cluster = None
 label = False
+platform = ''
 
 def err(message):
 	sys.stderr.write("Error: %s\n" % message)
@@ -84,6 +87,7 @@ def get_parser():
 	parser.add_argument('--export', dest='export', metavar='env_variables [ALL] | NONE', help='Options for exporting environment variables')
 	parser.add_argument('-o', '--output', dest='output', metavar='output_pattern', help='Filename pattern for standard output redirection')
 	parser.add_argument('command', nargs=argparse.REMAINDER, help='Executable to run with its arguments')
+	parser.add_argument('-p','--platform', dest='platform',type=str,choices=['gaea','orion'],help='Name of platform currently running on(defaults to gaea)')
 
 	return parser
 
@@ -105,14 +109,18 @@ def detect_hardware():
 	except KeyError:
 		try:
 			hw.cpuspernode = os.environ['SLURM_JOB_CPUS_PER_NODE']
-			hw.cpuspernode = map(lambda s: int(re.search('^\d+', s).group(0)), hw.cpuspernode.split(','))
+			hw.cpuspernode = list(map(lambda s: int(re.search('^\d+', s).group(0)), hw.cpuspernode.split(',')))
 			if len(hw.cpuspernode) > 1:
 				hw.cpuspernode = min(hw.cpuspernode)
 				err('%s does not currently support heterogeneous nodes, assuming %d CPUs per node' % (sys.argv[0], hw.cpuspernode))
 			else:
 				hw.cpuspernode = int(hw.cpuspernode[0])
 		except KeyError:
-			hw.cpuspernode = 32
+			#for testing, get correct cpu count if platform is provided
+			if 'orion' in sys.argv:
+				hw.cpuspernode = 40
+			else:
+				hw.cpuspernode = 32 
 
 	# Calculate some convenience variables
 	if cpumode == 'cores':
@@ -121,15 +129,15 @@ def detect_hardware():
 		hw.threadspercpu = hw.threadspercore
 		hw.cpuspercore = 1
 	elif cpumode == 'threads':
-		hw.corespernode = hw.cpuspernode / hw.threadspercore
+		hw.corespernode = hw.cpuspernode // hw.threadspercore
 		hw.threadspernode = hw.cpuspernode
 		hw.threadspercpu = 1
 		hw.cpuspercore = hw.threadspercore
 	else:
 		errexit('cpumode=%s is not supported' % cpumode)
-	hw.cpuspersocket = hw.cpuspernode / hw.socketspernode
-	hw.threadspersocket = hw.threadspernode / hw.socketspernode
-	hw.corespersocket = hw.corespernode / hw.socketspernode
+	hw.cpuspersocket = hw.cpuspernode // hw.socketspernode
+	hw.threadspersocket = hw.threadspernode // hw.socketspernode
+	hw.corespersocket = hw.corespernode // hw.socketspernode
 
 	return hw
 
@@ -143,6 +151,16 @@ def run_parser(parser, componentargs, hw):
 	else:
 		args.mode = 'task'
 
+	# Set platform on first component parse and check if matching otherwise
+	global platform
+	if platform is '':
+		if args.platform is not None:
+			platform = args.platform
+		else:
+			platform = 'gaea'
+	else:
+		if args.platform is not None and platform != args.platform:
+			errexit('Multiple platforms specified. Platform should be specified in first component.')
 	# Attempt to parse the distribution options
 	distargs = args.distribution.split(',')
 	distopts = distargs[0].split(':')
@@ -220,18 +238,20 @@ def run_parser(parser, componentargs, hw):
 	if args.nodes == None:
 		if args.ntaskspernode == None:
 			# No requested number of tasks per node, minimize node count
-			maxtaskspernode = hw.threadspernode / args.threadsconsumepertask
-			args.nodes = (args.ntasks + maxtaskspernode - 1) / maxtaskspernode
+			maxtaskspernode = hw.threadspernode // args.threadsconsumepertask
+			if maxtaskspernode < 1:
+				maxtaskspernode = 1
+			args.nodes = (args.ntasks + maxtaskspernode - 1) // maxtaskspernode
 		else:
 			# User requested a specific (maximum) number of tasks per node
-			args.nodes = (args.ntasks + args.ntaskspernode - 1) / args.ntaskspernode
+			args.nodes = (args.ntasks + args.ntaskspernode - 1) // args.ntaskspernode
 
 	# If there is no requested ntaskspernode, calculate it
 	if args.ntaskspernode == None:
 		if args.packoption == "nopack":
-			args.ntaskspernode = (args.ntasks + args.nodes - 1) / args.nodes
+			args.ntaskspernode = (args.ntasks + args.nodes - 1) // args.nodes
 		elif args.packoption == "pack":
-			args.ntaskspernode = hw.cpuspernode / args.cpuspertask
+			args.ntaskspernode = hw.cpuspernode // args.cpuspertask
 
 	# Some sanity checking
 	if (args.nodes == None) or (args.ntaskspernode == None) or (args.cpuspertask == None):
@@ -246,7 +266,7 @@ def parse_nodelist(nodeexp):
 	(sout, serr) = p.communicate()
 	if p.returncode != 0:
 		errexit("Unable to parse nodelist: error %d: %s" % (p.returncode, serr.rstrip()))
-	nodelist = sout.rstrip().split('\n')
+	nodelist = sout.decode('ascii').rstrip().split('\n')
 	return nodelist
 
 def main():
@@ -345,7 +365,7 @@ def node_allocator(components, args, hw):
 
 		# Debugging
 		if verbose:
-			print "Component %d: ntasks=%d cpuspertask=%d (consume %d bind %d) nodes=%d ntaskspernode=%d distribution %s:%s,%s" % (componentnum, args.ntasks, args.cpuspertask, args.threadsconsumepertask, args.threadsbindpertask, args.nodes, args.ntaskspernode, args.dist1, args.dist2, args.packoption)
+			print("Component %d: ntasks=%d cpuspertask=%d (consume %d bind %d) nodes=%d ntaskspernode=%d distribution %s:%s,%s" % (componentnum, args.ntasks, args.cpuspertask, args.threadsconsumepertask, args.threadsbindpertask, args.nodes, args.ntaskspernode, args.dist1, args.dist2, args.packoption))
 
 		componentfirsttaskidx=globaltaskidx
 
@@ -355,7 +375,7 @@ def node_allocator(components, args, hw):
 
 			# Handle dist1 distribution to nodes
 			if args.dist1 == 'block':
-				nodeidx = componenttaskidx / args.ntaskspernode
+				nodeidx = componenttaskidx // args.ntaskspernode
 			elif args.dist1 == 'cyclic':
 				nodeidx = componenttaskidx % args.nodes
 			hostlist.append(nodelist[nodeidx])
@@ -379,10 +399,10 @@ def node_allocator(components, args, hw):
 		totaltasks = totaltasks + args.ntasks
 
 	if verbose:
-		print "# Generated hostlist:"
-		print "%s" % '\n'.join(hostlist)
-		print "# Generated multiprog conf:"
-		print "%s" % '\n'.join(proglist)
+		print("# Generated hostlist:")
+		print("%s" % '\n'.join(hostlist))
+		print("# Generated multiprog conf:")
+		print("%s" % '\n'.join(proglist))
 
 	srun_args = ['srun', '-n', str(totaltasks), '--distribution=arbitrary', '--cpu-bind=none']
 	if export is not None:
@@ -395,24 +415,23 @@ def node_allocator(components, args, hw):
 	if testonly:
 		srun_args.append('--multi-prog')
 		srun_args.append('just_testing')
-		print "Running: %s" % str.join(' ', srun_args)
+		print("Running: %s" % str.join(' ', srun_args))
 		sys.exit(0)
 
 	# Write out the generated config files
 	(hostlistconffd, hostlistconf) = mkstemp(prefix='srun-multi-%s-hostlist.' % jobid, suffix='.conf')
-	os.write(hostlistconffd, '\n'.join(hostlist))
-	os.write(hostlistconffd, '\n')
+	os.write(hostlistconffd, '\n'.join(hostlist).encode('utf-8'))
+	os.write(hostlistconffd, '\n'.encode('utf-8'))
 	os.close(hostlistconffd)
 	(multiprogconffd, multiprogconf) = mkstemp(prefix='srun-multi-%s-multiprog.' % jobid, suffix='.conf')
-	os.write(multiprogconffd, '\n'.join(proglist))
-	os.write(multiprogconffd, '\n')
+	os.write(multiprogconffd, '\n'.join(proglist).encode('utf-8'))
+	os.write(multiprogconffd, '\n'.encode('utf-8'))
 	os.close(multiprogconffd)
-
 	srun_args.append('--multi-prog')
 	srun_args.append(multiprogconf)
 
 	if testonly or verbose:
-		print "Running: %s" % str.join(' ', srun_args)
+		print("Running: %s" % str.join(' ', srun_args))
 
 	# In the future, consider instead using popen so we can clean up the temp files
 	# If we do that, make sure that we understand buffering
@@ -461,10 +480,12 @@ def task_allocator(components, args, hw, node=None, globalrank=None, noderank=No
 					for testsocket in range(hw.socketspernode - 1):
 						if socketalloc[(socketidx + testsocket) + 1 % hw.socketspernode] < hw.cpuspersocket:
 							socketidx = (socketidx + testsocket) + 1 % hw.socketspernode
-				# 2020-4-22: original logic for mapping tasks across sockets, assuming CPUs are sequential within socket
-				#threadlist.append(socketalloc[socketidx] % hw.cpuspersocket + socketidx * hw.cpuspersocket)
-				# adjusted logic for Orion's numbering scheme, which interleaves among the sockets
-				threadlist.append((socketalloc[socketidx] % hw.cpuspersocket) * hw.socketspernode + socketidx % hw.socketspernode)
+				if platform.lower() == 'gaea':
+					# 2020-4-22: original logic for mapping tasks across sockets, assuming CPUs are sequential within socket
+					threadlist.append(socketalloc[socketidx] % hw.cpuspersocket + socketidx * hw.cpuspersocket)
+				else:
+					# adjusted logic for Orion's numbering scheme, which interleaves among the sockets
+					threadlist.append((socketalloc[socketidx] % hw.cpuspersocket) * hw.socketspernode + socketidx % hw.socketspernode)
 				socketalloc[socketidx] = socketalloc[socketidx] + 1
 		elif args.dist2 == 'block':
 			# Slurm will fully fill sockets
@@ -472,7 +493,7 @@ def task_allocator(components, args, hw, node=None, globalrank=None, noderank=No
 			# It won't try to balance tasks across all sockets (pack is the only mode)
 			for rank in range(args.cpuspertask):
 				threadlist.append(coresassigned + rank)
-				socketidx = (coresassigned + rank) / hw.corespersocket
+				socketidx = (coresassigned + rank) // hw.corespersocket
 				socketalloc[socketidx] = socketalloc[socketidx] + 1
 
 		# Mark that socket got a task
@@ -496,14 +517,13 @@ def task_allocator(components, args, hw, node=None, globalrank=None, noderank=No
 			elif 'bitverbose' in args.cpubind:
 				mask = threadlist2bitmask(threadlist, hw.threadspernode)
 			if 'v' in args.cpubind or 'verbose' in args.cpubind or 'bitverbose' in args.cpubind:
-				print "cpu-bind=MASK - %s, task %2d %2d [%s]: mask %s set" % (node, globalrank, noderank, pid, mask)
+				print("cpu-bind=MASK - %s, task %2d %2d [%s]: mask %s set" % (node, globalrank, noderank, pid, mask))
 
 			if not args.test:
 				os.system("taskset -p -c %s %s > /dev/null" % (",".join(map(str,threadlist)), pid))
 				os.execvp(args.command[0], args.command)
 
 			break
-
 
 if __name__ == "__main__":
 	try:
