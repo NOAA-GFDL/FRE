@@ -1,7 +1,8 @@
 module unload cray-netcdf cray-hdf5 fre
 module unload PrgEnv-pgi PrgEnv-intel PrgEnv-gnu PrgEnv-cray
 module load PrgEnv-gnu/6.0.5
-module swap gcc gcc/$(COMPILER_VERSION)
+module unload gcc
+module load gcc/$(COMPILER_VERSION)
 module load fre/$(FRE_VERSION)
 module load cray-hdf5/1.10.5.2
 module load git
