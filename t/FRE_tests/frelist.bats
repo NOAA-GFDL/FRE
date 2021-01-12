@@ -480,6 +480,7 @@ CM2.1U_Control-1990_E1.M_3B_snowmelt_static_ocn6x5 INHERITS FROM CM2.1U_Control-
 # Platform environment defaults from ${FRE_COMMANDS_HOME}/site/gfdl/env.defaults
 source \$MODULESHOME/init/csh
 module use -a /home/fms/local/modulefiles
+module use /app/spack/v0.15/modulefiles/linux-rhel6-x86_64
 module purge
 module load fre/$FRE_COMMANDS_VERSION
 module load git
@@ -596,6 +597,7 @@ scaling       3        1x0m8d_30x2a_120x1o
 # Platform environment defaults from '"$FRE_COMMANDS_HOME"'/site/gfdl/env.defaults
 source $MODULESHOME/init/csh
 module use -a /home/fms/local/modulefiles
+module use /app/spack/v0.15/modulefiles/linux-rhel6-x86_64
 module purge
 module load fre/bronx-12
 module load git
