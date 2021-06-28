@@ -159,7 +159,10 @@ if ( $listStatus == 0 && $submitStatus == 0 && $outputStagerStatus == 0 ) then
                                           rm -f $argFile
                                        else if ( $xferRetry >= 0 ) then
                                           if ( $xferRetry <= $xferRetries ) then
-                                             set xferResult = `submit -O "$xferOptions --export=argFile=$argFile" $outputStager`
+                                             # begin retry job after 0, 1, 2, 4, 8, or 16 hours
+                                             set xferRetryDelay = `echo "2^($xferRetry-1)" | bc`
+                                             set xferRetryBegin = "--begin=now+${xferRetryDelay}hours"
+                                             set xferResult = `submit -O "$xferRetryBegin $xferOptions --export=argFile=$argFile" $outputStager`
 
                                              if ( $status == 0 ) then
                                                 if ( $echoOn ) unset echo
