@@ -672,7 +672,7 @@ sub writescript {
     if ($status) { die "Sorry, I couldn't chmod $outscript"; }
 
     # submit to Slurm
-    my $batch_command = "sbatch --chdir \$HOME --partition=batch6 $outscript";
+    my $batch_command = "sbatch --chdir \$HOME $outscript";
 
     if ( substr( $mode, 0, 1 ) eq "i" ) {
         ####### The graphical analysis is specified in interactive mode #####
