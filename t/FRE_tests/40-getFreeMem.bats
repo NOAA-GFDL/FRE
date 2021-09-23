@@ -2,6 +2,12 @@
 # -*- mode: sh; eval: (sh-set-shell "sh"); -*-
 load test_helpers
 
+# getFreeMem uses only standard python libraries so the system python
+# is sufficient. However, if $LD_LIBRARY_PATH includes an
+# incompatible python library location, then the system python may fail.
+# So unsetting $LD_LIBRARY_PATH should be a safe step for this test.
+unset LD_LIBRARY_PATH
+
 @test "getFreeMem is in PATH" {
   run which getFreeMem
   print_output_and_status
