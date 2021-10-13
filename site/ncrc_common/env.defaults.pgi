@@ -7,6 +7,7 @@ module load fre/$(FRE_VERSION)
 module load cray-hdf5/1.12.0.4
 module load craype/2.7.7
 module load git
+module load libyaml/0.2.5
 
 setenv KMP_STACKSIZE 512m
 setenv NC_BLKSZ 1M
