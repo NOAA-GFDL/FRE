@@ -7757,6 +7757,8 @@ EOF
         my @refineScripts = split ',', $opt_D;
         foreach my $s (@refineScripts) {
             if ( !-e "$s" ) { die "ERROR: Your refineDiag script does not exist: $s\n"; }
+	    my ($rd) = (fileparse($s, qw[.csh .bash .sh .py]))[0];
+	    $csh .= qq{   setenv PAPIEX_TAGS "rd:$rd"\n} if $opt{epmt};
             $csh .= <<EOF;
    #source user refineDiag script: $s
    source $s
@@ -7770,6 +7772,7 @@ EOF
    endif
 
 EOF
+	    $csh .= qq{   unsetenv PAPIEX_TAGS\n} if $opt{epmt};
         }
 
         $csh .= <<EOF;
@@ -8196,12 +8199,13 @@ def papiex_tag_file(fin_name, fms_modulefiles):
             # Increment the operation instance. 
             # op_instance correlates to a specific line in the script.
             this_op = re.search('PAPIEX_TAGS "op:(.*);op_instance:OP_INSTANCE',line)
-            this_op = this_op.group(1)
-            for op in op_list:
-                if this_op == op['op_name']:
-                    op['op_instance'] += 1
-                    line = line.replace("OP_INSTANCE",str(op['op_instance'])+retry)
-                    line = line + ' ;unsetenv PAPIEX_TAGS'
+            if this_op:
+              this_op = this_op.group(1)
+              for op in op_list:
+                  if this_op == op['op_name']:
+                      op['op_instance'] += 1
+                      line = line.replace("OP_INSTANCE",str(op['op_instance'])+retry)
+                      line = line + ' ;unsetenv PAPIEX_TAGS'
         script.append(line)
         pline = line
 
