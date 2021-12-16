@@ -8176,15 +8176,16 @@ def papiex_tag_file(fin_name, fms_modulefiles):
         # Place the EPMT_JOB_TAGS
         if '#INFO:max_years' in pline:
            script.append('')
-           script.append('source $MODULESHOME/init/csh')
-           script.append('module use ' + fms_modulefiles)
-           script.append('module load epmt')
-           script.append('set PAPIEX_OLD_OUTPUT=$PAPIEX_OUTPUT')
-           script.append('set PAPIEX_OLD_OPTIONS=$PAPIEX_OPTIONS')
-           script.append(epmt_uninstrument)
-           script.append(EPMT_JOB_TAGS)
-           script.append(epmt_instrument)
-           script.append('')
+           script.append('if ( $?SLURM_JOBID ) then')
+           script.append('    source $MODULESHOME/init/csh')
+           script.append('    module use -a ' + fms_modulefiles)
+           script.append('    module load epmt')
+           script.append('    set PAPIEX_OLD_OUTPUT=$PAPIEX_OUTPUT')
+           script.append('    set PAPIEX_OLD_OPTIONS=$PAPIEX_OPTIONS')
+           script.append('    ' + epmt_uninstrument)
+           script.append('    ' + EPMT_JOB_TAGS)
+           script.append('    ' + epmt_instrument)
+           script.append('endif')
 
         # Refine the PAPIEX_TAGS for a particular operation
         if "PAPIEX_TAGS" in line:
