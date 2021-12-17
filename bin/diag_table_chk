@@ -1,4 +1,24 @@
 #! /usr/bin/env perl
+#
+# **********************************************************************
+# diag_table_chk - GFDL Diagnostic Table Checker
+# Copyright (C) 2012, 2021 Seth Underwood (@underwoo)
+#
+# This program is free software; you can redistribute it and/or
+# modify it under the terms of the GNU General Public License
+# as published by the Free Software Foundation; either version 2
+# of the License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
+# 02110-1301, USA.
+# **********************************************************************
 
 =pod
 
@@ -28,15 +48,15 @@ use strict;
 use Switch;
 use List::Util qw/max/;
 use Pod::Usage;
-use Getopt::Long;
+use Getopt::Long qw(:config posix_default no_ignore_case);
 use Text::ParseWords;
 
 # Fre modules
 use FRE;
 use FREExperiment;
 
-my $Version = '1.1';
-my $Date    = '01 Mar 2012';
+my $Version = '1.2';
+my $Date    = '17 Dec 2021';
 
 my $verbose    = 0;
 my $xmlFile    = '';
@@ -381,14 +401,13 @@ while (<DIAG_TABLE>) {
 
                 # More optional inputs
                 if ( $#line_data >= 8 ) {
-                    $num_warnings++;
-
                     # remove quotes, beginning and ending space.
                     my @start_time = split( /\s+/, sanitizeString( $line_data[8] ) );
 
                     # Check start_time_string :: Must be valid date string
                     my $message = verifyDate(@start_time);
                     if ($message) {
+		        $num_warnings++;
                         push @warnings,
                             (
                             {   line_number => $.,
@@ -424,7 +443,7 @@ while (<DIAG_TABLE>) {
                         }
                     } ## end if ( $#line_data > 8 )
                 } ## end if ( $#line_data >= 8 )
-            } ## end if ( $#line_data > 6 )
+	    } ## end if ( $#line_data > 6 )
             if ( $num_warnings == 0 ) {
                 push @files,
                     (
@@ -893,7 +912,7 @@ sub find_maxOutPerInField {
 sub displayVersion {
     my ( $version, $date ) = @_;
 
-    print "calcPErequest $version ($date)\n";
+    print "diag_table_chk $version ($date)\n";
 }
 
 __END__
