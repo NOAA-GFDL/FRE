@@ -4,6 +4,7 @@ package FREAnalysis;
 require Exporter;
 our @ISA       = qw(Exporter);
 our @EXPORT_OK = qw(analysis);
+use File::Basename;
 
 sub analysis {
     my $args          = shift;
@@ -39,6 +40,7 @@ sub analysis {
     my $opt_P         = $args->{opt_P};
     my $opt_T         = $args->{stdTarget};
     my $opt_s         = $args->{opt_s};
+    my $opt_epmt      = $args->{opt_epmt};
 
     # exit if no analysis nodes found
     my $anum = &anodenum($ts_av_Node);
@@ -421,7 +423,7 @@ sub analysis {
                 cleanpath($frexml),     cleanpath($stdoutdir),
                 $opt_P,                 $opt_T,
                 $experID,               $realizID,
-                $runID
+                $runID,                 $opt_epmt
             );
 
             #
@@ -489,7 +491,7 @@ sub analysis {
                         cleanpath($frexml),     cleanpath($stdoutdir),
                         $opt_P,                 $opt_T,
                         $experID,               $realizID,
-                        $runID
+                        $runID,                 $opt_epmt
                     );
                 }
                 else {
@@ -503,7 +505,7 @@ sub analysis {
                         cleanpath($frexml),     cleanpath($stdoutdir),
                         $opt_P,                 $opt_T,
                         $experID,               $realizID,
-                        $runID
+                        $runID,                 $opt_epmt
                     );
                 }
 
@@ -567,7 +569,7 @@ sub analysis {
                             cleanpath($frexml),     cleanpath($stdoutdir),
                             $opt_P,                 $opt_T,
                             $experID,               $realizID,
-                            $runID
+                            $runID,                 $opt_epmt
                         );
                     }
                     else {
@@ -581,7 +583,7 @@ sub analysis {
                             cleanpath($frexml),     cleanpath($stdoutdir),
                             $opt_P,                 $opt_T
                             ),
-                            $experID, $realizID, $runID;
+                            $experID, $realizID, $runID, $opt_epmt;
                     }
                 }    #for (my $n = 0 ...
             }    #if ($cumulative ..
@@ -813,7 +815,7 @@ sub filltemplate {
     my ($arrayofExptsH_ref, $figureDir, $aScript,  $aargu,     $aScriptout,
         $iExpt,             $workdir,   $mode,     $asrcfile,  $opt_s,
         $opt_u,             $opt_V,     $frexml,   $stdoutdir, $platform,
-        $target,            $experID,   $realizID, $runID
+        $target,            $experID,   $realizID, $runID,     $opt_epmt
     ) = @_;
 
     #if ( $opt_V ) {
@@ -833,7 +835,7 @@ sub filltemplate {
     unless ( $scriptexists eq "exists" ) {
         print "ERROR: Analysis script doesn't exist: '$aScript'\n";
         print
-            "       Check that all variables are set. The fre-analysis module may need to be loaded.\n";
+            "       Check that all variables and/or FRE properties are set correctly.\n";
         exit 1;
     }
 
@@ -1004,6 +1006,50 @@ EOF
             $tmpsch =~ s/set nlat_$ii\s*$/set nlat_$ii = $arrayofExptsH_ref->[$i]->{nlat}/m;
         } ## end for my $i ( 1 .. $iExpt)
     } ## end if ( $iExpt >= 1 )
+
+    # if using EPMT, insert the job tags right after the scheduler system headers
+    # and append "epmt" to the sbatch --comment headers or add them otherwise
+    if ($opt_epmt) {
+        # if --comment sbatch header already exists, append epmt
+        # otherwise, add it to the top just below the shebang
+        my $added_epmt_to_headers = 0;
+	    if ($tmpsch =~ s|(#SBATCH --comment)=?(.*)|$1=$2,epmt|g) {
+            $added_epmt_to_headers = 1;
+        }
+        my @lines = split "\n", $tmpsch;
+        if (! $added_epmt_to_headers) {
+            splice @lines, 1, 0, '#SBATCH --comment=epmt';
+        }
+        for my $n (0 .. $#lines) {
+            next if $lines[$n] =~ /^\s*$/;
+            next if $lines[$n] =~ /^\s*#/;
+            $first_line_of_code = $n;
+            last;
+        }
+        my $epmt_instrument = 'setenv PAPIEX_OPTIONS $PAPIEX_OLD_OPTIONS; setenv LD_PRELOAD $PAPIEX_LD_PRELOAD; setenv PAPIEX_OUTPUT $PAPIEX_OLD_OUTPUT;';
+        my $epmt_uninstrument = 'unsetenv PAPIEX_OUTPUT PAPIEX_OPTIONS LD_PRELOAD';
+        my $epmt_job_tags = sprintf "EPMT_JOB_TAGS='exp_component:analysis;exp_name:%s;exp_time:%s;exp_platform:%s;exp_target:%s;script_name:%s'",
+            $arrayofExptsH_ref->[0]->{exptname},
+            $arrayofExptsH_ref->[0]->{aendYear},
+            $platform,
+            $target,
+            basename($aScript);
+        my @tags = (
+            '# Set EPMT job tags if a batch job',
+            'if ( $?SLURM_JOBID ) then',
+            '    source $MODULESHOME/init/csh',
+            '    module use -a  /home/fms/local/modulefiles',
+            '    module load epmt',
+            '    set PAPIEX_OLD_OUTPUT=$PAPIEX_OUTPUT',
+            '    set PAPIEX_OLD_OPTIONS=$PAPIEX_OPTIONS',
+            "    $epmt_uninstrument",
+            "    epmt annotate $epmt_job_tags",
+            "    $epmt_instrument",
+            'endif',
+            '');
+        splice @lines, $first_line_of_code, 0, @tags;
+        $tmpsch = join("\n", @lines) . "\n\n";
+    }
 
     writescript( $tmpsch, $mode, $aScriptout, $aargu, $opt_s );
 } ## end sub filltemplate
