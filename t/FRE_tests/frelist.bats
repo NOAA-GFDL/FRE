@@ -485,8 +485,8 @@ module load fre/$FRE_COMMANDS_VERSION
 module load git
 
 setenv NC_BLKSZ 64K
-set ncksopt = \"-a -h -F --header_pad 16384\"
-set ncrcatopt = \"-h -O -t 2 --header_pad 16384\"
+set ncksopt = \"--no-abc -h -F --header_pad 32768\"
+set ncrcatopt = \"-h -O -t 2 --header_pad 32768\"
 
 # Platform environment overrides from XML"
 
@@ -601,8 +601,8 @@ module load fre/bronx-12
 module load git
 
 setenv NC_BLKSZ 64K
-set ncksopt = "-a -h -F --header_pad 16384"
-set ncrcatopt = "-h -O -t 2 --header_pad 16384"
+set ncksopt = "--no-abc -h -F --header_pad 32768"
+set ncrcatopt = "-h -O -t 2 --header_pad 32768"
 
 # Platform environment overrides from XML
 
