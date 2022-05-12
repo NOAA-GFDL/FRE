@@ -257,6 +257,7 @@
   endif
 
   # Get the PTMP directory using frelist, and verify it exists and is a directory
+  # If it does not exist, try to create it
   set -r ptmpDir = `frelist --directory=ptmp --platform=${platform} --target=${target} --xmlfile=${xmlFile} ${expName}`
   if ( $status != 0 ) then
     if ( $echoOn ) unset echo
@@ -264,10 +265,13 @@
     if ( $echoOn ) set echo
     exit 1
   else if ( ! -d ${ptmpDir} ) then
-    if ( $echoOn ) unset echo
-    echo "*ERROR*: PTMP directory '${ptmpDir}' does not exist or isn't a directory"
-    if ( $echoOn ) set echo
-    exit 1
+    mkdir -p ${ptmpDir}
+    if ( $status != 0 ) then
+      if ( $echoOn ) unset echo
+      echo "*ERROR*: PTMP directory '${ptmpDir}' does not exist or isn't a directory"
+      if ( $echoOn ) set echo
+      exit 1
+    endif
   endif
 
 ################################################################################
