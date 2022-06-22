@@ -1,13 +1,10 @@
 module unload cray-netcdf cray-hdf5 fre
 module unload PrgEnv-pgi PrgEnv-intel PrgEnv-gnu PrgEnv-cray
-module load PrgEnv-gnu/6.0.10
-module unload craype
-module load craype/2.7.7
+module load PrgEnv-gnu/8.3.3
 module unload gcc
 module load gcc/$(COMPILER_VERSION)
 module load fre/$(FRE_VERSION)
-module load cray-hdf5/1.12.0.4
-module load git
+module load cray-hdf5/1.12.1.3
 module load libyaml/0.2.5
 
 setenv KMP_STACKSIZE 512m
