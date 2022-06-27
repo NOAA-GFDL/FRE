@@ -459,9 +459,6 @@ sub new($$%)
  # -------------------------------------------------------- verify availability of the platform site
                 if ( scalar( grep( $_ eq $platformSite, FREDefaults::Sites() ) ) > 0 ) {
 
-# -------------------------------------------------------------- verify locality of the platform site
-                    if ( FREPlatforms::siteIsLocal($platformSite) || $caller eq 'frelist' ) {
-
 # ----------------------------------------------------------------------- standardize the target string
                         ( $o{target}, my $targetErrorMsg ) = FRETargets::standardize( $o{target} );
                         if ( $o{target} ) {
@@ -471,6 +468,10 @@ sub new($$%)
                             my $properties = FREProperties->new( $rootNode, $siteDir, %o );
                             if ($properties) {
                                 $properties->propertiesList( $o{verbose} );
+
+# -------------------------------------------------------------- verify locality of the platform site
+                                if ( FREPlatforms::siteIsLocal($platformSite) || $caller eq 'frelist'
+                                    || FREPlatforms::currentSiteIsCompatible($properties->property('FRE.sites.compatible'))) {
 
 # ----------------------------------------------- locate the platform node (no backward compatibility anymore)
                                 my $platformNode = $platformNodeGet->($rootNode);
@@ -583,6 +584,13 @@ sub new($$%)
                                         "The platform with name '$o{platform}' isn't defined" );
                                     return '';
                                 }
+                    } ## end if ( FREPlatforms::siteIsLocal...)
+                    else {
+                        FREMsg::out( $o{verbose}, FREMsg::FATAL,
+                            "You are not allowed to run the '$caller' tool with the '$o{platform}' platform on this site"
+                        );
+                        return '';
+                    }
                             } ## end if ($properties)
                             else {
                                 FREMsg::out( $o{verbose}, FREMsg::FATAL,
@@ -594,13 +602,6 @@ sub new($$%)
                             FREMsg::out( $o{verbose}, FREMsg::FATAL, $targetErrorMsg );
                             return '';
                         }
-                    } ## end if ( FREPlatforms::siteIsLocal...)
-                    else {
-                        FREMsg::out( $o{verbose}, FREMsg::FATAL,
-                            "You are not allowed to run the '$caller' tool with the '$o{platform}' platform on this site"
-                        );
-                        return '';
-                    }
                 } ## end if ( scalar( grep( $_ ...)))
                 else {
                     my $sites = join( "', '", FREDefaults::Sites() );
