@@ -469,7 +469,7 @@ sub new($$%)
                             if ($properties) {
                                 $properties->propertiesList( $o{verbose} );
 
-# -------------------------------------------------------------- verify locality of the platform site
+# ------------------------------------------- verify locality of the platform site or that it is allowed via config file
                                 if ( FREPlatforms::siteIsLocal($platformSite) || $caller eq 'frelist'
                                     || FREPlatforms::currentSiteIsCompatible($properties->property('FRE.sites.compatible'))) {
 

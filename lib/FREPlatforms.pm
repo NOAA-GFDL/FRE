@@ -194,6 +194,8 @@ sub siteIsLocal($)
     }
 }
 
+# Helper utility used in FRE.pm initialization to determine whether the current site,
+# $FRE_SYSTEM_SITE, is compatible with the site (--platform) requested by the user
 sub currentSiteIsCompatible($)
 
     # ------ arguments: $sites
