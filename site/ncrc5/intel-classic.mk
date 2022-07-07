@@ -1,1 +1,1 @@
-../ncrc_common/intel-classic.mk
+../../mkmf/templates/ncrc5-intel-classic.mk

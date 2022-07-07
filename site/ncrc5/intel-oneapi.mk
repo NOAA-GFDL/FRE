@@ -1,1 +1,1 @@
-../ncrc_common/intel-oneapi.mk
+../../mkmf/templates/ncrc5-intel-oneapi.mk
