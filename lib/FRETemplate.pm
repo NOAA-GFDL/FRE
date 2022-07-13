@@ -809,6 +809,10 @@ sub setRunCommand($$$)
                 $runCommand .= ' '
                     . $fre->propertyParameterized( 'FRE.mpi.runCommand.option.nthreads',
                     '$scheduler_' . ${component} . '_threads' );
+                # optionally append more scheduler options if set in fre.properties
+                if ($fre->property('FRE.mpi.runCommand.moreOptions')) {
+                    $runCommand .= ' ' . $fre->property('FRE.mpi.runCommand.moreOptions');
+                }
                 $runCommand .= ' ' . $fre->property('FRE.mpi.runCommand.executable');
             }
         }
