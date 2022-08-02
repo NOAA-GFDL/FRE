@@ -47,7 +47,7 @@ use Email::Valid;
     );
 
     use constant WALLTIME_DEFAULT => 120;
-    use constant NCORES_DEFAULT   => 8;
+    use constant NCORES_DEFAULT   => 32;
     use constant TAB              => '<TAB>';
 
 }
@@ -81,7 +81,7 @@ use Email::Valid;
             "   -F,        --force-compile             force compile in case the executable directory exists\n",
             "   -K,        --keep-compiled             keep compiled files in the executable directory\n",
             "   -L,        --link                      link the executable (negatable, default is on)\n",
-            "   -j NUM,    --make-jobs=NUM             number NUM of concurrent make jobs to use for compilation\n\n",
+            "   -j NUM,    --make-jobs=NUM             number NUM of concurrent make jobs to use for compilation\n",
             "   -E,        --execute                   execute all the created scripts in the current session\n",
             "   -h,        --help                      print help message and exit\n",
             "   -n NUM,    --ncores=NUM                number NUM of processor cores to use (default is $ncs)\n",
@@ -707,6 +707,12 @@ use Email::Valid;
 
         my $freCommandsHomeDir = FRE::home();
         my $jobs               = $o{'make-jobs'} || $fre->property('FRE.tool.make.jobs.default');
+        if ($jobs > $o{ncores}) {
+            $fre->out( FREMsg::WARNING,
+                "You have requested fewer cores ($o{ncores}) than parallel make jobs ($jobs), so parallel make jobs are reduced."
+            );
+            $jobs = $o{ncores};
+        }
         my $modulesHomeDir     = $fre->property('FRE.tool.modules.home');
 
 # ------------------------------------------------------------------- create the environment setting script
