@@ -809,9 +809,17 @@ sub setRunCommand($$$)
                 $runCommand .= ' '
                     . $fre->propertyParameterized( 'FRE.mpi.runCommand.option.nthreads',
                     '$scheduler_' . ${component} . '_threads' );
-                # optionally append more scheduler options if set in fre.properties
-                if ($fre->property('FRE.mpi.runCommand.moreOptions')) {
-                    $runCommand .= ' ' . $fre->property('FRE.mpi.runCommand.moreOptions');
+                # optionally append gaea/Slurm/threads-related options if set in fre.properties
+                if (FRETargets::containsOpenMP( $fre->target() )) {
+                    if ($fre->property('FRE.mpi.runCommand.exportAllWithThreads')) {
+                        $runCommand .= ' ' . $fre->propertyParameterized('FRE.mpi.runCommand.exportAllWithThreads',
+                            '$' . $component . '_threads');
+                    }
+                }
+                else {
+                    if ($fre->property('FRE.mpi.runCommand.exportAll')) {
+                        $runCommand .= ' ' . $fre->property('FRE.mpi.runCommand.exportAll');
+                    }
                 }
                 $runCommand .= ' ' . $fre->property('FRE.mpi.runCommand.executable');
             }
