@@ -41,7 +41,7 @@ use Email::Valid;
 
     use constant OPTLIST => (
         'force-checkout|f', 'force-compile|F', 'keep-compiled|K', 'link|L!',
-        'make-jobs|j=i',    'execute|E',       'help|h',          'ncores|n=i',
+                            'execute|E',       'help|h',          'ncores|n=i',
         'platform|p=s',     'submit|s',        'target|t=s',      'version|V',
         'verbose|v+',       'walltime|w=i',    'xmlfile|x=s',     'mail-list=s'
     );
@@ -81,7 +81,6 @@ use Email::Valid;
             "   -F,        --force-compile             force compile in case the executable directory exists\n",
             "   -K,        --keep-compiled             keep compiled files in the executable directory\n",
             "   -L,        --link                      link the executable (negatable, default is on)\n",
-            "   -j NUM,    --make-jobs=NUM             number NUM of concurrent make jobs to use for compilation\n",
             "   -E,        --execute                   execute all the created scripts in the current session\n",
             "   -h,        --help                      print help message and exit\n",
             "   -n NUM,    --ncores=NUM                number NUM of processor cores to use (default is $ncs)\n",
@@ -122,7 +121,7 @@ use Email::Valid;
             "      Rather, we save only scripts with the timestamp and clean that directory (unless the option --keep-compiled is used).\n",
             "   Use --keep-compiled if you want to keep compiled files in the executable directory for the future use.\n",
             "      This option allows you to modify the standard behavior of the --force-compile option.\n",
-            "   Use --make-jobs to set a number of concurrent make jobs (it corresponds to the GNU make option --jobs)\n",
+            "   Use --ncores to set the number of processors to use for concurrent make jobs.\n",
             "      The default value of this option depends on the site you are working at.\n",
             "   Use --platform to pick a platform for experiment(s).\n",
             "      The <platform> node in the experiment suite configuration file is used\n",
@@ -706,13 +705,7 @@ use Email::Valid;
 # ---------------------------------------------------------------------------------------- get FRE parameters
 
         my $freCommandsHomeDir = FRE::home();
-        my $jobs               = $o{'make-jobs'} || $fre->property('FRE.tool.make.jobs.default');
-        if ($jobs > $o{ncores}) {
-            $fre->out( FREMsg::WARNING,
-                "You have requested fewer cores ($o{ncores}) than parallel make jobs ($jobs), so parallel make jobs are reduced."
-            );
-            $jobs = $o{ncores};
-        }
+        my $default_make_jobs = $fre->property('FRE.tool.make.jobs.default');
         my $modulesHomeDir     = $fre->property('FRE.tool.modules.home');
 
 # ------------------------------------------------------------------- create the environment setting script
@@ -726,7 +719,13 @@ use Email::Valid;
         $envScript
             .= "# ------------------------------------------------------------------------------\n\n";
 
-        $envScript .= "setenv MAKEFLAGS --jobs=$jobs\n\n";
+        $envScript .= 'if ( ! $?MAKEFLAGS ) then' . "\n";
+        $envScript .= '  if ( $?SLURM_JOB_CPUS_PER_NODE ) then' . "\n";
+        $envScript .= '    setenv MAKEFLAGS --jobs=$SLURM_JOB_CPUS_PER_NODE' . "\n";
+        $envScript .= "  else\n";
+        $envScript .= "    setenv MAKEFLAGS --jobs=$default_make_jobs\n";
+        $envScript .= "  endif\n";
+        $envScript .= "endif\n\n";
 
         $envScript .= "source $modulesHomeDir/init/tcsh\n";
         $envScript .= "$baseCsh\n";
