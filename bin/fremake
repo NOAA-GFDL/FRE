@@ -705,8 +705,9 @@ use Email::Valid;
 # ---------------------------------------------------------------------------------------- get FRE parameters
 
         my $freCommandsHomeDir = FRE::home();
-        my $default_make_jobs = $fre->property('FRE.tool.make.jobs.default');
+        my $default_make_jobs  = $fre->property('FRE.tool.make.jobs.default');
         my $modulesHomeDir     = $fre->property('FRE.tool.modules.home');
+        my $tasks_per_node     = $fre->property('FRE.scheduler.variable.coresPerNode');
 
 # ------------------------------------------------------------------- create the environment setting script
 
@@ -719,9 +720,10 @@ use Email::Valid;
         $envScript
             .= "# ------------------------------------------------------------------------------\n\n";
 
+        $envScript .= "# Allow for some flexibilty to override make flags\n";
         $envScript .= 'if ( ! $?MAKEFLAGS ) then' . "\n";
-        $envScript .= '  if ( $?SLURM_JOB_CPUS_PER_NODE ) then' . "\n";
-        $envScript .= '    setenv MAKEFLAGS --jobs=$SLURM_JOB_CPUS_PER_NODE' . "\n";
+        $envScript .= '  if ( $?' . $tasks_per_node . ') then' . "\n";
+        $envScript .= '    setenv MAKEFLAGS --jobs=$' . $tasks_per_node . "\n";
         $envScript .= "  else\n";
         $envScript .= "    setenv MAKEFLAGS --jobs=$default_make_jobs\n";
         $envScript .= "  endif\n";
