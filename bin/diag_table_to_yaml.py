@@ -1,6 +1,29 @@
 #!/usr/bin/env python3
+"""
+***********************************************************************
+*                   GNU Lesser General Public License
+*
+* This file is part of the GFDL Flexible Modeling System (FMS) YAML tools.
+*
+* FMS_yaml_tools is free software: you can redistribute it and/or modify it under
+* the terms of the GNU Lesser General Public License as published by
+* the Free Software Foundation, either version 3 of the License, or (at
+* your option) any later version.
+*
+* FMS_yaml_tools is distributed in the hope that it will be useful, but WITHOUT
+* ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+* FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+* for more details.
+*
+* You should have received a copy of the GNU Lesser General Public
+* License along with FMS.  If not, see <http://www.gnu.org/licenses/>.
+***********************************************************************
+"""
 
-#: converts the global, file and field sections in diag_table to yaml format:
+""" Converts a legacy ascii diag_table to a yaml diag_table.
+    Run `python3 diag_table_to_yaml.py -h` for more details
+    Author: Uriel Ramirez 05/27/2022
+"""
 
 import copy as cp
 import argparse
@@ -8,16 +31,18 @@ from os import path
 import yaml
 
 #: parse user input
-parser = argparse.ArgumentParser(prog='diag_table_to_yaml', description="converts diag_table to yaml format")
-parser.add_argument('-f', type=str, help='diag_table file' )
+parser = argparse.ArgumentParser(prog='diag_table_to_yaml', \
+                                 description="converts a legacy ascii diag_table to a yaml diag_table \
+                                              Requires pyyaml (https://pyyaml.org/) \
+                                              More details on the diag_table yaml format can be found in \
+                                              https://github.com/NOAA-GFDL/FMS/tree/main/diag_table")
+parser.add_argument('-f', type=str, help='Name of the ascii diag_table to convert' )
 in_diag_table = parser.parse_args().f
 
-#: diag_table related attributes and functions
 class DiagTable :
 
     def __init__(self, diag_table_file='Diag_Table' ) :
-
-        '''add description of this class later'''
+        '''Initialize the diag_table type'''
 
         self.diag_table_file = diag_table_file
 
@@ -54,23 +79,21 @@ class DiagTable :
 
         self.region_section = []
         self.region_section_keys = ['grid_type',
-                                  'dim1_begin',
-                                  'dim1_end',
-                                  'dim2_begin',
-                                  'dim2_end',
-                                  'dim3_begin',
-                                  'dim3_end',
-                                  'file_name'
-                                  'line']
+                                    'corner1',
+                                    'corner2',
+                                    'corner3',
+                                    'corner4',
+                                    'zbounds',
+                                    'file_name'
+                                    'line']
         self.region_section_fvalues = {'grid_type'            : str,
-                                    'dim1_begin'              : float,
-                                    'dim1_end'                : float,
-                                    'dim2_begin'              : float,
-                                    'dim2_end'                : float,
-                                    'dim3_begin'              : float,
-                                    'dim3_end'                : float,
-                                    'file_name'               : str,
-                                    'line'                : str}
+                                       'corner1'              : [ float, float],
+                                       'corner2'              : [ float, float],
+                                       'corner3'              : [ float, float],
+                                       'corner4'              : [ float, float],
+                                       'zbounds'              : [ float, float],
+                                       'file_name'            : str,
+                                       'line'                 : str}
         self.max_file_section = len(self.file_section_keys)
         self.field_section = []
         self.field_section_keys = ['module',
@@ -96,24 +119,29 @@ class DiagTable :
 
 
     def read_diag_table(self) :
-        #: read
+        """ Open and read the diag_table"""
         with open( self.diag_table_file, 'r' ) as myfile :
             self.diag_table_content = myfile.readlines()
 
-    def set_region(self, myval, file_name) :
+    def set_sub_region(self, myval, file_name) :
+        """ Loop through the defined sub_regions, determine if the file already has a sub_region defined
+            if it does crash. If the sub_region is not already defined add the region to the list
+        """
         tmp_dict2 = {}
         found = False
         for iregion_dict in self.region_section :
            if iregion_dict['file_name'] == file_name :
               found = True
               if iregion_dict['line'] != myval :
-                 print("There are multiple regions for file:" + file_name)
+                 print("The "+ file_name +" has multiple sub_regions defined. Be sure that all the variables \
+                        in the file are in the same sub_region!")
                  print("Region1:" + myval)
                  print("Region2:" + iregion_dict['line'])
                  exit()
         if (found) : return
 
         tmp_dict2["line"] = myval
+        tmp_dict2["file_name"] = file_name
         if "none" in myval:
            tmp_dict2[self.region_section_keys[0]] = myval
         else :
@@ -121,27 +149,49 @@ class DiagTable :
            stuff = myval.split(' ')
            k = -1
            for j in range(len(stuff)) :
-               if (stuff[j] == "") : continue #LOL some lines have extra spaces ("1 10  9 11 -1 -1")
-               k = k + 1 #The Classic way
-               mykey   = self.region_section_keys[k+1]
-               myfunct = self.region_section_fvalues[mykey]
-               myval   = myfunct( stuff[j] )
-               if myval != -1 and myval != -999 : #Do not add a key if the limit is -1 or -999
-                  tmp_dict2[mykey] = myval
-        tmp_dict2["file_name"] = file_name
+               if (stuff[j] == "") : continue #Some lines have extra spaces ("1 10  9 11 -1 -1")
+               k = k + 1
+
+               if float(stuff[j]) == -1 :
+                  stuff[j] = "-999"
+
+               if k==0 :
+                   corner1 = stuff[j]
+                   corner2 = stuff[j]
+               elif k==1 :
+                   corner3 = stuff[j]
+                   corner4 = stuff[j]
+               elif k==2 :
+                   corner1 = corner1 + ' ' + stuff[j]
+                   corner2 = corner2 + ' ' + stuff[j]
+               elif k==3 :
+                   corner3 = corner3 + ' ' + stuff[j]
+                   corner4 = corner4 + ' ' + stuff[j]
+               elif k==4:
+                   zbounds = stuff[j]
+               elif k==5:
+                   zbounds = zbounds + ' ' + stuff[j]
+
+           tmp_dict2["corner1"] = corner1
+           tmp_dict2["corner2"] = corner2
+           tmp_dict2["corner3"] = corner3
+           tmp_dict2["corner4"] = corner4
+           tmp_dict2["zbounds"] = zbounds
         self.region_section.append( cp.deepcopy(tmp_dict2) )
 
     def parse_diag_table(self) :
-        if self.diag_table_content == [] : exit('ERROR:  diag_table_content is empty')
+        """ Loop through each line in the diag_table and parse it"""
+
+        if self.diag_table_content == [] : raise Exception('ERROR:  The input diag_table is empty!')
 
         iline_count, global_count = 0, 0
 
-        #: global section; should be the first two lines
+        #: The first two lines should be the title and base_time
         while global_count < 2 :
             iline = self.diag_table_content[iline_count]
             iline_count += 1
             if iline.strip() != '' and '#' not in iline.strip()[0] : #: if not blank or comment
-                #: line 2
+                #: Set the base_date
                 if global_count == 1 :
                     try :
                         iline_list, tmp_list = iline.split('#')[0].split(), [] #: not comma separated integers
@@ -151,7 +201,7 @@ class DiagTable :
                     except :
                         exit(" ERROR1 with line # " + str(iline_count) + '\n'
                              " CHECK:            " + str(iline) + '\n' )
-                #: line 1
+                #: Set the title
                 if global_count == 0 :
                     try :
                         mykey   = self.global_section_keys[0]
@@ -163,7 +213,7 @@ class DiagTable :
                         exit(" ERROR2 with line # " + str(iline_count) + '\n'
                              " CHECK:            " + str(iline) + '\n' )
 
-        #: rest are either going to be file or field section
+        #: The rest of the lines are either going to be file or field section
         for iline_in in self.diag_table_content[iline_count:] :
             iline = iline_in.strip().strip(',') #get rid of any leading spaces and the comma that some file lines have in the end #classic
             iline_count += 1
@@ -174,13 +224,13 @@ class DiagTable :
                     tmp_dict = {}
                     for i in range(len(iline_list)) :
                         j = i
-                        if (i == 3) : continue #do not do anything with the "file_format" section
+                        if (i == 3) : continue #do not do anything with the "file_format" column
                         if (i > 3) : j = i-1
                         mykey   = self.file_section_keys[j]
                         myfunct = self.file_section_fvalues[mykey]
                         myval   = myfunct( iline_list[i].strip().strip('"').strip("'"))
-                        if (i == 9 and myval <= 0) : continue
-                        if (i == 10 and myval == "") : continue
+                        if (i == 9 and myval <= 0) : continue #ignore file_duration if it less than 0
+                        if (i == 10 and myval == "") : continue #ignore the file_duration_units if it is an empty string
                         tmp_dict[mykey] = myval
                     self.file_section.append( cp.deepcopy(tmp_dict) )
                 except :
@@ -205,13 +255,14 @@ class DiagTable :
                             if (i != 6) : # Do not add the region to the field section
                                tmp_dict[mykey] = myval
                             else:
-                               self.set_region(myval, tmp_dict["file_name"])
+                               self.set_sub_region(myval, tmp_dict["file_name"])
                         self.field_section.append( cp.deepcopy(tmp_dict) )
                     except :
                         exit(" ERROR3 with line # " + str(iline_count) + '\n'
                              " CHECK:            " + str(iline) + '\n' )
 
     def construct_yaml(self) :
+        """ Combine the global, file, field, sub_region sections into 1 """
         yaml_doc= {}
         #: title
         mykey = self.global_section_keys[0]
@@ -235,7 +286,7 @@ class DiagTable :
                    if (tmp_dict['grid_type'] != "none"):
                        ifile_dict['sub_region'].append(tmp_dict)
                        found = True
-                       break
+                       continue
             if not found : del ifile_dict['sub_region']
             ifile_dict['varlist']=[]
             found = False
@@ -248,13 +299,14 @@ class DiagTable :
                     del tmp_dict['file_name']
                     ifile_dict['varlist'].append(tmp_dict)
                     found = True
-                    break
+                    continue
             if not found : del ifile_dict['varlist']
             yaml_doc['diag_files'].append(ifile_dict)
         myfile = open(self.diag_table_file+'.yaml', 'w')
         yaml.dump(yaml_doc, myfile, sort_keys=False)
 
     def read_and_parse_diag_table(self) :
+        """ Read and parse the file """
         self.read_diag_table()
         self.parse_diag_table()
 

@@ -1,4 +1,29 @@
 #!/usr/bin/env python3
+"""
+***********************************************************************
+*                   GNU Lesser General Public License
+*
+* This file is part of the GFDL Flexible Modeling System (FMS) YAML tools.
+*
+* FMS_yaml_tools is free software: you can redistribute it and/or modify it under
+* the terms of the GNU Lesser General Public License as published by
+* the Free Software Foundation, either version 3 of the License, or (at
+        * your option) any later version.
+*
+* FMS_yaml_tools is distributed in the hope that it will be useful, but WITHOUT
+* ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+* FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+* for more details.
+*
+* You should have received a copy of the GNU Lesser General Public
+* License along with FMS.  If not, see <http://www.gnu.org/licenses/>.
+***********************************************************************
+"""
+
+""" Converts a legacy ascii field_table to a yaml field_table.
+        Author: Eric Stofferahn 07/14/2022
+"""
+
 import yaml
 import re
 import sys
@@ -9,6 +34,7 @@ yaml.add_representer(OrderedDict, lambda dumper, data: dumper.represent_mapping(
 
 verbose = False
 
+# Identify Field Table Name
 if len(sys.argv) > 1:
   field_table_name = sys.argv[1]
 else:
@@ -17,7 +43,9 @@ if verbose:
   print(field_table_name)
 
 class Field:
+  """ A Field Object, containing the variable attributes, methods, and subparameters """
   def __init__(self, in_field_type, entry_tuple):
+    """ Initialize the Field Object with the provided entries, then process as a species or tracer """
     self.field_type = in_field_type
     self.name = entry_tuple[0]
     self.dict = OrderedDict()
@@ -28,6 +56,7 @@ class Field:
         self.process_species(in_prop)
 
   def process_species(self, prop):
+    """ Process a species field """
     comma_split = prop.split(',')
     if verbose:
       print(self.name)
@@ -47,7 +76,7 @@ class Field:
       eq_splits = [eq_splits[0]]
       for sub_param in eq_splits:
         if ',' in sub_param[1]:
-          val = [yaml.safe_load(b) for b in sub_param[1].split(',')]
+          val = yaml.safe_load("'" + sub_param[1]+ "'")
         else:
           val = yaml.safe_load(sub_param[1])
         self.dict[sub_param[0]] = val
@@ -57,13 +86,12 @@ class Field:
       self.dict[eq_split[0]] = val
     
   def process_tracer(self, prop):
+    """ Process a tracer field """
     if verbose:
       print(len(prop))
-    if len(prop) < 3:
-      self.dict[prop[0]] = prop[1]
-    else:
-      self.dict[prop[0]] = OrderedDict()
-      self.dict[prop[0]]['value'] = prop[1]
+    self.dict[prop[0]] = prop[1]
+    if len(prop) > 2:
+      self.dict['subparams'] = [OrderedDict()] 
       if verbose:
         print(self.name)
         print(self.field_type)
@@ -73,12 +101,26 @@ class Field:
         val = yaml.safe_load(eq_split[-1])
         if isinstance(val, list):
           val = [yaml.safe_load(b) for b in val]
-        self.dict[prop[0]][eq_split[0]] = val
+        self.dict['subparams'][0][eq_split[0]] = val
       
-out_yaml = OrderedDict()
+def list_items(brief_text, brief_od):
+  """ Given text and an OrderedDict, make an OrderedDict and convert to list """
+  return list(OrderedDict([(brief_text, brief_od)]).items())
 
-if __name__ == '__main__':
-  with open(field_table_name, 'r') as fh:
+def listify_ordered_dict(in_list, in_list2, in_od):
+  """ Given two lists and an OrderedDict, return a list of OrderedDicts. Note this function is recursive. """
+  if len(in_list) > 1:
+    x = in_list.pop()
+    y = in_list2.pop()
+    return [OrderedDict(list_items(x, k) + list_items(y, listify_ordered_dict(in_list, in_list2, v))) for k, v in in_od.items()]
+  else:
+    x = in_list[0]
+    y = in_list2[0]
+    return [OrderedDict(list_items(x, k) + list_items(y, v)) for k, v in in_od.items()]
+  
+def process_field_file(my_file):
+  """ Parse ascii field table into nested lists for further processing """
+  with open(my_file, 'r') as fh:
     whole_file = fh.read()
   # Eliminate spaces, tabs, and quotes
   whole_file = whole_file.replace(' ', '').replace('"', '').replace('\t', '')
@@ -97,29 +139,67 @@ if __name__ == '__main__':
   # Split nested lines into "heads" (field_type, model, var_name) and "tails" (the rest)
   heads = [x[0] for x in nested_lines]
   tails = [x[1:] for x in nested_lines]
-  # Get unique combination of field_type and model... in order provided
-  ordered_keys = OrderedDict.fromkeys([tuple([y.lower() for y in x.split(',')[:2]]) for x in heads])
-  # Initialize lists
-  for k in ordered_keys.keys():
-    ordered_keys[k] = []
-    if k[0] not in out_yaml.keys():
-      out_yaml[k[0]] = OrderedDict()
-    if k[1] not in out_yaml[k[0]].keys():
-      out_yaml[k[0]][k[1]] = OrderedDict()
-  # Populate entries as OrderedDicts
-  for h, t in zip(heads, tails):
-    head_list = [y.lower() for y in h.split(',')]
-    tail_list = [x.split(',') for x in t]
-    if (head_list[0], head_list[1]) in ordered_keys.keys():
-      if 'tracer' == head_list[0]:
-        ordered_keys[(head_list[0], head_list[1])].append((head_list[2], tail_list))
-      else:
-        ordered_keys[(head_list[0], head_list[1])].append((head_list[2], t))
-  # Make Tracer and Species objects and assign to out_yaml
-  for k in ordered_keys.keys():
-    for j in ordered_keys[k]:
-      my_entry = Field(k[0], j)
-      out_yaml[k[0]][k[1]][my_entry.name] = my_entry.dict
-  # Make out_yaml file
-  with open(f'{field_table_name}.yaml', 'w') as yaml_file:
-    yaml.dump(out_yaml, yaml_file, default_flow_style=False)
+  return heads, tails
+  
+class FieldYaml:
+  def __init__(self, field_file):
+    self.filename = field_file
+    self.out_yaml = OrderedDict()
+    self.heads, self.tails = process_field_file(self.filename)
+
+  def init_ordered_keys(self):
+    """ Get unique combination of field_type and model... in order provided """
+    self.ordered_keys = OrderedDict.fromkeys([tuple([y.lower() for y in x.split(',')[:2]]) for x in self.heads])
+
+  def initialize_lists(self):
+    """ Initialize out_yaml and ordered_keys """
+    for k in self.ordered_keys.keys():
+      self.ordered_keys[k] = []
+      if k[0] not in self.out_yaml.keys():
+        self.out_yaml[k[0]] = OrderedDict()
+      if k[1] not in self.out_yaml[k[0]].keys():
+        self.out_yaml[k[0]][k[1]] = OrderedDict()
+
+  def populate_entries(self):
+    """ Populate entries as OrderedDicts """
+    for h, t in zip(self.heads, self.tails):
+      head_list = [y.lower() for y in h.split(',')]
+      tail_list = [x.split(',') for x in t]
+      if (head_list[0], head_list[1]) in self.ordered_keys.keys():
+        if 'tracer' == head_list[0]:
+          self.ordered_keys[(head_list[0], head_list[1])].append((head_list[2], tail_list))
+        else:
+          self.ordered_keys[(head_list[0], head_list[1])].append((head_list[2], t))
+
+  def make_objects(self):
+    """ Make Tracer and Species objects and assign to out_yaml """
+    for k in self.ordered_keys.keys():
+      for j in self.ordered_keys[k]:
+        my_entry = Field(k[0], j)
+        self.out_yaml[k[0]][k[1]][my_entry.name] = my_entry.dict
+
+  def convert_yaml(self):
+    """ Convert to list-style yaml """
+    lists_yaml = listify_ordered_dict(['model_type', 'field_type'], ['varlist', 'modlist'], self.out_yaml)
+    for i in range(len(lists_yaml)):
+      for j in range(len(lists_yaml[i]['modlist'])):
+        lists_yaml[i]['modlist'][j]['varlist'] = [OrderedDict(list(OrderedDict([('variable', k)]).items()) +
+            list(v.items())) for k, v in lists_yaml[i]['modlist'][j]['varlist'].items()]
+    self.lists_wh_yaml = {"field_table": lists_yaml}
+
+  def writeyaml(self):
+    """ Write yaml out to file """
+    with open(f'{self.filename}.yaml', 'w') as yaml_file:
+      yaml.dump(self.lists_wh_yaml, yaml_file, default_flow_style=False)
+
+  def main(self):
+    self.init_ordered_keys()
+    self.initialize_lists()
+    self.populate_entries()
+    self.make_objects()
+    self.convert_yaml()
+
+if __name__ == '__main__':
+  field_yaml = FieldYaml(field_table_name)
+  field_yaml.main()
+  field_yaml.writeyaml()
