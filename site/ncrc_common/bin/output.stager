@@ -1667,21 +1667,51 @@ if ( $actionPPStartToConsider ) then
 
          if ( $includeDir != "" && $includeDirRemote != "" ) then
             if ( -d $includeDir && -r $includeDir ) then
-               gcp --verbose --recursive --sync $xferSrcPrefix$includeDir $xferDstPrefix$includeDirRemote/
+               # create the include directory first
+               set dummyFile = /tmp/.dummy.txt.$$
+               echo "dummy" >> $dummyFile
+               gcp --create-dirs --verbose $xferSrcPrefix$dummyFile $xferDstPrefix$includeDirRemote/
                if ( $status == 0 ) then
-                  echo "<NOTE> : The include directory $includeDir has been copied to the remote location $includeDirRemote successfully"
+                  if ( $echoOn ) unset echo
+                  echo "<NOTE> : The remote include directory '$includeDirRemote' has been created successfully"
+                  if ( $echoOn ) set echo
+                  rm -f $dummyFile
                else
-                  echo "*ERROR* : Can't copy the include directory $includeDir to the remote location $includeDirRemote"
+                  if ( $echoOn ) unset echo
+                  echo "*ERROR*: Can't create the remote include directory '$stdoutDirRemotePP'"
+                  if ( $echoOn ) set echo
+                  rm -f $dummyFile
                   set exitStatus = 4
                   goto END
                endif
+
+               # copy each of the subdirectories/files within the source includeDir to the remote includeDir
+               # (needed to avoid copying the includeDir to a subdirectory of itself)
+               foreach f (`ls $includeDir`)
+                  gcp --verbose --recursive --sync $xferSrcPrefix$includeDir/$f $xferDstPrefix$includeDirRemote/
+                  if ( $status == 0 ) then
+                     if ( $echoOn ) unset echo
+                     echo "<NOTE> : The include sub-directory or file $includeDir/$f has been copied to the remote location $includeDirRemote/$f successfully"
+                     if ( $echoOn ) set echo
+                  else
+                     if ( $echoOn ) unset echo
+                     echo "*ERROR* : Can't copy the include sub-directory or file $includeDir/$f to the remote location $includeDirRemote/$f"
+                     if ( $echoOn ) set echo
+                     set exitStatus = 4
+                     goto END
+                  endif
+               end
             else
+               if ( $echoOn ) unset echo
                echo "*ERROR* : Can't copy the include directory $includeDir because it doesn't exist or not readable"
+               if ( $echoOn ) set echo
                set exitStatus = 2
                goto END
             endif
          else
+            if ( $echoOn ) unset echo
             echo "<NOTE> : Not configured to transfer include directory to GFDL"
+            if ( $echoOn ) set echo
          endif
 
          # ---------------- create the stdout directory for the pp.starter and submit the pp.starter job
