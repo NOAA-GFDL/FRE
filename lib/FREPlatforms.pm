@@ -185,15 +185,28 @@ sub siteIsLocal($)
     # ------ return 1 if the $site and the current site have common "site" directory
 {
     my $site      = shift;
-    my $site_root = ( $siteParse->($site) )[1];
     if (   $site eq $FREPlatformsSite
-        || $site eq $FREPlatformsSiteRoot
-        || $site_root eq $FREPlatformsSiteRoot ) {
+        || $site eq $FREPlatformsSiteRoot ) {
         return 1;
     }
     else {
         return 0;
     }
+}
+
+# Helper utility used in FRE.pm initialization to determine whether the current site,
+# $FRE_SYSTEM_SITE, is compatible with the site (--platform) requested by the user
+sub currentSiteIsCompatible($)
+
+    # ------ arguments: $sites
+    # ------ return 1 if the current site is one of the compatibile $sites
+{
+    my @sites = split ';', shift;
+    my $current_site = $FREPlatformsSite;
+    for (@sites) {
+        return 1 if $current_site eq $_;
+    }
+    return 0;
 }
 
 sub siteHasLocalStorage($)
