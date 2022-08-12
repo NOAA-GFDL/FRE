@@ -532,6 +532,12 @@ use Email::Valid;
         my ( $z, $p, $u ) = @_;
         my ( $fre,    $expName ) = ( $z->fre(),      $z->name() );
         my ( $target, $xmlfile ) = ( $fre->target(), $fre->configFileAbsPathName() );
+        # Optionally (if these 4 FRE properties are set), apply the search and replace.
+        # This is a workaround for determining the remote $(xmlDir) location and is not needed otherwise.
+        my $pattern_home = $fre->property('FRE.remote.directory.pattern.search.home');
+        my $pattern_scratch = $fre->property('FRE.remote.directory.pattern.search.scratch');
+        my $pattern_dev = $fre->property('FRE.remote.directory.pattern.search.dev');
+        my $pattern_replacement = $fre->property('FRE.remote.directory.pattern.replacement');
         my $cmd
             = "frelist --xmlfile=$xmlfile --platform=$p --target=$target --novalidate --directory=stdout,stmp,archive,include $expName";
         $cmd .= " --remote-user=$u" if $u;
@@ -540,6 +546,9 @@ use Email::Valid;
             my @res = ();
             foreach my $dir ( split( /\n/, $res ) ) {
                 $dir =~ s/^\w+: //;
+                $dir =~ s/$pattern_home/$pattern_replacement/;
+                $dir =~ s/$pattern_scratch/$pattern_replacement/;
+                $dir =~ s/$pattern_dev/$pattern_replacement/;
                 push @res, $dir;
             }
             return @res;
