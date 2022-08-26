@@ -198,6 +198,21 @@ my $schedulerSize = sub($$$$$$$)
             my $procsM = POSIX::floor( $coresPerJobInc / $nt );
             my $nodesM = POSIX::ceil( $np / $procsM );
 
+            # If the node has more than one socket, check for an inefficient number of threads.
+            # If the number of cores per socket does not divide cleanly by the threads,
+            # then one of the ranks will be run on cores on different sockets, which will
+            # run slower than the other ranks.
+            my $coresPerSocket = $fre->property("FRE.scheduler.$j.coresPerSocket");
+            if ( $coresPerSocket ) {
+                if ( $coresPerSocket % $nt ) {
+                    $fre->out( FREMsg::WARNING, "" );
+                    $fre->out( FREMsg::WARNING, "You have requested '$nt' OpenMP threads on a node with '$coresPerSocket' cores per socket," );
+                    $fre->out( FREMsg::WARNING, "which is not optimal and will cause your model to run slower." );
+                    $fre->out( FREMsg::WARNING, "Please consider a more efficient layout, and contact your model liaison if you need assistance." );
+                    $fre->out( FREMsg::WARNING, "" );
+                }
+            }
+
             if ( $fre->property("FRE.scheduler.option.reqNodes") ) {
 
                 # Return the number of nodes if using nodes for the size instead of number of cores
