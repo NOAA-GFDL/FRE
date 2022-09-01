@@ -1,1 +1,1 @@
-../../mkmf/templates/ncrc-cray.mk
+../../mkmf/templates/ncrc-cce.mk
