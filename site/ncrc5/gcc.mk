@@ -1,1 +1,1 @@
-../ncrc_common/gnu.mk
+../ncrc_common/gcc.mk
