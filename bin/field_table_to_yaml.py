@@ -112,10 +112,17 @@ class Field:
         print(prop[2:])
       for sub_param in prop[2:]:
         eq_split = sub_param.split('=')
-        val = dont_convert_yaml_val(eq_split[-1])
-        if isinstance(val, list):
-          val = [dont_convert_yaml_val(b) for b in val]
-        self.dict[f'subparams{str(self.num_subparams-1)}'][0][eq_split[0].strip()] = val
+        if len(eq_split) < 2:
+          self.dict[prop[0]] = 'fm_yaml_null'
+          val = dont_convert_yaml_val(eq_split[0])
+          if isinstance(val, list):
+            val = [dont_convert_yaml_val(b) for b in val]
+          self.dict[f'subparams{str(self.num_subparams-1)}'][0][prop[1].strip()] = val
+        else:
+          val = dont_convert_yaml_val(eq_split[-1])
+          if isinstance(val, list):
+            val = [dont_convert_yaml_val(b) for b in val]
+          self.dict[f'subparams{str(self.num_subparams-1)}'][0][eq_split[0].strip()] = val
       
 def list_items(brief_text, brief_od):
   """ Given text and an OrderedDict, make an OrderedDict and convert to list """
