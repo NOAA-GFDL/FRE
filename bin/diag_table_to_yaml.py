@@ -84,6 +84,7 @@ class DiagTable :
                                     'corner3',
                                     'corner4',
                                     'zbounds',
+                                    'is_only_zbounds',
                                     'file_name'
                                     'line']
         self.region_section_fvalues = {'grid_type'            : str,
@@ -92,6 +93,7 @@ class DiagTable :
                                        'corner3'              : [ float, float],
                                        'corner4'              : [ float, float],
                                        'zbounds'              : [ float, float],
+                                       'is_only_zbounds'      : bool,
                                        'file_name'            : str,
                                        'line'                 : str}
         self.max_file_section = len(self.file_section_keys)
@@ -102,14 +104,16 @@ class DiagTable :
                                    'file_name',
                                    'reduction',
                                    'spatial_ops',
-                                   'kind']
+                                   'kind',
+                                   'zbounds']
         self.field_section_fvalues = {'module'       : str,
                                      'var_name'      : str,
                                      'output_name'   : str,
                                      'file_name'     : str,
                                      'reduction'     : str,
                                      'spatial_ops'   : str,
-                                     'kind'          : str }
+                                     'kind'          : str,
+                                     'zbounds'       : str }
         self.max_field_section = len(self.field_section_keys)
 
         self.diag_table_content = []
@@ -123,22 +127,23 @@ class DiagTable :
         with open( self.diag_table_file, 'r' ) as myfile :
             self.diag_table_content = myfile.readlines()
 
-    def set_sub_region(self, myval, file_name) :
+    def set_sub_region(self, myval, field_dict) :
         """ Loop through the defined sub_regions, determine if the file already has a sub_region defined
             if it does crash. If the sub_region is not already defined add the region to the list
         """
         tmp_dict2 = {}
+        file_name = field_dict['file_name']
         found = False
+        is_same = True
         for iregion_dict in self.region_section :
            if iregion_dict['file_name'] == file_name :
               found = True
               if iregion_dict['line'] != myval :
-                 print("The "+ file_name +" has multiple sub_regions defined. Be sure that all the variables \
-                        in the file are in the same sub_region!")
-                 print("Region1:" + myval)
-                 print("Region2:" + iregion_dict['line'])
-                 exit()
-        if (found) : return
+                 """ Here the file has a already a sub_region defined and it is not the same as the current
+                     subregion.
+                 """
+                 is_same = False
+        if (found and is_same) : return
 
         tmp_dict2["line"] = myval
         tmp_dict2["file_name"] = file_name
@@ -177,6 +182,17 @@ class DiagTable :
            tmp_dict2["corner3"] = corner3
            tmp_dict2["corner4"] = corner4
            tmp_dict2["zbounds"] = zbounds
+           tmp_dict2["is_only_zbounds"] = False
+           field_dict['zbounds'] = zbounds
+
+           if corner1 == "-999 -999" and corner2 == "-999 -999" and corner3 == "-999 -999" and corner4 == "-999 -999" :
+             tmp_dict2["is_only_zbounds"] = True
+           elif not is_same :
+             print("The "+ file_name +" has multiple sub_regions defined. Be sure that all the variables \
+                    in the file are in the same sub_region!")
+             print("Region1:" + myval)
+             print("Region2:" + iregion_dict['line'])
+             exit()
         self.region_section.append( cp.deepcopy(tmp_dict2) )
 
     def parse_diag_table(self) :
@@ -237,7 +253,7 @@ class DiagTable :
                     #: see if field section
                     try :
                         tmp_dict = {}
-                        for i in range(len(self.field_section_keys)+1) :
+                        for i in range(len(self.field_section_keys)) :
                             j = i
                             buf = iline_list[i]
                             if (i == 4) : continue #do not do anything with the "time_sampling" section
@@ -255,7 +271,7 @@ class DiagTable :
                             if (i != 6) : # Do not add the region to the field section
                                tmp_dict[mykey] = myval
                             else:
-                               self.set_sub_region(myval, tmp_dict["file_name"])
+                               self.set_sub_region(myval, tmp_dict)
                         self.field_section.append( cp.deepcopy(tmp_dict) )
                     except :
                         exit(" ERROR3 with line # " + str(iline_count) + '\n'
@@ -286,7 +302,9 @@ class DiagTable :
                    if (tmp_dict['grid_type'] != "none"):
                        ifile_dict['sub_region'].append(tmp_dict)
                        found = True
-                       continue
+                       if tmp_dict['is_only_zbounds'] : found = False
+                       del tmp_dict['is_only_zbounds']
+                       del tmp_dict['zbounds']
             if not found : del ifile_dict['sub_region']
             ifile_dict['varlist']=[]
             found = False
