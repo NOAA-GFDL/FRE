@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python
 """FRE XML Conversion Tool
 
 -------------------
@@ -112,7 +112,7 @@ import logging
 import argparse
 import xml.etree.ElementTree as ET
 
-newest_fre_version = 'bronx-18'
+newest_fre_version = 'bronx-20'
 
 configs_to_edit = ['atmos_npes', 'atmos_nthreads', 'ocean_npes',
                    'ocean_nthreads', 'layout', 'io_layout',
@@ -2227,6 +2227,7 @@ issues and re-run freconvert.py")
     root = tree.getroot()
     
     old_version = do_properties(root)
+    post_B12_versions = ["bronx-" + str(i) for i in range(13, 20)]
     print("Converting XML from %s to %s..." % (old_version, newest_fre_version))
     time.sleep(1)
 
@@ -2272,8 +2273,8 @@ issues and re-run freconvert.py")
         logging.info("Linking paths to F2. Performing final XML manipulations...")
         final_xml = convert_xml_text(input_content, prev_version=old_version)
     
-    elif old_version == 'bronx-13' or old_version == 'bronx-14' or old_version == 'bronx-15' or old_version == 'bronx-16' or old_version == 'bronx-17':
-        logging.info("Making Slurm compatible/Updating XML...")
+    elif old_version in post_B12_versions:
+        logging.info("Updating XML to the latest version...")
         final_xml = convert_xml_text(input_content, prev_version=old_version)
     
     elif old_version == newest_fre_version:
