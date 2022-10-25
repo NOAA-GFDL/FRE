@@ -2625,50 +2625,38 @@ EOF
 
                 #set initial timing stats
                 chomp( my $segmentStart = `date +\%s` );
-                my $combine = <<EOF;
-$time_cp $cp $opt_d/$file .
-MYSTATUS=\$?
-if [ \$MYSTATUS -ne 0 ]; then
-   echo WARNING: copy filed for raw history file $file, retrying.
-   $time_cp $cp $opt_d/$file .
-   MYSTATUS=\$?
-   if [ \$MYSTATUS -ne 0 ]; then
-      echo ERROR: copy failed twice for raw history file $file, exiting.
-      exit 7
-   fi
-fi
 
-$time_untar tar -xf $file
-MYSTATUS=\$?
-if [ \$MYSTATUS -ne 0 ]; then
-   echo ERROR: history tar extraction failed for $file, exiting.
-   exit 1
-fi
-$time_rm rm $file
+                system "$cp $opt_d/$file .";
+                if ($? != 0) {
+                    print "\nWARNING: copy failed for raw history file $file, retrying.\n";
+                    system "$cp $opt_d/$file .";
+                    if ($? != 0) {
+                        print "\n ERROR: copy failed twice for raw history file $file, exiting.\n";
+                        exit 7;
+                    }
+                }
+                system "tar -xf $file";
+                if ($? != 0) {
+                    print "\nERROR: history tar extraction failed for $file, exiting.\n";
+                    exit 1;
+                }
+                unlink $file;
 
-export mppnccombineOptString='$mppnccombineOptString'
+                system "/usr/bin/env mppnccombineOptString='$mppnccombineOptString' $ENV{FRE_COMMANDS_HOME}/site/$ENV{FRE_SYSTEM_SITE}/bin/combinehist";
+                if ($? != 0) {
+                    print "\nERROR: combining history files failed for $file, exiting.\n";
+                    exit 1;
+                }
 
-$time_combine $ENV{FRE_COMMANDS_HOME}/site/$ENV{FRE_SYSTEM_SITE}/bin/combinehist
-MYSTATUS=\$?
-if [ \$MYSTATUS -ne 0 ]; then
-   echo ERROR: combining history files failed for $file, exiting.
-   exit 1
-fi
-
-$time_hsmput hsmput -v -t -s tar -a $opt_d -p $ptmpDir/history -w $combinedir $histdate
-MYSTATUS=\$?
-if [ \$MYSTATUS -eq 0 ]; then
- if [ -f $opt_d/$file ] && [ -f $opt_d/$histdate.tar ]; then
- $time_rm rm $opt_d/$file
- fi
-fi
-
-EOF
-                print qx("$combine");
-                my $shreturn = $? >> 8;
-                if ( $shreturn != 0 ) {
+                system "hsmput -v -t -s tar -a $opt_d -p $ptmpDir/history -w $combinedir $histdate";
+                if ($? == 0) {
+                    if ( -f "$opt_d/$file" and -f "$opt_d/$histdate.tar") {
+                        unlink "$opt_d/$file";
+                    }
+                }
+                else {
                     print "ERROR: Could not combine history data\n";
-                    exit $shreturn;
+                    exit 1;
                 }
 
                 #calculate timings, resubmit if necessary
