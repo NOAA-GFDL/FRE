@@ -1915,6 +1915,10 @@ EOF
 
             #TIMESERIES - HOURLY
             my @hrfreqs = ( '30min', 'hourly', '1hr', '2hr', '3hr', '4hr', '6hr', '8hr', '12hr', '120hr' );
+            # TSfromTS does not use "source" as it processes all variables already in PP-dir
+            # but many XMLs include separate timeSeries tags for each source history file,
+            # so skip the duplicate ones with a note.
+            my %TSfromTS_processed = ();
             foreach my $hrfreq (@hrfreqs) {
                 my @tsNodes     = sort by_chunk $ppcNode->findnodes("timeSeries[\@freq='$hrfreq']");
                 my @chunks      = map { $_->findvalue('@chunkLength') } @tsNodes;
@@ -1931,7 +1935,13 @@ EOF
 
                     if ( !$opt_A ) {
                         if ($subchunk) {
-                            $cshscript .= TSfromts( $tsNode, $sim0, $subchunk );
+                            if ( $TSfromTS_processed{$cl} ) {
+                                print STDERR "NOTE: Skipping unnecessary <timeSeries> tag for $component hourly $cl-yr (due to TSfromTS calculation)\n";
+                            }
+                            else {
+                                $cshscript .= TSfromts( $tsNode, $sim0, $subchunk );
+                                $TSfromTS_processed{$cl} = 1;
+                            }
                         }
                         else {
                             $cshscript .= directTS( $tsNode, $sim0, $startofrun );
@@ -1978,6 +1988,7 @@ EOF
                 = sort by_chunk $ppcNode->findnodes('timeSeries[@freq="daily" or @freq="day"]');
             my @chunks = map { $_->findvalue('@chunkLength') } @tsNodes;
             my $diag_source = diagfile( $ppcNode, "daily" );
+            my %TSfromTS_processed = ();
             foreach my $tsNode (@tsNodes) {
                 $hsmfiles = $hsmfiles . jpkSrcFiles($tsNode) . ",";
                 ( my $cl, my $subchunk, my @dep ) = get_subint( $tsNode, @chunks );
@@ -1990,7 +2001,13 @@ EOF
 
                 if ( !$opt_A ) {
                     if ($subchunk) {
-                        $cshscript .= TSfromts( $tsNode, $sim0, $subchunk );
+                        if ( $TSfromTS_processed{$cl} ) {
+                            print STDERR "NOTE: Skipping unnecessary <timeSeries> tag for $component daily $cl-yr (due to TSfromTS calculation)\n";
+                        }
+                        else {
+                            $cshscript .= TSfromts( $tsNode, $sim0, $subchunk );
+                            $TSfromTS_processed{$cl} = 1;
+                        }
                     }
                     else {
                         $cshscript .= directTS( $tsNode, $sim0, $startofrun );
@@ -2036,6 +2053,7 @@ EOF
                 = sort by_chunk $ppcNode->findnodes('timeSeries[@freq="monthly" or @freq="month"]');
             my @chunks = map { $_->findvalue('@chunkLength') } @tsNodes;
             my $diag_source = diagfile( $ppcNode, "monthly" );
+            my %TSfromTS_processed = ();
             foreach my $tsNode (@tsNodes) {
                 $hsmfiles = $hsmfiles . jpkSrcFiles($tsNode) . ",";
                 ( my $cl, my $subchunk, my @dep ) = get_subint( $tsNode, @chunks );
@@ -2048,7 +2066,13 @@ EOF
 
                 if ( !$opt_A ) {
                     if ($subchunk) {
-                        $cshscript .= TSfromts( $tsNode, $sim0, $subchunk );
+                        if ( $TSfromTS_processed{$cl} ) {
+                            print STDERR "NOTE: Skipping unnecessary <timeSeries> tag for $component monthly $cl-yr (due to TSfromTS calculation)\n";
+                        }
+                        else {
+                            $cshscript .= TSfromts( $tsNode, $sim0, $subchunk );
+                            $TSfromTS_processed{$cl} = 1;
+                        }
                     }
                     else {
                         $cshscript .= directTS( $tsNode, $sim0, $startofrun );
@@ -2093,6 +2117,7 @@ EOF
             my @tsNodes     = sort by_chunk $ppcNode->findnodes('timeSeries[@freq="annual"]');
             my @chunks      = map { $_->findvalue('@chunkLength') } @tsNodes;
             my $diag_source = diagfile( $ppcNode, "annual", "annual" );
+            my %TSfromTS_processed = ();
             foreach my $tsNode (@tsNodes) {
                 $hsmfiles = $hsmfiles . jpkSrcFiles($tsNode) . ",";
                 ( my $cl, my $subchunk, my @dep ) = get_subint( $tsNode, @chunks );
@@ -2105,7 +2130,13 @@ EOF
 
                 if ( !$opt_A ) {
                     if ($subchunk) {
-                        $cshscript .= TSfromts( $tsNode, $sim0, $subchunk );
+                        if ( $TSfromTS_processed{$cl} ) {
+                            print STDERR "NOTE: Skipping unnecessary <timeSeries> tag for $component annual $cl-yr (due to TSfromTS calculation)\n";
+                        }
+                        else {
+                            $cshscript .= TSfromts( $tsNode, $sim0, $subchunk );
+                            $TSfromTS_processed{$cl} = 1;
+                        }
                     }
                     else {
                         $cshscript .= annualTS( $tsNode, $sim0, $startofrun,
@@ -2151,6 +2182,7 @@ EOF
             my @tsNodes     = sort by_chunk $ppcNode->findnodes('timeSeries[@freq="seasonal"]');
             my @chunks      = map { $_->findvalue('@chunkLength') } @tsNodes;
             my $diag_source = diagfile( $ppcNode, "seasonal", "seasonal" );
+            my %TSfromTS_processed = ();
             foreach my $tsNode (@tsNodes) {
                 $hsmfiles = $hsmfiles . jpkSrcFiles($tsNode) . ",";
                 ( my $cl, my $subchunk, my @dep ) = get_subint( $tsNode, @chunks );
@@ -2163,7 +2195,13 @@ EOF
 
                 if ( !$opt_A ) {
                     if ($subchunk) {
-                        $cshscript .= seaTSfromts( $tsNode, $sim0, $subchunk );
+                        if ( $TSfromTS_processed{$cl} ) {
+                            print STDERR "NOTE: Skipping unnecessary <timeSeries> tag for $component seasonal $cl-yr (due to TSfromTS calculation)\n";
+                        }
+                        else {
+                            $cshscript .= TSfromts( $tsNode, $sim0, $subchunk );
+                            $TSfromTS_processed{$cl} = 1;
+                        }
                     }
                     else {
                         $cshscript .= seasonalTS( $tsNode, $sim0 );
