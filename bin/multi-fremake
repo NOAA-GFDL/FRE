@@ -11,7 +11,14 @@ from multiprocessing import Pool
 ## Executes the fremake compile script using subprocess.call
 def fremake(fmake):
  fmake.append("--execute")
- subprocess.call(fmake)
+ try:
+     subprocess.run(args=fmake, check=True)
+ except subprocess.CalledProcessError as err:
+     print ("Fremake failed.  Additional error: "+err.output)
+     print (fmake)
+     raise
+
+     
 
 parser = argparse.ArgumentParser(description='Run multiple fremakes at once.  Automatically runs with the --execute option')
 parser.add_argument('-x', type=str, help='XML file', required=True)
@@ -61,7 +68,12 @@ for exp in e:
  if args.force_checkout:
      fm.append("--force-checkout")
  print (fmake)
- subprocess.call(fm)
+ try:
+     subprocess.run(args=fm, check=True)
+ except subprocess.CalledProcessError as err:
+     print ("Fremake failed.")
+     print (fm)
+     raise
 
 ## Use multiprocess pool to run the compiles concurrently
  if __name__ == '__main__':
