@@ -59,7 +59,7 @@ Enter the provided http address into your web browser
 * Testing has shown some improvement in postprocessing runtimes when using /xtmp as PTMP, and further workflow optimizations to take advantage of /xtmp are planned.
 * To use /ptmp as PTMP explicitly, set the ptmp FRE directory in your XML: `<ptmp>/ptmp/$USER</ptmp>`
 
-**No user action needed. If you notice any /xtmp-related problems, please open a Help Desk ticket immediately.**
+**No user action needed. If you notice filesystem-related issues possibly related to /xtmp, please open a Help Desk ticket.**
 
 ## FRE-NCtools now a submodule
 * FRE-NCtools is independent of FRE, and is maintained on [github](https://github.com/NOAA-GFDL/FRE-NCtools)
