@@ -21,9 +21,10 @@ FRE Bronx-20 was released on October 28, 2022 to support the Gaea C5 partition; 
 ## Improved batch compiling
 * Optimized mkmf templates for parallel make
 * fremake handles new Slurm enforcement of per-job memory limits on C5 login nodes (see the [C5 Onboarding Guide](https://docs.google.com/document/d/12tVJrDMon9tvvM1F-A5wn7oVHGxqRVWFzRcgctAkODQ/edit?usp=sharing) for more.)
-* Simplified specification for compile parallelism. The number of make jobs is the number of cores/tasks requested if in a batch job (using fremake `--ncores=N` option), and will be 16 when run interactively. You may set $MAKEFLAGS as an override.
+* Simplified specification for compile parallelism. The number of make jobs is the number of cores/tasks requested if in a batch job (using fremake `--ncores=N` option), and will be 8 when run interactively. You may set $MAKEFLAGS as an override.
 * For C5, the default `--ncores` is 16 and the maximum is 64. For C3/C4, the default and maximum `--ncores` is 8.
-* Each requested core can use up to 2GB of memory, so by default C5 compile scripts will request 16 cores giving access to 32 GB of memory. If your compile job exceeds the limit, it will be killed by Slurm (with an OUT-OF-MEMORY job code). Request more cores/memory with the fremake `--ncores=N` option if needed.
+* The default and maximum `--ncores` is 8. Each requested core can use up to 2GB of memory, so by default compile scripts will request 8 cores giving access to 16 GB of memory.
+* If your compile job exceeds the limit, it will be killed by Slurm (with an OUT-OF-MEMORY job code). Request more memory with the sbatch `--mem` option, or compile interactively (which is not subject to a per-job memory limit).
 
 **No user action needed.**
 
