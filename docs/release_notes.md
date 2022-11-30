@@ -77,6 +77,8 @@ Enter the provided http address into your web browser
 **Currently not recommended to use YAML input files for production.**
 
 ## Bug fixes and minor updates
+* The default PTMP directory for gaea platforms has been changed to `$SCRATCH/$USER/ptmp/$(stem)/$(name)` (from `$SCRATCH/$USER/ptmp`) to reduce the number of hsmget-created hardlinks which have caused issues with the scratch (Lustre) filesystem.
+* The working directory ($workDir) will be removed automatically after normal completion of the compute job. Use the frerun option `--no-free` to not remove the workDir automatically.
 * Skip unnecessary/duplicate timeSeries requests when using sub-chunks. When creating timeseries from multiple history files within a single component, each history file must be included in a separate `<timeSeries>` tag. When possible, frepp will try to create timeseries from existing timeseries in /archive; when it does this, variables from all history files will be used, so including multiple <timeSeries> tags results in duplicate work. This has been a long-standing bug in frepp that has become noticeable with increases in resolution and filesizes. When the unnecessary/duplicate timeSeries tags are encountered, they are skipped with a message (e.g. `NOTE: Skipping unnecessary <timeSeries> tag for ocean_z monthly 20-yr (due to TSfromTS calculation)`).
 * Use latest NCO tools (5.0.1). Several ncks calls required small syntax updates
 * Fixed ability for frepp to combine distributed history files on PP/AN. If the history file tarfile is uncombined (i.e. `YYYYMMDD.raw.nc.tar`), frepp will combine the files and replace the tarfile in archive, then submit the frepp scripts. NOTE: automated refineDiag processing will not occur in this case
