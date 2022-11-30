@@ -21,9 +21,10 @@ FRE Bronx-20 was released on October 28, 2022 to support the Gaea C5 partition; 
 ## Improved batch compiling
 * Optimized mkmf templates for parallel make
 * fremake handles new Slurm enforcement of per-job memory limits on C5 login nodes (see the [C5 Onboarding Guide](https://docs.google.com/document/d/12tVJrDMon9tvvM1F-A5wn7oVHGxqRVWFzRcgctAkODQ/edit?usp=sharing) for more.)
-* Simplified specification for compile parallelism. The number of make jobs is the number of cores/tasks requested if in a batch job (using fremake `--ncores=N` option), and will be 16 when run interactively. You may set $MAKEFLAGS as an override.
+* Simplified specification for compile parallelism. The number of make jobs is the number of cores/tasks requested if in a batch job (using fremake `--ncores=N` option), and will be 8 when run interactively. You may set $MAKEFLAGS as an override.
 * For C5, the default `--ncores` is 16 and the maximum is 64. For C3/C4, the default and maximum `--ncores` is 8.
-* Each requested core can use up to 2GB of memory, so by default C5 compile scripts will request 16 cores giving access to 32 GB of memory. If your compile job exceeds the limit, it will be killed by Slurm (with an OUT-OF-MEMORY job code). Request more cores/memory with the fremake `--ncores=N` option if needed.
+* The default and maximum `--ncores` is 8. Each requested core can use up to 2GB of memory, so by default compile scripts will request 8 cores giving access to 16 GB of memory.
+* If your compile job exceeds the limit, it will be killed by Slurm (with an OUT-OF-MEMORY job code). Request more memory with the sbatch `--mem` option, or compile interactively (which is not subject to a per-job memory limit).
 
 **No user action needed.**
 
@@ -76,6 +77,8 @@ Enter the provided http address into your web browser
 **Currently not recommended to use YAML input files for production.**
 
 ## Bug fixes and minor updates
+* The default PTMP directory for gaea platforms has been changed to `$SCRATCH/$USER/ptmp/$(stem)/$(name)` (from `$SCRATCH/$USER/ptmp`) to reduce the number of hsmget-created hardlinks which have caused issues with the scratch (Lustre) filesystem.
+* The working directory ($workDir) will be removed automatically after normal completion of the compute job. Use the frerun option `--no-free` to not remove the workDir automatically.
 * Skip unnecessary/duplicate timeSeries requests when using sub-chunks. When creating timeseries from multiple history files within a single component, each history file must be included in a separate `<timeSeries>` tag. When possible, frepp will try to create timeseries from existing timeseries in /archive; when it does this, variables from all history files will be used, so including multiple <timeSeries> tags results in duplicate work. This has been a long-standing bug in frepp that has become noticeable with increases in resolution and filesizes. When the unnecessary/duplicate timeSeries tags are encountered, they are skipped with a message (e.g. `NOTE: Skipping unnecessary <timeSeries> tag for ocean_z monthly 20-yr (due to TSfromTS calculation)`).
 * Use latest NCO tools (5.0.1). Several ncks calls required small syntax updates
 * Fixed ability for frepp to combine distributed history files on PP/AN. If the history file tarfile is uncombined (i.e. `YYYYMMDD.raw.nc.tar`), frepp will combine the files and replace the tarfile in archive, then submit the frepp scripts. NOTE: automated refineDiag processing will not occur in this case
