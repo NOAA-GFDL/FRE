@@ -1,1 +1,1 @@
-../../mkmf/templates/ncrc4-intel.mk
+../../mkmf/templates/ncrc5-intel.mk
