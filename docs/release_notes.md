@@ -1,6 +1,6 @@
 # Bronx-20 Release Notes
 
-FRE Bronx-20 was released on October 28, 2022 to support the Gaea C5 partition; other updates include collection of workflow performance metrics, enabling /xtmp on PP/AN, loading fre-nctools as a submodule, and improved XML include directory transfer.
+FRE Bronx-20 was released on October 28, 2022 to support the Gaea C5 partition; other updates include collection of workflow performance metrics, enabling /xtmp on PP/AN, loading fre-nctools as a submodule, and improved XML include directory transfer. There were 3 updates/patches, [summarized below][identifier].
 
 ## Support for Gaea C5
 * fremake/frerun forbids using ncrc5 platforms on C3/C4 and vice versa
@@ -56,7 +56,7 @@ Enter the provided http address into your web browser
 
 ## Uses /xtmp filesystem as PTMP by default at GFDL
 * Installed in 2021, /xtmp is a fast, shared scratch filesystem available on PP/AN, now used by frepp jobs by default.
-* When PP/AN jobs are submitted with the "xtmp" sbatch comment, $TMPDIR points to /xtmp instead of /vftmp. When hsmget then uses /xtmp/$USER/ptmp as the PTMP cache, PTMP to WORKDIR transfers are done with hard links.
+* When PP/AN jobs are submitted with the "xtmp" sbatch comment, `$TMPDIR` points to /xtmp instead of /vftmp. When hsmget then uses `/xtmp/$USER/ptmp` as the PTMP cache, PTMP to WORKDIR transfers are done with hard links.
 * Testing has shown some improvement in postprocessing runtimes when using /xtmp as PTMP, and further workflow optimizations to take advantage of /xtmp are planned.
 * To use /ptmp as PTMP explicitly, set the ptmp FRE directory in your XML: `<ptmp>/ptmp/$USER</ptmp>`
 
@@ -78,9 +78,9 @@ Enter the provided http address into your web browser
 
 ## Bug fixes and minor updates
 * The default srcDir, execDir, and rootDir directories for gaea platforms has been updated to $HOME from $DEV. These changes were made to help reduce potential Git-contributed issues on the F2 (Lustre scratch) filesystem. The new defaults are:
-  * srcDir: $HOME/$(stem)/$(name)/src
-  * execDir: $HOME/$(stem)/$(name)/$(platform)-$(target)/exec
-  * rootDir: $HOME/$(stem)
+  * srcDir: `$HOME/$(stem)/$(name)/src`
+  * execDir: `$HOME/$(stem)/$(name)/$(platform)-$(target)/exec`
+  * rootDir: `$HOME/$(stem)`
 * The default PTMP directory for gaea platforms has been changed to `$SCRATCH/$USER/ptmp/$(stem)/$(name)` (from `$SCRATCH/$USER/ptmp`) to reduce the number of hsmget-created hardlinks which have caused issues with the scratch (Lustre) filesystem.
 * The working directory ($workDir) will be removed automatically after normal completion of the compute job. Use the frerun option `--no-free` to not remove the workDir automatically.
 * Skip unnecessary/duplicate timeSeries requests when using sub-chunks. When creating timeseries from multiple history files within a single component, each history file must be included in a separate `<timeSeries>` tag. When possible, frepp will try to create timeseries from existing timeseries in /archive; when it does this, variables from all history files will be used, so including multiple <timeSeries> tags results in duplicate work. This has been a long-standing bug in frepp that has become noticeable with increases in resolution and filesizes. When the unnecessary/duplicate timeSeries tags are encountered, they are skipped with a message (e.g. `NOTE: Skipping unnecessary <timeSeries> tag for ocean_z monthly 20-yr (due to TSfromTS calculation)`).
@@ -93,3 +93,18 @@ Enter the provided http address into your web browser
 * Various multi-frerun and multi-fremake updates
 * XML upgrade utility fre-convert.py updated
 * Small bug fix for diag_table_chk
+
+## Patch release notes
+* 2022-11-30 (patch 1): Minor adjustments to gaea site files, attempt to relieve pressure on /lustre/f2
+  * Change gaea default ptmp to be per-stem, per-experiment
+  * Change gaea default to remove workDir after successful exit. Use --no-free to preserve workDir
+  * Change default fremake --ncores to be 8
+  * Minor fix for multi-fremake
+* 2023-01-17 (patch 2): More minor adjustments to gaea site files, attempt to relieve prsesure on /lustre/f2
+  * Change gaea default srcDir, execDir, and rootDir to $HOME
+  * Use $DEV and $SCRATCH in fre.properties instead of /lustre/f2
+  * Test XML updates
+  * epmt example notebook improvements
+* 2023-04-12 (patch 3): C5 environment updates (needed for C5 OS update)
+  * Default C5 platform cshell updated (cray-hdf5/1.12.2.3)
+  * mkmf template updates for intel-classic and nvhpc (-DHAVE_GETTID needed). Uses mkmf release 2023.01
