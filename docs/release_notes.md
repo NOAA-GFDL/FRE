@@ -1,6 +1,6 @@
 # Bronx-20 Release Notes
 
-FRE Bronx-20 was released on October 28, 2022 to support the Gaea C5 partition; other updates include collection of workflow performance metrics, enabling /xtmp on PP/AN, loading fre-nctools as a submodule, and improved XML include directory transfer. There were 3 updates/patches, [summarized below][identifier].
+FRE Bronx-20 was released on October 28, 2022 to support the Gaea C5 partition; other updates include collection of workflow performance metrics, enabling /xtmp on PP/AN, loading fre-nctools as a submodule, and improved XML include directory transfer. There were 3 updates/patches, [summarized below](#patch-release-notes).
 
 ## Support for Gaea C5
 * fremake/frerun forbids using ncrc5 platforms on C3/C4 and vice versa
