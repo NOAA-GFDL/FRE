@@ -1,1 +1,1 @@
-../../mkmf/templates/ncrc4-cce.mk
+../../mkmf/templates/ncrc5-cce.mk

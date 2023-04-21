@@ -1,1 +1,1 @@
-../ncrc_common/intel.mk
+../../mkmf/templates/ncrc4-intel.mk
