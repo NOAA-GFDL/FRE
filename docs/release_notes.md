@@ -1,6 +1,6 @@
 # Bronx-20 Release Notes
 
-FRE Bronx-20 was released on October 28, 2022 to support the Gaea C5 partition; other updates include collection of workflow performance metrics, enabling /xtmp on PP/AN, loading fre-nctools as a submodule, and improved XML include directory transfer. There were 3 updates/patches, [summarized below](#patch-release-notes).
+FRE Bronx-20 was released on October 28, 2022 to support the Gaea C5 partition; other updates include collection of workflow performance metrics, enabling /xtmp on PP/AN, loading fre-nctools as a submodule, and improved XML include directory transfer. There were 4 updates/patches, [summarized below](#patch-release-notes).
 
 ## Support for Gaea C5
 * fremake/frerun forbids using ncrc5 platforms on C3/C4 and vice versa
@@ -12,9 +12,9 @@ FRE Bronx-20 was released on October 28, 2022 to support the Gaea C5 partition; 
 ## Updated make templates and default platform cshell
 * Intel compilers available in three flavors: classic (ifort/icc), oneapi (ifx, icx), and "production" (ifort/icx).
 * For consistency with module names, the GNU compiler templates have been renamed to `gcc`; XMLs referring to `gnu` will need to be updated.
-* FRE targets updated; see the [C5 Onboarding Guide](https://docs.google.com/document/d/12tVJrDMon9tvvM1F-A5wn7oVHGxqRVWFzRcgctAkODQ/edit?usp=sharing) for more. In general, C5 `prod` settings are more optimized than C3/C4 `prod`.
+* FRE targets updated; see the [C5 Onboarding Guide](https://docs.google.com/document/d/12tVJrDMon9tvvM1F-A5wn7oVHGxqRVWFzRcgctAkODQ/edit?usp=sharing) for more. In general, C5 (and C4 after mid-April 2023 update) `prod` settings are more optimized than C3/C4 `prod`.
 
-**User action needed: Add XML platforms for C5.** For each platform, the `<compiler type=MODULE version=VERSION>` tag should refer to an available compiler module and version. Supported compilers include `intel`, `intel-classic`, `intel-oneapi`, `gcc`, `cce`, and `nvhpc`. Use `module avail` to determine the available compiler versions. If you have C3/C4 `gnu` compiler platforms defined, update the compiler name to `gcc`.
+**User action needed: Add XML platforms for C5 (and updated C4 mid-April 2023).** For each platform, the `<compiler type=MODULE version=VERSION>` tag should refer to an available compiler module and version. Supported compilers include `intel`, `intel-classic`, `intel-oneapi`, `gcc`, `cce`, and `nvhpc`. Use `module avail` to determine the available compiler versions. If you have `gnu` compiler platforms defined, update the compiler name to `gcc`.
 
 **Recommendation: Use `repro` for reproducibility and `prod` for performance. Anything beyond run-to-run reproducibility may be limited when choosing the `prod` target.** Also, note that C5 runs will not reproduce runs on other clusters. `intel-classic` is the most similar to Intel-19.
 
@@ -108,3 +108,7 @@ Enter the provided http address into your web browser
 * 2023-04-12 (patch 3): C5 environment updates (needed for C5 OS update)
   * Default C5 platform cshell updated (cray-hdf5/1.12.2.3)
   * mkmf template updates for intel-classic and nvhpc (-DHAVE_GETTID needed). Uses mkmf release 2023.01
+* 2023-04-21 (patch 4): C4 environment and mkmf template updates (needed for C4 OS update)
+  * Default C4 platform cshell updated (cray-hdf5/1.12.1.3)
+  * Use the updated mkmf templates on C4
+  * fremake/frerun to disallow using ncrc3 platforms on C4 and vice versa
