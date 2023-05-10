@@ -1,1 +1,0 @@
-../../mkmf/templates/ncrc4-intel.mk
