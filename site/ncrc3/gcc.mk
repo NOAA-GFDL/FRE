@@ -1,1 +1,1 @@
-../../mkmf/templates/ncrc4-gcc.mk
+../ncrc_common/gcc.mk
