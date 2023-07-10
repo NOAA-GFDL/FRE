@@ -820,6 +820,14 @@ set -r archExt = 'tar'
 alias submit `which batch.scheduler.submit` --verbose
 alias retry `which output.retry`
 
+# #515: Determine what nco version is being used, set NCKS_M command for use
+set -r NCO_VERSION_46 = `ncks --version |& grep -q 'version 4.6' && echo 1`
+if ( $NCO_VERSION_46 ) then
+    set -r NCKS_M = 'ncks -m'
+else
+    set -r NCKS_M = 'ncks --trd -m'
+endif    
+
 ################################################################################
 #----------------------------------- combining ---------------------------------
 ################################################################################
@@ -976,7 +984,7 @@ if ( $actionCombineToDo ) then
                #if not, set flag to skip combine step
                set nvars = ()
                foreach f ( $inputFiles )
-                  set num = `ncks -m $f | grep -E ': type' | cut -f 1 -d ' ' | sed 's/://' | sort -u | wc -l`
+                  set num = `$NCKS_M $f | grep -E ': type' | cut -f 1 -d ' ' | sed 's/://' | sort -u | wc -l`
                   set nvars = ( $nvars $num )
                   if ( `list_ncvars.csh -st -01234 $f | sort -u` != `list_ncvars.csh -st -01234 $inputFiles[1] | sort -u` ) then
                      set combineFlag = 0
@@ -1226,12 +1234,12 @@ if ( $actionFillGridToDo ) then
          # I couldn't figure out how to do this without temporary files using c-shell,
          # but could with bash
          set common_vars = `bash -c "comm -12 \
-            <(ncks -m $masked_ocean_static | grep -E ': type' | cut -f 1 -d ' ' | sed 's/://' | sort -u) \
-            <(ncks -m $ref_ocean_static | grep -E ': type' | cut -f 1 -d ' ' | sed 's/://' | sort -u)"`
+            <($NCKS_M $masked_ocean_static | grep -E ': type' | cut -f 1 -d ' ' | sed 's/://' | sort -u) \
+            <($NCKS_M $ref_ocean_static | grep -E ': type' | cut -f 1 -d ' ' | sed 's/://' | sort -u)"`
          if ($status == 0) then
             set common_vars = `echo $common_vars | sed 's/ /,/g'`
             if ( $common_vars != "" ) then
-               ncks -A -m -v $common_vars $ref_ocean_static $masked_ocean_static
+               $NCKS_M -A -v $common_vars $ref_ocean_static $masked_ocean_static
                if ( $status == 0 ) then
                   if ( $echoOn ) unset echo
                   echo "<NOTE> : Reference ocean static $ref_ocean_static has been appended to $masked_ocean_static"
