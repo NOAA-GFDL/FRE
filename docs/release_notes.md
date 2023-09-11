@@ -116,3 +116,4 @@ Enter the provided http address into your web browser
   * Default C3 platform cshell updated
   * Use the updated mkmf templates already used on C4/C5
   * fremake/frerun to again allow using ncrc3 plaforms on C4 and vice versa
+* 2023-08-03 (patch 6): Compatibility update for output.stager to allow DTN update to use nco/4.7.9
