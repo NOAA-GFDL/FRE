@@ -377,7 +377,7 @@ my $treeProcessPlatform = sub($$$)
                                     return undef;
                                 }
                                 # Create FRE-defined property so it can be used in FRE directory expansion
-                                $r->propertyInsert('project', $placeholdersExpand->( $r, $n->findnodes('project') ));
+                                $r->propertyInsert('project', $placeholdersExpand->( $r, $n->findvalue('project') ));
                                 foreach my $t (FREProperties::DIRECTORIES) {
                                     my $dir   = $t . 'Dir';
                                     my $value = $r->{ 'FRE.directory.' . $t . '.default' };
