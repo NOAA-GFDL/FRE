@@ -1230,12 +1230,27 @@ use Email::Valid;
 
         # -------------------------------------------------------------------------------- dataTable
 
-        if ( defined( my $dataTable = $z->extractTable('dataTable') ) ) {
-            FRETemplate::setTable( $fre, $r, 'data_table', $dataTable );
+        my $dataYaml = $z->extractYaml('dataYaml');
+        my $dataTable = $z->extractTable('dataTable');
+        if ( ! defined $dataYaml ) {
+            $fre->out( FREMsg::FATAL, "A problem with the data yaml" );
+            return ( 0, FREDefaults::STATUS_FS_GENERIC_PROBLEM );
         }
-        else {
+        elsif ( ! defined $dataTable ) {
             $fre->out( FREMsg::FATAL, "A problem with the data table" );
             return ( 0, FREDefaults::STATUS_FS_GENERIC_PROBLEM );
+        }
+        elsif ( $dataYaml and $dataTable ) {
+            $fre->out( FREMsg::FATAL, "You have specified both dataTable and dataYaml; please choose one." );
+            return (0, FREDefaults::STATUS_FS_GENERIC_PROBLEM );
+        }
+        elsif ( $dataYaml ) {
+            FRETemplate::setTable( $fre, $r, 'data_table', $dataYaml );
+            $fre->out( FREMsg::NOTE, "Using dataYaml" );
+        }
+        elsif ( $dataTable ) {
+            FRETemplate::setTable( $fre, $r, 'data_table', $dataTable );
+            $fre->out( FREMsg::NOTE, "Using diagTable" );
         }
 
         # ------------------------------------------------------------------------ tracerTreeTable
