@@ -1525,8 +1525,146 @@ sub extractNamelists($)
     } ## end while ($exp)
 
     return $nmls;
-
 } ## end sub extractNamelists($)
+
+sub extractYaml($$)
+
+    # ------ arguments: $object $label
+    # ------ called as object method
+    # ------ returns data, corresponding to the $label yaml, following inherits
+{
+
+    my ( $r, $l ) = @_;
+    my ( $exp, $fre, $value ) = ( $r, $r->fre(), '' );
+
+    # ------------------------------------------- get the input node
+    my $inputNode = $exp->node()->findnodes('input')->get_node(1);
+
+    # --------------------------------------------- process the input node
+    if ($inputNode) {
+
+        # ----------------- Find nodes that have the wrong @order attribute.
+        my @inlineAppendTableNodes
+            = $inputNode->findnodes( $l . '[@order and not(@order="append")]' );
+        if (@inlineAppendTableNodes) {
+            $fre->out( FREMsg::FATAL, "The value for attribute order in $l is not valid." );
+            return undef;
+        }
+
+# ----------------- get inline tables except for "@order="append"" (they must be before tables from files and appended nodes)
+        my @inlineTableNodes
+            = $inputNode->findnodes( $l . '[not(@file) and not(@order="append")]' );
+        foreach my $inlineTableNode (@inlineTableNodes) {
+            $value = _append_yaml($fre, $value, $exp->nodeValue( $inlineTableNode, 'text()' ), $l);
+            return if ! defined $value;
+        }
+
+        # --------------------------------------------------------------- get tables from files
+        my @tableFiles = $fre->dataFilesMerged( $inputNode, $l, 'file' );
+        foreach my $filePath (@tableFiles) {
+            if ( -f $filePath and -r $filePath ) {
+                my $fileContent = qx(cat $filePath);
+                $fileContent = $fre->placeholdersExpand($fileContent);
+                $fileContent = $exp->placeholdersExpand($fileContent);
+                $value .= _append_yaml($fre, $value, $fileContent, $l);
+                return if ! defined $value;
+            }
+            else {
+                return undef;
+            }
+        }
+    } ## end if ($inputNode)
+
+    # ---------------------------- repeat for the parent
+    if ( $exp->parent() and !$value ) {
+        $value .= $exp->parent()->extractYaml($l);
+        return if ! defined $value;
+    }
+
+    #  ---------------------------- now add appended tables
+    if ($inputNode) {
+
+        # ----------------- get [@order="append"] tables
+        my @inlineAppendTableNodes = $inputNode->findnodes( $l . '[@order="append"]' );
+        foreach my $inlineAppendTableNode (@inlineAppendTableNodes) {
+            $value = _append_yaml($fre, $value, $exp->nodeValue( $inlineAppendTableNode, 'text()' ), $l);
+            return if ! defined $value;
+        }
+    }
+
+    return $value;
+
+} ## end sub extractTable($$)
+
+# utility function to combine two datayamls, fieldyamls, and diagyamls
+# label should be one of: fieldYaml, dataYaml, diagYaml
+sub _append_yaml($$$$) {
+    my ($fre, $one, $two, $label) = @_;
+
+    # if $one is empty, then just return $two
+    if (! $one) {
+        return $two;
+    }
+
+    # locate the combining tool
+    my $tool;
+    if ($label eq 'dataYaml') {
+        $tool = 'combine-data-table-yamls';
+    }
+    elsif ($label eq 'fieldYaml') {
+        $tool = 'combine-field-table-yamls';
+    }
+    elsif ($label eq 'diagYaml') {
+        $tool = 'combine-diag-table-yamls';
+    }
+    else {
+        $fre->out( FREMsg::FATAL, "Combiner for yaml type '$label' not available" );
+        return;
+    }
+
+    # create a tmpdir
+    my $tmpdir = qx( mktemp -d );
+    chomp $tmpdir;
+    if ($?) {
+        $fre->out( FREMsg::FATAL, "Could not create a temporary directory for YAML combining" );
+        return undef;
+    }
+    else {
+        print "Using dir $tmpdir\n";
+    }
+
+    # save first file
+    open my $fh, '>', "$tmpdir/one.yaml" or die "Error in wrirting $tmpdir/one.yaml: $!\n";
+    print $fh $one or die;
+    #if ($?) {
+    #    $fre->out( FREMsg::FATAL, "Could not write file to temporary directory '$tmpdir' for YAML combining" );
+    #    return undef;
+    #}
+
+    # save second file
+    open $fh, '>', "$tmpdir/two.yaml" or die;
+    print $fh $two or die;
+    #if ($?) {
+    #    $fre->out( FREMsg::FATAL, "Could not write file to temporary directory '$tmpdir' for YAML combining" );
+    #    return undef;
+    #}
+
+    # run the combiner
+    system( "$tool -f $tmpdir/one.yaml $tmpdir/two.yaml -o $tmpdir/combined.yaml" );
+    if ($?) {
+        $fre->out( FREMsg::FATAL, "Error in combining the '$label' YAMLs" );
+        return undef;
+    }
+
+    # retrieve the combined yaml
+    my $combined = qx( cat $tmpdir/combined.yaml );
+    chomp $combined;
+
+    # delete tmpdir
+    qx( rm -rf $tmpdir );
+
+    return $combined;
+}
 
 sub extractTable($$)
 
