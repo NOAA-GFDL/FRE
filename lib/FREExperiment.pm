@@ -1629,27 +1629,20 @@ sub _append_yaml($$$$) {
         $fre->out( FREMsg::FATAL, "Could not create a temporary directory for YAML combining" );
         return undef;
     }
-    else {
-        print "Using dir $tmpdir\n";
-    }
 
-    # save first file
-    open my $fh, '>', "$tmpdir/one.yaml" or die "Error in wrirting $tmpdir/one.yaml: $!\n";
-    print $fh $one or die;
-    #if ($?) {
-    #    $fre->out( FREMsg::FATAL, "Could not write file to temporary directory '$tmpdir' for YAML combining" );
-    #    return undef;
-    #}
-
-    # save second file
-    open $fh, '>', "$tmpdir/two.yaml" or die;
-    print $fh $two or die;
-    #if ($?) {
-    #    $fre->out( FREMsg::FATAL, "Could not write file to temporary directory '$tmpdir' for YAML combining" );
-    #    return undef;
-    #}
+    # save files to tempdir
+    my $error = 0;
+    open my $fh, '>', "$tmpdir/one.yaml" or $error = 1;
+    print $fh $one or $error = 1;
+    open $fh, '>', "$tmpdir/two.yaml" or $error = 1;
+    print $fh $two or $error = 1;
+    if ( $error ) {
+        $fre->out( FREMsg::FATAL, "Could not write file to temporary directory '$tmpdir' for YAML combining" );
+        return undef;
+    };
 
     # run the combiner
+    print( "DEBUG: $tool -f $tmpdir/one.yaml $tmpdir/two.yaml -o $tmpdir/combined.yaml\n" );
     system( "$tool -f $tmpdir/one.yaml $tmpdir/two.yaml -o $tmpdir/combined.yaml" );
     if ($?) {
         $fre->out( FREMsg::FATAL, "Error in combining the '$label' YAMLs" );
