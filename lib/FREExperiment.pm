@@ -1642,8 +1642,9 @@ sub _append_yaml($$$$) {
     };
 
     # run the combiner
-    print( "DEBUG: $tool -f $tmpdir/one.yaml $tmpdir/two.yaml -o $tmpdir/combined.yaml\n" );
-    system( "$tool -f $tmpdir/one.yaml $tmpdir/two.yaml -o $tmpdir/combined.yaml" );
+    my $command = "$tool -f $tmpdir/one.yaml $tmpdir/two.yaml -o $tmpdir/combined.yaml";
+    $fre->out( FREMsg::NOTE, $command );
+    system( $command );
     if ($?) {
         $fre->out( FREMsg::FATAL, "Error in combining the '$label' YAMLs" );
         return undef;
