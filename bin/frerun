@@ -1190,15 +1190,36 @@ use Email::Valid;
 
         # -------------------------------------------------------------- diagTable
 
-        if ( defined( my $diagTable = $z->extractTable('diagTable') ) ) {
+        my $diagYaml = $z->extractYaml('diagYaml');
+        my $diagTable = $z->extractTable('diagTable');
+        if ( ! defined $diagYaml ) {
+            $fre->out( FREMsg::FATAL, "A problem with the diagnostic yaml" );
+            return ( 0, FREDefaults::STATUS_FS_GENERIC_PROBLEM );
+        }
+        if ( ! defined $diagTable ) {
+            $fre->out( FREMsg::FATAL, "A problem with the diagnostic table" );
+            return ( 0, FREDefaults::STATUS_FS_GENERIC_PROBLEM );
+        }
+        if ( $diagYaml and $diagTable ) {
+            $fre->out( FREMsg::FATAL, "You have specified both diagTable(s) and diagYaml(s); please choose one." );
+            return (0, FREDefaults::STATUS_FS_GENERIC_PROBLEM );
+        }
+        if ( $diagYaml ) {
+            $fre->out( FREMsg::NOTE, "Using diagYaml(s)" );
+            my $baseDate = frerun::baseDate($h);
+            FRETemplate::setVariable( $fre, $r, 'baseDate', "'$baseDate'" );
+            $diagYaml =~ s/^\s*\$baseDate\s*$/$baseDate/m;
+            FRETemplate::setTable( $fre, $r, 'diag_table', $diagYaml );
+        }
+        elsif ( $diagTable ) {
+            $fre->out( FREMsg::NOTE, "Using diagTable(s)" );
             my $baseDate = frerun::baseDate($h);
             FRETemplate::setVariable( $fre, $r, 'baseDate', "'$baseDate'" );
             $diagTable =~ s/^\s*\$baseDate\s*$/$baseDate/m;
             FRETemplate::setTable( $fre, $r, 'diag_table', $diagTable );
         }
         else {
-            $fre->out( FREMsg::FATAL, "A problem with the diagnostic table" );
-            return ( 0, FREDefaults::STATUS_FS_GENERIC_PROBLEM );
+            $fre->out( FREMsg::NOTE, "Not using diagYaml(s) or diagTable(s)" );
         }
 
         # -------------------------------------------------------------------------- fieldTable
@@ -1236,21 +1257,24 @@ use Email::Valid;
             $fre->out( FREMsg::FATAL, "A problem with the data yaml" );
             return ( 0, FREDefaults::STATUS_FS_GENERIC_PROBLEM );
         }
-        elsif ( ! defined $dataTable ) {
+        if ( ! defined $dataTable ) {
             $fre->out( FREMsg::FATAL, "A problem with the data table" );
             return ( 0, FREDefaults::STATUS_FS_GENERIC_PROBLEM );
         }
-        elsif ( $dataYaml and $dataTable ) {
+        if ( $dataYaml and $dataTable ) {
             $fre->out( FREMsg::FATAL, "You have specified both dataTable(s) and dataYaml(s); please choose one." );
             return (0, FREDefaults::STATUS_FS_GENERIC_PROBLEM );
         }
-        elsif ( $dataYaml ) {
-            FRETemplate::setTable( $fre, $r, 'data_table', $dataYaml );
+        if ( $dataYaml ) {
             $fre->out( FREMsg::NOTE, "Using dataYaml(s)" );
+            FRETemplate::setTable( $fre, $r, 'data_table', $dataYaml );
         }
         elsif ( $dataTable ) {
+            $fre->out( FREMsg::NOTE, "Using dataTable(s)" );
             FRETemplate::setTable( $fre, $r, 'data_table', $dataTable );
-            $fre->out( FREMsg::NOTE, "Using diagTable(s)" );
+        }
+        else {
+            $fre->out( FREMsg::NOTE, "Not using dataYaml(s) or dataTable(s)" );
         }
 
         # ------------------------------------------------------------------------ tracerTreeTable
