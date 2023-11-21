@@ -136,13 +136,9 @@ ERROR: No history data found for year 0101 in /work/$USER/$unique_string/.*/CM2.
     case "$FRE_SYSTEM_SITE" in
         gfdl )
             output_good="NOTE: adding '-c split'; frepp will do each component in a separate batch job
-
 TO SUBMIT: sbatch  /work/$USER/$unique_string/.*/CM2.1U_Control-1990_E1.M_3B_snowmelt/${default_platform}-prod/scripts/postProcess/CM2.1U_Control-1990_E1.M_3B_snowmelt_atmos_01050101
-
 TO SUBMIT: sbatch  /work/$USER/$unique_string/.*/CM2.1U_Control-1990_E1.M_3B_snowmelt/${default_platform}-prod/scripts/postProcess/CM2.1U_Control-1990_E1.M_3B_snowmelt_ocean_01050101
-
 TO SUBMIT: sbatch  /work/$USER/$unique_string/.*/CM2.1U_Control-1990_E1.M_3B_snowmelt/${default_platform}-prod/scripts/postProcess/CM2.1U_Control-1990_E1.M_3B_snowmelt_land_01050101
-
 TO SUBMIT: sbatch  /work/$USER/$unique_string/.*/CM2.1U_Control-1990_E1.M_3B_snowmelt/${default_platform}-prod/scripts/postProcess/CM2.1U_Control-1990_E1.M_3B_snowmelt_ice_01050101"
             exit_status=0
             ;;
@@ -169,13 +165,9 @@ TO SUBMIT: sbatch  /work/$USER/$unique_string/.*/CM2.1U_Control-1990_E1.M_3B_sno
     case "$FRE_SYSTEM_SITE" in
         gfdl )
             output_good="NOTE: adding '-c split'; frepp will do each component in a separate batch job
-
 TO SUBMIT: sbatch  /work/$USER/$unique_string/.*/CM2.1U_Control-1990_E1.M_3B_snowmelt/${default_platform}-prod-openmp/scripts/postProcess/CM2.1U_Control-1990_E1.M_3B_snowmelt_atmos_01050101
-
 TO SUBMIT: sbatch  /work/$USER/$unique_string/.*/CM2.1U_Control-1990_E1.M_3B_snowmelt/${default_platform}-prod-openmp/scripts/postProcess/CM2.1U_Control-1990_E1.M_3B_snowmelt_ocean_01050101
-
 TO SUBMIT: sbatch  /work/$USER/$unique_string/.*/CM2.1U_Control-1990_E1.M_3B_snowmelt/${default_platform}-prod-openmp/scripts/postProcess/CM2.1U_Control-1990_E1.M_3B_snowmelt_land_01050101
-
 TO SUBMIT: sbatch  /work/$USER/$unique_string/.*/CM2.1U_Control-1990_E1.M_3B_snowmelt/${default_platform}-prod-openmp/scripts/postProcess/CM2.1U_Control-1990_E1.M_3B_snowmelt_ice_01050101"
             exit_status=0
             ;;
@@ -267,4 +259,40 @@ TO SUBMIT: sbatch  /work/$USER/$unique_string/.*/CM2.1U_Control-1990_E1.M_3B_sno
     grep "SBATCH --mail-user=title@yahoo.com,department@gmail.com,foo@noaa.gov" $script
     [ "$status" -eq 0 ]
     rm "$unique_xml_name"
+}
+
+@test "tool frepp-like command script with PAPIEX_TAGS and verify that exit status untouched" {
+    case "$FRE_SYSTEM_SITE" in
+        gfdl )
+            ;;
+        * )
+            skip "No test for current platform"
+            ;;
+    esac
+    FREPP_SCRIPT=${FRE_COMMANDS_TEST}/bin/frepp
+    NUM_LINES=$(cat $FREPP_SCRIPT | grep -A 9999 __Python__ | wc -l)
+    NUM_LINES=$(($NUM_LINES-1))
+    
+    #the tooler is part of bin/frepp- grab the code, make sure it's "fresh"
+    TESTS_DIR=$FRE_COMMANDS_TEST/t/FRE_tests
+    TOOLER_SCRIPT=$TESTS_DIR/papiex_tag_file.py
+    if [[ -f $TOOLER_SCRIPT ]]; then rm -f $TOOLER_SCRIPT; fi
+    tail -$NUM_LINES $FREPP_SCRIPT >> $TOOLER_SCRIPT
+    
+    #make sure the test input exists with the right perms.
+    SIMPLE_FAILING_SCRIPT=$TESTS_DIR/simple_failing_command.sh
+    if [[ ! -f $SIMPLE_FAILING_SCRIPT ]]; then exit 1; fi
+    chmod u+x $SIMPLE_FAILING_SCRIPT
+    
+    TAGGED_SIMPLE_FAILING_SCRIPT=$SIMPLE_FAILING_SCRIPT.tags
+    #now with python 2.7, import the script and run the code targeting the failing script, again changing the perms
+    if [[ -f $TAGGED_SIMPLE_FAILING_SCRIPT ]]; then rm -f $TAGGED_SIMPLE_FAILING_SCRIPT; fi
+    cd $TESTS_DIR
+    python -c "import papiex_tag_file as ptf; ptf.papiex_tag_file(fin_name='./simple_failing_command.sh',fms_modulefiles=None);"
+    chmod u+x $TAGGED_SIMPLE_FAILING_SCRIPT
+    cd -
+    
+    #moment of truth
+    /bin/csh $TAGGED_SIMPLE_FAILING_SCRIPT && RESULT=$? || RESULT=$?
+    [ $RESULT -eq 0 ]
 }
