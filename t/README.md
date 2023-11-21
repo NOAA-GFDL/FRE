@@ -17,3 +17,38 @@ commands are in PATH.  On some sites there is a Slurm module.
 
 Once your environment is setup, enter the `t/FRE_tests` directory, and run the
 command: `run_tests`.  The command will produce TAP output of the tests.
+
+
+## run tests for branch `519.epmt-bug`
+execute the following from this directory (`fre-commands/t`). warning: `bash` assumed.
+```
+cd ..
+export FRE_COMMANDS_TEST=$PWD
+module load fre/test
+module load bats
+cd t/FRE_tests
+```
+
+now edit `t/FRE_tests/run_tests` to only run `frepp` tests. replace the 
+`do_tests` function with the following script:
+```
+do_tests () {
+  pushd xml
+
+  local command="bats -t ../frepp.bats"
+  echo $command
+  $command | tee frepp.tap 2>&1
+  frepp_exit=$(evalTAP frepp.tap)
+  rm -f frepp.tap
+
+  echo ""
+
+  popd
+
+  local myExit=$(expr $frepp_exit)
+
+  return $myExit
+}
+```
+
+now we can run only `frepp` tests with `run_tests`
