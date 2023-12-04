@@ -1566,7 +1566,7 @@ sub extractYaml($$)
                 my $fileContent = qx(cat $filePath);
                 $fileContent = $fre->placeholdersExpand($fileContent);
                 $fileContent = $exp->placeholdersExpand($fileContent);
-                $value .= _append_yaml($fre, $value, $fileContent, $l);
+                $value = _append_yaml($fre, $value, $fileContent, $l);
                 return if ! defined $value;
             }
             else {
@@ -1655,7 +1655,7 @@ sub _append_yaml($$$$) {
     chomp $combined;
 
     # delete tmpdir
-    qx( rm -rf $tmpdir );
+    #qx( rm -rf $tmpdir );
 
     return $combined;
 }
