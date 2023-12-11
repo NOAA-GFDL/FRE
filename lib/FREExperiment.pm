@@ -1655,7 +1655,7 @@ sub _append_yaml($$$$) {
     chomp $combined;
 
     # delete tmpdir
-    #qx( rm -rf $tmpdir );
+    qx( rm -rf $tmpdir );
 
     return $combined;
 }
