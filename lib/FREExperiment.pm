@@ -1637,7 +1637,7 @@ sub _append_yaml($$$$) {
     catch {
         $fre->out( FREMsg::FATAL, "Could not create a temporary directory for YAML combining" );
 	$error++;
-    }
+    };
     return undef if $error;
     
     my $fh;
