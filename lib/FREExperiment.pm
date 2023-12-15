@@ -1631,7 +1631,7 @@ sub _append_yaml($$$$) {
     }
 
     # create a tmpdir.  Use File::Temp::tempdir so cleanup happens automatically when scope closes.
-    my $dir = try {
+    my $tmpdir = try {
 	tempdir( CLEANUP => 1 )
     }
     catch {
@@ -1640,7 +1640,6 @@ sub _append_yaml($$$$) {
     }
     return undef if $error;
     
-    my $tmpdir = $dir->dirname;
     my $fh;
     # save files to tempdir and tmpfiles.
     # $one and $two passed in are presumably single-line scalars
