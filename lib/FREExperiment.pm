@@ -12,7 +12,8 @@ package FREExperiment;
 use strict;
 
 use List::Util();
-
+use Try::Tiny;
+use File::Temp 'tempdir';
 use FREDefaults();
 use FREMsg();
 use FRENamelists();
@@ -711,7 +712,7 @@ my $MPISizeParametersGeneric = sub($$$$)
                     }
                     else {
                         $fre->out( FREMsg::FATAL,
-                            "The component $component's thread request ($ntds) must be less or equal than a number '$coresPerNode' of cores per node"
+                            "The component $component\'s thread request ($ntds) must be less or equal than a number '$coresPerNode' of cores per node"
                         );
                         return undef;
                     }
@@ -1248,7 +1249,7 @@ sub extractExecutable($)
         $fre->out( FREMsg::WARNING,
             "The executable name is predefined more than once - all the extra definitions are ignored"
         ) if scalar(@results) > 1;
-        return ( @results[0], $exp );
+        return ( $results[0], $exp );
     }
     elsif ($makeSenseToCompile) {
         return ( undef, $exp );
@@ -1280,7 +1281,7 @@ sub extractMkmfTemplate($$)
     $fre->out( FREMsg::WARNING,
         "The '$c' component mkmf template is defined more than once - all the extra definitions are ignored"
     ) if scalar(@results) > 1;
-    return @results[0];
+    return $results[0];
 
 }
 
@@ -1570,6 +1571,7 @@ sub extractYaml($$)
                 return if ! defined $value;
             }
             else {
+		$fre->out( FREMsg::WARNING, "Tablefile $filePath unreadable, ignored" );
                 return undef;
             }
         }
@@ -1599,12 +1601,13 @@ sub extractYaml($$)
 # utility function to combine two datayamls, fieldyamls, and diagyamls
 # label should be one of: fieldYaml, dataYaml, diagYaml
 sub _append_yaml($$$$) {
+    use autodie;
     my ($fre, $one, $two, $label) = @_;
-
     # if $one is empty, then just return $two
     if (! $one) {
         return $two;
     }
+    my $error;
 
     # locate the combining tool
     my $tool;
@@ -1619,44 +1622,63 @@ sub _append_yaml($$$$) {
     }
     else {
         $fre->out( FREMsg::FATAL, "Combiner for yaml type '$label' not available" );
-        return;
+        return undef;
+    }
+    chomp ( $tool = qx{which $tool 2>&1} );
+    if (! -x $tool) {
+        $fre->out( FREMsg::FATAL, "Yaml combiner tool $tool unavailable");
+        return undef;
     }
 
-    # create a tmpdir
-    my $tmpdir = qx( mktemp -d );
-    chomp $tmpdir;
-    if ($?) {
+    # create a tmpdir.  Use File::Temp::tempdir so cleanup happens automatically when scope closes.
+    my $dir = try {
+	tempdir( CLEANUP => 1 )
+    }
+    catch {
         $fre->out( FREMsg::FATAL, "Could not create a temporary directory for YAML combining" );
-        return undef;
+	$error++;
     }
-
-    # save files to tempdir
-    my $error = 0;
-    open my $fh, '>', "$tmpdir/one.yaml" or $error = 1;
-    print $fh $one or $error = 1;
-    open $fh, '>', "$tmpdir/two.yaml" or $error = 1;
-    print $fh $two or $error = 1;
-    if ( $error ) {
-        $fre->out( FREMsg::FATAL, "Could not write file to temporary directory '$tmpdir' for YAML combining" );
-        return undef;
+    return undef if $error;
+    
+    my $tmpdir = $dir->dirname;
+    my $fh;
+    # save files to tempdir and tmpfiles.
+    # $one and $two passed in are presumably single-line scalars
+    try {
+	open $fh, '>', "$tmpdir/one.yaml";
+	print $fh $one;
+	open $fh, '>', "$tmpdir/two.yaml";
+	print $fh $two;
+    }
+    catch {
+        $fre->out( FREMsg::FATAL, "Could not write files to temporary directory '$tmpdir' for YAML combining" );
+	$error++;
     };
+    my $combined;
+    unless ($error) {
+	# run the combiner
+	my $command = "$tool -f $tmpdir/one.yaml $tmpdir/two.yaml -o $tmpdir/combined.yaml";
+	$fre->out( FREMsg::NOTE, $command );
+	system( $command );
+	if ($?) {
+	    $fre->out( FREMsg::FATAL, "Error in combining the '$label' YAMLs" );
+	    $error++;
+	}
 
-    # run the combiner
-    my $command = "$tool -f $tmpdir/one.yaml $tmpdir/two.yaml -o $tmpdir/combined.yaml";
-    $fre->out( FREMsg::NOTE, $command );
-    system( $command );
-    if ($?) {
-        $fre->out( FREMsg::FATAL, "Error in combining the '$label' YAMLs" );
-        return undef;
+	if (-z "$tmpdir/combined.yaml") {
+	    $fre->out( FREMsg::FATAL, "Error in combining the '$label' YAMLs: no output produced" );
+	    $error++;
+	}	
+	unless ($error) {
+	    # retrieve the combined yaml
+	    open($fh, '<', "$tmpdir/combined.yaml");
+	    chomp ($combined = join '', <$fh>);
+	}
     }
 
-    # retrieve the combined yaml
-    my $combined = qx( cat $tmpdir/combined.yaml );
-    chomp $combined;
-
-    # delete tmpdir
-    qx( rm -rf $tmpdir );
-
+    if ($error) {
+	return undef;
+    }
     return $combined;
 }
 
@@ -1775,7 +1797,7 @@ sub extractVariableFile($$)
     $fre->out( FREMsg::WARNING,
         "The variable '$l' is defined more than once - all the extra definitions are ignored" )
         if scalar(@results) > 1;
-    return @results[0];
+    return $results[0];
 
 }
 
