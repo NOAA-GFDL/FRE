@@ -188,8 +188,8 @@ sub out {
 }
 my $fre = FRE->new();
 
-# run the 3 tests
-use Test::More tests => 3;
+# run the 4 tests
+use Test::More tests => 4;
 
 # remove newlines from reference output
 chomp $data3;
@@ -200,3 +200,27 @@ chomp $diag3;
 is(FREExperiment::_append_yaml($fre, $data1, $data2, 'dataYaml'), $data3, "combine two dataYamls and verify output");
 is(FREExperiment::_append_yaml($fre, $field1, $field2, 'fieldYaml'), $field3, "combine two fieldYamls and verify output");
 is(FREExperiment::_append_yaml($fre, $diag1, $diag2, 'diagYaml'), $diag3, "combine two diagYamls and verify output");
+
+# verify bad input causes error
+# This is missing the diag_files header
+my $bad_diag = <<EOF;
+  freq: 6
+  freq_units: hours
+  time_units: days
+  unlimdim: time
+  varlist:
+  - module: dynamics
+    var_name: tm
+    reduction: none
+    kind: r4
+  - module: flux
+    var_name: u_ref
+    reduction: none
+    kind: r4
+  - module: flux
+    var_name: v_ref
+    reduction: none
+    kind: r4
+EOF
+
+ok(! FREExperiment::_append_yaml($fre, $diag1, $bad_diag, 'diagYaml'), 'dataYaml combining should fail if input is bad');
