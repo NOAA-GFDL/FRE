@@ -1190,52 +1190,110 @@ use Email::Valid;
 
         # -------------------------------------------------------------- diagTable
 
-        if ( defined( my $diagTable = $z->extractTable('diagTable') ) ) {
+        my $diagYaml = $z->extractYaml('diagYaml');
+        my $diagTable = $z->extractTable('diagTable');
+        if ( ! defined $diagYaml ) {
+            $fre->out( FREMsg::FATAL, "A problem with the diagnostic yaml" );
+            return ( 0, FREDefaults::STATUS_FS_GENERIC_PROBLEM );
+        }
+        if ( ! defined $diagTable ) {
+            $fre->out( FREMsg::FATAL, "A problem with the diagnostic table" );
+            return ( 0, FREDefaults::STATUS_FS_GENERIC_PROBLEM );
+        }
+        if ( $diagYaml and $diagTable ) {
+            $fre->out( FREMsg::FATAL, "You have specified both diagTable(s) and diagYaml(s); please choose one." );
+            return (0, FREDefaults::STATUS_FS_GENERIC_PROBLEM );
+        }
+        if ( $diagYaml ) {
+            $fre->out( FREMsg::NOTE, "Using diagYaml(s)" );
+            my $baseDate = frerun::baseDate($h);
+            FRETemplate::setVariable( $fre, $r, 'baseDate', "'$baseDate'" );
+            $diagYaml =~ s/^\s*\$baseDate\s*$/$baseDate/m;
+            FRETemplate::setTable( $fre, $r, 'diag_table.yaml', $diagYaml );
+        }
+        elsif ( $diagTable ) {
+            $fre->out( FREMsg::NOTE, "Using diagTable(s)" );
             my $baseDate = frerun::baseDate($h);
             FRETemplate::setVariable( $fre, $r, 'baseDate', "'$baseDate'" );
             $diagTable =~ s/^\s*\$baseDate\s*$/$baseDate/m;
             FRETemplate::setTable( $fre, $r, 'diag_table', $diagTable );
         }
         else {
-            $fre->out( FREMsg::FATAL, "A problem with the diagnostic table" );
-            return ( 0, FREDefaults::STATUS_FS_GENERIC_PROBLEM );
+            $fre->out( FREMsg::NOTE, "Not using diagYaml(s) or diagTable(s)" );
         }
 
         # -------------------------------------------------------------------------- fieldTable
 
-        if ( defined( my $fieldTable = $z->extractTable('fieldTable') ) ) {
-            if ( $h->namelistGet('coupler_nml') ) {
+        my $fieldYaml = $z->extractYaml('fieldYaml');
+        my $fieldTable = $z->extractTable('fieldTable');
+        if ( ! defined $fieldYaml ) {
+            $fre->out( FREMsg::FATAL, "A problem with the field yaml" );
+            return ( 0, FREDefaults::STATUS_FS_GENERIC_PROBLEM );
+        }
+        if ( ! defined $fieldTable ) {
+            $fre->out( FREMsg::FATAL, "A problem with the field table" );
+            return ( 0, FREDefaults::STATUS_FS_GENERIC_PROBLEM );
+        }
+        if ( $fieldYaml and $fieldTable ) {
+            $fre->out( FREMsg::FATAL, "You have specified both fieldTable(s) and fieldYaml(s); please choose one." );
+            return ( 0, FREDefaults::STATUS_FS_GENERIC_PROBLEM );
+        }
+        if ( $fieldYaml ) {
+            $fre->out( FREMsg::NOTE, "Using fieldYaml(s)" );
+            FRETemplate::setTable( $fre, $r, 'field_table.yaml', $fieldYaml );
+        }
+        elsif ( $fieldTable ) {
+            if ( defined( my $fieldTable = $z->extractTable('fieldTable') ) ) {
+                if ( $h->namelistGet('coupler_nml') ) {
 
-                # Adding a new line character just in case ...
-                $fieldTable .= "\n";
-                if ( $fieldTable !~ /^\s*"TRACER"\s*,\s*"atmos_mod"\s*,\s*"sphum".*/im ) {
-                    $fieldTable .= '# added by FRE: sphum must be present in atmos' . "\n";
-                    $fieldTable .= ' "TRACER", "atmos_mod",    "sphum"' . "\n";
-                    $fieldTable .= '           "longname",     "specific humidity"' . "\n";
-                    $fieldTable .= '           "units",        "kg/kg" /' . "\n";
-                }
-                if ( $fieldTable !~ /^\s*"TRACER"\s*,\s*"land_mod"\s*,\s*"sphum".*/im ) {
-                    $fieldTable .= '# added by FRE: sphum must be present on land' . "\n";
-                    $fieldTable .= ' "TRACER", "land_mod",     "sphum"' . "\n";
-                    $fieldTable .= '           "longname",     "specific humidity"' . "\n";
-                    $fieldTable .= '           "units",        "kg/kg" /' . "\n";
+                    # Adding a new line character just in case ...
+                    $fieldTable .= "\n";
+                    if ( $fieldTable !~ /^\s*"TRACER"\s*,\s*"atmos_mod"\s*,\s*"sphum".*/im ) {
+                        $fieldTable .= '# added by FRE: sphum must be present in atmos' . "\n";
+                        $fieldTable .= ' "TRACER", "atmos_mod",    "sphum"' . "\n";
+                        $fieldTable .= '           "longname",     "specific humidity"' . "\n";
+                        $fieldTable .= '           "units",        "kg/kg" /' . "\n";
+                    }
+                    if ( $fieldTable !~ /^\s*"TRACER"\s*,\s*"land_mod"\s*,\s*"sphum".*/im ) {
+                        $fieldTable .= '# added by FRE: sphum must be present on land' . "\n";
+                        $fieldTable .= ' "TRACER", "land_mod",     "sphum"' . "\n";
+                        $fieldTable .= '           "longname",     "specific humidity"' . "\n";
+                        $fieldTable .= '           "units",        "kg/kg" /' . "\n";
+                    }
                 }
             }
             FRETemplate::setTable( $fre, $r, 'field_table', $fieldTable );
         } ## end if ( defined( my $fieldTable...))
         else {
-            $fre->out( FREMsg::FATAL, "A problem with the field table" );
-            return ( 0, FREDefaults::STATUS_FS_GENERIC_PROBLEM );
+            $fre->out( FREMsg::NOTE, "Not using fieldYaml(s) or fieldTable(s)" );
         }
 
         # -------------------------------------------------------------------------------- dataTable
 
-        if ( defined( my $dataTable = $z->extractTable('dataTable') ) ) {
+        my $dataYaml = $z->extractYaml('dataYaml');
+        my $dataTable = $z->extractTable('dataTable');
+        if ( ! defined $dataYaml ) {
+            $fre->out( FREMsg::FATAL, "A problem with the data yaml" );
+            return ( 0, FREDefaults::STATUS_FS_GENERIC_PROBLEM );
+        }
+        if ( ! defined $dataTable ) {
+            $fre->out( FREMsg::FATAL, "A problem with the data table" );
+            return ( 0, FREDefaults::STATUS_FS_GENERIC_PROBLEM );
+        }
+        if ( $dataYaml and $dataTable ) {
+            $fre->out( FREMsg::FATAL, "You have specified both dataTable(s) and dataYaml(s); please choose one." );
+            return (0, FREDefaults::STATUS_FS_GENERIC_PROBLEM );
+        }
+        if ( $dataYaml ) {
+            $fre->out( FREMsg::NOTE, "Using dataYaml(s)" );
+            FRETemplate::setTable( $fre, $r, 'data_table.yaml', $dataYaml );
+        }
+        elsif ( $dataTable ) {
+            $fre->out( FREMsg::NOTE, "Using dataTable(s)" );
             FRETemplate::setTable( $fre, $r, 'data_table', $dataTable );
         }
         else {
-            $fre->out( FREMsg::FATAL, "A problem with the data table" );
-            return ( 0, FREDefaults::STATUS_FS_GENERIC_PROBLEM );
+            $fre->out( FREMsg::NOTE, "Not using dataYaml(s) or dataTable(s)" );
         }
 
         # ------------------------------------------------------------------------ tracerTreeTable

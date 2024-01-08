@@ -112,7 +112,7 @@ use FRETemplate();
             "  Usage: $self [option|experiment] ...\n\n",
             "  Options:\n\n",
             "   -D,        --description               include experiment descriptions\n",
-            "              --diagtable                 print the diagTables\n",
+            "              --diagtable                 print the diagTables or diagYamls (whichever frerun will use)\n",
             "   -d STRING, --directory=STRING          list experiment directories with types, defined by the STRING\n",
             "   -e STRING, --evaluate=STRING           evaluate STRING expression (in XPath syntax) to retrieve experiment information\n",
             "   -E,        --executable                retrieve an executable pathname and the experiment, where this executable is defined\n",
@@ -544,8 +544,28 @@ use FRETemplate();
             $fre->{verbose} = $original_verbosity;
         } ## end if ( $opt{nodes} )
 
+        # print the diagtables or diagyamls (whichever frerun will use)
         if ( $opt{diagtable} ) {
-            print $exp->extractTable('diagTable') . "\n";
+            my $diagYaml = $exp->extractYaml('diagYaml');
+            my $diagTable = $exp->extractTable('diagTable');
+            if ( $diagYaml and $diagTable ) {
+                $fre->out( FREMsg::FATAL, "You have specified both diagTable(s) and diagYaml(s); please choose one." );
+                exit FREDefaults::STATUS_FS_GENERIC_PROBLEM;
+            }
+            if ( ! defined $diagYaml ) {
+                $fre->out( FREMsg::FATAL, "A problem with the diagnostic yaml" );
+                exit FREDefaults::STATUS_FS_GENERIC_PROBLEM;
+            }
+            if ( ! defined $diagTable ) {
+                $fre->out( FREMsg::FATAL, "A problem with the diagnostic table" );
+                exit FREDefaults::STATUS_FS_GENERIC_PROBLEM;
+            }
+            if ( $diagYaml ) {
+                print $diagYaml . "\n";
+            }
+            else {
+                print $diagTable . "\n";
+            }
             exit FREDefaults::STATUS_OK;
         }
 

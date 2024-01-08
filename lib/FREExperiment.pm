@@ -12,7 +12,8 @@ package FREExperiment;
 use strict;
 
 use List::Util();
-
+use Try::Tiny;
+use File::Temp 'tempdir';
 use FREDefaults();
 use FREMsg();
 use FRENamelists();
@@ -711,7 +712,7 @@ my $MPISizeParametersGeneric = sub($$$$)
                     }
                     else {
                         $fre->out( FREMsg::FATAL,
-                            "The component $component's thread request ($ntds) must be less or equal than a number '$coresPerNode' of cores per node"
+                            "The component $component\'s thread request ($ntds) must be less or equal than a number '$coresPerNode' of cores per node"
                         );
                         return undef;
                     }
@@ -1248,7 +1249,7 @@ sub extractExecutable($)
         $fre->out( FREMsg::WARNING,
             "The executable name is predefined more than once - all the extra definitions are ignored"
         ) if scalar(@results) > 1;
-        return ( @results[0], $exp );
+        return ( $results[0], $exp );
     }
     elsif ($makeSenseToCompile) {
         return ( undef, $exp );
@@ -1280,7 +1281,7 @@ sub extractMkmfTemplate($$)
     $fre->out( FREMsg::WARNING,
         "The '$c' component mkmf template is defined more than once - all the extra definitions are ignored"
     ) if scalar(@results) > 1;
-    return @results[0];
+    return $results[0];
 
 }
 
@@ -1525,8 +1526,160 @@ sub extractNamelists($)
     } ## end while ($exp)
 
     return $nmls;
-
 } ## end sub extractNamelists($)
+
+sub extractYaml($$)
+
+    # ------ arguments: $object $label
+    # ------ called as object method
+    # ------ returns data, corresponding to the $label yaml, following inherits
+{
+
+    my ( $r, $l ) = @_;
+    my ( $exp, $fre, $value ) = ( $r, $r->fre(), '' );
+
+    # ------------------------------------------- get the input node
+    my $inputNode = $exp->node()->findnodes('input')->get_node(1);
+
+    # --------------------------------------------- process the input node
+    if ($inputNode) {
+
+        # ----------------- Find nodes that have the wrong @order attribute.
+        my @inlineAppendTableNodes
+            = $inputNode->findnodes( $l . '[@order and not(@order="append")]' );
+        if (@inlineAppendTableNodes) {
+            $fre->out( FREMsg::FATAL, "The value for attribute order in $l is not valid." );
+            return undef;
+        }
+
+# ----------------- get inline tables except for "@order="append"" (they must be before tables from files and appended nodes)
+        my @inlineTableNodes
+            = $inputNode->findnodes( $l . '[not(@file) and not(@order="append")]' );
+        foreach my $inlineTableNode (@inlineTableNodes) {
+            $value = _append_yaml($fre, $value, $exp->nodeValue( $inlineTableNode, 'text()' ), $l);
+            return if ! defined $value;
+        }
+
+        # --------------------------------------------------------------- get tables from files
+        my @tableFiles = $fre->dataFilesMerged( $inputNode, $l, 'file' );
+        foreach my $filePath (@tableFiles) {
+            if ( -f $filePath and -r $filePath ) {
+                my $fileContent = qx(cat $filePath);
+                $fileContent = $fre->placeholdersExpand($fileContent);
+                $fileContent = $exp->placeholdersExpand($fileContent);
+                $value = _append_yaml($fre, $value, $fileContent, $l);
+                return if ! defined $value;
+            }
+            else {
+		$fre->out( FREMsg::WARNING, "Tablefile $filePath unreadable, ignored" );
+                return undef;
+            }
+        }
+    } ## end if ($inputNode)
+
+    # ---------------------------- repeat for the parent
+    if ( $exp->parent() and !$value ) {
+        $value .= $exp->parent()->extractYaml($l);
+        return if ! defined $value;
+    }
+
+    #  ---------------------------- now add appended tables
+    if ($inputNode) {
+
+        # ----------------- get [@order="append"] tables
+        my @inlineAppendTableNodes = $inputNode->findnodes( $l . '[@order="append"]' );
+        foreach my $inlineAppendTableNode (@inlineAppendTableNodes) {
+            $value = _append_yaml($fre, $value, $exp->nodeValue( $inlineAppendTableNode, 'text()' ), $l);
+            return if ! defined $value;
+        }
+    }
+
+    return $value;
+
+} ## end sub extractTable($$)
+
+# utility function to combine two datayamls, fieldyamls, and diagyamls
+# label should be one of: fieldYaml, dataYaml, diagYaml
+sub _append_yaml($$$$) {
+    use autodie;
+    my ($fre, $one, $two, $label) = @_;
+    # if $one is empty, then just return $two
+    if (! $one) {
+        return $two;
+    }
+    my $error;
+
+    # locate the combining tool
+    my $tool;
+    if ($label eq 'dataYaml') {
+        $tool = 'combine-data-table-yamls';
+    }
+    elsif ($label eq 'fieldYaml') {
+        $tool = 'combine-field-table-yamls';
+    }
+    elsif ($label eq 'diagYaml') {
+        $tool = 'combine-diag-table-yamls';
+    }
+    else {
+        $fre->out( FREMsg::FATAL, "Combiner for yaml type '$label' not available" );
+        return undef;
+    }
+    chomp ( $tool = qx{which $tool 2>&1} );
+    if (! -x $tool) {
+        $fre->out( FREMsg::FATAL, "Yaml combiner tool $tool unavailable");
+        return undef;
+    }
+
+    # create a tmpdir.  Use File::Temp::tempdir so cleanup happens automatically when scope closes.
+    my $tmpdir = try {
+	tempdir( CLEANUP => 1 )
+    }
+    catch {
+        $fre->out( FREMsg::FATAL, "Could not create a temporary directory for YAML combining" );
+	$error++;
+    };
+    return undef if $error;
+    
+    my $fh;
+    # save files to tempdir and tmpfiles.
+    # $one and $two passed in are presumably single-line scalars
+    try {
+	open $fh, '>', "$tmpdir/one.yaml";
+	print $fh $one;
+	open $fh, '>', "$tmpdir/two.yaml";
+	print $fh $two;
+    }
+    catch {
+        $fre->out( FREMsg::FATAL, "Could not write files to temporary directory '$tmpdir' for YAML combining" );
+	$error++;
+    };
+    my $combined;
+    unless ($error) {
+	# run the combiner
+	my $command = "$tool -f $tmpdir/one.yaml $tmpdir/two.yaml -o $tmpdir/combined.yaml";
+	$fre->out( FREMsg::NOTE, $command );
+	system( $command );
+	if ($?) {
+	    $fre->out( FREMsg::FATAL, "Error in combining the '$label' YAMLs" );
+	    $error++;
+	}
+
+	if (-z "$tmpdir/combined.yaml") {
+	    $fre->out( FREMsg::FATAL, "Error in combining the '$label' YAMLs: no output produced" );
+	    $error++;
+	}	
+	unless ($error) {
+	    # retrieve the combined yaml
+	    open($fh, '<', "$tmpdir/combined.yaml");
+	    chomp ($combined = join '', <$fh>);
+	}
+    }
+
+    if ($error) {
+	return undef;
+    }
+    return $combined;
+}
 
 sub extractTable($$)
 
@@ -1643,7 +1796,7 @@ sub extractVariableFile($$)
     $fre->out( FREMsg::WARNING,
         "The variable '$l' is defined more than once - all the extra definitions are ignored" )
         if scalar(@results) > 1;
-    return @results[0];
+    return $results[0];
 
 }
 

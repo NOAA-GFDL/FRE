@@ -177,22 +177,6 @@ else
    exit 1
 endif
 
-# the fms-yaml-tools are available in the python/3.9 environment,
-# but due to issues with the module, we want to unload it after
-# locating the scripts
-if ( $echoOn ) unset echo
-module load python/3.9
-if ( $echoOn ) set echo
-alias diag_table_yaml_tool `which diag-table-to-yaml`
-alias field_table_yaml_tool `which field-table-to-yaml`
-alias data_table_yaml_tool `which data-table-to-yaml`
-if ( $echoOn ) unset echo
-module unload python
-if ( $echoOn ) set echo
-set -r diag_table_yaml_tool = `alias diag_table_yaml_tool`
-set -r field_table_yaml_tool = `alias field_table_yaml_tool`
-set -r data_table_yaml_tool = `alias data_table_yaml_tool`
-
 # ---------------- commands, copied from XML (setup/platform/csh)
 
 if ( $echoOn ) unset echo
@@ -710,92 +694,11 @@ else
 endif
 
 #FRE table(diag_table)
-if ( -f diag_table.yaml ) then
-   if ( $echoOn ) unset echo
-   echo "<NOTE> : Will not convert diag_table to YAML as diag_table.yaml already exists"
-   if ( $echoOn ) set echo
-else
-   /usr/bin/time -f "    TIME for diag_table_yaml_tool:    real %e user %U sys %S" $diag_table_yaml_tool -f diag_table
-   if ( $status == 0 ) then
-      if ( $echoOn ) unset echo
-      echo "<NOTE> : Converted diag_table to YAML format"
-      if ( $echoOn ) set echo
-   else if ( $?FRE_WARNINGS ) then
-      if ( $FRE_WARNINGS == "error" ) then
-         if ( $echoOn ) unset echo
-         echo '*ERROR*: Failed to convert diag_table to YAML format, exiting per user request (i.e. $FRE_WARNINGS set to "error")'
-         if ( $echoOn ) set echo
-         exit 1
-      else
-         if ( $echoOn ) unset echo
-         echo "<NOTE> : Failed to convert diag_table to YAML format; continuing on"
-         if ( $echoOn ) set echo
-      endif
-   else
-      if ( $echoOn ) unset echo
-      echo "<NOTE> : Failed to convert diag_table to YAML format; continuing on"
-      if ( $echoOn ) set echo
-   endif
-endif
+#FRE table(diag_table.yaml)
 #FRE table(field_table)
-if ( -f field_table.yaml ) then
-   if ( $echoOn ) unset echo
-   echo "<NOTE> : Will not convert field_table to YAML as field_table.yaml already exists"
-   if ( $echoOn ) set echo
-else
-   /usr/bin/time -f "    TIME for field_table_yaml_tool:    real %e user %U sys %S" $field_table_yaml_tool -f field_table
-   if ( $status == 0 ) then
-      if ( $echoOn ) unset echo
-      echo "<NOTE> : Converted field_table to YAML format"
-      if ( $echoOn ) set echo
-   else if ( $?FRE_WARNINGS ) then
-      if ( $FRE_WARNINGS == "error" ) then
-         if ( $echoOn ) unset echo
-         echo '*ERROR*: Failed to convert field_table to YAML format, exiting per user request (i.e. $FRE_WARNINGS set to "error")'
-         if ( $echoOn ) set echo
-         exit 1
-      else
-         if ( $echoOn ) unset echo
-         echo "<NOTE> : Failed to convert diag_table to YAML format; continuing on"
-         if ( $echoOn ) set echo
-      endif
-   else
-      if ( $echoOn ) unset echo
-      echo "<NOTE> : Failed to convert field_table to YAML format; continuing on"
-      if ( $echoOn ) set echo
-   endif
-endif
-
-touch data_table
-
+#FRE table(field_table.yaml)
 #FRE table(data_table)
-if ( -f data_table.yaml ) then
-   if ( $echoOn ) unset echo
-   echo "<NOTE> : Will not convert data_table to YAML as data_table.yaml already exists"
-   if ( $echoOn ) set echo
-else
-   /usr/bin/time -f "    TIME for data_table_yaml_tool:    real %e user %U sys %S" $data_table_yaml_tool -f data_table
-   if ( $status == 0 ) then
-      if ( $echoOn ) unset echo
-      echo "<NOTE> : Converted data_table to YAML format"
-      if ( $echoOn ) set echo
-   else if ( $?FRE_WARNINGS ) then
-      if ( $FRE_WARNINGS == "error" ) then
-         if ( $echoOn ) unset echo
-         echo '*ERROR*: Failed to convert data_table to YAML format, exiting per user request (i.e. $FRE_WARNINGS set to "error")'
-         if ( $echoOn ) set echo
-         exit 1
-      else
-         if ( $echoOn ) unset echo
-         echo "<NOTE> : Failed to convert diag_table to YAML format; continuing on"
-         if ( $echoOn ) set echo
-      endif
-   else
-      if ( $echoOn ) unset echo
-      echo "<NOTE> : Failed to convert data_table to YAML format; continuing on"
-      if ( $echoOn ) set echo
-   endif
-endif
+#FRE table(data_table.yaml)
 #FRE table(ocean_tracer_tree)
 #FRE table(ocean_tracer_tree_init)
 
@@ -1365,6 +1268,7 @@ while ( $irun <= $segmentsPerJob && $currentSeg <= $segmentsPerSimulation )
 
       cp --force --preserve=mode,ownership,timestamps $workDir/input.nml $restartWorkDir
       cp --force --preserve=mode,ownership,timestamps $workDir/*_table   $restartWorkDir
+      cp --force --preserve=mode,ownership,timestamps $workDir/*_table.yaml $restartWorkDir
       cp --force --preserve=mode,ownership,timestamps $rtsxml            $restartWorkDir
       cp --force --preserve=mode,ownership,timestamps $scriptName        $restartWorkDir
 
