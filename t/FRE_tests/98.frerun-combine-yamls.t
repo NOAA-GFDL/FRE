@@ -188,11 +188,8 @@ sub out {
 }
 my $fre = FRE->new();
 
-# run the 4 tests, but skip them if at GFDL
-use Test::More;
-if ($ENV{FRE_SYSTEM_SITE} =~ /gfdl/) {
-    plan skip_all => 'Test irrelevant on PP/AN and not likely to work on workstations';
-}
+# run the 4 tests
+use Test::More tests => 4;
 
 # remove newlines from reference output
 chomp $data3;
@@ -227,5 +224,3 @@ my $bad_diag = <<EOF;
 EOF
 
 ok(! FREExperiment::_append_yaml($fre, $diag1, $bad_diag, 'diagYaml'), 'dataYaml combining should fail if input is bad');
-
-done_testing(4);
