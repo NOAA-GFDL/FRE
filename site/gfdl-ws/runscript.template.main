@@ -65,6 +65,7 @@ banner $FRE_JOBID
 #FRE const(hourslist)
 #FRE const(timeStampOptions)
 #FRE const(baseDate)
+#FRE const(ardiffTmpdir)
 
 #FRE flag(flagRunType)
 #FRE flag(flagCheckSum)
@@ -239,20 +240,6 @@ limit
 if ( $#dayslist != $segmentsPerJob || $#monthslist != $segmentsPerJob || $#hourslist != $segmentsPerJob ) then
    if ( $echoOn ) unset echo
    echo "*ERROR*: dayslist, monthslist and hourslist lengths must be equal to a number of segments per job"
-   if ( $echoOn ) set echo
-   exit 1
-endif
-
-# ---------------- setup the FRE temporary directory, exit if it's not defined
-
-if ( $?FRE_SYSTEM_TMP ) then
-   if ( $echoOn ) unset echo
-   echo "<NOTE> : Using the '$FRE_SYSTEM_TMP' temporary directory"
-   if ( $echoOn ) set echo
-   prepareDir $FRE_SYSTEM_TMP || exit 1
-else
-   if ( $echoOn ) unset echo
-   echo "*ERROR*: The FRE temporary directory is not defined"
    if ( $echoOn ) set echo
    exit 1
 endif
@@ -1029,6 +1016,7 @@ while ( $irun <= $segmentsPerJob && $currentSeg <= $segmentsPerSimulation )
       echo "set archDir               =  $historyArchDir"           >> $historyArgFile
       echo "set mppnccombineOptString = '$mppnccombineOptsHistory'" >> $historyArgFile
       echo "set gridSpec              =   $gridSpec"                >> $historyArgFile
+      echo "set ardiffTmpdir          =   $ardiffTmpdir"            >> $historyArgFile
 
       # Allow FRE_*TEST* variables to pass into output.stager jobs
       if ( ${freCommandsVersion} =~ "test" ) then

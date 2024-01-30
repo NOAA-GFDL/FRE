@@ -29,7 +29,7 @@ Bronx-21 was released on January 18, 2024, to support the new gaea F5 filesystem
 * If YAML formats are used, frerun will combine them using python utilities in the fms-yaml-tools project (https://github.com/NOAA-GFDL/fms_yaml_tools), which are installed at gaea and GFDL and available after module loading FRE. If the YAMLs cannot be combined, frerun will report a fatal error. Otherwise, the combined YAMLs are saved by the runscript in the workDir (diag_table.yaml, field_table.yaml, data_table.yaml), and also copied to the restart archive.
 * FRE will not convert tables to YAMLs! Also included in fms-yaml-tools (and available through module loading FRE) are the conversion tools diag-table-to-yaml, data-table-to-yaml, and field-table-to-yaml, that you may use to update your XMLs offline.
 
-**FMS will support legacy tables and new YAML formats for some time, but eventually legacy tables will be dropped. Work with your model liaison to update your XMLs.**
+**Currently there are no XML changes required if you wish to continue using the legacy tables. FMS will support legacy tables and new YAML formats for some time, but eventually legacy tables will be dropped. Work with your model liaison to update your XMLs.**
 
 ## Updated HSM 1.2.7
 * Switch to native file locking on PP/AN (from NFSLock). When hsmget tasks are interrupted (e.g. due to a cluster reboot), there are no longer stale lockfiles that previously required manual intervention or a time-out period.
@@ -38,9 +38,15 @@ Bronx-21 was released on January 18, 2024, to support the new gaea F5 filesystem
 * FRE-NCtools is independent of FRE, and is maintained on [github](https://github.com/NOAA-GFDL/FRE-NCtools)
 
 ## Known issues
-* $FRE_SYSTEM_TMP defines the ardiff working directory, is set in the FRE modulefiles, and the runscript checks that this directory is writable. As F5's scratch space is project-specific, the FRE modulefiles cannot easily set this value automatically. As a workaround, the FRE modulefiles are currently using `/gpfs/f5/gfdl/scratch/$USER`, but this directory location is not supported and will be removed in the future. If you encounter this problem, you may comment out the check for `$FRE_SYSTEM_TMP` in your runscript, but then frerun's dual-run feature will not work.
+* During early access F5 testing, an intermittent issue was seen where a “staging” FRE output.stager job attempts to remove a lockfile and reports success, but in fact the lockfile is not removed. Subsequent “transfer” output.stager jobs check for the lockfile, see it was not removed as expected by the “staging” job, and exit with a error message. If you see this problem in your FRE output.stager jobs, please report it to the Gaea helpdesk. (ORNL believes that this problem can be improved with DTN system settings related to caching small files.)
 
 ## Bug fixes and minor updates
+* Update to how ardiff sets its temporary working directory. Previously, FRE modulefile set $FRE_SYSTEM_TMP, and the runscript checks that this directory is writable; frecheck and output.stager assume the variable is set due to module loading FRE. The problem is that F5's scratch space is project-specific, which can be set correctly through FRE but not FRE modules. Therefore, the ardiff tempdir is set in FRE properties (FRE.tool.ardiff.tmpdir) and used by frecheck and output.stager to set TMPDIR, which ardiff uses. Interactive ardiff users must set $TMPDIR themselves.
 * Simplified frepp workdir cleaning logic to hopefully resolve occasional problems due to overly large arguments passed to “find”.
 * Use maximum pp.starter wallclock time of 16 hours for large history file sizes. If your pp.starter jobs time-out due to large history tarfiles, consider reducing your simulation segment size and saving fewer diagnostics.
 * Runscript stdout log included in the ascii tarfile output
+* Removed orion and ncrc3 sites which are no longer supported
+
+## Patch release notes
+* 2024-01-31 (patch 1): Varied adjustments and bug fixes
+  * Remove all mentions of $FRE_SYSTEM_TMP variable. Traditionally, this was set in FRE modules, but because F5's scratch directory is project-specific, the ardiff temporary directory is now set in FRE properties. frecheck and output.stager's dual-run checking are the only uses of ardiff. Interactive ardiff users can set TMPDIR themselves.
