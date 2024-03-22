@@ -50,3 +50,4 @@ Bronx-21 was released on January 18, 2024, to support the new gaea F5 filesystem
 ## Patch release notes
 * 2024-01-31 (patch 1): Varied adjustments and bug fixes
   * Remove all mentions of $FRE_SYSTEM_TMP variable. Traditionally, this was set in FRE modules, but because F5's scratch directory is project-specific, the ardiff temporary directory is now set in FRE properties. frecheck and output.stager's dual-run checking are the only uses of ardiff. Interactive ardiff users can set TMPDIR themselves.
+* 2024-02 (patch 2): Bug fix for the simplified frepp find cleaning logic
