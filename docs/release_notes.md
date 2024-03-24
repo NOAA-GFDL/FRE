@@ -1,53 +1,97 @@
-# Bronx-21 Release Notes
+# Bronx-22 Release Notes
 
-Bronx-21 was released on January 18, 2024, to support the new gaea F5 filesystem and allow specification of FMS ascii configuration files in legacy table or new yaml format.
+Bronx-22 was released on March 25, 2024 to support user management of gaea F5 scratch space by placing previously swept FRE gaea directories in a `volatile` subdirectory. F5 has no sweeper, and using the updated directory defaults will let you more easily distinguish the previously-swept and previously-unswept FRE-generated gaea output. Bronx-22 is exactly Bronx-21 but with these updated directory defaults, and FRE users can use either.
 
-## Support for Gaea F5 filesystem
-* Summary of F5, changes from F2, and user advice in [F5 Onboarding Guide](https://docs.google.com/document/d/1Z8YnZHaaWAWuyNfVGorrupBxtadOY04c4RL2Y2svZos/edit?usp=sharing)
-* Default ncrc5 FRE directories are project-specific scratch location on F5
+**Reminders**
+* Both Bronx-21/22 remove the work directory on normal exit (i.e. no crash or error; to not do this, use `frerun --no-free`)
+* Interactive `ardiff` users must set `$TMPDIR` to your F5 scratch space when running on the gaea login hosts (otherwise, `/tmp` will be used which cannot handle such large usage)
+
+## Updated ncrc5 FRE default directories
+* Previously-swept directories are now in `volatile` subdirectory in your F5 scratch:
+  * stdoutDir: `/gpfs/f5/$(project)/scratch/$USER/volatile/$(stem)/$(name)/stdout`
+  * archiveDir: `/gpfs/f5/$(project)/scratch/$USER/volatile/$(name)/$(platform)-$(target)`
+  * workDir: `/gpfs/f5/$(project)/scratch/$USER/volatile/$FRE_JOBID`
+  * ptmpDir: `/gpfs/f5/$(project)/scratch/$USER/volatile/ptmp/$(stem)/$(name)`
+* Unchanged from Bronx-21:
   * rootDir: `/gpfs/f5/$(project)/scratch/$USER/$(stem)`
   * srcDir: `$(rootDir)/$(name)/src`
   * execDir: `$(rootDir)/$(name)/$(platform)-$(target)/exec`
   * scriptsDir: `$(rootDir)/$(name)/$(platform)-$(target)/scripts`
-  * stdoutDir: `$(rootDir)/$(name)/stdout`
-  * archiveDir: `$(rootDir)/$(name)/$(platform)-$(target)`
-  * workDir: `/gpfs/f5/$(project)/scratch/$USER/$FRE_JOBID`
-  * ptmpDir: `/gpfs/f5/$(project)/scratch/$USER/ptmp/$(stem)/$(name)`
-* New FRE-defined property $(project) expanded to the value set in the XML `<setup>/<platform>/<project>`
-* ncrc5 output stager jobs are run on the `ldtn_c5` and `rdtn_c5` partitions.
-* F5 is not swept. The working directory ($workDir) will be removed automatically after normal completion of the compute job. Use the frerun option --no-free to not remove the workDir automatically.
 
 **Recommendations**
-* **Use Bronx-21 for new and continuing C5 experiments. Continue to use Bronx-20 for C4 experiments.**
-* **F5 is not swept, so you must periodically manually clean your `ptmpDir`.**
-* **F5 is not backed up. Consider keeping your “src” FRE directory on $HOME if you are developing.**
+* Use Bronx-22 for new experiments, and continue to use Bronx-21 for existing experiments. (Bronx-21 and 22 will remain equal except for the directory default change.)
+* Occasionally clean out your `volatile` subdirectory for experiments you no longer need,
+or set up a personal F5 sweeper following the example below.
+* Reminder: F5 is not backed up. Consider keeping your `src` FRE directory on $HOME if you are developing.
 
-## Support for FMS YAML input files
-* The FMS diag manager, field manager, and data managers are being rewritten, and as part of the updates they will accept YAML input instead of the traditional (legacy) table formats. Please refer to the FMS release notes for more details and how to configure which input format should be used (i.e. namelist flags).
-* For each FMS manager (diag, field, data), choose either the legacy table format or the new YAML format. Specify YAML input files like tables: as external files (set Label to “diagYaml”, “fieldYaml”, or “dataYaml”), inline (use `<diagYaml>`, `<fieldYaml>`, or `<dataYaml>`), or “inline appended”.
-* frerun will check that you have specified either the table or yaml format for each of the 3 FMS managers. Specifying both is a fatal error. `frelist --diagtable` prints out the diagtable or diagYaml, whichever frerun would use.
-* If YAML formats are used, frerun will combine them using python utilities in the fms-yaml-tools project (https://github.com/NOAA-GFDL/fms_yaml_tools), which are installed at gaea and GFDL and available after module loading FRE. If the YAMLs cannot be combined, frerun will report a fatal error. Otherwise, the combined YAMLs are saved by the runscript in the workDir (diag_table.yaml, field_table.yaml, data_table.yaml), and also copied to the restart archive.
-* FRE will not convert tables to YAMLs! Also included in fms-yaml-tools (and available through module loading FRE) are the conversion tools diag-table-to-yaml, data-table-to-yaml, and field-table-to-yaml, that you may use to update your XMLs offline.
+## Example of a scrontab/find-based personal F5 file sweeper
 
-**Currently there are no XML changes required if you wish to continue using the legacy tables. FMS will support legacy tables and new YAML formats for some time, but eventually legacy tables will be dropped. Work with your model liaison to update your XMLs.**
+1. **Form a find command.** Determine how you would like to target your `volatile` FRE-generated output that normally would have been transferred to GFDL and in the (F2) past would eventually be removed by the (F2) sweeper.
 
-## Updated HSM 1.2.7
-* Switch to native file locking on PP/AN (from NFSLock). When hsmget tasks are interrupted (e.g. due to a cluster reboot), there are no longer stale lockfiles that previously required manual intervention or a time-out period.
+"Remove files not accessed in 90 days" might be reasonable. To do that,
 
-## Updated FRE-NCtools 2023.01.02
-* FRE-NCtools is independent of FRE, and is maintained on [github](https://github.com/NOAA-GFDL/FRE-NCtools)
+`find /gpfs/f5/<project>/scratch/<user>/volatile -atime +90`
 
-## Known issues
-* During early access F5 testing, an intermittent issue was seen where a “staging” FRE output.stager job attempts to remove a lockfile and reports success, but in fact the lockfile is not removed. Subsequent “transfer” output.stager jobs check for the lockfile, see it was not removed as expected by the “staging” job, and exit with a error message. If you see this problem in your FRE output.stager jobs, please report it to the Gaea helpdesk. (ORNL believes that this problem can be improved with DTN system settings related to caching small files.)
+replacing `<project>` and `<user>` with your project and user name.
+That `find` command will print the files. To delete and print the files, add `-delete -print`:
 
-## Bug fixes and minor updates
-* Update to how ardiff sets its temporary working directory. Previously, FRE modulefile set $FRE_SYSTEM_TMP, and the runscript checks that this directory is writable; frecheck and output.stager assume the variable is set due to module loading FRE. The problem is that F5's scratch space is project-specific, which can be set correctly through FRE but not FRE modules. Therefore, the ardiff tempdir is set in FRE properties (FRE.tool.ardiff.tmpdir) and used by frecheck and output.stager to set TMPDIR, which ardiff uses. Interactive ardiff users must set $TMPDIR themselves.
-* Simplified frepp workdir cleaning logic to hopefully resolve occasional problems due to overly large arguments passed to “find”.
-* Use maximum pp.starter wallclock time of 16 hours for large history file sizes. If your pp.starter jobs time-out due to large history tarfiles, consider reducing your simulation segment size and saving fewer diagnostics.
-* Runscript stdout log included in the ascii tarfile output
-* Removed orion and ncrc3 sites which are no longer supported
+`find /gpfs/f5/<project>/scratch/<user>/volatile -atime +90 -delete -print`
 
-## Patch release notes
-* 2024-01-31 (patch 1): Varied adjustments and bug fixes
-  * Remove all mentions of $FRE_SYSTEM_TMP variable. Traditionally, this was set in FRE modules, but because F5's scratch directory is project-specific, the ardiff temporary directory is now set in FRE properties. frecheck and output.stager's dual-run checking are the only uses of ardiff. Interactive ardiff users can set TMPDIR themselves.
-* 2024-02 (patch 2): Bug fix for the simplified frepp find cleaning logic
+Note that this will leave empty directories.
+
+You can try these find commands out interactively (please be careful!). To use other find-based approaches, refer to the manual (`man find`).
+
+2. **Create a scrontab entry.** Determine how often you would like to run your `find` command.
+
+One a day might be reasonable. To help avoid collective F5 stress at each midnight, please use "once day at HH", where `HH` is `<userid> mod 24`. You can determine that by running this at your gaea login shell:
+
+```
+echo `id -u`%24 | bc
+```
+
+An scrontab entry for once a day at HH (replace `<HH>` below with what you get by typing the above, and replace `<project`> and `<user>` with your project and user names) would be:
+
+`00 <HH> * * * * find /gpfs/f5/<project>/scratch/<user>/volatile -atime +90`
+
+(Again, replace `<HH>`, `<project>`, and `<user>` before using that example.) See the scrontab manual for more (`man scrontab`).
+
+3. **Add the scrontab entry.** Add your find command do your scrontab with `scrontab -e` on the C5 login hosts. When you do that, if you haven't created a scrontab before, you will see a commented template example. You can replace that with:
+
+```
+#SCRON --partition=cron_c5
+#SCRON --job-name=my-sweeper
+#SCRON --output=my-sweeper/log.%j
+# Once daily, list volatile FRE-generated files not accessed in last 90 days
+00 <HH> * * * * find /gpfs/f5/<project>/scratch/<user>/volatile -atime +90 && date
+```
+
+(Again, replace `<HH>`, `<project>`, and `<user>` before using that example.) Notes / explanation:
+* Output from the `find` and `date` commands are appended to `$HOME/my-sweeper/log.<JOBID>` each time the scrontab job runs.
+* Once installed or modified, a new `<JOBID>` is created for the recurring job, and the `<JOBID>` then remains the same each time it is run.
+* The `&& date` after the find command is optional, but useful to show something in the log (as otherwise if the `find` command finds no files, nothing is written to the log).
+* Refer to the [scrontab gaeadocs](https://gaeadocs.rdhpcs.noaa.gov/wiki/index.php?title=Cron) for more.
+
+When you are satisfied with the file list targeted for deletion, you can add `-delete -print` to your find command:
+
+```
+#SCRON --partition=cron_c5
+#SCRON --job-name=my-sweeper
+#SCRON --output=my-sweeper/log.%j
+# Once daily, remove volatile FRE-generated files not accessed in last 90 days
+00 <HH> * * * * find /gpfs/f5/<project>/scratch/<user>/volatile -atime +90 -delete -print && date
+```
+
+4. **Monitoring your find sweeper.**
+
+`squeue -u $USER` and `scontrol show <JOBID>` show the job if it is running or the next date it is schedule to run.
+
+The `$HOME/my-sweeper/log.<JOBID>` file will contain the `find` and `date` output.
+
+5. **Changing your find sweeper.**
+
+Use `scrontab -e` anytime to edit or remove/comment out the job.
+
+##
+
+## Updated HSM 1.2.9
+* Bug fix for unique hsmput pathology recently discovered, related to repeated hsmputs, hsmget with globbing, and a ptmp cache that is not up-to-date. (See https://gitlab.gfdl.noaa.gov/fre/hsm/-/issues/40)
