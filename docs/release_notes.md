@@ -7,9 +7,9 @@ Bronx-22 was released on March 25, 2024 to support user management of gaea F5 sc
 * Interactive `ardiff` users must set `$TMPDIR` to your F5 scratch space when running on the gaea login hosts (otherwise, `/tmp` will be used which cannot handle such large usage)
 
 ## Updated ncrc5 FRE default directories
-* Previously-swept directories are now in `volatile` subdirectory in your F5 scratch:
+* Files previously in scrubbed locations are now a `volatile` subdirectory in your F5 scratch:
   * stdoutDir: `/gpfs/f5/$(project)/scratch/$USER/volatile/$(stem)/$(name)/stdout`
-  * archiveDir: `/gpfs/f5/$(project)/scratch/$USER/volatile/$(name)/$(platform)-$(target)`
+  * archiveDir: `/gpfs/f5/$(project)/scratch/$USER/volatile/$(stem)/$(name)/$(platform)-$(target)`
   * workDir: `/gpfs/f5/$(project)/scratch/$USER/volatile/$FRE_JOBID`
   * ptmpDir: `/gpfs/f5/$(project)/scratch/$USER/volatile/ptmp/$(stem)/$(name)`
 * Unchanged from Bronx-21:
