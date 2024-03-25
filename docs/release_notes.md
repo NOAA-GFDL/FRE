@@ -10,8 +10,8 @@ Bronx-22 was released on March 25, 2024 to support user management of gaea F5 sc
 * Files previously in scrubbed locations are now in a `volatile` subdirectory in your F5 scratch:
   * stdoutDir: `/gpfs/f5/$(project)/scratch/$USER/volatile/$(stem)/$(name)/stdout`
   * archiveDir: `/gpfs/f5/$(project)/scratch/$USER/volatile/$(stem)/$(name)/$(platform)-$(target)`
-  * workDir: `/gpfs/f5/$(project)/scratch/$USER/volatile/$FRE_JOBID`
-  * ptmpDir: `/gpfs/f5/$(project)/scratch/$USER/volatile/ptmp/$(stem)/$(name)`
+  * workDir: `/gpfs/f5/$(project)/scratch/$USER/volatile/$(stem)/$(name)/work/$FRE_JOBID`
+  * ptmpDir: `/gpfs/f5/$(project)/scratch/$USER/volatile/$(stem)/$(name)/ptmp
 * Unchanged from Bronx-21:
   * rootDir: `/gpfs/f5/$(project)/scratch/$USER/$(stem)`
   * srcDir: `$(rootDir)/$(name)/src`
