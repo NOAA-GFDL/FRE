@@ -43,7 +43,7 @@ You can try these find commands out interactively (please be careful!). To use o
 
 2. **Create a scrontab entry.** Determine how often you would like to run your `find` command.
 
-One a day might be reasonable. To help avoid collective F5 stress at each midnight, please use "once day at HH", where `HH` is `<userid> mod 24`. You can determine that by running this at your gaea login shell:
+One a day might be reasonable. To help avoid collective F5 stress at each midnight, please use "once daily at HH", where HH` is `<userid> mod 24`. You can determine that by running this at your gaea login shell:
 
 ```
 echo `id -u`%24 | bc
@@ -83,13 +83,13 @@ When you are satisfied with the file list targeted for deletion, you can add `-d
 
 4. **Monitoring your find sweeper.**
 
-`squeue -u $USER` and `scontrol show <JOBID>` show the job if it is running or the next date it is schedule to run.
+`squeue -u $USER` and `scontrol show <JOBID>` show the job if it is running or the next date it is scheduled to run.
 
 The `$HOME/my-sweeper/log.<JOBID>` file will contain the `find` and `date` output.
 
 5. **Changing your find sweeper.**
 
-Use `scrontab -e` anytime to edit or remove/comment out the job.
+Use `scrontab -e` to edit or remove/comment out the job.
 
 ##
 
