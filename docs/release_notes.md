@@ -43,7 +43,7 @@ You can try these find commands out interactively (please be careful!). To use o
 
 2. **Create a scrontab entry.** Determine how often you would like to run your `find` command.
 
-One a day might be reasonable. To help avoid collective F5 stress at each midnight, please use "once daily at HH", where HH` is `<userid> mod 24`. You can determine that by running this at your gaea login shell:
+One a day might be reasonable. To help avoid collective F5 stress at each midnight, please use "once daily at HH", where HH is `<userid> mod 24`. You can determine that by running this at your gaea login shell:
 
 ```
 echo `id -u`%24 | bc
@@ -69,7 +69,7 @@ An scrontab entry for once a day at HH (replace `<HH>` below with what you get b
 * Output from the `find` and `date` commands are appended to `$HOME/my-sweeper/log.<JOBID>` each time the scrontab job runs.
 * Once installed or modified, a new `<JOBID>` is created for the recurring job, and the `<JOBID>` then remains the same each time it is run.
 * The `&& date` after the find command is optional, but useful to show something in the log (as otherwise if the `find` command finds no files, nothing is written to the log).
-* The jobs *must* run on the DTNs (i.e. --partition=ldtn_c5) in order to protect the compute and login node F5 use. (I/O load caused by DTN jobs are isolated from login and compute node I/O load).
+* The jobs *must* run on the DTNs (i.e. `--partition=ldtn_c5`) in order to protect the compute and login node F5 use. (I/O load caused by DTN jobs are isolated from login and compute node I/O load).
 * Refer to the [scrontab gaeadocs](https://gaeadocs.rdhpcs.noaa.gov/wiki/index.php?title=Cron) for more.
 
 When you are satisfied with the file list targeted for deletion, you can add `-delete -print` to your find command:
