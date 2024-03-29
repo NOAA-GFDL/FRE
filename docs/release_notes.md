@@ -55,7 +55,7 @@ An scrontab entry for once a day at HH (replace `<HH>` below with what you get b
 
 (Again, replace `<HH>`, `<project>`, and `<user>` before using that example.) See the scrontab manual for more (`man scrontab`).
 
-3. **Add the scrontab entry.** Add your find command do your scrontab with `scrontab -e` on the C5 login hosts. When you do that, if you haven't created a scrontab before, you will see a commented template example. You can replace that with:
+3. **Add the scrontab entry.** Add your find command do your scrontab with `scrontab -e` on the C5 DTNs (the jobs *must* be run on the DTNs, i.e. `--partition=ldtn_c5, in order to protect F5 I/O on the compute and login nodes). When you do that, if you haven't created a scrontab before, you will see a commented template example. You can replace that with:
 
 ```
 #SCRON --partition=ldtn_c5
@@ -69,7 +69,6 @@ An scrontab entry for once a day at HH (replace `<HH>` below with what you get b
 * Output from the `find` and `date` commands are appended to `$HOME/my-sweeper/log.<JOBID>` each time the scrontab job runs.
 * Once installed or modified, a new `<JOBID>` is created for the recurring job, and the `<JOBID>` then remains the same each time it is run.
 * The `&& date` after the find command is optional, but useful to show something in the log (as otherwise if the `find` command finds no files, nothing is written to the log).
-* The jobs *must* run on the DTNs (i.e. `--partition=ldtn_c5`) in order to protect the compute and login node F5 use. (I/O load caused by DTN jobs are isolated from login and compute node I/O load).
 * Refer to the [scrontab gaeadocs](https://gaeadocs.rdhpcs.noaa.gov/wiki/index.php?title=Cron) for more.
 
 When you are satisfied with the file list targeted for deletion, you can add `-delete -print` to your find command:
