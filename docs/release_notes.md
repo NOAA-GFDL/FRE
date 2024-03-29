@@ -55,7 +55,7 @@ An scrontab entry for once a day at HH (replace `<HH>` below with what you get b
 
 (Again, replace `<HH>`, `<project>`, and `<user>` before using that example.) See the scrontab manual for more (`man scrontab`).
 
-3. **Add the scrontab entry.** Add your find command do your scrontab with `scrontab -e` on the C5 DTNs (the jobs *must* be run on the DTNs, i.e. `--partition=ldtn_c5, in order to protect F5 I/O on the compute and login nodes). When you do that, if you haven't created a scrontab before, you will see a commented template example. You can replace that with:
+3. **Add the scrontab entry.** Add your find command do your scrontab with `scrontab -e` on the C5 DTNs (the jobs *must* be run on the DTNs, i.e. `--partition=ldtn_c5`, in order to protect F5 I/O on the compute and login nodes). When you do that, if you haven't created a scrontab before, you will see a commented template example. You can replace that with:
 
 ```
 #SCRON --partition=ldtn_c5
