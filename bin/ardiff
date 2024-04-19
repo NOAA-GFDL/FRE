@@ -20,7 +20,7 @@ set extraoptions = ""
 set ignore = ""
 @ numignore=0
 set copytool = "gcp"
-set argv = (`getopt qshfgx:v:A:c:I: $*`)
+set argv = (`getopt qshfgx:v:A:c:I:C:dm $*`)
 while ("$argv[1]" != "--")
     switch ($argv[1])
         case -q:
@@ -39,6 +39,12 @@ while ("$argv[1]" != "--")
             set extraoptions = "-v $argv[2] $extraoptions"; shift argv; breaksw
         case -A:
             set extraoptions = "-A $argv[2] $extraoptions"; shift argv; breaksw
+        case -C:
+            set extraoptions = "--var-diff-count=$argv[2] $extraoptions"; shift argv; breaksw
+        case -d:
+            set data_only; breaksw
+        case -m:
+            set metadata_only; breaksw
         case -c:
             set copytool = "$argv[2]"; shift argv; breaksw
         case -I:
@@ -87,6 +93,9 @@ Usage:    ls -1 */history/00010101.nc.cpio | ardiff
           -x   Exclude variable(s) var1[,...]
           -A   Ignore attribute(s) att1[,...] for all variables
           -I   Ignore differences for file.  (Repeatable)
+          -d   Compare the data for all variables only (default is to compare data and metadata)
+          -m   Compare the metadata for all variables only (default is to compare data and metadata)
+          -C   Stop after the nth difference (equivalent to --var-diff-count in nccmp), ignored if not using the -f
 
           You may want more control over the order of the files since
           the first archive file will be compared to all the rest:
@@ -109,6 +118,16 @@ endif
 
 set top = $cwd
 set mystat = 0
+
+if ( $?data_only && $?metadata_only  ) then
+  set extraoptions = "-dm $extraoptions"
+else if ( $?data_only ) then
+  set extraoptions = "-d $extraoptions"
+else if ( $?metadata_only ) then
+  set extraoptions = "-m $extraoptions"
+else
+  set extraoptions = "-dm $extraoptions"
+endif
 
 #create list of filenames
 set files = ()
@@ -308,7 +327,7 @@ while ( 1 )
        if ( "$ncfile:e" == 'nc' || ( "$ncfile:r:e" == 'nc' && $isdistrib ) ) then
           # Use nccmp to compare netcdf files 
           # Using sh to redirect stderr to stdout. Cannot do this with csh
-          set output=`sh -c "nccmp -dm $extraoptions -w format ../first/$ncfile ../second/$ncfile 2>&1"`
+          set output=`sh -c "nccmp $extraoptions -w format ../first/$ncfile ../second/$ncfile 2>&1"`
           if ( $status != 0 ) then
              if ( $ignored != 0 ) then
                 echo -n "IGNORED : "
