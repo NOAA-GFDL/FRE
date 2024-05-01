@@ -2323,11 +2323,15 @@ EOF
         and $opt{archive}
         and !$opt{check}
         and ( scalar( split( /;/, $fre->property('FRE.output.staging') ) ) == 1
-            or $opt{'output-staging'} ne 'online' )
-        and $fre->property('FRE.option.transfer.default')
-        ) {
-        $fre->out( FREMsg::WARNING, "Option --transfer has been automatically added" );
-        $opt{transfer} = 1;
+            or $opt{'output-staging'} ne 'online' ) ) {
+        if ( $opt{regression} and $fre->property('FRE.option.transfer.regression.default') ) {
+            $fre->out( FREMsg::WARNING, "Option --transfer has been automatically added" );
+            $opt{transfer} = 1;
+        }
+        elsif ( ! $opt{regression} and $fre->property('FRE.option.transfer.prod.default') ) {
+            $fre->out( FREMsg::WARNING, "Option --transfer has been automatically added" );
+            $opt{transfer} = 1;
+        }
     }
 
     if ( !exists( $opt{free} ) and $fre->property('FRE.option.free.default') ) {
