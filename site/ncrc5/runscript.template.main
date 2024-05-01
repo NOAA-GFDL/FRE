@@ -1046,13 +1046,9 @@ while ( $irun <= $segmentsPerJob && $currentSeg <= $segmentsPerSimulation )
       set asciiJobName = $FRE_JOBID.output.stager.$begindate.A
       set asciiArgFile = $stateDir/$asciiJobName.args
 
-      set asciiSaveOptions = ( $submitOptionsOutputStagerSave $submitOptionsProject )
-      set asciiSaveOptions = ( $asciiSaveOptions --job-name=${asciiJobName}S )
-      set asciiSaveOptions = ( $asciiSaveOptions --time=$outputStagerSaveRuntimeAscii --mincpus=$outputStagerSaveCoreSpec )
-
-      set asciiXferOptions = ( $submitOptionsOutputStagerXfer $submitOptionsProject )
-      set asciiXferOptions = ( $asciiXferOptions --job-name=${asciiJobName}T )
-      set asciiXferOptions = ( $asciiXferOptions --time=$outputStagerXferRuntimeAscii --mincpus=$outputStagerXferCoreSpec )
+      set asciiOptions = ( $submitOptionsOutputStagerXfer $submitOptionsProject )
+      set asciiOptions = ( $asciiOptions --job-name=${asciiJobName} )
+      set asciiOptions = ( $asciiOptions --time=$outputStagerXferRuntimeAscii --mincpus=$outputStagerSaveCoreSpec )
 
       echo "set expName                   =   $name"                       > $asciiArgFile
       echo "set type                      =   ascii"                      >> $asciiArgFile
@@ -1071,8 +1067,8 @@ while ( $irun <= $segmentsPerJob && $currentSeg <= $segmentsPerSimulation )
       echo "set ptmpDir                   =   $ptmpDir"                   >> $asciiArgFile
       echo "set archDir                   =   $asciiArchDir"              >> $asciiArgFile
       echo "set outputDirRemote           =   $asciiOutputDirRemote"      >> $asciiArgFile
-      echo "set saveOptions               = ( $asciiSaveOptions )"        >> $asciiArgFile
-      echo "set xferOptions               = ( $asciiXferOptions )"        >> $asciiArgFile
+      echo "set saveOptions               = ( $asciiOptions )"            >> $asciiArgFile
+      echo "set xferOptions               = ( $asciiOptions )"            >> $asciiArgFile
       echo "set saveRetries               =   $outputStagerSaveRetries"   >> $asciiArgFile
       echo "set xferRetries               =   $outputStagerXferRetries"   >> $asciiArgFile
       echo "set saveRetry                 =   0"                          >> $asciiArgFile
@@ -1083,6 +1079,7 @@ while ( $irun <= $segmentsPerJob && $currentSeg <= $segmentsPerSimulation )
       echo "set hsmVersion                =   $hsmVersion"                >> $asciiArgFile
       echo "set xferToolModuleFilesDir    =   $xferToolModuleFilesDir"    >> $asciiArgFile
       echo "set xferToolVersion           =   $xferToolVersion"           >> $asciiArgFile
+      echo "set actionXferForce           =   1"                          >> $asciiArgFile
 
       # Allow FRE_*TEST* variables to pass into output.stager jobs
       if ( ${freCommandsVersion} =~ "test" ) then
@@ -1135,19 +1132,19 @@ while ( $irun <= $segmentsPerJob && $currentSeg <= $segmentsPerSimulation )
             unset $mpiRankReorderMethod
          endif
       else if ( $?flagOutputStagingTypeStaged ) then
-         if ( $actionSaveOn ) then
-            set asciiResult = `submit -O "$asciiSaveOptions --export=argFile=$asciiArgFile" $outputStager`
+         if ( $actionSaveOn || $actionXferOn ) then
+            set asciiResult = `submit -O "$asciiOptions --export=argFile=$asciiArgFile" $outputStager`
 
             if ( $status == 0 ) then
                if ( $echoOn ) unset echo
-               echo "<NOTE> : The output stager job '$asciiResult' to process the '$asciiArchDir' (saving) has been submitted successfully"
+               echo "<NOTE> : The output stager job '$asciiResult' to process the '$asciiArchDir' (saving/transfer) has been submitted successfully"
                if ( $echoOn ) set echo
                set saveJobIds = ( $saveJobIds $asciiResult )
                set argFiles = ( $argFiles $asciiArgFile:t )
             else
                @ outputStagerErrors += 1
                if ( $echoOn ) unset echo
-               set msg =       "*WARNING*: Can't submit the output stager job to process the '$asciiArchDir' (saving)\n"
+               set msg =       "*WARNING*: Can't submit the output stager job to process the '$asciiArchDir' (saving/transfer)\n"
                set msg = "${msg}*WARNING*: ascii files have not been saved, you may need to transfer them manually.\n\n"
                set msg = "${msg}*WARNING*: The ascii ArgFile has been saved at $asciiArgFile.  You may be able\n"
                set msg = "${msg}*WARNING*: use the following command:\n\n"
@@ -1161,34 +1158,9 @@ while ( $irun <= $segmentsPerJob && $currentSeg <= $segmentsPerSimulation )
 
             unset asciiResult
          endif
-
-         if ( $actionXferOn ) then
-            set asciiResult = `submit -O "$asciiXferOptions --export=argFile=$asciiArgFile --dependency=afterok:$saveJobIds[$#saveJobIds]" $outputStager`
-
-            if ( $status == 0 ) then
-               if ( $echoOn ) unset echo
-               echo "<NOTE> : The output stager job '$asciiResult' to process the '$asciiArchDir' (transfer) has been submitted successfully"
-               if ( $echoOn ) set echo
-            else
-               @ outputStagerErrors += 1
-               if ( $echoOn ) unset echo
-               set msg =       "*WARNING*: Can't submit the output stager job to process the '$asciiArchDir' (transfer)\n"
-               set msg = "${msg}*WARNING*: ascii files have not been saved, you may need to transfer them manually.\n\n"
-               set msg = "${msg}*WARNING*: The ascii ArgFile has been saved at $asciiArgFile.  You may be able\n"
-               set msg = "${msg}*WARNING*: use the following command:\n\n"
-               set msg = "${msg}*WARNING*: $outputStager $asciiArgFile\n"
-               if ( $?batch ) then
-                  printf "$msg" | mailx -s "Can't submit the output stager job to process the '$asciiArchDir' (transfer)" $mailList
-               endif
-               printf "$msg"
-               if ( $echoOn ) set echo
-            endif
-
-            unset asciiResult
-         endif
       else if ( $?flagOutputStagingTypeChained ) then
          if ( $actionSaveOn || $actionXferOn ) then
-            set asciiResult = `submit -O "$asciiSaveOptions --export=argFile=$asciiArgFile" $outputStager`
+            set asciiResult = `submit -O "$asciiOptions --export=argFile=$asciiArgFile" $outputStager`
 
             if ( $status == 0 ) then
                if ( $echoOn ) unset echo
@@ -1215,9 +1187,7 @@ while ( $irun <= $segmentsPerJob && $currentSeg <= $segmentsPerSimulation )
          endif
       endif
 
-      unset asciiXferOptions
-      unset asciiSaveOptions
-
+      unset asciiOptions
       unset asciiArgFile
       unset asciiJobName
 
