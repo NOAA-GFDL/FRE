@@ -1,1 +1,0 @@
-../ncrc_common/intel-classic.mk
