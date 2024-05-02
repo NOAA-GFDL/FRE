@@ -982,27 +982,32 @@ if ( $actionCombineToDo ) then
                slmnccompressed $inputFiles[1]
                #save status of slmnccompressed
                set compress_stat = $status
-               #check that number of variables and variable names in $inputFiles are the same
-               #if not, set flag to skip combine step
-               set nvars = ()
-               foreach f ( $inputFiles )
-                  set num = `$NCKS_M $f | grep -E ': type' | cut -f 1 -d ' ' | sed 's/://' | sort -u | wc -l`
-                  set nvars = ( $nvars $num )
-                  if ( `list_ncvars.csh -st -01234 $f | sort -u` != `list_ncvars.csh -st -01234 $inputFiles[1] | sort -u` ) then
-                     set combineFlag = 0
-                     echo "WARNING: Variables differ between input files."
-                     echo "WARNING: Not combining $inputFiles"
-                  endif
-               end
-               foreach n ( $nvars )
-                  if ( $n != $nvars[1] ) then
-                     set combineFlag = 0
-                     echo "WARNING: Number of variables differ, not combining $inputFiles"
-                  endif
-               end
-               unset n
-               unset num
-               unset nvars
+
+               # for history files, check that number of variables and variable names in $inputFiles are the same
+               # if not, set flag to skip combine step
+               # this checking is not needed for restart files
+               if ( $type == 'history' ) then
+                  set nvars = ()
+                  foreach f ( $inputFiles )
+                     set num = `$NCKS_M $f | grep -E ': type' | cut -f 1 -d ' ' | sed 's/://' | sort -u | wc -l`
+                     set nvars = ( $nvars $num )
+                     if ( `list_ncvars.csh -st -01234 $f | sort -u` != `list_ncvars.csh -st -01234 $inputFiles[1] | sort -u` ) then
+                        set combineFlag = 0
+                        echo "WARNING: Variables differ between input files."
+                        echo "WARNING: Not combining $inputFiles"
+                     endif
+                  end
+                  foreach n ( $nvars )
+                     if ( $n != $nvars[1] ) then
+                        set combineFlag = 0
+                        echo "WARNING: Number of variables differ, not combining $inputFiles"
+                     endif
+                  end
+                  unset n
+                  unset num
+                  unset nvars
+               endif
+
                if ( $combineFlag == 0 ) then
                   set unCombinedFiles = ( $unCombinedFiles $inputFiles )
                else
