@@ -1499,16 +1499,26 @@ while ( $irun <= $segmentsPerJob && $currentSeg <= $segmentsPerSimulation )
       unset restartSuffix
    endif
 
-   # if chained,
+   # If using chained or staged staging, then submit the ascii and restart staging together.
+   if ( $?flagOutputStagingTypeChained ) then
       # if ascii files and restart files, then submit both together now
+      if ( $#restartFiles > 0 && $#asciiFiles > 0 ) then
       # else if ascii files and no restart files, then submit ascii stagers
+      else if ( $#asciiFiles > 0 ) then
       # else if restart files and no ascii files (unlikely), then submit restart stagers
-   # else if staged
+      else if ( $#restartFiles > 0 ) then
+      endif
+   else if ( $?flagOutputStagingTypeStaged ) then
       # if ascii files and restart files, then submit both together now
+      if ( $#restartFiles > 0 && $#asciiFiles > 0 ) then
       #   also, then submit the restart-transfer job with a hold
       # else if ascii files and no restart files, then submit ascii stagers
+      else if ( $#asciiFiles > 0 ) then
       # else if restart files and no ascii files (unlikely), then submit restart-save stager
       #   also, then submit the restart-transfer job with a hold
+      else if ( $#restartFiles > 0 ) then
+      endif
+   endif
 
    popd
 
