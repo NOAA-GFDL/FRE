@@ -1436,8 +1436,59 @@ while ( $irun <= $segmentsPerJob && $currentSeg <= $segmentsPerSimulation )
       endif
    else if ( $?flagOutputStagingTypeStaged ) then
       # if ascii files and restart files, then submit both together now
-      if ( $#restartFiles > 0 && $#asciiFiles > 0 ) then
       #   also, then submit the restart-transfer job with a hold
+      if ( $#restartFiles > 0 && $#asciiFiles > 0 ) then
+         set result = `submit -O "$asciiOptions --export=argFile=$asciiArgFile,argFile2=$restartArgFile" $outputStager`
+
+         if ( $status == 0 ) then
+            if ( $echoOn ) unset echo
+            echo "<NOTE> : The output stager job '$result' to process '$asciiArchDir' and '$restartArchDir' has been submitted successfully"
+            if ( $echoOn ) set echo
+            set saveJobIds = ( $saveJobIds $result )
+            set argFiles = ( $argFiles $asciiArgFile:t $restartArgFile:t )
+         else
+            @ outputStagerErrors += 1
+            if ( $echoOn ) unset echo
+            set msg =       "*WARNING*: Can't submit the output stager job to process '$asciiArchDir' and '$restartArchDir'\n"
+            set msg = "${msg}*WARNING*: ascii files have not been saved, you may need to transfer them manually.\n\n"
+            set msg = "${msg}*WARNING*: The ascii ArgFile has been saved at $asciiArgFile.  You may be able\n"
+            set msg = "${msg}*WARNING*: use the following command:\n\n"
+            set msg = "${msg}*WARNING*: $outputStager $asciiArgFile\n"
+            set msg = "${msg}*WARNING*: restart files have not been saved, you may need to transfer them manually.\n\n"
+            set msg = "${msg}*WARNING*: The restart ArgFile has been saved at $restartArgFile.  You may be able\n"
+            set msg = "${msg}*WARNING*: use the following command:\n\n"
+            set msg = "${msg}*WARNING*: $outputStager $restartArgFile\n"
+            if ( $?batch ) then
+               printf "$msg" | mailx -s "Can't submit the output stager job to process '$asciiArchDir' and '$restartArchDir'" $mailList
+            endif
+            printf "$msg"
+            if ( $echoOn ) set echo
+         endif
+
+         if ( $restartActionXferOn ) then
+            set restartResult = `submit -O "$restartXferOptions --export=argFile=$restartArgFile --dependency=afterok:$saveJobIds[$#saveJobIds]" $outputStager`
+
+            if ( $status == 0 ) then
+               if ( $echoOn ) unset echo
+               echo "<NOTE> : The output stager job '$restartResult' to process the '$restartArchDir' (transfer) has been submitted successfully"
+               if ( $echoOn ) set echo
+            else
+               @ outputStagerErrors += 1
+               if ( $echoOn ) unset echo
+               set msg =       "*WARNING*: Can't submit the output stager job to process the '$restartArchDir' (transfer)\n"
+               set msg = "${msg}*WARNING*: restart files have not been saved, you may need to transfer them manually.\n\n"
+               set msg = "${msg}*WARNING*: The restart ArgFile has been saved at $restartArgFile.  You may be able\n"
+               set msg = "${msg}*WARNING*: use the following command:\n\n"
+               set msg = "${msg}*WARNING*: $outputStager $restartArgFile\n"
+               if ( $?batch ) then
+                  printf "$msg" | mailx -s "Can't submit the output stager job to process the '$restartArchDir' (transfer)" $mailList
+               endif
+               printf "$msg"
+               if ( $echoOn ) set echo
+            endif
+
+            unset restartResult
+         endif
       # else if ascii files and no restart files, then submit ascii stagers
       else if ( $#asciiFiles > 0 ) then
          set asciiResult = `submit -O "$asciiOptions --export=argFile=$asciiArgFile" $outputStager`
