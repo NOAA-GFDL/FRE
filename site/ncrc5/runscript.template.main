@@ -1134,62 +1134,10 @@ while ( $irun <= $segmentsPerJob && $currentSeg <= $segmentsPerSimulation )
       else if ( $?flagOutputStagingTypeStaged ) then
          # comment out
          # if ascii files, and if staged, and if the below
-         if ( $actionSaveOn || $actionXferOn ) then
-            set asciiResult = `submit -O "$asciiOptions --export=argFile=$asciiArgFile" $outputStager`
-
-            if ( $status == 0 ) then
-               if ( $echoOn ) unset echo
-               echo "<NOTE> : The output stager job '$asciiResult' to process the '$asciiArchDir' (saving/transfer) has been submitted successfully"
-               if ( $echoOn ) set echo
-               set saveJobIds = ( $saveJobIds $asciiResult )
-               set argFiles = ( $argFiles $asciiArgFile:t )
-            else
-               @ outputStagerErrors += 1
-               if ( $echoOn ) unset echo
-               set msg =       "*WARNING*: Can't submit the output stager job to process the '$asciiArchDir' (saving/transfer)\n"
-               set msg = "${msg}*WARNING*: ascii files have not been saved, you may need to transfer them manually.\n\n"
-               set msg = "${msg}*WARNING*: The ascii ArgFile has been saved at $asciiArgFile.  You may be able\n"
-               set msg = "${msg}*WARNING*: use the following command:\n\n"
-               set msg = "${msg}*WARNING*: $outputStager $asciiArgFile\n"
-               if ( $?batch ) then
-                  printf "$msg" | mailx -s "Can't submit the output stager job to process the '$asciiArchDir' (saving)" $mailList
-               endif
-               printf "$msg"
-               if ( $echoOn ) set echo
-            endif
-
-            unset asciiResult
-         endif
          # comment out end
       else if ( $?flagOutputStagingTypeChained ) then
          # comment out
          # if ascii files, and if chained, and if the below
-         if ( $actionSaveOn || $actionXferOn ) then
-            set asciiResult = `submit -O "$asciiOptions --export=argFile=$asciiArgFile" $outputStager`
-
-            if ( $status == 0 ) then
-               if ( $echoOn ) unset echo
-               echo "<NOTE> : The output stager job '$asciiResult' to process the '$asciiArchDir' has been submitted successfully"
-               if ( $echoOn ) set echo
-               set saveJobIds = ( $saveJobIds $asciiResult )
-               set argFiles = ( $argFiles $asciiArgFile:t )
-            else
-               @ outputStagerErrors += 1
-               if ( $echoOn ) unset echo
-               set msg =       "*WARNING*: Can't submit the output stager job to process the '$asciiArchDir'\n"
-               set msg = "${msg}*WARNING*: ascii files have not been saved, you may need to transfer them manually.\n\n"
-               set msg = "${msg}*WARNING*: The ascii ArgFile has been saved at $asciiArgFile.  You may be able\n"
-               set msg = "${msg}*WARNING*: use the following command:\n\n"
-               set msg = "${msg}*WARNING*: $outputStager $asciiArgFile\n"
-               if ( $?batch ) then
-                  printf "$msg" | mailx -s "Can't submit the output stager job to process the '$asciiArchDir'" $mailList
-               endif
-               printf "$msg"
-               if ( $echoOn ) set echo
-            endif
-
-            unset asciiResult
-         endif
          # comment out end
       endif
 
@@ -1503,6 +1451,32 @@ while ( $irun <= $segmentsPerJob && $currentSeg <= $segmentsPerSimulation )
       if ( $#restartFiles > 0 && $#asciiFiles > 0 ) then
       # else if ascii files and no restart files, then submit ascii stagers
       else if ( $#asciiFiles > 0 ) then
+         if ( $actionSaveOn || $actionXferOn ) then
+            set asciiResult = `submit -O "$asciiOptions --export=argFile=$asciiArgFile" $outputStager`
+
+            if ( $status == 0 ) then
+               if ( $echoOn ) unset echo
+               echo "<NOTE> : The output stager job '$asciiResult' to process the '$asciiArchDir' has been submitted successfully"
+               if ( $echoOn ) set echo
+               set saveJobIds = ( $saveJobIds $asciiResult )
+               set argFiles = ( $argFiles $asciiArgFile:t )
+            else
+               @ outputStagerErrors += 1
+               if ( $echoOn ) unset echo
+               set msg =       "*WARNING*: Can't submit the output stager job to process the '$asciiArchDir'\n"
+               set msg = "${msg}*WARNING*: ascii files have not been saved, you may need to transfer them manually.\n\n"
+               set msg = "${msg}*WARNING*: The ascii ArgFile has been saved at $asciiArgFile.  You may be able\n"
+               set msg = "${msg}*WARNING*: use the following command:\n\n"
+               set msg = "${msg}*WARNING*: $outputStager $asciiArgFile\n"
+               if ( $?batch ) then
+                  printf "$msg" | mailx -s "Can't submit the output stager job to process the '$asciiArchDir'" $mailList
+               endif
+               printf "$msg"
+               if ( $echoOn ) set echo
+            endif
+
+            unset asciiResult
+         endif
       # else if restart files and no ascii files (unlikely), then submit restart stagers
       else if ( $#restartFiles > 0 ) then
       endif
@@ -1512,6 +1486,32 @@ while ( $irun <= $segmentsPerJob && $currentSeg <= $segmentsPerSimulation )
       #   also, then submit the restart-transfer job with a hold
       # else if ascii files and no restart files, then submit ascii stagers
       else if ( $#asciiFiles > 0 ) then
+         if ( $actionSaveOn || $actionXferOn ) then
+            set asciiResult = `submit -O "$asciiOptions --export=argFile=$asciiArgFile" $outputStager`
+
+            if ( $status == 0 ) then
+               if ( $echoOn ) unset echo
+               echo "<NOTE> : The output stager job '$asciiResult' to process the '$asciiArchDir' (saving/transfer) has been submitted successfully"
+               if ( $echoOn ) set echo
+               set saveJobIds = ( $saveJobIds $asciiResult )
+               set argFiles = ( $argFiles $asciiArgFile:t )
+            else
+               @ outputStagerErrors += 1
+               if ( $echoOn ) unset echo
+               set msg =       "*WARNING*: Can't submit the output stager job to process the '$asciiArchDir' (saving/transfer)\n"
+               set msg = "${msg}*WARNING*: ascii files have not been saved, you may need to transfer them manually.\n\n"
+               set msg = "${msg}*WARNING*: The ascii ArgFile has been saved at $asciiArgFile.  You may be able\n"
+               set msg = "${msg}*WARNING*: use the following command:\n\n"
+               set msg = "${msg}*WARNING*: $outputStager $asciiArgFile\n"
+               if ( $?batch ) then
+                  printf "$msg" | mailx -s "Can't submit the output stager job to process the '$asciiArchDir' (saving)" $mailList
+               endif
+               printf "$msg"
+               if ( $echoOn ) set echo
+            endif
+
+            unset asciiResult
+         endif
       # else if restart files and no ascii files (unlikely), then submit restart-save stager
       #   also, then submit the restart-transfer job with a hold
       else if ( $#restartFiles > 0 ) then
