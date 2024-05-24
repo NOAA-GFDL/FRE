@@ -1871,8 +1871,26 @@ endif
 unlock
 
 # if a second argFile is specified (as argFile2), then run it online
+# unset the enviroment variable to avoid infinite recursion
 if ( $?argFile2 ) then
+   set argFile2 = $argFile2
+   unsetenv argFile2
+
    $0 $argFile2
+
+   set myStatus = $status
+   if ( $myStatus == 0) then
+      if ( $echoOn ) unset echo
+      echo "<NOTE> : Second argFile processing exited normally"
+      if ( $echoOn ) set echo
+   else
+      if ( $echoOn ) unset echo
+      echo "<NOTE> : Second argFile processing exited with '$myStatus'"
+      if ( $echoOn ) set echo
+   endif
+
+   # set the main exitStatus to non-zero if either of the argFile processing failed
+   @ exitStatus = ( $exitStatus || $myStatus )
 endif
 
 if ( $actionRetryToDo ) then
