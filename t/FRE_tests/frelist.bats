@@ -354,7 +354,7 @@ CM2.1U_Control-1990_E1.M_3B_snowmelt_static_ocn6x5 $execRoot/$USER/.*/CM2.1U_Con
 @test "Get the number of nodes that would be requested for an experiment production run" {
     case "${default_platform%%.*}" in
         ncrc? )
-            num_nodes=7
+            num_nodes=2
             ;;
         theia )
             num_nodes=3
@@ -399,7 +399,7 @@ CM2.1U_Control-1990_E1.M_3B_snowmelt INHERITS FROM CM2.1U_Control-1990_E1.M_3A"
 @test "Get the number of nodes that would be requested for all production runs" {
     case "${default_platform%%.*}" in
         ncrc? )
-            num_nodes=7
+            num_nodes=2
             ;;
         theia )
             num_nodes=3
@@ -428,20 +428,20 @@ CM2.1U_Control-1990_E1.M_3B_snowmelt_static_ocn6x5 INHERITS FROM CM2.1U_Control-
 CM2.1U_Control-1990_E1.M_3A regression/restarts would request 2 nodes.
 CM2.1U_Control-1990_E1.M_3A regression/scaling #1 would request 2 nodes.
 CM2.1U_Control-1990_E1.M_3A regression/scaling #2 would request 2 nodes.
-CM2.1U_Control-1990_E1.M_3A regression/scaling #3 would request 3 nodes.
-CM2.1U_Control-1990_E1.M_3A regression/scaling #4 would request 6 nodes.
+CM2.1U_Control-1990_E1.M_3A regression/scaling #3 would request 2 nodes.
+CM2.1U_Control-1990_E1.M_3A regression/scaling #4 would request 2 nodes.
 CM2.1U_Control-1990_E1.M_3A
 CM2.1U_Control-1990_E1.M_3B_snowmelt regression/basic would request 2 nodes.
 CM2.1U_Control-1990_E1.M_3B_snowmelt regression/restarts would request 2 nodes.
 CM2.1U_Control-1990_E1.M_3B_snowmelt regression/scaling #1 would request 2 nodes.
 CM2.1U_Control-1990_E1.M_3B_snowmelt regression/scaling #2 would request 2 nodes.
-CM2.1U_Control-1990_E1.M_3B_snowmelt regression/scaling #3 would request 3 nodes.
-CM2.1U_Control-1990_E1.M_3B_snowmelt regression/scaling #4 would request 6 nodes.
+CM2.1U_Control-1990_E1.M_3B_snowmelt regression/scaling #3 would request 2 nodes.
+CM2.1U_Control-1990_E1.M_3B_snowmelt regression/scaling #4 would request 2 nodes.
 CM2.1U_Control-1990_E1.M_3B_snowmelt INHERITS FROM CM2.1U_Control-1990_E1.M_3A
 CM2.1U_Control-1990_E1.M_3B_snowmelt_static_ocn6x5 regression/basic would request 2 nodes.
 CM2.1U_Control-1990_E1.M_3B_snowmelt_static_ocn6x5 regression/restarts would request 2 nodes.
 CM2.1U_Control-1990_E1.M_3B_snowmelt_static_ocn6x5 regression/scaling #1 would request 2 nodes.
-CM2.1U_Control-1990_E1.M_3B_snowmelt_static_ocn6x5 regression/scaling #2 would request 3 nodes.
+CM2.1U_Control-1990_E1.M_3B_snowmelt_static_ocn6x5 regression/scaling #2 would request 2 nodes.
 CM2.1U_Control-1990_E1.M_3B_snowmelt_static_ocn6x5 INHERITS FROM CM2.1U_Control-1990_E1.M_3B_snowmelt"
             ;;
         theia )
