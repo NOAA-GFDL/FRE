@@ -1050,6 +1050,10 @@ while ( $irun <= $segmentsPerJob && $currentSeg <= $segmentsPerSimulation )
       set asciiOptions = ( $asciiOptions --job-name=${asciiJobName} )
       set asciiOptions = ( $asciiOptions --time=$outputStagerXferRuntimeAscii --mincpus=$outputStagerSaveCoreSpec )
 
+      set arOptions = ( $submitOptionsOutputStagerXfer $submitOptionsProject )
+      set arOptions = ( $arOptions --job-name=$FRE_JOBID.output.stager.$begindate.AR )
+      set arOptions = ( $arOptions --time=$outputStagerXferRuntimeAscii --mincpus=$outputStagerSaveCoreSpec )
+
       echo "set expName                   =   $name"                       > $asciiArgFile
       echo "set type                      =   ascii"                      >> $asciiArgFile
       echo "set stagingType               =   $outputStagingType"         >> $asciiArgFile
@@ -1131,64 +1135,11 @@ while ( $irun <= $segmentsPerJob && $currentSeg <= $segmentsPerSimulation )
             setenv MPICH_RANK_REORDER_METHOD $mpiRankReorderMethod
             unset $mpiRankReorderMethod
          endif
-      else if ( $?flagOutputStagingTypeStaged ) then
-         if ( $actionSaveOn || $actionXferOn ) then
-            set asciiResult = `submit -O "$asciiOptions --export=argFile=$asciiArgFile" $outputStager`
-
-            if ( $status == 0 ) then
-               if ( $echoOn ) unset echo
-               echo "<NOTE> : The output stager job '$asciiResult' to process the '$asciiArchDir' (saving/transfer) has been submitted successfully"
-               if ( $echoOn ) set echo
-               set saveJobIds = ( $saveJobIds $asciiResult )
-               set argFiles = ( $argFiles $asciiArgFile:t )
-            else
-               @ outputStagerErrors += 1
-               if ( $echoOn ) unset echo
-               set msg =       "*WARNING*: Can't submit the output stager job to process the '$asciiArchDir' (saving/transfer)\n"
-               set msg = "${msg}*WARNING*: ascii files have not been saved, you may need to transfer them manually.\n\n"
-               set msg = "${msg}*WARNING*: The ascii ArgFile has been saved at $asciiArgFile.  You may be able\n"
-               set msg = "${msg}*WARNING*: use the following command:\n\n"
-               set msg = "${msg}*WARNING*: $outputStager $asciiArgFile\n"
-               if ( $?batch ) then
-                  printf "$msg" | mailx -s "Can't submit the output stager job to process the '$asciiArchDir' (saving)" $mailList
-               endif
-               printf "$msg"
-               if ( $echoOn ) set echo
-            endif
-
-            unset asciiResult
-         endif
-      else if ( $?flagOutputStagingTypeChained ) then
-         if ( $actionSaveOn || $actionXferOn ) then
-            set asciiResult = `submit -O "$asciiOptions --export=argFile=$asciiArgFile" $outputStager`
-
-            if ( $status == 0 ) then
-               if ( $echoOn ) unset echo
-               echo "<NOTE> : The output stager job '$asciiResult' to process the '$asciiArchDir' has been submitted successfully"
-               if ( $echoOn ) set echo
-               set saveJobIds = ( $saveJobIds $asciiResult )
-               set argFiles = ( $argFiles $asciiArgFile:t )
-            else
-               @ outputStagerErrors += 1
-               if ( $echoOn ) unset echo
-               set msg =       "*WARNING*: Can't submit the output stager job to process the '$asciiArchDir'\n"
-               set msg = "${msg}*WARNING*: ascii files have not been saved, you may need to transfer them manually.\n\n"
-               set msg = "${msg}*WARNING*: The ascii ArgFile has been saved at $asciiArgFile.  You may be able\n"
-               set msg = "${msg}*WARNING*: use the following command:\n\n"
-               set msg = "${msg}*WARNING*: $outputStager $asciiArgFile\n"
-               if ( $?batch ) then
-                  printf "$msg" | mailx -s "Can't submit the output stager job to process the '$asciiArchDir'" $mailList
-               endif
-               printf "$msg"
-               if ( $echoOn ) set echo
-            endif
-
-            unset asciiResult
-         endif
       endif
+      # NOTE: Traditionally the staged and chained submissions are done here
+      # but now they are after the restart processing block so that
+      # the ascii and restart-save processing are done by the same batch job
 
-      unset asciiOptions
-      unset asciiArgFile
       unset asciiJobName
 
       unset paramCompressOn
@@ -1200,11 +1151,8 @@ while ( $irun <= $segmentsPerJob && $currentSeg <= $segmentsPerSimulation )
 
       unset asciiOutputDirRemote
       unset asciiWorkDir
-      unset asciiArchDir
       unset asciiSuffix
    endif
-
-   unset asciiFiles
 
    # ---------------- save restart files, namelist, tables etc. and move them from RESTART to INPUT
 
@@ -1245,7 +1193,7 @@ while ( $irun <= $segmentsPerJob && $currentSeg <= $segmentsPerSimulation )
             set actionCombineOn = $?flagRunTypeRegression
             set actionCheckOn   = $?flagOutputCheckOn
             set actionSaveOn    = 1
-            set actionXferOn    = 0
+            set restartActionXferOn = 0
             set paramArchiveOn  = $?flagOutputArchiveOn
             set paramPtmpOn     = 1
             set paramCheckSumOn = $?flagCheckSumOn
@@ -1275,7 +1223,7 @@ while ( $irun <= $segmentsPerJob && $currentSeg <= $segmentsPerSimulation )
             set actionCombineOn = $?flagRunTypeRegression
             set actionCheckOn   = $?flagOutputCheckOn
             set actionSaveOn    = 1
-            set actionXferOn    = $?flagOutputXferOn
+            set restartActionXferOn = $?flagOutputXferOn
             set paramArchiveOn  = $?flagOutputArchiveOn
             set paramPtmpOn     = 1
             set paramCheckSumOn = $?flagCheckSumOn
@@ -1286,7 +1234,7 @@ while ( $irun <= $segmentsPerJob && $currentSeg <= $segmentsPerSimulation )
          set actionCombineOn        = 0
          set actionCheckOn          = 0
          set actionSaveOn           = 1
-         set actionXferOn           = 0
+         set restartActionXferOn    = 0
          set paramArchiveOn         = 1
          set paramPtmpOn            = 0
          set paramCheckSumOn        = 0
@@ -1310,7 +1258,7 @@ while ( $irun <= $segmentsPerJob && $currentSeg <= $segmentsPerSimulation )
       echo "set actionCombineOn           =   $actionCombineOn"           >> $restartArgFile
       echo "set actionCheckOn             =   $actionCheckOn"             >> $restartArgFile
       echo "set actionSaveOn              =   $actionSaveOn"              >> $restartArgFile
-      echo "set actionXferOn              =   $actionXferOn"              >> $restartArgFile
+      echo "set actionXferOn              =   $restartActionXferOn"       >> $restartArgFile
       echo "set actionPPStartOn           =   0"                          >> $restartArgFile
       echo "set paramArchiveOn            =   $paramArchiveOn"            >> $restartArgFile
       echo "set paramPtmpOn               =   $paramPtmpOn"               >> $restartArgFile
@@ -1386,98 +1334,17 @@ while ( $irun <= $segmentsPerJob && $currentSeg <= $segmentsPerSimulation )
             setenv MPICH_RANK_REORDER_METHOD $mpiRankReorderMethod
             unset $mpiRankReorderMethod
          endif
-      else if ( $?flagOutputStagingTypeStaged ) then
-         if ( $actionCombineOn || $actionSaveOn || $actionCheckOn ) then
-            set restartResult = `submit -O "$restartSaveOptions --export=argFile=$restartArgFile" $outputStager`
-
-            if ( $status == 0 ) then
-               if ( $echoOn ) unset echo
-               echo "<NOTE> : The output stager job '$restartResult' to process the '$restartArchDir' (saving) has been submitted successfully"
-               if ( $echoOn ) set echo
-               set saveJobIds = ( $saveJobIds $restartResult )
-               set argFiles = ( $argFiles $restartArgFile:t )
-            else
-               @ outputStagerErrors += 1
-               if ( $echoOn ) unset echo
-               set msg =       "*WARNING*: Can't submit the output stager job to process the '$restartArchDir' (saving)\n"
-               set msg = "${msg}*WARNING*: restart files have not been saved, you may need to transfer them manually.\n\n"
-               set msg = "${msg}*WARNING*: The restart ArgFile has been saved at $restartArgFile.  You may be able\n"
-               set msg = "${msg}*WARNING*: use the following command:\n\n"
-               set msg = "${msg}*WARNING*: $outputStager $restartArgFile\n"
-               if ( $?batch ) then
-                  printf "$msg" | mailx -s "Can't submit the output stager job to process the '$restartArchDir' (saving)" $mailList
-               endif
-               printf "$msg"
-               if ( $echoOn ) set echo
-            endif
-
-            unset restartResult
-         endif
-
-         if ( $actionXferOn ) then
-            set restartResult = `submit -O "$restartXferOptions --export=argFile=$restartArgFile --dependency=afterok:$saveJobIds[$#saveJobIds]" $outputStager`
-
-            if ( $status == 0 ) then
-               if ( $echoOn ) unset echo
-               echo "<NOTE> : The output stager job '$restartResult' to process the '$restartArchDir' (transfer) has been submitted successfully"
-               if ( $echoOn ) set echo
-            else
-               @ outputStagerErrors += 1
-               if ( $echoOn ) unset echo
-               set msg =       "*WARNING*: Can't submit the output stager job to process the '$restartArchDir' (transfer)\n"
-               set msg = "${msg}*WARNING*: restart files have not been saved, you may need to transfer them manually.\n\n"
-               set msg = "${msg}*WARNING*: The restart ArgFile has been saved at $restartArgFile.  You may be able\n"
-               set msg = "${msg}*WARNING*: use the following command:\n\n"
-               set msg = "${msg}*WARNING*: $outputStager $restartArgFile\n"
-               if ( $?batch ) then
-                  printf "$msg" | mailx -s "Can't submit the output stager job to process the '$restartArchDir' (transfer)" $mailList
-               endif
-               printf "$msg"
-               if ( $echoOn ) set echo
-            endif
-
-            unset restartResult
-         endif
-      else if ( $?flagOutputStagingTypeChained ) then
-         if ( $actionCombineOn || $actionSaveOn || $actionCheckOn || $actionXferOn ) then
-            set restartResult = `submit -O "$restartSaveOptions --export=argFile=$restartArgFile" $outputStager`
-
-            if ( $status == 0 ) then
-               if ( $echoOn ) unset echo
-               echo "<NOTE> : The output stager job '$restartResult' to process the '$restartArchDir' has been submitted successfully"
-               if ( $echoOn ) set echo
-               set saveJobIds = ( $saveJobIds $restartResult )
-               set argFiles = ( $argFiles $restartArgFile:t )
-            else
-               @ outputStagerErrors += 1
-               if ( $echoOn ) unset echo
-               set msg =       "*WARNING*: Can't submit the output stager job to process the '$restartArchDir'\n"
-               set msg = "${msg}*WARNING*: restart files have not been saved, you may need to transfer them manually.\n\n"
-               set msg = "${msg}*WARNING*: The restart ArgFile has been saved at $restartArgFile.  You may be able\n"
-               set msg = "${msg}*WARNING*: use the following command:\n\n"
-               set msg = "${msg}*WARNING*: $outputStager $restartArgFile\n"
-               if ( $?batch ) then
-                  printf "$msg" | mailx -s "Can't submit the output stager job to process the '$restartArchDir'" $mailList
-               endif
-               printf "$msg"
-               if ( $echoOn ) set echo
-            endif
-
-            unset restartResult
-         endif
       endif
+      # NOTE: Traditionally the staged and chained submissions are done here
+      # but now they are after the restart processing block so that
+      # the ascii and restart-save processing are done by the same batch job
 
-      unset restartXferOptions
-      unset restartSaveOptions
-
-      unset restartArgFile
       unset restartJobName
 
       unset paramCompressOn
       unset paramCheckSumOn
       unset paramPtmpOn
       unset paramArchiveOn
-      unset actionXferOn
       unset actionSaveOn
       unset actionCheckOn
       unset actionCombineOn
@@ -1486,6 +1353,103 @@ while ( $irun <= $segmentsPerJob && $currentSeg <= $segmentsPerSimulation )
       unset restartWorkDir
       unset restartSuffix
    endif
+
+   # If using batch (chained) staging, then submit the ascii and restart staging together.
+   if ( $?flagOutputStagingTypeChained ) then
+      # if ascii files and restart files, then submit both together now
+      if ( $#restartFiles > 0 && $#asciiFiles > 0 ) then
+         set result = `submit -O "$arOptions --export=argFile=$asciiArgFile,argFile2=$restartArgFile" $outputStager`
+
+         if ( $status == 0 ) then
+            if ( $echoOn ) unset echo
+            echo "<NOTE> : The output stager job '$result' to process '$asciiArchDir' and '$restartArchDir' has been submitted successfully"
+            if ( $echoOn ) set echo
+            # save the jobid twice so the index count matches the argfile count
+            set saveJobIds = ( $saveJobIds $result $result )
+            set argFiles = ( $argFiles $asciiArgFile:t $restartArgFile:t )
+         else
+            @ outputStagerErrors += 1
+            if ( $echoOn ) unset echo
+            set msg =       "*WARNING*: Can't submit the output stager job to process '$asciiArchDir' and '$restartArchDir'\n"
+            set msg = "${msg}*WARNING*: ascii files have not been saved, you may need to transfer them manually.\n\n"
+            set msg = "${msg}*WARNING*: The ascii ArgFile has been saved at $asciiArgFile.  You may be able\n"
+            set msg = "${msg}*WARNING*: use the following command:\n\n"
+            set msg = "${msg}*WARNING*: $outputStager $asciiArgFile\n"
+            set msg = "${msg}*WARNING*: restart files have not been saved, you may need to transfer them manually.\n\n"
+            set msg = "${msg}*WARNING*: The restart ArgFile has been saved at $restartArgFile.  You may be able\n"
+            set msg = "${msg}*WARNING*: use the following command:\n\n"
+            set msg = "${msg}*WARNING*: $outputStager $restartArgFile\n"
+            if ( $?batch ) then
+               printf "$msg" | mailx -s "Can't submit the output stager job to process '$asciiArchDir' and '$restartArchDir'" $mailList
+            endif
+            printf "$msg"
+            if ( $echoOn ) set echo
+         endif
+      # else if ascii files and no restart files, then submit ascii stagers
+      else if ( $#asciiFiles > 0 ) then
+         set asciiResult = `submit -O "$asciiOptions --export=argFile=$asciiArgFile" $outputStager`
+
+         if ( $status == 0 ) then
+            if ( $echoOn ) unset echo
+            echo "<NOTE> : The output stager job '$asciiResult' to process the '$asciiArchDir' has been submitted successfully"
+            if ( $echoOn ) set echo
+            set saveJobIds = ( $saveJobIds $asciiResult )
+            set argFiles = ( $argFiles $asciiArgFile:t )
+         else
+            @ outputStagerErrors += 1
+            if ( $echoOn ) unset echo
+            set msg =       "*WARNING*: Can't submit the output stager job to process the '$asciiArchDir'\n"
+            set msg = "${msg}*WARNING*: ascii files have not been saved, you may need to transfer them manually.\n\n"
+            set msg = "${msg}*WARNING*: The ascii ArgFile has been saved at $asciiArgFile.  You may be able\n"
+            set msg = "${msg}*WARNING*: use the following command:\n\n"
+            set msg = "${msg}*WARNING*: $outputStager $asciiArgFile\n"
+            if ( $?batch ) then
+               printf "$msg" | mailx -s "Can't submit the output stager job to process the '$asciiArchDir'" $mailList
+            endif
+            printf "$msg"
+            if ( $echoOn ) set echo
+         endif
+
+         unset asciiResult
+      # else if restart files and no ascii files (unlikely), then submit restart stagers
+      else if ( $#restartFiles > 0 ) then
+         set restartResult = `submit -O "$restartSaveOptions --export=argFile=$restartArgFile" $outputStager`
+
+         if ( $status == 0 ) then
+            if ( $echoOn ) unset echo
+            echo "<NOTE> : The output stager job '$restartResult' to process the '$restartArchDir' has been submitted successfully"
+            if ( $echoOn ) set echo
+            set saveJobIds = ( $saveJobIds $restartResult )
+            set argFiles = ( $argFiles $restartArgFile:t )
+         else
+            @ outputStagerErrors += 1
+            if ( $echoOn ) unset echo
+            set msg =       "*WARNING*: Can't submit the output stager job to process the '$restartArchDir'\n"
+            set msg = "${msg}*WARNING*: restart files have not been saved, you may need to transfer them manually.\n\n"
+            set msg = "${msg}*WARNING*: The restart ArgFile has been saved at $restartArgFile.  You may be able\n"
+            set msg = "${msg}*WARNING*: use the following command:\n\n"
+            set msg = "${msg}*WARNING*: $outputStager $restartArgFile\n"
+            if ( $?batch ) then
+               printf "$msg" | mailx -s "Can't submit the output stager job to process the '$restartArchDir'" $mailList
+            endif
+            printf "$msg"
+            if ( $echoOn ) set echo
+         endif
+
+         unset restartResult
+      endif
+   endif
+
+   # now safe to unset these
+   unset asciiFiles
+   unset asciiArchDir
+   unset asciiArgFile
+   unset asciiOptions
+
+   unset restartArgFile
+   unset restartSaveOptions
+   unset restartXferOptions
+   unset restartActionXferOn
 
    popd
 

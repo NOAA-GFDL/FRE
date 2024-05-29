@@ -805,16 +805,12 @@ endif
 #------------------------ global constants and aliases -------------------------
 ################################################################################
 
-if ( $HOST =~ gaea[0-9] || $HOST =~ gaea1[0-5] ) then
+if ( $HOST =~ gaea ) then
    set -r hostType = 'login'
 else if ( $HOST =~ *dtn* ) then
    set -r hostType = $SLURM_JOB_PARTITION
 else
-   if ( $echoOn ) unset echo
-   echo "*ERROR*: Unknown host type"
-   if ( $echoOn ) set echo
-   set exitStatus = 2
-   goto END
+   set -r hostType = 'batch'
 endif
 
 set -r archExt = 'tar'
@@ -842,19 +838,11 @@ if ( $actionCombineToDo ) then
    set -r tagFail = 'fail'
    set -r patternGrepFail = '\.'$tagFail'$'
 
-   if ( $hostType == 'login' || $hostType == 'ldtn' || $hostType == 'ldtn_c5' ) then
-      alias mppnccombine `which mppnccombine` $mppnccombineOptString
-      alias slmnccombine `which combine-ncc`
-      alias slmnccompressed `which is-compressed`
-      alias slmncdecompress `which decompress-ncc`
-      alias iceberg_comb `which iceberg_comb.sh`
-   else
-      if ( $echoOn ) unset echo
-      echo "*ERROR*: Combining on '$hostType' hosts isn't allowed"
-      if ( $echoOn ) set echo
-      set exitStatus = 2
-      goto END
-   endif
+   alias mppnccombine `which mppnccombine` $mppnccombineOptString
+   alias slmnccombine `which combine-ncc`
+   alias slmnccompressed `which is-compressed`
+   alias slmncdecompress `which decompress-ncc`
+   alias iceberg_comb `which iceberg_comb.sh`
 
    set -r memoryDownscalingFactor = '1.00'
    set -r memorySpec = ( `getFreeMem` )
@@ -1869,6 +1857,29 @@ else if ( $exitStatus == 4 ) then
 endif
 
 unlock
+
+# if a second argFile is specified (as argFile2), then run it online
+# unset the enviroment variable to avoid infinite recursion
+if ( $?argFile2 ) then
+   set argFile2 = $argFile2
+   unsetenv argFile2
+
+   $0 $argFile2
+
+   set myStatus = $status
+   if ( $myStatus == 0) then
+      if ( $echoOn ) unset echo
+      echo "<NOTE> : Second argFile processing exited normally"
+      if ( $echoOn ) set echo
+   else
+      if ( $echoOn ) unset echo
+      echo "<NOTE> : Second argFile processing exited with '$myStatus'"
+      if ( $echoOn ) set echo
+   endif
+
+   # set the main exitStatus to non-zero if either of the argFile processing failed
+   @ exitStatus = ( $exitStatus || $myStatus )
+endif
 
 if ( $actionRetryToDo ) then
    retry $argFile:h
