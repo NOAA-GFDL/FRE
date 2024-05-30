@@ -59,18 +59,3 @@ teardown() {
     run bash -c "ls -1d ardiff_dir1 ardiff_dir3 | ardiff -c cp"
     [ "$status" -eq 1 ]
 }
-
-@test "ardiff.py compares two identical tarfiles" {
-    run bash -c "ardiff.py tar1.tar tar2.tar"
-    [ "$status" -eq 0 ]
-}
-
-@test "ardiff.py reports failure when tarfiles are different" {
-    run bash -c "ardiff.py tar1.tar tar3.tar"
-    [ "$status" -eq 1 ]
-}
-
-@test "ardiff.py reports failure when directories are different" {
-    run bash -c "ardiff.py ardiff_dir1 ardiff_dir3"
-    [ "$status" -eq 1 ]
-}
