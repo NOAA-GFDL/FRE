@@ -151,17 +151,11 @@ CM2.1U_Control-1990_E1.M_3B_snowmelt_static_ocn6x5"
 
 @test "Get stdout directory for --platform=${default_platform}" {
     case ${FRE_SYSTEM_SITE} in
-        ncrc )
-            stdoutRoot="/lustre/f2/scratch"
-            ;;
-        gfdl-ws )
-            stdoutRoot="/home"
+        ncrc5 )
+            stdoutRoot="/gpfs/f5/gfdl_f/scratch"
             ;;
         gfdl )
             stdoutRoot="/home"
-            ;;
-        theia )
-            stdoutRoot="/scratch4/GFDL/gfdlscr"
             ;;
         * )
             skip "Unknown site '${FRE_SYSTEM_SITE}'."
@@ -211,17 +205,11 @@ analysis: /archive/$userStr/.*/CM2.1U_Control-1990_E1.M_3A/${platform}-prod/anal
 
 @test "Get the executable --platform=${default_platform}" {
     case ${FRE_SYSTEM_SITE} in
-        ncrc )
-            execRoot="/lustre/f2/dev"
-            ;;
-        gfdl-ws )
-            execRoot="/home"
+        ncrc5 )
+            execRoot="/gpfs/f5/gfdl_f/scratch"
             ;;
         gfdl )
             execRoot="/home"
-            ;;
-        theia )
-            execRoot="/scratch4/GFDL/gfdlscr"
             ;;
         * )
             skip "Unknown site '${FRE_SYSTEM_SITE}'."
@@ -238,17 +226,11 @@ analysis: /archive/$userStr/.*/CM2.1U_Control-1990_E1.M_3A/${platform}-prod/anal
 
 @test "Get the executable from inherited experiment --platform=${default_platform}" {
     case ${FRE_SYSTEM_SITE} in
-        ncrc )
-            execRoot="/lustre/f2/dev"
-            ;;
-        gfdl-ws )
-            execRoot="/home"
+        ncrc5 )
+            execRoot="/gpfs/f5/gfdl_f/scratch"
             ;;
         gfdl )
             execRoot="/home"
-            ;;
-        theia )
-            execRoot="/scratch4/GFDL/gfdlscr"
             ;;
         * )
             skip "Unknown site '${FRE_SYSTEM_SITE}'."
@@ -266,22 +248,19 @@ analysis: /archive/$userStr/.*/CM2.1U_Control-1990_E1.M_3A/${platform}-prod/anal
 @test "Get the executable with a remote user" {
     # Pick a remote site
     case ${default_platform%%.*} in
-        ncrc3 )
+        ncrc5 )
             REMOTE_SITE=gfdl-ws.intel
             ;;
-        ncrc4 )
-            REMOTE_SITE=gfdl.ncrc4-intel
-            ;;
         gfdl | gfdl-ws )
-            REMOTE_SITE=ncrc4.intel
+            REMOTE_SITE=ncrc5.intel
             ;;
         * )
             skip "Unknown site '${FRE_SYSTEM_SITE}'."
             ;;
     esac
     case $REMOTE_SITE in
-        ncrc4.intel )
-            execRoot='$DEV'
+        ncrc5.intel )
+            execRoot='/gpfs/f5/gfdl_f/scratch'
             ;;
         gfdl-ws.intel )
             execRoot="/home"
@@ -301,17 +280,11 @@ analysis: /archive/$userStr/.*/CM2.1U_Control-1990_E1.M_3A/${platform}-prod/anal
 
 @test "Get the executable for all experiments with --target=openmp,repro" {
     case ${FRE_SYSTEM_SITE} in
-        ncrc )
-            execRoot="/lustre/f2/dev"
-            ;;
-        gfdl-ws )
-            execRoot="/home"
+        ncrc5 )
+            execRoot="/gpfs/f5/gfdl_f/scratch"
             ;;
         gfdl )
             execRoot="/home"
-            ;;
-        theia )
-            execRoot="/scratch4/GFDL/gfdlscr"
             ;;
         * )
             skip "Unknown site '${FRE_SYSTEM_SITE}'."
@@ -347,9 +320,6 @@ CM2.1U_Control-1990_E1.M_3B_snowmelt_static_ocn6x5 $execRoot/$USER/.*/CM2.1U_Con
         ncrc? )
             num_nodes=2
             ;;
-        theia )
-            num_nodes=3
-            ;;
         * )
             skip "--nodes not supported on site '${FRE_SYSTEM_SITE}'"
     esac
@@ -368,9 +338,6 @@ CM2.1U_Control-1990_E1.M_3B_snowmelt INHERITS FROM CM2.1U_Control-1990_E1.M_3A"
     case "${default_platform%%.*}" in
         ncrc? )
             num_nodes=2
-            ;;
-        theia )
-            num_nodes=3
             ;;
         * )
             skip "--nodes not supported on site '${FRE_SYSTEM_SITE}'"
@@ -391,9 +358,6 @@ CM2.1U_Control-1990_E1.M_3B_snowmelt INHERITS FROM CM2.1U_Control-1990_E1.M_3A"
     case "${default_platform%%.*}" in
         ncrc? )
             num_nodes=2
-            ;;
-        theia )
-            num_nodes=3
             ;;
         * )
             skip "--nodes not supported on site '${FRE_SYSTEM_SITE}'"
@@ -433,27 +397,6 @@ CM2.1U_Control-1990_E1.M_3B_snowmelt_static_ocn6x5 regression/basic would reques
 CM2.1U_Control-1990_E1.M_3B_snowmelt_static_ocn6x5 regression/restarts would request 2 nodes.
 CM2.1U_Control-1990_E1.M_3B_snowmelt_static_ocn6x5 regression/scaling #1 would request 2 nodes.
 CM2.1U_Control-1990_E1.M_3B_snowmelt_static_ocn6x5 regression/scaling #2 would request 2 nodes.
-CM2.1U_Control-1990_E1.M_3B_snowmelt_static_ocn6x5 INHERITS FROM CM2.1U_Control-1990_E1.M_3B_snowmelt"
-            ;;
-        theia )
-            output_good="CM2.1U_Control-1990_E1.M_3A regression/basic would request 1 nodes.
-CM2.1U_Control-1990_E1.M_3A regression/restarts would request 1 nodes.
-CM2.1U_Control-1990_E1.M_3A regression/scaling #1 would request 1 nodes.
-CM2.1U_Control-1990_E1.M_3A regression/scaling #2 would request 1 nodes.
-CM2.1U_Control-1990_E1.M_3A regression/scaling #3 would request 1 nodes.
-CM2.1U_Control-1990_E1.M_3A regression/scaling #4 would request 2 nodes.
-CM2.1U_Control-1990_E1.M_3A
-CM2.1U_Control-1990_E1.M_3B_snowmelt regression/basic would request 3 nodes.
-CM2.1U_Control-1990_E1.M_3B_snowmelt regression/restarts would request 3 nodes.
-CM2.1U_Control-1990_E1.M_3B_snowmelt regression/scaling #1 would request 3 nodes.
-CM2.1U_Control-1990_E1.M_3B_snowmelt regression/scaling #2 would request 3 nodes.
-CM2.1U_Control-1990_E1.M_3B_snowmelt regression/scaling #3 would request 3 nodes.
-CM2.1U_Control-1990_E1.M_3B_snowmelt regression/scaling #4 would request 3 nodes.
-CM2.1U_Control-1990_E1.M_3B_snowmelt INHERITS FROM CM2.1U_Control-1990_E1.M_3A
-CM2.1U_Control-1990_E1.M_3B_snowmelt_static_ocn6x5 regression/basic would request 3 nodes.
-CM2.1U_Control-1990_E1.M_3B_snowmelt_static_ocn6x5 regression/restarts would request 3 nodes.
-CM2.1U_Control-1990_E1.M_3B_snowmelt_static_ocn6x5 regression/scaling #1 would request 3 nodes.
-CM2.1U_Control-1990_E1.M_3B_snowmelt_static_ocn6x5 regression/scaling #2 would request 3 nodes.
 CM2.1U_Control-1990_E1.M_3B_snowmelt_static_ocn6x5 INHERITS FROM CM2.1U_Control-1990_E1.M_3B_snowmelt"
             ;;
         * )
