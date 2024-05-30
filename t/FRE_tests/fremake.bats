@@ -67,7 +67,7 @@ setup() {
     case "${default_platform%%.*}" in
         ncrc? )
             platform="ncrc"
-            root_stem="/lustre/f2/scratch"
+            root_stem="/gpfs/f5/gfdl_f/scratch"
             submit_cmd="sleep 1; sbatch"
             ;;
         theia )
@@ -134,7 +134,7 @@ setup() {
     case "${default_platform%%.*}" in
         ncrc? )
             platform="ncrc"
-            root_stem="/lustre/f2/scratch"
+            root_stem="/gpfs/f5/gfdl_f/scratch"
             submit_cmd="sleep 1; sbatch"
             ;;
         theia )
@@ -188,7 +188,7 @@ setup() {
     case "${default_platform%%.*}" in
         ncrc? )
             platform="ncrc"
-            root_stem="/lustre/f2/scratch"
+            root_stem="/gpfs/f5/gfdl_f/scratch"
             submit_cmd="sleep 1; sbatch"
             ;;
         theia )
@@ -232,7 +232,7 @@ setup() {
     case "${default_platform%%.*}" in
         ncrc? )
             platform="ncrc"
-            root_stem="/lustre/f2/scratch"
+            root_stem="/gpfs/f5/gfdl_f/scratch"
             submit_cmd="sleep 1; sbatch"
             ;;
         theia )
@@ -276,7 +276,7 @@ setup() {
     case "${default_platform%%.*}" in
         ncrc? )
             platform="ncrc"
-            root_stem="/lustre/f2/scratch"
+            root_stem="/gpfs/f5/gfdl_f/scratch"
             submit_cmd="sleep 1; sbatch"
             ;;
         theia )
@@ -322,7 +322,7 @@ ${last_line_good}"
     case "${default_platform%%.*}" in
         ncrc? )
             platform="ncrc"
-            root_stem="/lustre/f2/scratch"
+            root_stem="/gpfs/f5/gfdl_f/scratch"
             submit_cmd="sleep 1; sbatch"
             ;;
         theia )
@@ -367,7 +367,7 @@ ${last_line_good}"
     case "${default_platform%%.*}" in
         ncrc? )
             platform="ncrc"
-            root_stem="/lustre/f2/scratch"
+            root_stem="/gpfs/f5/gfdl_f/scratch"
             submit_cmd="sleep 1; sbatch"
             ;;
         theia )
@@ -412,7 +412,7 @@ ${last_line_good}"
     case "${default_platform%%.*}" in
         ncrc? )
             platform="ncrc"
-            root_stem="/lustre/f2/scratch"
+            root_stem="/gpfs/f5/gfdl_f/scratch"
             submit_cmd="sleep 1; sbatch"
             ;;
         theia )
@@ -441,7 +441,7 @@ ${last_line_good}"
     case "${default_platform%%.*}" in
         ncrc? )
             platform="ncrc"
-            root_stem="/lustre/f2/scratch"
+            root_stem="/gpfs/f5/gfdl_f/scratch"
             submit_cmd="sleep 1; sbatch"
             ;;
         theia )
@@ -471,7 +471,7 @@ ${last_line_good}"
     case "${default_platform%%.*}" in
         ncrc? )
             platform="ncrc"
-            root_stem="/lustre/f2/scratch"
+            root_stem="/gpfs/f5/gfdl_f/scratch"
             submit_cmd="sleep 1; sbatch"
             ;;
         theia )
@@ -500,7 +500,7 @@ ${last_line_good}"
     case "${default_platform%%.*}" in
         ncrc? )
             platform="ncrc"
-            root_stem="/lustre/f2/scratch"
+            root_stem="/gpfs/f5/gfdl_f/scratch"
             submit_cmd="sleep 1; sbatch"
             ;;
         theia )
