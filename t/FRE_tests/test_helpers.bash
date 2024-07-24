@@ -6,19 +6,7 @@
 # testing.  Cannot use FRE_SYSTEM_SITE as on Gaea, it is now "ncrc"
 # (no [34]).
 
-if [ "${FRE_SYSTEM_SITE}" = "ncrc" ]
-then
-   case "$(hostname)" in
-      gaea9|gaea1[0-2] )
-         default_platform="ncrc3.intel"
-         ;;
-      * )
-         default_platform="ncrc4.intel"
-         ;;
-   esac
-else
-   default_platform="${FRE_SYSTEM_SITE}.intel"
-fi
+default_platform="${FRE_SYSTEM_SITE}.intel"
 
 unique_stdout_xml() {
 # NOTE: Do not use
