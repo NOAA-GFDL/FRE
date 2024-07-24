@@ -67,18 +67,8 @@ setup() {
     case "${default_platform%%.*}" in
         ncrc? )
             platform="ncrc"
-            root_stem="/lustre/f2/scratch"
+            root_stem="/gpfs/f5/gfdl_f/scratch"
             submit_cmd="sleep 1; sbatch"
-            ;;
-        theia )
-            platform="theia"
-            root_stem="/scratch4/GFDL/gfdlscr"
-            submit_cmd="qsub"
-            ;;
-        gfdl-ws )
-            platform="gfdl-ws"
-            root_stem="/local2/tmp"
-            submit_cmd=""
             ;;
         * )
             skip "No test for current platform"
@@ -134,18 +124,8 @@ setup() {
     case "${default_platform%%.*}" in
         ncrc? )
             platform="ncrc"
-            root_stem="/lustre/f2/scratch"
+            root_stem="/gpfs/f5/gfdl_f/scratch"
             submit_cmd="sleep 1; sbatch"
-            ;;
-        theia )
-            platform="theia"
-            root_stem="/scratch4/GFDL/gfdlscr"
-            submit_cmd="qsub"
-            ;;
-        gfdl-ws )
-            platform="gfdl-ws"
-            root_stem="/local2/tmp"
-            submit_cmd=""
             ;;
         * )
             skip "No test for current platform"
@@ -188,18 +168,8 @@ setup() {
     case "${default_platform%%.*}" in
         ncrc? )
             platform="ncrc"
-            root_stem="/lustre/f2/scratch"
+            root_stem="/gpfs/f5/gfdl_f/scratch"
             submit_cmd="sleep 1; sbatch"
-            ;;
-        theia )
-            platform="theia"
-            root_stem="/scratch4/GFDL/gfdlscr"
-            submit_cmd="qsub"
-            ;;
-        gfdl-ws )
-            platform="gfdl-ws"
-            root_stem="/local2/tmp"
-            submit_cmd=""
             ;;
         * )
             skip "No test for current platform"
@@ -232,18 +202,8 @@ setup() {
     case "${default_platform%%.*}" in
         ncrc? )
             platform="ncrc"
-            root_stem="/lustre/f2/scratch"
+            root_stem="/gpfs/f5/gfdl_f/scratch"
             submit_cmd="sleep 1; sbatch"
-            ;;
-        theia )
-            platform="theia"
-            root_stem="/scratch4/GFDL/gfdlscr"
-            submit_cmd="qsub"
-            ;;
-        gfdl-ws )
-            platform="gfdl-ws"
-            root_stem="/local2/tmp"
-            submit_cmd=""
             ;;
         * )
             skip "No test for current platform"
@@ -276,18 +236,8 @@ setup() {
     case "${default_platform%%.*}" in
         ncrc? )
             platform="ncrc"
-            root_stem="/lustre/f2/scratch"
+            root_stem="/gpfs/f5/gfdl_f/scratch"
             submit_cmd="sleep 1; sbatch"
-            ;;
-        theia )
-            platform="theia"
-            root_stem="/scratch4/GFDL/gfdlscr"
-            submit_cmd="qsub"
-            ;;
-        gfdl-ws )
-            platform="gfdl-ws"
-            root_stem="/local2/tmp"
-            submit_cmd=""
             ;;
         * )
             skip "No test for current platform"
@@ -322,18 +272,8 @@ ${last_line_good}"
     case "${default_platform%%.*}" in
         ncrc? )
             platform="ncrc"
-            root_stem="/lustre/f2/scratch"
+            root_stem="/gpfs/f5/gfdl_f/scratch"
             submit_cmd="sleep 1; sbatch"
-            ;;
-        theia )
-            platform="theia"
-            root_stem="/scratch4/GFDL/gfdlscr"
-            submit_cmd="qsub"
-            ;;
-        gfdl-ws )
-            platform="gfdl-ws"
-            root_stem="/local2/tmp"
-            submit_cmd=""
             ;;
         * )
             skip "No test for current platform"
@@ -367,18 +307,8 @@ ${last_line_good}"
     case "${default_platform%%.*}" in
         ncrc? )
             platform="ncrc"
-            root_stem="/lustre/f2/scratch"
+            root_stem="/gpfs/f5/gfdl_f/scratch"
             submit_cmd="sleep 1; sbatch"
-            ;;
-        theia )
-            platform="theia"
-            root_stem="/scratch4/GFDL/gfdlscr"
-            submit_cmd="qsub"
-            ;;
-        gfdl-ws )
-            platform="gfdl-ws"
-            root_stem="/local2/tmp"
-            submit_cmd=""
             ;;
         * )
             skip "No test for current platform"
@@ -412,13 +342,8 @@ ${last_line_good}"
     case "${default_platform%%.*}" in
         ncrc? )
             platform="ncrc"
-            root_stem="/lustre/f2/scratch"
+            root_stem="/gpfs/f5/gfdl_f/scratch"
             submit_cmd="sleep 1; sbatch"
-            ;;
-        theia )
-            platform="theia"
-            root_stem="/scratch4/GFDL/gfdlscr"
-            submit_cmd="qsub"
             ;;
         * )
             skip "No test for current platform"
@@ -441,18 +366,8 @@ ${last_line_good}"
     case "${default_platform%%.*}" in
         ncrc? )
             platform="ncrc"
-            root_stem="/lustre/f2/scratch"
+            root_stem="/gpfs/f5/gfdl_f/scratch"
             submit_cmd="sleep 1; sbatch"
-            ;;
-        theia )
-            platform="theia"
-            root_stem="/scratch4/GFDL/gfdlscr"
-            submit_cmd="qsub"
-            ;;
-        gfdl-ws )
-            platform="gfdl-ws"
-            root_stem="/local2/tmp"
-            submit_cmd=""
             ;;
         * )
             skip "No test for current platform"
@@ -471,13 +386,8 @@ ${last_line_good}"
     case "${default_platform%%.*}" in
         ncrc? )
             platform="ncrc"
-            root_stem="/lustre/f2/scratch"
+            root_stem="/gpfs/f5/gfdl_f/scratch"
             submit_cmd="sleep 1; sbatch"
-            ;;
-        theia )
-            platform="theia"
-            root_stem="/scratch4/GFDL/gfdlscr"
-            submit_cmd="qsub"
             ;;
         * )
             skip "No test for current platform"
@@ -500,13 +410,8 @@ ${last_line_good}"
     case "${default_platform%%.*}" in
         ncrc? )
             platform="ncrc"
-            root_stem="/lustre/f2/scratch"
+            root_stem="/gpfs/f5/gfdl_f/scratch"
             submit_cmd="sleep 1; sbatch"
-            ;;
-        theia )
-            platform="theia"
-            root_stem="/scratch4/GFDL/gfdlscr"
-            submit_cmd="qsub"
             ;;
         * )
             skip "No test for current platform"
