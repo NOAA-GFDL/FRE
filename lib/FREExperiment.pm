@@ -14,6 +14,7 @@ use strict;
 use List::Util();
 use Try::Tiny;
 use File::Temp 'tempdir';
+use File::Path 'rmtree';
 use FREDefaults();
 use FREMsg();
 use FRENamelists();
@@ -1630,9 +1631,9 @@ sub _append_yaml($$$$) {
         return undef;
     }
 
-    # create a tmpdir.  Use File::Temp::tempdir so cleanup happens automatically when scope closes.
+    # create a tmpdir.
     my $tmpdir = try {
-	tempdir( CLEANUP => 1 )
+	tempdir() 
     }
     catch {
         $fre->out( FREMsg::FATAL, "Could not create a temporary directory for YAML combining" );
@@ -1660,7 +1661,7 @@ sub _append_yaml($$$$) {
 	$fre->out( FREMsg::NOTE, $command );
 	system( $command );
 	if ($?) {
-	    $fre->out( FREMsg::FATAL, "Error in combining the '$label' YAMLs" );
+	    $fre->out( FREMsg::FATAL, "Error in combining the '$label' YAMLs. Files are availble here: $tmpdir " );
 	    $error++;
 	}
 
@@ -1678,6 +1679,8 @@ sub _append_yaml($$$$) {
     if ($error) {
 	return undef;
     }
+    # If combiner was completed successfully, remove the tmpdir and return the combined yaml
+    rmtree($tmpdir);
     return $combined;
 }
 
