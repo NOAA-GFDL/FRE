@@ -991,7 +991,7 @@ if ( $actionCombineToDo ) then
                   foreach f ( $inputFiles )
                      # If ncks fails, then either the input files are corrupt or there are filesystem problems.
                      # In that case, exit immediately. Exit code 3 will be retried.
-                     $NCKS_M -q $f > /dev/null
+                     set ncks_output = `$NCKS_M $f`
                      if ( $status ) then
                         if ( $echoOn ) unset echo
                         echo "-ERROR-: History file '$f' appears to not be a valid NetCDF file; cannot continue."
@@ -999,7 +999,7 @@ if ( $actionCombineToDo ) then
                         set exitStatus = 3
                         goto END
                      endif
-                     set num = `$NCKS_M $f | grep -c -E ': type'`
+                     set num = `echo $ncks_output | grep -c -E ': type'`
                      set nvars = ( $nvars $num )
                      if ( `list_ncvars.csh -st -01234 $f | sort -u` != `list_ncvars.csh -st -01234 $inputFiles[1] | sort -u` ) then
                         set combineFlag = 0
