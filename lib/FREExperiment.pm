@@ -1661,7 +1661,8 @@ sub _append_yaml($$$$) {
 	$fre->out( FREMsg::NOTE, $command );
 	system( $command );
 	if ($?) {
-	    $fre->out( FREMsg::FATAL, "Error in combining the '$label' YAMLs. Files are availble here: $tmpdir " );
+	    $fre->out( FREMsg::FATAL, "Error in combining the '$label' YAMLs: $tool did not successfully combine the files located in $tmpdir " );
+	    $fre->out( FREMsg::FATAL, "Please review the files in $tmpdir for syntax issues, update the yamls within your xml, and run frerun again" );
 	    $error++;
 	}
 
