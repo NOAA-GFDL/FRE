@@ -51,3 +51,9 @@ Bronx-21 was released on January 18, 2024, to support the new gaea F5 filesystem
 * 2024-01-31 (patch 1): Varied adjustments and bug fixes
   * Remove all mentions of $FRE_SYSTEM_TMP variable. Traditionally, this was set in FRE modules, but because F5's scratch directory is project-specific, the ardiff temporary directory is now set in FRE properties. frecheck and output.stager's dual-run checking are the only uses of ardiff. Interactive ardiff users can set TMPDIR themselves.
 * 2024-02 (patch 2): Bug fix for the simplified frepp find cleaning logic
+* 2024-07-25 (patch 3): Three bug fixes and two adjustments
+  * Output stager fix to check exit status of NCO calls and exit if NetCDF file cannot be read. (Previously, the NCO error was incorrectly interpreted as subregional history files that cannot be combined.)
+  * Output stager fix to remove temporary file if combiner fails. (Previously, if combine-ncc failed, its output file was left in the working directory which caused required manual removal in order to retry.)
+  * frepp fix to not modify input PTMP history files. (Previously, frepp modified a NetCDF attribute before running fregrid. When using /xtmp for PTMP, sometimes the attribute would be modified twice resulting in a fregrid error.)
+  * New ardiff options -d, -m, and -C to check only data, only metadata, and stop early.
+  * Output stager to stop unnecessary checking for distributed subregional variable differences in restart files
