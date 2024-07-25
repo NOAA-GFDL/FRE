@@ -1130,7 +1130,7 @@ foreach order1var ( $order1 )
     if ( $modelvar == $order1var ) then
       if ( `ncexists -f $fregrid_in.tile1.nc -v $order1var` ) then
         if ( ! `ncexists -f $fregrid_in.tile1.nc -v $order1var -a interp_method` ) then
-          set attCmds = ( $attCmds -a interp_method,$order1var,a,c,"conserve_order1" )
+          set attCmds = ( $attCmds -a interp_method,$order1var,o,c,"conserve_order1" )
         endif
       endif
     endif
@@ -1141,7 +1141,7 @@ foreach non_regrid_var ( $non_regrid_vars )
     if ( $modelvar == $non_regrid_var ) then
       if ( `ncexists -f $fregrid_in.tile1.nc -v $non_regrid_var` ) then
         if ( ! `ncexists -f $fregrid_in.tile1.nc -v $non_regrid_var -a interp_method` ) then
-          set attCmds = ( $attCmds -a interp_method,$non_regrid_var,a,c,"none" )
+          set attCmds = ( $attCmds -a interp_method,$non_regrid_var,o,c,"none" )
         endif
       endif
     endif
@@ -1189,13 +1189,24 @@ end
 EOF
         $call_tile_fregrid .= <<EOF;
 if (\$#attCmds > 0) then
-   $time_ncatted ncatted -h -O \$attCmds \$fregrid_in.tile1.nc
-   $time_ncatted ncatted -h -O \$attCmds \$fregrid_in.tile2.nc
-   $time_ncatted ncatted -h -O \$attCmds \$fregrid_in.tile3.nc
-   $time_ncatted ncatted -h -O \$attCmds \$fregrid_in.tile4.nc
-   $time_ncatted ncatted -h -O \$attCmds \$fregrid_in.tile5.nc
-   $time_ncatted ncatted -h -O \$attCmds \$fregrid_in.tile6.nc
+   $time_ncatted ncatted -h -O \$attCmds \$fregrid_in.tile1.nc \$fregrid_in.tile1.nc.tmp
    #check_ncatted
+   mv -f \$fregrid_in.tile1.nc.tmp \$fregrid_in.tile1.nc
+   $time_ncatted ncatted -h -O \$attCmds \$fregrid_in.tile2.nc \$fregrid_in.tile2.nc.tmp
+   #check_ncatted
+   mv -f \$fregrid_in.tile2.nc.tmp \$fregrid_in.tile2.nc
+   $time_ncatted ncatted -h -O \$attCmds \$fregrid_in.tile3.nc \$fregrid_in.tile3.nc.tmp
+   #check_ncatted
+   mv -f \$fregrid_in.tile3.nc.tmp \$fregrid_in.tile3.nc
+   $time_ncatted ncatted -h -O \$attCmds \$fregrid_in.tile4.nc \$fregrid_in.tile4.nc.tmp
+   #check_ncatted
+   mv -f \$fregrid_in.tile4.nc.tmp \$fregrid_in.tile4.nc
+   $time_ncatted ncatted -h -O \$attCmds \$fregrid_in.tile5.nc \$fregrid_in.tile5.nc.tmp
+   #check_ncatted
+   mv -f \$fregrid_in.tile5.nc.tmp \$fregrid_in.tile5.nc
+   $time_ncatted ncatted -h -O \$attCmds \$fregrid_in.tile6.nc \$fregrid_in.tile6.nc.tmp
+   #check_ncatted
+   mv -f \$fregrid_in.tile6.nc.tmp \$fregrid_in.tile6.nc
 endif
 
 if ( "\$fregrid_wt" != '' ) then
@@ -1233,8 +1244,9 @@ foreach f ( \$fregrid_in*.nc )
             $time_mv $mv copy \$f
             chmod 644 \$f
          endif
-         $time_ncatted ncatted -h -O -a associated_files,global,m,c,"\$newassoc" \$f
+         $time_ncatted ncatted -h -O -a associated_files,global,m,c,"\$newassoc" \$f \$f.tmp
 #check_ncatted
+         mv -f \$f.tmp \$f
       endif
 
       # For now, remove the '.tile[1-6]' from all associated files.  fregrid will add it back in
@@ -1246,8 +1258,9 @@ foreach f ( \$fregrid_in*.nc )
          $time_mv $mv copy \$f
          chmod 644 \$f
       endif
-      $time_ncatted ncatted -h -O -a associated_files,global,m,c,"\$newassoc" \$f
+      $time_ncatted ncatted -h -O -a associated_files,global,m,c,"\$newassoc" \$f \$f.tmp
 #check_ncatted
+      mv -f \$f.tmp \$f
 
       # Get the associated_files
       foreach af ( `echo \$newassoc | sed "s/\\w*://g"` )

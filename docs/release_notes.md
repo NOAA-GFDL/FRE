@@ -95,3 +95,11 @@ Use `scrontab -e` to edit or remove/comment out the job.
 
 ## Updated HSM 1.2.9
 * Bug fix for unique hsmput pathology recently discovered, related to repeated hsmputs, hsmget with globbing, and a ptmp cache that is not up-to-date. (See https://gitlab.gfdl.noaa.gov/fre/hsm/-/issues/40)
+
+## Patch release notes
+* 2024-07-25 (patch 1): Three bug fixes and two adjustments
+  * Output stager fix to check exit status of NCO calls and exit if NetCDF file cannot be read. (Previously, the NCO error was incorrectly interpreted as subregional history files that cannot be combined.)
+  * Output stager fix to remove temporary file if combiner fails. (Previously, if combine-ncc failed, its output file was left in the working directory which caused required manual removal in order to retry.)
+  * frepp fix to not modify input PTMP history files. (Previously, frepp modified a NetCDF attribute before running fregrid. When using /xtmp for PTMP, sometimes the attribute would be modified twice resulting in a fregrid error.)
+  * New ardiff options -d, -m, and -C to check only data, only metadata, and stop early.
+  * Output stager to stop unnecessary checking for distributed subregional variable differences in restart files
