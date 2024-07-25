@@ -1631,7 +1631,7 @@ sub _append_yaml($$$$) {
         return undef;
     }
 
-    # create a tmpdir.
+    # create a tmpdir. Do not automatically CLEANUP to make debugging easier in case of failed combiner
     my $tmpdir = try {
 	tempdir() 
     }
