@@ -1661,8 +1661,9 @@ sub _append_yaml($$$$) {
 	$fre->out( FREMsg::NOTE, $command );
 	system( $command );
 	if ($?) {
-	    $fre->out( FREMsg::FATAL, "Error in combining the '$label' YAMLs: $tool did not successfully combine the files located in $tmpdir " );
+	    $fre->out( FREMsg::FATAL, "Error in combining the '$label' YAMLs: the command \"$command\" did not successfully combine the files located in $tmpdir " );
 	    $fre->out( FREMsg::FATAL, "Please review the files in $tmpdir for syntax issues, update the yamls within your xml, and run frerun again" );
+            $fre->out( FREMsg::FATAL, "Once you have found the error in your yaml, please remove the temporary directory with the command \"rm -r $tmpdir \"");
 	    $error++;
 	}
 
@@ -1682,6 +1683,9 @@ sub _append_yaml($$$$) {
     }
     # If combiner was completed successfully, remove the tmpdir and return the combined yaml
     rmtree($tmpdir);
+    if ( -z $tmpdir ) {
+        $fre->out( FREMsg::WARNING, " $tmpdir was not successfully removed after combine yamls. Please remove this dir manually." );
+    } 
     return $combined;
 }
 
