@@ -14,6 +14,7 @@ use strict;
 use List::Util();
 use Try::Tiny;
 use File::Temp 'tempdir';
+use File::Path 'rmtree';
 use FREDefaults();
 use FREMsg();
 use FRENamelists();
@@ -1630,9 +1631,9 @@ sub _append_yaml($$$$) {
         return undef;
     }
 
-    # create a tmpdir.  Use File::Temp::tempdir so cleanup happens automatically when scope closes.
+    # create a tmpdir. Do not automatically CLEANUP to make debugging easier in case of failed combiner
     my $tmpdir = try {
-	tempdir( CLEANUP => 1 )
+	tempdir() 
     }
     catch {
         $fre->out( FREMsg::FATAL, "Could not create a temporary directory for YAML combining" );
@@ -1660,7 +1661,9 @@ sub _append_yaml($$$$) {
 	$fre->out( FREMsg::NOTE, $command );
 	system( $command );
 	if ($?) {
-	    $fre->out( FREMsg::FATAL, "Error in combining the '$label' YAMLs" );
+	    $fre->out( FREMsg::FATAL, "Error in combining the '$label' YAMLs: the command \"$command\" did not successfully combine the files located in $tmpdir " );
+	    $fre->out( FREMsg::FATAL, "Please review the files in $tmpdir for syntax issues, update the yamls within your xml, and run frerun again" );
+            $fre->out( FREMsg::FATAL, "Once you have found the error in your yaml, please remove the temporary directory with the command \"rm -r $tmpdir \"");
 	    $error++;
 	}
 
@@ -1678,6 +1681,11 @@ sub _append_yaml($$$$) {
     if ($error) {
 	return undef;
     }
+    # If combiner was completed successfully, remove the tmpdir and return the combined yaml
+    rmtree($tmpdir, {error => \my $err} );
+    if ( $err && @$err ) {
+        $fre->out( FREMsg::WARNING, " $tmpdir was not successfully removed after combine yamls. Please remove this dir manually." );
+    } 
     return $combined;
 }
 
