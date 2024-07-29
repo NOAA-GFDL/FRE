@@ -1682,8 +1682,8 @@ sub _append_yaml($$$$) {
 	return undef;
     }
     # If combiner was completed successfully, remove the tmpdir and return the combined yaml
-    rmtree($tmpdir);
-    if ( -z $tmpdir ) {
+    rmtree($tmpdir, {error => \my $err} );
+    if ( $err && @$err ) {
         $fre->out( FREMsg::WARNING, " $tmpdir was not successfully removed after combine yamls. Please remove this dir manually." );
     } 
     return $combined;
