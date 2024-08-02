@@ -1657,7 +1657,7 @@ sub _append_yaml($$$$) {
     my $combined;
     unless ($error) {
 	# run the combiner
-	my $command = "$tool -f $tmpdir/one.yaml $tmpdir/two.yaml -o $tmpdir/combined.yaml";
+	my $command = "$tool $tmpdir/one.yaml $tmpdir/two.yaml --output-yaml $tmpdir/combined.yaml";
 	$fre->out( FREMsg::NOTE, $command );
 	system( $command );
 	if ($?) {
