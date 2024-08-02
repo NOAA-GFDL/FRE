@@ -1637,7 +1637,7 @@ sub _append_yaml($$$$) {
     }
     catch {
         $fre->out( FREMsg::FATAL, "Could not create a temporary directory for YAML combining" );
-	$error++;
+	    $error++;
     };
     return undef if $error;
     
@@ -1645,14 +1645,14 @@ sub _append_yaml($$$$) {
     # save files to tempdir and tmpfiles.
     # $one and $two passed in are presumably single-line scalars
     try {
-	open $fh, '>', "$tmpdir/one.yaml";
-	print $fh $one;
-	open $fh, '>', "$tmpdir/two.yaml";
-	print $fh $two;
+	    open $fh, '>', "$tmpdir/one.yaml";
+	    print $fh $one;
+	    open $fh, '>', "$tmpdir/two.yaml";
+	    print $fh $two;
     }
     catch {
         $fre->out( FREMsg::FATAL, "Could not write files to temporary directory '$tmpdir' for YAML combining" );
-	$error++;
+	    $error++;
     };
     my $combined;
     unless ($error) {
@@ -1663,7 +1663,7 @@ sub _append_yaml($$$$) {
 	if ($?) {
 	    $fre->out( FREMsg::FATAL, "Error in combining the '$label' YAMLs: the command \"$command\" did not successfully combine the files located in $tmpdir " );
 	    $fre->out( FREMsg::FATAL, "Please review the files in $tmpdir for syntax issues, update the yamls within your xml, and run frerun again" );
-            $fre->out( FREMsg::FATAL, "Once you have found the error in your yaml, please remove the temporary directory with the command \"rm -r $tmpdir \"");
+        $fre->out( FREMsg::FATAL, "Once you have found the error in your yaml, please remove the temporary directory with the command \"rm -r $tmpdir\"");
 	    $error++;
 	}
 
@@ -1679,7 +1679,7 @@ sub _append_yaml($$$$) {
     }
 
     if ($error) {
-	return undef;
+	    return undef;
     }
     # If combiner was completed successfully, remove the tmpdir and return the combined yaml
     rmtree($tmpdir, {error => \my $err} );
