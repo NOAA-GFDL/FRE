@@ -1595,18 +1595,12 @@ sub extractYaml($$)
         }
     }
 
-    # now validate the YAMLs
-    if (_validate_yaml($fre, $value, $l)) {
-        return $value
-    }
-    else {
-        return;
-    }
+    return $value;
 } ## end sub extractTable($$)
 
 # utility function to validate a yaml
 # label should be one of: fieldYaml, dataYaml, diagYaml
-sub _validate_yaml($$$$) {
+sub validateYaml {
     use autodie;
     my ($fre, $yaml, $label, $remove_tmpdir) = @_;
 

@@ -1207,10 +1207,16 @@ use Email::Valid;
             return (0, FREDefaults::STATUS_FS_GENERIC_PROBLEM );
         }
         if ( $diagYaml ) {
-            $fre->out( FREMsg::NOTE, "Using diagYaml(s)" );
             my $baseDate = frerun::baseDate($h);
             FRETemplate::setVariable( $fre, $r, 'baseDate', "'$baseDate'" );
             $diagYaml =~ s/^\s*\$baseDate\s*$/$baseDate/m;
+            if ( FREExperiment::validateYaml( $fre, $diagYaml, 'diagYaml' ) ) {
+                $fre->out( FREMsg::NOTE, "Using diagYaml(s)" );
+            }
+            else {
+                $fre->out( FREMsg::FATAL, "The diagYaml is not valid." );
+                return ( 0, FREDefaults::STATUS_FS_GENERIC_PROBLEM );
+            }
             FRETemplate::setTable( $fre, $r, 'diag_table.yaml', $diagYaml );
         }
         elsif ( $diagTable ) {
@@ -1241,7 +1247,13 @@ use Email::Valid;
             return ( 0, FREDefaults::STATUS_FS_GENERIC_PROBLEM );
         }
         if ( $fieldYaml ) {
-            $fre->out( FREMsg::NOTE, "Using fieldYaml(s)" );
+            if ( FREExperiment::validateYaml( $fre, $fieldYaml, 'fieldYaml' ) ) {
+                $fre->out( FREMsg::NOTE, "Using fieldYaml(s)" );
+            }
+            else {
+                $fre->out( FREMsg::FATAL, "The fieldYaml is not valid." );
+                return ( 0, FREDefaults::STATUS_FS_GENERIC_PROBLEM );
+            }
             FRETemplate::setTable( $fre, $r, 'field_table.yaml', $fieldYaml );
         }
         elsif ( $fieldTable ) {
@@ -1287,7 +1299,13 @@ use Email::Valid;
             return (0, FREDefaults::STATUS_FS_GENERIC_PROBLEM );
         }
         if ( $dataYaml ) {
-            $fre->out( FREMsg::NOTE, "Using dataYaml(s)" );
+            if ( FREExperiment::validateYaml( $fre, $dataYaml, 'dataYaml' ) ) {
+                $fre->out( FREMsg::NOTE, "Using dataYaml(s)" );
+            }
+            else {
+                $fre->out( FREMsg::FATAL, "The dataYaml is not valid." );
+                return ( 0, FREDefaults::STATUS_FS_GENERIC_PROBLEM );
+            }
             FRETemplate::setTable( $fre, $r, 'data_table.yaml', $dataYaml );
         }
         elsif ( $dataTable ) {
