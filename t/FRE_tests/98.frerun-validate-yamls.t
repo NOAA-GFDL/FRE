@@ -102,10 +102,9 @@ field_table:
       longname: dust2 tracer
 EOF
 
-  #base_date:  [1, 1, 1, 0, 0, 0]
 my $diag_good = <<EOF;
 title: 'name'
-base_date: '[1, 1, 1, 0, 0, 0]'
+base_date: [1, 1, 1, 0, 0, 0]
 diag_files:
 - file_name: grid_spec
   time_units: days
@@ -1050,12 +1049,12 @@ my $fre = FRE->new();
 use Test::More tests => 7;
 
 # validate good yamls
-ok(FREExperiment::_validate_yaml($fre, $data_good, 'dataYaml', 1), "good datayaml");
-ok(FREExperiment::_validate_yaml($fre, $field_good, 'fieldYaml', 1), "good fieldyaml");
-ok(FREExperiment::_validate_yaml($fre, $diag_good, 'diagYaml', 1), "good diagyaml");
+ok(FREExperiment::validateYaml($fre, $data_good, 'dataYaml'), "good datayaml");
+ok(FREExperiment::validateYaml($fre, $field_good, 'fieldYaml', 1), "good fieldyaml");
+ok(FREExperiment::validateYaml($fre, $diag_good, 'diagYaml', 1), "good diagyaml");
 
 # validate bad yamls
-ok(! FREExperiment::_validate_yaml($fre, $data_bad, 'dataYaml', 1), 'bad datayaml');
-ok(! FREExperiment::_validate_yaml($fre, $field_bad, 'fieldYaml', 1), 'bad fieldyaml');
-ok(! FREExperiment::_validate_yaml($fre, $diag_bad, 'diagYaml', 1), 'bad diagyaml');
-ok(! FREExperiment::_validate_yaml($fre, $diag_bad2, 'diagYaml', 1), 'another bad diagyaml');
+ok(! FREExperiment::validateYaml($fre, $data_bad, 'dataYaml', 1), 'bad datayaml');
+ok(! FREExperiment::validateYaml($fre, $field_bad, 'fieldYaml', 1), 'bad fieldyaml');
+ok(! FREExperiment::validateYaml($fre, $diag_bad, 'diagYaml', 1), 'bad diagyaml');
+ok(! FREExperiment::validateYaml($fre, $diag_bad2, 'diagYaml', 1), 'another bad diagyaml');
