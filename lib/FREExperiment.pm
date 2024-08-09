@@ -1595,9 +1595,84 @@ sub extractYaml($$)
         }
     }
 
-    return $value;
-
+    # now validate the YAMLs
+    if (_validate_yaml($fre, $value, $l)) {
+        return $value
+    }
+    else {
+        return;
+    }
 } ## end sub extractTable($$)
+
+# utility function to validate a yaml
+# label should be one of: fieldYaml, dataYaml, diagYaml
+sub _validate_yaml($$$$) {
+    use autodie;
+    my ($fre, $yaml, $label, $remove_tmpdir) = @_;
+
+    # locate the validation tool
+    my $tool;
+    if ($label eq 'dataYaml') {
+        $tool = 'is-valid-data-table-yaml';
+    }
+    elsif ($label eq 'fieldYaml') {
+        $tool = 'is-valid-field-table-yaml';
+    }
+    elsif ($label eq 'diagYaml') {
+        $tool = 'is-valid-diag-table-yaml';
+    }
+    else {
+        $fre->out( FREMsg::FATAL, "Validator for yaml type '$label' not available" );
+        return undef;
+    }
+    chomp ( $tool = qx{which $tool 2>&1} );
+    if (! -x $tool) {
+        $fre->out( FREMsg::FATAL, "Yaml validator tool $tool unavailable");
+        return undef;
+    }
+
+    # create a tmpdir. Cleanup if option specified
+    my $error;
+    my $tmpdir = try {
+        tempdir( CLEANUP => $remove_tmpdir )
+    }
+    catch {
+        $fre->out( FREMsg::FATAL, "Could not create a temporary directory for YAML valiation" );
+	    $error++;
+    };
+    return undef if $error;
+    
+    my $fh;
+    try {
+	    open $fh, '>', "$tmpdir/$label.yaml";
+	    print $fh $yaml;
+    }
+    catch {
+        $fre->out( FREMsg::FATAL, "Could not write files to temporary directory '$tmpdir' for YAML validation" );
+	    $error++;
+    };
+    unless ($error) {
+	    my $command = "$tool $tmpdir/$label.yaml";
+	    $fre->out( FREMsg::NOTE, $command );
+	    system( $command );
+	    if ($?) {
+	        $fre->out( FREMsg::FATAL, "Error in validating the '$label' YAMLs: the command \"$command\" did not successfully validate the yaml located in $tmpdir " );
+	        $fre->out( FREMsg::FATAL, "Please review the yaml in $tmpdir for syntax issues, update the yamls within your XML, and run frerun again." );
+            $fre->out( FREMsg::FATAL, "Once you have found the error in your yaml, please remove the temporary directory with the command \"rm -r $tmpdir\"");
+	        $error++;
+	    }
+    }
+
+    if ($error) {
+	    return undef;
+    }
+    # If combiner was completed successfully, remove the tmpdir and return success
+    rmtree($tmpdir, {error => \my $err} );
+    if ( $err && @$err ) {
+        $fre->out( FREMsg::WARNING, " $tmpdir was not successfully removed after validation of yaml. Please remove this dir manually." );
+    } 
+    return 1;
+}
 
 # utility function to combine two datayamls, fieldyamls, and diagyamls
 # label should be one of: fieldYaml, dataYaml, diagYaml
