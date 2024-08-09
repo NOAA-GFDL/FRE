@@ -1600,7 +1600,7 @@ sub extractYaml($$)
 
 # utility function to validate a yaml
 # label should be one of: fieldYaml, dataYaml, diagYaml
-sub validateYaml($$$) {
+sub validateYaml {
     use autodie;
     my ($fre, $yaml, $label, $remove_tmpdir) = @_;
 
