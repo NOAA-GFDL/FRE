@@ -104,7 +104,7 @@ EOF
 
 my $diag_good = <<EOF;
 title: 'name'
-base_date: [1, 1, 1, 0, 0, 0]
+base_date: 1 1 1 0 0 0
 diag_files:
 - file_name: grid_spec
   time_units: days
