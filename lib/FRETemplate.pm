@@ -765,12 +765,12 @@ sub setVersionInfo($$$$%)
 
 } ## end sub setVersionInfo($$$$%)
 
-sub setRunCommand($$$)
+sub setRunCommand($$$$)
 
-    # ------ arguments: $fre $refToScript $mpiInfo
+    # ------ arguments: $fre $refToScript $mpiInfo $container
 {
 
-    my ( $fre, $r, $mpiInfo ) = @_;
+    my ( $fre, $r, $mpiInfo, $isContainer ) = @_;
     my ( $cf, $np, $rp, $rt, $layout, $io_layout, $mask_table, $ranks_per_ens, $rt_res )
         = @{$mpiInfo}
         { qw( coupler npes npesList ntdsList layoutList ioLayoutList maskTableList ranksPerEnsList ntdsResList )
@@ -780,10 +780,18 @@ sub setRunCommand($$$)
     my $runCommandSize = FRETemplate::PRAGMA_RUN_COMMAND_SIZE;
     my $placeholder    = qr/^[ \t]*$prefix[ \t]+$runCommandSize[ \t]*$/mo;
 
-    # use a different launcher if there's more than one component with ranks
-    my $runCommandLauncher = (grep({ $_ } @$rp) > 1)
-                           ? $fre->property('FRE.mpi.runCommand.launcher.multi')
-                           : $fre->property('FRE.mpi.runCommand.launcher.single');
+    # if container option is set, use the container runCommand
+    my $runCommandLauncher;
+    if ( $isContainer ) {
+      $runCommandLauncher = $fre->property('FRE.mpi.runCommand.launcher.container')
+    } else {
+      # use a different launcher if there's more than one component with ranks
+      $runCommandLauncher = (grep({ $_ } @$rp) > 1)
+                             ? $fre->property('FRE.mpi.runCommand.launcher.multi')
+                             : $fre->property('FRE.mpi.runCommand.launcher.single');
+
+    }
+
     my @components = split( ';', $fre->property('FRE.mpi.component.names') );
     my ( $runCommand, $runSizeInfo ) = ( $runCommandLauncher, "  set -r npes = $np\n" );
 

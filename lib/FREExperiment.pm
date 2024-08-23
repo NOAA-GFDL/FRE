@@ -1261,6 +1261,25 @@ sub extractExecutable($)
 
 } ## end sub extractExecutable($)
 
+sub extractContainer($)
+
+    # ------ arguments: $object
+    # ------ called as object method
+    # ------ return predefined container name (if found), following inherits
+{
+
+    my $r = shift;
+    my ( $exp, $fre, @results ) = ( $r, $r->fre(), () );
+
+    while ($exp) {
+        @results = $fre->dataFilesMerged( $exp->node(), 'container', 'file' );
+        last if scalar(@results) > 0;
+        $exp = $exp->parent();
+    }
+    return $results[0];
+
+} ## end sub extractContainer($)
+
 sub extractMkmfTemplate($$)
 
     # ------ arguments: $object $componentName
