@@ -844,7 +844,12 @@ sub setRunCommand($$$$)
                         $runCommand .= ' ' . $fre->property('FRE.mpi.runCommand.exportAll');
                     }
                 }
-                $runCommand .= ' ' . $fre->property('FRE.mpi.runCommand.executable');
+                if ($isContainer) {
+                    $runCommand .= ' ' . $fre->property('FRE.mpi.runCommand.execContainer');
+                }
+                else {
+                    $runCommand .= ' ' . $fre->property('FRE.mpi.runCommand.executable');
+                }
             }
         }
     }
