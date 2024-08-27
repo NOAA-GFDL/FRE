@@ -266,16 +266,7 @@ set -r archExt = 'tar'
 # ---------------- batch scheduler output staging options
 
 set -r submitOptionsCommon = ( --mail-type=$mailMode --mail-user=$mailList --comment=fre/$freCommandsVersion )
-
-
-
-
-set -r submitOptionsContainerCompilation = ( $submitOptionsCommon --chdir=$workDir --output=$stdoutDir/compile_%j.out --clusters=c5 --nodes=3 )
-
-
-
-
-
+set -r submitOptionsContainerCompilation = ( $submitOptionsCommon --chdir=$workDir --output=$stdoutDir/compile_%j.out --clusters=$outputStagerSaveCluster --nodes=3 )
 set -r submitOptionsOutputStagerSave = ( $submitOptionsCommon --chdir=$stdoutDir --output=$stdoutDir/%x.o%j --clusters=$outputStagerSaveCluster --partition=$outputStagerSavePartition )
 set -r submitOptionsOutputStagerXfer = ( $submitOptionsCommon --chdir=$stdoutDir --output=$stdoutDir/%x.o%j --clusters=$outputStagerXferCluster --partition=$outputStagerXferPartition )
 set -r submitOptionsWorkDirCleaner =   ( $submitOptionsCommon --chdir=$stdoutDir --output=$stdoutDir/%x.o%j --clusters=$outputStagerSaveCluster --partition=$workDirCleanerPartition )
@@ -445,7 +436,41 @@ set argFiles = ( )
 
 #FRE experiment-runtime-csh
 
-# ---------------- initialize reloading (production runs only)                                                                                                                                                                        if ( $?flagRunTypeProduction ) then                                                                                   prepareDir $stateDir                                                                                               if ( $status != 0 ) then                                                                                              if ( $echoOn ) unset echo                                                                                          echo "*ERROR*: Unable to setup the state directory '$stateDir'"                                                    if ( $echoOn ) set echo                                                                                            exit 1                                                                                                          endif                                                                                                              set reload_file = $stateDir/reload_commands                                                                                                                                                                                           if ( -f $reload_file ) then                                                                                           if ( -r $reload_file ) then                                                                                           source $reload_file                                                                                                if ( $#argFiles > 0 ) then                                                                                            if ( `echo $argFiles | tr ' ' "\n" | grep --count "^$FRE_JOBID"` != $#argFiles ) then                                 set saveJobIds = ( )                                                                                               set argFiles = ( )                                                                                              endif                                                                                                           endif                                                                                                           else                                                                                                                  if ( $echoOn ) unset echo                                                                                          echo "*ERROR*: The reload file '$reload_file' is not readable"                                                     if ( $echoOn ) set echo                                                                                            exit 1                                                                                                          endif                                                                                                           endif                                                                                                                                                                                                                                 set queue_file = $stateDir/queue_commands                                                                                                                                                                                             if ( -f $queue_file ) then                                                                                            if ( -r $queue_file ) then                                                                                            source $queue_file                                                                                              else                                                                                                                  if ( $echoOn ) unset echo
+# ---------------- initialize reloading (production runs only)                                             
+if ( $?flagRunTypeProduction ) then
+   prepareDir $stateDir
+   if ( $status != 0 ) then
+      if ( $echoOn ) unset echo
+      echo "*ERROR*: Unable to setup the state directory '$stateDir'"      
+      if ( $echoOn ) set echo   
+      exit 1    
+   endif
+   set reload_file = $stateDir/reload_commands
+
+   if ( -f $reload_file ) then
+      if ( -r $reload_file ) then 
+         source $reload_file
+         if ( $#argFiles > 0 ) then
+            if ( `echo $argFiles | tr ' ' "\n" | grep --count "^$FRE_JOBID"` != $#argFiles ) then
+               set saveJobIds = ( )
+               set argFiles = ( )
+            endif
+         endif
+      else
+         if ( $echoOn ) unset echo
+         echo "*ERROR*: The reload file '$reload_file' is not readable"
+         if ( $echoOn ) set echo
+         exit 1
+      endif
+   endif
+
+   set queue_file = $stateDir/queue_commands
+
+   if ( -f $queue_file ) then 
+      if ( -r $queue_file ) then
+         source $queue_file 
+      else
+         if ( $echoOn ) unset echo
          echo "*ERROR*: The queue file '$queue_file' is not readable"
          if ( $echoOn ) set echo
          exit 1
@@ -497,18 +522,6 @@ if ( $?ireload ) then
    # per job after job started --- frerun -e does not update state file
    @ currentSeg = ( $ireload - 1 ) * $segmentsPerJob + $irun
 endif
-
-
-
-
-
-
-
-
-
-
-
-
 
 # ---------------- set up working directory structure
 
@@ -650,16 +663,11 @@ unset initCondStatus
 
 # ---------------- the container loading
 
-container="................"
+#container=set to executable (Ryan)
 #runscript???=
 #s+ --> process state code, s = session leader, + = is in the foreground proocess group
 #/++ -->
-hsmget $container:s+/++
-
-
-
-
-
+hsmget $executable:s+/++
 
 # ---------------- commands, copied from XML (experiment/input/csh[not(@type="always") and not(@type="postInit")])
 
@@ -675,11 +683,11 @@ if ( $echoOn ) set echo
 
 # ---------------- container and tables loading
 
-ln -f $ptmpDir$container . || cp -pf $ptmpDir$container .
+ln -f $ptmpDir$container . || cp -pf $ptmpDir$executable .
 
 if ( $status == 0 ) then
    if ( $echoOn ) unset echo
-   echo "<NOTE> : Using the container '$ptmpDir$container'"
+   echo "<NOTE> : Using the container '$ptmpDir$executable'"
    if ( $echoOn ) set echo
 else
    if ( $echoOn ) unset echo
