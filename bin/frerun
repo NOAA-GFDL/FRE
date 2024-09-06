@@ -310,7 +310,7 @@ use Email::Valid;
         'target|t=s',             'version|V',
         'verbose|v+',             'walltime|w=i',
         'xmlfile|x=s',            'mail-list=s',
-        'force-pp'
+        'force-pp',               'container'
     );
 
     use constant RUNSCRIPT_TEMPLATE_MAIN => 'runscript.template.main';
@@ -349,6 +349,7 @@ use Email::Valid;
             "   -C,        --checksum                  compute checking sums for all the output data archives to enable their verification\n",
             "   -M,        --combine-history           combine history files after each segment run (negatable, default is on)\n",
             "   -z STRING, --compress=STRING           compress model output of type STRING (list of 'ascii', 'restart', 'history' or 'all')\n",
+            "   --container                            run experiment using container image, container image must be defined in XML file\n",
             "   -Z,        --nc4-compress-history      compress history files using Netcdf4 compression, deflation=2 and shuffle\n",
             "   -D,        --dual                      create a pair of runscripts - the main one and the dual one (negatable, default depends on site)\n",
             "   -e,        --extend                    extend default run of existing experiment\n",
@@ -525,6 +526,20 @@ use Email::Valid;
         }
     }
 
+    sub containerName($)
+
+        # ------ arguments: $exp
+    {
+        my $z = shift;
+        my $value = $z->extractContainer();
+        if ($value) {
+            return $value;
+        }
+        else {
+            return undef;
+        }
+    }
+
     sub getRemoteDirs($$$)
 
         # ------ arguments: $exp $platform $user
@@ -623,7 +638,7 @@ use Email::Valid;
 
             # ------------------------------------- executable
 
-            my $execName = frerun::execName($z);
+            my $execName = ( $o{container} ) ? frerun::containerName($z) : frerun::execName($z);
             if ($execName) {
                 if ( -f $execName ) {
                     if ( -x $execName ) {
@@ -1591,15 +1606,15 @@ use Email::Valid;
         FRETemplate::setList( $fre, $r, 'timeStampOptions', $timeStampOptions );
     }
 
-    sub setMPI($$$)
+    sub setMPI($$$$)
 
-        # ------ arguments: $refToScript $exp $refToMPIInfo
+        # ------ arguments: $refToScript $exp $refToMPIInfo $container
     {
-        my ( $r, $z, $i ) = @_;
+        my ( $r, $z, $i, $c ) = @_;
         my ( $fre, $coupler, $npes, $refNPes, $refNTds, $refNTdsRes )
             = ( $z->fre(), $i->{coupler}, $i->{npes}, $i->{npesList}, $i->{ntdsList}, $i->{ntdsResList} );
         FRETemplate::setSchedulerSize( $fre, $r, 'run', $coupler, $npes, $refNPes, $refNTds, $refNTdsRes );
-        FRETemplate::setRunCommand( $fre, $r, $i );
+        FRETemplate::setRunCommand( $fre, $r, $i, $c );
     }
 
     sub outputScriptJobId($$)
@@ -1797,7 +1812,7 @@ use Email::Valid;
                             ( my $rc, $status )
                                 = frerun::setTables( \$rtScript, $z, $runInfo->{namelists} );
                             if ($rc) {
-                                frerun::setMPI( \$rtScript, $z, $runInfo->{mpiInfo} );
+                                frerun::setMPI( \$rtScript, $z, $runInfo->{mpiInfo}, $o{container});
                                 frerun::setRegressionTimeStampOptions( \$rtScript, $z, $runInfo );
                                 frerun::setRegressionTimingParameters( \$rtScript, $z, $runInfo,
                                     $o{cluster}, $o{qos}, $o{dual} );
@@ -1903,7 +1918,7 @@ use Email::Valid;
                         ( my $rc, $status )
                             = frerun::setTables( \$runScript, $z, $prdInfo->{namelists} );
                         if ($rc) {
-                            frerun::setMPI( \$runScript, $z, $prdInfo->{mpiInfo} );
+                            frerun::setMPI( \$runScript, $z, $prdInfo->{mpiInfo}, $o{container} );
                             frerun::setProductionTimeStampOptions( \$runScript, $z, $prdInfo );
                             frerun::setProductionTimingParameters( \$runScript, $z, $prdInfo,
                                 $o{cluster}, $o{qos}, $o{dual} );
@@ -2388,6 +2403,10 @@ EOF
         FREMsg::out( $opt{verbose}, FREMsg::FATAL,
             "The --remote-user option is required on this site when transfers are enabled" );
         exit FREDefaults::STATUS_COMMAND_GENERIC_PROBLEM;
+    }
+
+    if ($opt{'container'}) {
+      ## TODO actually do something if set
     }
 
     my @exps = ();
