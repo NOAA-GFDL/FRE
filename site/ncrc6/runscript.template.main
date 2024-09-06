@@ -252,10 +252,10 @@ set -r patternGrepRegion = '^rregion'
 # ---------------- search and replacement patterns for sed
 
 set -r patternSedHome = 's/^\/(autofs|ncrc)\/.+\/'$USER'\//\/home\/'$USER'\/ncrc\//'
-set -r patternSedF5 = 's|^/gpfs/f5/[^/]+/scratch/'$USER'/|/home/'$USER'/ncrc/|'
+set -r patternSedFXX = 's|^/gpfs/f[0-9][0-9]?/[^/]+/scratch/'$USER'/|/home/'$USER'/ncrc/|'
 # to not break legacy csh inserts
-set -r patternSedSCRATCH = "$patternSedF5"
-set -r patternSedDEV = "$patternSedF5"
+set -r patternSedSCRATCH = "$patternSedFXX"
+set -r patternSedDEV = "$patternSedFXX"
 set -r patternSedCTMP = "$patternSedSCRATCH"
 set -r patternSedCPERM = "$patternSedDEV"
 
@@ -297,10 +297,6 @@ alias outputStager `which output.stager`
 
 set -r outputStager = `alias outputStager`
 @ outputStagerErrors = 0
-
-# ---------------- finding command
-
-alias find `which lfs` find
 
 ################################################################################
 #---------------------------------- finisher -----------------------------------
@@ -776,7 +772,7 @@ endif
 if ( $?flagOutputXferOn && $?flagOutputPostProcessOn ) then
    set xmlFilesRemote = ( )
    foreach xmlFile ( $xmlFiles )
-      set xmlFileRemote = `echo $xmlFile | sed -r "$patternSedHome;$patternSedF5"`
+      set xmlFileRemote = `echo $xmlFile | sed -r "$patternSedHome;$patternSedFXX"`
       if ( $echoOn ) unset echo
       echo "<NOTE> : The file '$xmlFile' will be copied to the file '$xmlFileRemote' @ GFDL to be used in the post-processing..."
       if ( $echoOn ) set echo
