@@ -103,4 +103,5 @@ Use `scrontab -e` to edit or remove/comment out the job.
   * frepp fix to not modify input PTMP history files. (Previously, frepp modified a NetCDF attribute before running fregrid. When using /xtmp for PTMP, sometimes the attribute would be modified twice resulting in a fregrid error.)
   * New ardiff options -d, -m, and -C to check only data, only metadata, and stop early.
   * Output stager to stop unnecessary checking for distributed subregional variable differences in restart files
-* 2024-08-22 (patch 4): Add C6 site files and bug fix for verifying that the distributed history files can be combined
+* 2024-08-22 (patch 2): Add C6 site files and bug fix for verifying that the distributed history files can be combined
+* 2024-09-11 (patch 3): Fix C6 runscript (revert unintended fre/test update)
