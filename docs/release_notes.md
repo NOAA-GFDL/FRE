@@ -105,3 +105,4 @@ Use `scrontab -e` to edit or remove/comment out the job.
   * Output stager to stop unnecessary checking for distributed subregional variable differences in restart files
 * 2024-08-22 (patch 2): Add C6 site files and bug fix for verifying that the distributed history files can be combined
 * 2024-09-11 (patch 3): Fix C6 runscript (revert unintended fre/test update)
+* 2024-09-16 (patch 4): Fix C6 fre.properties (revert unintended fre/test update)
