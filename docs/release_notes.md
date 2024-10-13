@@ -106,3 +106,4 @@ Use `scrontab -e` to edit or remove/comment out the job.
 * 2024-08-22 (patch 2): Add C6 site files and bug fix for verifying that the distributed history files can be combined
 * 2024-09-11 (patch 3): Fix C6 runscript (revert unintended fre/test update)
 * 2024-09-16 (patch 4): Fix C6 fre.properties (revert unintended fre/test update)
+* 2024-10-13 (patch 5): Update C5 default csh to be equal to C6 (PrgEnv 8.5.0, cray-hdf5/1.12.2.11), update dtn names, add --qos=ppan for transfer jobs, remove host type checking from output stager
