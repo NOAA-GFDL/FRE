@@ -805,14 +805,6 @@ endif
 #------------------------ global constants and aliases -------------------------
 ################################################################################
 
-if ( $HOST =~ gaea ) then
-   set -r hostType = 'login'
-else if ( $HOST =~ *dtn* ) then
-   set -r hostType = $SLURM_JOB_PARTITION
-else
-   set -r hostType = 'batch'
-endif
-
 set -r archExt = 'tar'
 
 alias submit `which batch.scheduler.submit` --verbose
@@ -1586,7 +1578,6 @@ endif
 
 if ( $actionXferToConsider ) then
    if ( $actionXferToPerform ) then
-      if ( $hostType == 'login' || $hostType == 'rdtn' || $hostType == 'rdtn_c5' ) then
          if ( -f $archDir.$archExt && -r $archDir.$archExt ) then
             gcp --create-dirs --verbose $xferSrcPrefix$archDir.$archExt $xferDstPrefix$outputDirRemote:h/
 
@@ -1628,13 +1619,6 @@ if ( $actionXferToConsider ) then
          set actionXferOk = 1
 
          echo "set actionXferOk = 1" >> $argFile
-      else
-         if ( $echoOn ) unset echo
-         echo "*ERROR*: Transfer on '$hostType' hosts isn't allowed"
-         if ( $echoOn ) set echo
-         set exitStatus = 2
-         goto END
-      endif
    else
       echo "set actionXferForce = 1" >> $argFile
    endif
@@ -1646,7 +1630,6 @@ endif
 
 if ( $actionPPStartToConsider ) then
    if ( $actionPPStartToPerform ) then
-      if ( $hostType == 'login' || $hostType == 'rdtn' || $hostType == 'rdtn_c5' ) then
          # ---------------- copy XML files to GFDL
 
          if ( $#xmlFiles == $#xmlFilesRemote ) then
@@ -1800,13 +1783,6 @@ if ( $actionPPStartToConsider ) then
          set actionPPStartOk = 1
 
          echo "set actionPPStartOk = 1" >> $argFile
-      else
-         if ( $echoOn ) unset echo
-         echo "*ERROR*: Post-processing starting on '$hostType' hosts isn't allowed"
-         if ( $echoOn ) set echo
-         set exitStatus = 2
-         goto END
-      endif
    else
       echo "set actionPPStartForce = 1" >> $argFile
    endif
