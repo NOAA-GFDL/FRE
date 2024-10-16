@@ -187,20 +187,6 @@ if ( $echoOn ) unset echo
 module list
 if ( $echoOn ) set echo
 
-# ---------------- if model container used, load modules
-
-if ( $?flagUseContainerOn ) then
-   if ( $echoOn ) unset echo
-   ##container
-   setenv MPICH_SMP_SINGLE_COPY_MODE NONE
-   setenv APPTAINERENV_LD_LIBRARY_PATH "${CRAY_LD_LIBRARY_PATH}:${LD_LIBRARY_PATH}:/opt/cray/pe/lib64:/usr/lib64/libibverbs"
-   setenv APPTAINER_CONTAINLIBS "/usr/lib64/libjansson.so.4,/usr/lib64/libjson-c.so.3,/usr/lib64/libdrm.so.2,/lib64/libtinfo.so.6,/usr/lib64/libnl-3.so.200,/usr/lib64/librdmacm.so.1,/usr/lib64/libibverbs.so.1,/usr/lib64/libibverbs/libmlx5-rdmav34.so,/usr/lib64/libfabric.so.1,/usr/lib64/libefa.so.1, /usr/lib64/libpsm_infinipath.so.1,/usr/lib64/libnuma.so.1,/usr/lib64/libinfinipath.so.4,/usr/lib64/libnl-cli-3.so.200,/usr/lib64/libnl-genl-3.so.200,/usr/lib64/libnl-nf-3.so.200,/usr/lib64/libnl-route-3.so.200,/usr/lib64/libnl-3.so.200,/usr/lib64/libnl-idiag-3.so.200,/usr/lib64/libnl-xfrm-3.so.200,/usr/lib64/libnl-genl-3.so.200"
-   setenv APPTAINER_BIND /usr/share/libdrm,/var/spool/slurmd,/opt/cray,/opt/intel,${PWD},/etc/libibverbs.d,/usr/lib64/libibverbs,/usr/lib64/libnl3-200,${HOME}
-
-   module load cray-mpich-abi
-   if ( $echoOn ) set echo
-endif
-
 # ---------------- postload the fre module to be sure it's still there
 
 set freCommandsModuleFile = $freCommandsModuleFilesDir/fre/$freCommandsVersion
@@ -888,6 +874,29 @@ while ( $irun <= $segmentsPerJob && $currentSeg <= $segmentsPerSimulation )
 
    echo "Time before runCommand"
    date
+
+# ---------------- if model container used, load modules
+
+   if ( $?flagUseContainerOn ) then
+      if ( $echoOn ) unset echo
+      ##container
+      echo "LOADING CRAY-MPICH-ABI"
+      module load cray-mpich-abi
+
+      echo "setenv MPICH_SMP_SINGLE_COPY_MODE NONE"
+      setenv MPICH_SMP_SINGLE_COPY_MODE NONE
+
+      echo "setenv APPTAINERENV_LD_LIBRARY_PATH "${CRAY_LD_LIBRARY_PATH}:${LD_LIBRARY_PATH}:/opt/cray/pe/lib64:/usr/lib64/libibverbs""
+      setenv APPTAINERENV_LD_LIBRARY_PATH "${CRAY_LD_LIBRARY_PATH}:${LD_LIBRARY_PATH}:/opt/cray/pe/lib64:/usr/lib64/libibverbs"
+
+      echo "setenv APPTAINER_CONTAINLIBS "/usr/lib64/libjansson.so.4,/usr/lib64/libjson-c.so.3,/usr/lib64/libdrm.so.2,/lib64/libtinfo.so.6,/usr/lib64/libnl-3.so.200,/usr/lib64/librdmacm.so.1,/usr/lib64/libibverbs.so.1,/usr/lib64/libibverbs/libmlx5-rdmav34.so,/usr/lib64/libfabric.so.1,/usr/lib64/libefa.so.1, /usr/lib64/libpsm_infinipath.so.1,/usr/lib64/libnuma.so.1,/usr/lib64/libinfinipath.so.4,/usr/lib64/libnl-cli-3.so.200,/usr/lib64/libnl-genl-3.so.200,/usr/lib64/libnl-nf-3.so.200,/usr/lib64/libnl-route-3.so.200,/usr/lib64/libnl-3.so.200,/usr/lib64/libnl-idiag-3.so.200,/usr/lib64/libnl-xfrm-3.so.200,/usr/lib64/libnl-genl-3.so.200""
+      setenv APPTAINER_CONTAINLIBS "/usr/lib64/libjansson.so.4,/usr/lib64/libjson-c.so.3,/usr/lib64/libdrm.so.2,/lib64/libtinfo.so.6,/usr/lib64/libnl-3.so.200,/usr/lib64/librdmacm.so.1,/usr/lib64/libibverbs.so.1,/usr/lib64/libibverbs/libmlx5-rdmav34.so,/usr/lib64/libfabric.so.1,/usr/lib64/libefa.so.1, /usr/lib64/libpsm_infinipath.so.1,/usr/lib64/libnuma.so.1,/usr/lib64/libinfinipath.so.4,/usr/lib64/libnl-cli-3.so.200,/usr/lib64/libnl-genl-3.so.200,/usr/lib64/libnl-nf-3.so.200,/usr/lib64/libnl-route-3.so.200,/usr/lib64/libnl-3.so.200,/usr/lib64/libnl-idiag-3.so.200,/usr/lib64/libnl-xfrm-3.so.200,/usr/lib64/libnl-genl-3.so.200"
+
+      echo "APPTAINER_BIND /usr/share/libdrm,/var/spool/slurmd,/opt/cray,/opt/intel,${PWD},/etc/libibverbs.d,/usr/lib64/libibverbs,/usr/lib64/libnl3-200,${HOME}"
+      setenv APPTAINER_BIND /usr/share/libdrm,/var/spool/slurmd,/opt/cray,/opt/intel,${PWD},/etc/libibverbs.d,/usr/lib64/libibverbs,/usr/lib64/libnl3-200,${HOME}
+
+      if ( $echoOn ) set echo
+   endif
 
    runCommand |& tee fms.out
 
