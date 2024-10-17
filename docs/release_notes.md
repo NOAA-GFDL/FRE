@@ -60,4 +60,4 @@ Bronx-21 was released on January 18, 2024, to support the new gaea F5 filesystem
 * 2024-08-22 (patch 4): Add C6 site files and bug fix for verifying that the distributed history files can be combined
 * 2024-09-11 (patch 5): Fix the C6 runscript
 * 2024-09-16 (patch 6): Fix the C6 fre.properties
-* 2024-10-13 (patch 7): Update C5 default csh to be equal to C6 (PrgEnv 8.5.0, cray-hdf5/1.12.2.11), update dtn names, add --qos=ppan for transfer jobs, remove host type checking from output stager
+* 2024-10-13 (patch 7): Update C5 default csh to be equal to C6 (PrgEnv 8.5.0, cray-hdf5/1.12.2.11), update dtn names, add --qos=ppan for transfer jobs, remove host type checking from output stager, add to C5 default csh the HPE MPI_Finalize workaround
