@@ -27,7 +27,7 @@ This project allows for the integration between Bronx and Canopy workflows. Usin
     - The experiment XML now has to point to the newly created container. Include `container file` with the path to the container under the experiment name.
     - Example:     
         ```     
-        <experiment name="c96L65_$(AM5_VERSION)_amip" inherit="$(AM5_VERSION)_compile" xmlns:xi="http://www.w3.org/2003/XInclude">
+        <experiment name="[experiment name]" inherit="[model version]_compile" xmlns:xi="http://www.w3.org/2003/XInclude">
           <container file="path/to/container/">      
         ```
 
