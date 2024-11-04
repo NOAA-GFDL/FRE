@@ -15,7 +15,7 @@ This project allows for the integration between Bronx and Canopy workflows. Usin
     - Example yaml configurations files live in the fre-examples repo:         
     - AM5: https://github.com/NOAA-GFDL/fre-examples/tree/main/am5-compile    
     - One can either (*recommended: create own conda environment at the moment*)        
-        - run `module load fre/canopy` to get access to fre make tools        
+        - run `module load fre/2024.01` to get access to fre make tools        
         - [create own conda environment](https://github.com/NOAA-GFDL/fre-cli/tree/main?tab=readme-ov-file#method-3-developer---conda-environment-building) and install the fre-cli to acces fre make tools
 
 2) Once the container in created, it must be located somewhere that can be accessed by the Bronx tools
