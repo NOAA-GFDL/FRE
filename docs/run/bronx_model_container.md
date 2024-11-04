@@ -33,7 +33,7 @@ This project allows for the integration between Bronx and FRE 2024 workflows. Us
 4) Run the model container with Bronx:
 ```
 # Load FRE
-module load fre/bronx-21
+module load fre/bronx-23
 
 # Running frerun
 frerun -x [model XML] -p [platform] -t [target] [experiment name] --container
