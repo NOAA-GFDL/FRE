@@ -12,8 +12,7 @@ This project allows for the integration between Bronx and Canopy workflows. Usin
 1) Create a model container on gaea C5: Follow the fre make canopy steps in order to create a model container:     
     - [Fre make guide](https://github.com/NOAA-GFDL/fre-cli/tree/main/fre/make#guide)    
     - *Required configuration files*: model yaml, compile yaml, and platform yaml     
-    - Example yaml configurations files live in the fre-examples repo:         
-    - AM5: https://github.com/NOAA-GFDL/fre-examples/tree/main/am5-compile    
+    - Example yaml configurations files live in the [fre-examples](https://github.com/NOAA-GFDL/fre-examples) repo  
     - One can either (*recommended: create own conda environment at the moment*)        
         - run `module load fre/2024.01` to get access to fre make tools        
         - [create own conda environment](https://github.com/NOAA-GFDL/fre-cli/tree/main?tab=readme-ov-file#method-3-developer---conda-environment-building) and install the fre-cli to acces fre make tools
