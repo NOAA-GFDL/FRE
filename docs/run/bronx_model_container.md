@@ -28,7 +28,7 @@ This project allows for the integration between Bronx and Canopy workflows. Usin
     - Example:     
         ```     
         <experiment name="c96L65_$(AM5_VERSION)_amip" inherit="$(AM5_VERSION)_compile" xmlns:xi="http://www.w3.org/2003/XInclude">
-        <container file="path/to/container/">      
+          <container file="path/to/container/">      
         ```
 
 4) Run the model container with Bronx:
