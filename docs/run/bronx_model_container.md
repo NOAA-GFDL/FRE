@@ -1,5 +1,5 @@
-# Connecting FRE Bronx and FRE Canopy
-This project allows for the integration between Bronx and Canopy workflows. Using `fre make` tools in Canopy, one can create either a bare-metal executable or a model container that will compile the model. If a container is built, the path to this newly created container can then be included in a group's experiment XML. In the FRE ecosystem, team's can run the model container in the `frerun` command by passing the `--container` option.
+# Connecting FRE Bronx and FRE 2024
+This project allows for the integration between Bronx and FRE 2024 workflows. Using `fre make` tools in FRE 2024, one can create either a bare-metal executable or a model container that will compile the model. If a container is built, the path to this newly created container can then be included in a group's experiment XML. In the FRE ecosystem, team's can run the model container in the `frerun` command by passing the `--container` option.
 
 ### Container assumptions:
 - Container assumes set location of runscript INSIDE     
@@ -9,7 +9,7 @@ This project allows for the integration between Bronx and Canopy workflows. Usin
 - Container utilizes spack stack to find packages within container
 
 ## Guide to integrate model container in FRERUN:
-1) Create a model container on gaea C5: Follow the fre make canopy steps in order to create a model container:     
+1) Create a model container on gaea C5: Follow the fre make steps in order to create a model container:     
     - [Fre make guide](https://github.com/NOAA-GFDL/fre-cli/tree/main/fre/make#guide)    
     - *Required configuration files*: model yaml, compile yaml, and platform yaml     
     - Example yaml configurations files live in the [fre-examples](https://github.com/NOAA-GFDL/fre-examples) repo  
