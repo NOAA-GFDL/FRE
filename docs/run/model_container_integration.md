@@ -8,6 +8,7 @@ This project allows for the integration between Bronx and FRE 2024 workflows. Us
 - Container platform to use with `fre make` tools: `hpcme.2023`
 - Container utilizes spack stack to find packages within container
 - Container uses intel compiler
+- Certain paths are mounted to bind in the MPI on the system; these paths may change due to OS releases or updates
 
 ## Guide to integrate model container in FRERUN:
 1) Create a model container on gaea C5: Follow the fre make steps in order to create a model container:     
