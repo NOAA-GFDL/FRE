@@ -20,9 +20,10 @@ This project allows for the integration between Bronx and FRE 2024 workflows. Us
         - [create own conda environment](https://github.com/NOAA-GFDL/fre-cli/tree/main?tab=readme-ov-file#method-3-developer---conda-environment-building) and install the fre-cli to acces fre make tools
 
 The container build goes through 3 steps in `fre make` tools:
-    1. `podman build [options]` : builds the container image
-    2. `podman save [options]` : saves the image to a local `.tar` file 
-    3. `apptainer build [options]` : builds a `.sif` (singularity image format) file from the `.tar` file
+
+1. `podman build [options]` : builds the container image
+2. `podman save [options]` : saves the image to a local `.tar` file 
+3. `apptainer build [options]` : builds a `.sif` (singularity image format) file from the `.tar` file
  
 The end result created container will be the `.sif` file and will be generated in your current working directory.
 
