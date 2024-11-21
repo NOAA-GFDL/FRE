@@ -888,6 +888,12 @@ EOF
             # which is normally unset for refineDiag, so set it here so it is populated
             # in the exp_component empt job tag
             $cshscripttmpl =~ s/(#INFO:component=)/$1refineDiag/;
+            # if requested, add arbitrary Slurm directives through
+            my $refineDiagSlurmOptions = $exp->extractPPRefineDiagScriptsSlurmOptions;
+            if ( $refineDiagSlurmOptions ) {
+                $cshscripttmpl =~ s/(#SBATCH --job-name.*)/$1\n#SBATCH $refineDiagSlurmOptions/;
+                print STDERR "NOTE: Adding refineDiag Slurm options '$refineDiagSlurmOptions'\n";
+            }
             $cshscripttmpl
                 .= refineDiag( $tmphistdir, $stdoutdir, $ptmpDir, $basedate, $refinedir, $gridspec,
                 $mdbi );
