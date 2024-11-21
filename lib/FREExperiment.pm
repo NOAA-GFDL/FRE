@@ -1941,6 +1941,19 @@ sub extractPPRefineDiagScripts($)
     return @results;
 }
 
+sub extractPPRefineDiagScriptsSlurmOptions($)
+
+    # ------ arguments: $object
+    # ------ called as object method
+    # ------ return string of concatenated refineDiag SlurmOptions, following inherits
+    # ------ will return empty string if no SlurmOptions specified
+{
+    my ( $r, @results ) = ( shift, () );
+    my @nodes = $r->extractNodes( 'postProcess', 'refineDiag/@slurmOptions' );
+    foreach my $node (@nodes) { push @results, split /\s+/, $r->nodeValue( $node, '.' ); }
+    return "@results";
+}
+
 sub extractCheckoutInfo($)
 
     # ------ arguments: $object
