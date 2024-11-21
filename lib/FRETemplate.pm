@@ -857,6 +857,9 @@ sub setRunCommand($$$$)
         $runCommand .= ' '
             . $fre->propertyParameterized( 'FRE.mpi.runCommand.option.mpiprocs', '$npes' );
         $runCommand .= ' ' . $fre->propertyParameterized( 'FRE.mpi.runCommand.option.nthreads', 1 );
+        if ($fre->property('FRE.mpi.runCommand.exportAll')) {
+            $runCommand .= ' ' . $fre->property('FRE.mpi.runCommand.exportAll');
+        }
         $runCommand .= ' ' . $fre->property('FRE.mpi.runCommand.executable');
     }
 
