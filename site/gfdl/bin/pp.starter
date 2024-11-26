@@ -232,6 +232,28 @@
   # Set the default umask of 022, which can be overridden in the platform cshell
   umask 022
 
+  # If using FRE 2024 or later, attempt to start the postprocessing using an associated yaml and exit early
+  echo $freVersion | grep --quiet "^[0-9]"
+  if ( $status == 0 ) then
+    # the yaml will be in the xml directory but may be in a subdirectory
+    set yamlFileBasename = `echo $xmlFile:t | sed 's/.xml/.yaml/'`
+    set results = `find $xmlFile:h -maxdepth 2 -name $yamlFileBasename`
+    if ( $#results > 0 ) then
+        set firstDateYear = `echo $firstDate | cut -c1-4`
+        source $MODULESHOME/init/csh
+        module load fre/$freVersion
+        echo "NOTE: A plausible postprocessing YAML was located and will attempt to start postprocessing"
+        set echo
+        which fre
+        fre --version
+        fre pp wrapper --config-file $results[1] --experiment $expName --platform $platform --target $target --time $firstDateYear
+        exit $status
+    else
+        echo "NOTE: Could not locate a postprocessing YAML '$yamlFileBasename' in '$xmlFile:t'"
+        exit 0
+    endif
+  endif
+
   # Use the freVersion to extract and load the platform/csh section.
   if ( $echoOn ) unset echo
   csh -c "source ${MODULESHOME}/init/csh; module load fre/${freVersion}; frelist --platform=${platform} --target=${target} --platform-csh --xmlfile=${xmlFile} ${expName}" | source /dev/stdin
