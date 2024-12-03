@@ -55,8 +55,9 @@ ok(@state_list == @state_test_list, "valid_states returns only valid states");
 my @cluster_test_list = getSlurmClusters();
 @cluster_list = valid_slurm_clusters(@cluster_test_list);
 $cluster_string = valid_slurm_clusters(@cluster_test_list);
-
+print("What is this? @cluster_list\n");
 ok(@cluster_list, "valid_slurm_cluster returns list");
+print("END What is this? @cluster_list\n");
 ok($cluster_string, "valid_slurm_cluster returns string");
 ok(@cluster_list == split(',',$cluster_string), "valid_slurm_cluster returns identical list and string");
 
@@ -65,7 +66,7 @@ push @cluster_list, 'doesNotExist';
 ok(@cluster_list == @cluster_test_list, "valid_slurm_cluster returns only valid clusters");
 
 # Valid partitions test
-my @partitions_test_list = qw/eslogin rdtn ldtn batch novel analysis ppshort stage/; # All known partitions ATT
+my @partitions_test_list = qw/eslogin_c5 dtn_f5_f6 cron_c5 batch novel analysis ppshort stage/; # All known partitions ATT
 my @partitions_list = valid_slurm_partitions(@partitions_test_list);
 my $partitions_string = valid_slurm_partitions(@partitions_test_list);
 
