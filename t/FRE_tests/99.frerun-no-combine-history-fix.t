@@ -24,12 +24,12 @@ if ($ENV{HSM_SITE} =~ /gfdl/) {
 }
 
 my $xml = 'xml/CM4_am4p0c96L33_OM4p5.xml';
-my $platform = 'ncrc4.intel16';
+my $platform = 'ncrc5.intel16';
 my $exp = 'CM4_c96L33_am4p0_OMp5_2010_30d30_me_tlt_geo_kd15_fgnv0p1';
 
 
 
-system "frerun --qos=normal --transfer --target=openmp --cluster=c4 -x $xml -p $platform $exp -o > /dev/null";
+system "frerun --qos=normal --transfer --target=openmp -x $xml -p $platform $exp -o > /dev/null";
 is($?, 0, 'control case frerun exited 0');
 
 my $script_dir = `frelist --target=openmp -x $xml -p $platform $exp -d scripts`;
@@ -42,7 +42,7 @@ is($?, 0, "control case runscript will activate ocean_static hole-filling");
 
 
 
-system "frerun --qos=normal --transfer --target=openmp --cluster=c4 -x $xml -p $platform $exp -o --no-combine-history > /dev/null";
+system "frerun --qos=normal --transfer --target=openmp -x $xml -p $platform $exp -o --no-combine-history > /dev/null";
 is($?, 0, 'frerun --no-combine-history exited 0');
 
 system "grep -q 'set -r flagOutputFillGridOff' $runscript";

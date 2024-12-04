@@ -153,16 +153,17 @@ CM2.1U_Control-1990_E1.M_3B_snowmelt_static_ocn6x5"
     case ${FRE_SYSTEM_SITE} in
         ncrc5 )
             stdoutRoot="/gpfs/f5/gfdl_f/scratch"
+            output_good="${stdoutRoot}/$USER/volatile/[a-zA-Z0-9_]\+\?/CM2.1U_Control-1990_E1.M_3A/${default_platform}-prod/stdout"
             ;;
         gfdl )
             stdoutRoot="/home"
+            output_good="${stdoutRoot}/$USER/[a-zA-Z0-9_]\+\?/CM2.1U_Control-1990_E1.M_3A/${default_platform}-prod/stdout"
             ;;
         * )
             skip "Unknown site '${FRE_SYSTEM_SITE}'."
             ;;
     esac
 
-    output_good="${stdoutRoot}/$USER/[a-zA-Z0-9_]\+\?/CM2.1U_Control-1990_E1.M_3A/${default_platform}-prod/stdout"
 
     run frelist -p ${default_platform} -d stdout -x CM2.1U.xml CM2.1U_Control-1990_E1.M_3A
     print_output_status_and_diff_expected
@@ -249,7 +250,7 @@ analysis: /archive/$userStr/.*/CM2.1U_Control-1990_E1.M_3A/${platform}-prod/anal
     # Pick a remote site
     case ${default_platform%%.*} in
         ncrc5 )
-            REMOTE_SITE=gfdl-ws.intel
+            REMOTE_SITE=gfdl.intel
             ;;
         gfdl | gfdl-ws )
             REMOTE_SITE=ncrc5.intel
@@ -262,7 +263,7 @@ analysis: /archive/$userStr/.*/CM2.1U_Control-1990_E1.M_3A/${platform}-prod/anal
         ncrc5.intel )
             execRoot='/gpfs/f5/gfdl_f/scratch'
             ;;
-        gfdl-ws.intel )
+        gfdl.intel )
             execRoot="/home"
             ;;
         gfdl.ncrc4-intel )
