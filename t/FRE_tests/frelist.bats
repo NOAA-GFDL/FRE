@@ -153,16 +153,17 @@ CM2.1U_Control-1990_E1.M_3B_snowmelt_static_ocn6x5"
     case ${FRE_SYSTEM_SITE} in
         ncrc5 )
             stdoutRoot="/gpfs/f5/gfdl_f/scratch"
+            output_good="${stdoutRoot}/$USER/volatile/[a-zA-Z0-9_]\+\?/CM2.1U_Control-1990_E1.M_3A/${default_platform}-prod/stdout"
             ;;
         gfdl )
             stdoutRoot="/home"
+            output_good="${stdoutRoot}/$USER/[a-zA-Z0-9_]\+\?/CM2.1U_Control-1990_E1.M_3A/${default_platform}-prod/stdout"
             ;;
         * )
             skip "Unknown site '${FRE_SYSTEM_SITE}'."
             ;;
     esac
 
-    output_good="${stdoutRoot}/$USER/volatile/[a-zA-Z0-9_]\+\?/CM2.1U_Control-1990_E1.M_3A/${default_platform}-prod/stdout"
 
     run frelist -p ${default_platform} -d stdout -x CM2.1U.xml CM2.1U_Control-1990_E1.M_3A
     print_output_status_and_diff_expected
