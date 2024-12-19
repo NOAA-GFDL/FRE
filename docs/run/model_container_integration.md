@@ -1,5 +1,5 @@
-# Connecting FRE Bronx and FRE 2024
-This project allows for the integration between Bronx and FRE 2024 workflows. Using `fre make` tools in FRE 2024, one can create either a bare-metal executable or a model container that will compile the model. If a container is built, the path to this newly created container can then be included in a group's experiment XML. In the FRE ecosystem, team's can run the model container in the `frerun` command by passing the `--container` option.
+# Connecting FRE Bronx and FRE 2025.01
+This project allows for the integration between Bronx and FRE 2025.01 workflows. Using `fre make` tools in FRE 2025, one can create either a bare-metal executable or a model container that will compile the model. If a container is built, the path to this newly created container can then be included in a group's experiment XML. In the FRE ecosystem, team's can run the model container in the `frerun` command by passing the `--container` option.
 
 ### Container assumptions:
 - Container assumes set location of runscript INSIDE     
@@ -12,11 +12,11 @@ This project allows for the integration between Bronx and FRE 2024 workflows. Us
 
 ## Guide to integrate model container in FRERUN:
 1) Create a model container on gaea C5: Follow the fre make steps in order to create a model container:     
-    - [Fre make guide](https://github.com/NOAA-GFDL/fre-cli/tree/main/fre/make#guide)    
+    - [Fre make guide](https://noaa-gfdl.github.io/fre-cli/usage.html#guide)    
     - *Required configuration files*: model yaml, compile yaml, and platform yaml     
     - Example yaml configurations files live in the [fre-examples](https://github.com/NOAA-GFDL/fre-examples) repo  
     - One can either (*recommended: create own conda environment at the moment*)        
-        - run `module load fre/2024.01` to get access to fre make tools        
+        - run `module load fre/2025.01` to get access to fre make tools        
         - [create own conda environment](https://github.com/NOAA-GFDL/fre-cli/tree/main?tab=readme-ov-file#method-3-developer---conda-environment-building) and install the fre-cli to acces fre make tools
 
 The container build goes through 3 steps in `fre make` tools:
@@ -49,7 +49,3 @@ module load fre/bronx-23
 frerun -x [model XML] -p [platform] -t [target] [experiment name] --container
 ```
 There will be a note that the container will be used for compilation as well.
-
-### QUICKSTART EXAMPLE
-(TO-DO) 
-
