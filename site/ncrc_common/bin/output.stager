@@ -721,7 +721,7 @@ if ( "$mppnccombineOptString" != ""  ) then
    echo "<NOTE> : mppnccombineOptString = '$mppnccombineOptString'"
    if ( $echoOn ) set echo
 else
-   set -r mppnccombineOptsDefault = '-64 -h 16384 -m'
+   set -r mppnccombineOptsDefault = '-h 65536 -m'
    if ( $echoOn ) unset echo
    echo "WARNING: mppnccombineOptString not found, defaulting to '$mppnccombineOptsDefault'"
    if ( $echoOn ) set echo
@@ -841,16 +841,9 @@ if ( $actionCombineToDo ) then
    set -r combineMemory = `echo "$memorySpec * $memoryDownscalingFactor" | bc -l | xargs printf "%.0f"`
    set -r combinesPerJob = 2
 
-   mppnccombine -V >& /dev/null
-
-   if ( $status == 0 ) then
-      if ( `mppnccombine -V |& head -1 | cut --delimiter=' ' --fields=3 | sed 's/\.//g'` > 220 ) then
-         set -r mppnccombineWithBuffering
-         set -r buffersNmbMax = 100
-      endif
-   else
-      rm --force ./-V
-   endif
+   # next line enables buffering in mppnccombine
+   set -r mppnccombineWithBuffering
+   set -r buffersNmbMax = 100
 
    set srcDir = $workDir$archDir
 
