@@ -150,6 +150,7 @@ if ( $echoOn ) set echo
 #FRE flag(flagOutputCheck)
 #FRE flag(flagVerbosity)
 #FRE flag(flagOutputFillGrid)
+#FRE flag(flagUseContainer)
 
 #FRE var(outputDir)
 #FRE var(gridSpec)
@@ -874,7 +875,35 @@ while ( $irun <= $segmentsPerJob && $currentSeg <= $segmentsPerSimulation )
    echo "Time before runCommand"
    date
 
+   # ---------------- if model container used, load modules
+
+   if ( $?flagUseContainerOn ) then
+      if ( $echoOn ) unset echo
+      ##container
+      echo "LOADING CRAY-MPICH-ABI"
+      module load cray-mpich-abi
+
+      echo "SET MPICH_SMP_SINGLE_COPY_MODE"
+      setenv MPICH_SMP_SINGLE_COPY_MODE "NONE"
+
+      echo "SET APPTAINERENV_LD_LIBRARY_PATH"
+      module unload cray-hdf5
+      setenv APPTAINERENV_LD_LIBRARY_PATH "${CRAY_LD_LIBRARY_PATH}:${LD_LIBRARY_PATH}:/opt/cray/pe/lib64:/usr/lib64/libibverbs:/opt/cray/libfabric/1.20.1/lib64:/opt/cray/pals/1.4/lib"
+
+      echo "SET APPTAINER_CONTAINLIBS"
+      setenv APPTAINER_CONTAINLIBS "/usr/lib64/libcxi.so,/usr/lib64/libcxi.so.1,/usr/lib64/libcxi.so.1.5.0,/usr/lib64/libjansson.so.4,/usr/lib64/libjson-c.so.3,/usr/lib64/libdrm.so.2,/lib64/libtinfo.so.6,/usr/lib64/libnl-3.so.200,/usr/lib64/librdmacm.so.1,/usr/lib64/libibverbs.so.1,/usr/lib64/libibverbs/libmlx5-rdmav34.so,/usr/lib64/libnuma.so.1,/usr/lib64/libnl-cli-3.so.200,/usr/lib64/libnl-genl-3.so.200,/usr/lib64/libnl-nf-3.so.200,/usr/lib64/libnl-route-3.so.200,/usr/lib64/libnl-3.so.200,/usr/lib64/libnl-idiag-3.so.200,/usr/lib64/libnl-xfrm-3.so.200,/usr/lib64/libnl-genl-3.so.200"
+
+      echo "SET APPTAINER_BIND"
+      setenv APPTAINER_BIND "/usr/share/libdrm,/var/spool/slurmd,/opt/cray,/opt/intel,${PWD},/etc/libibverbs.d,/usr/lib64/libibverbs,/usr/lib64/libnl3-200,${HOME}"
+
+      if ( $echoOn ) set echo
+   endif
+
    runCommand |& tee fms.out
+
+   if ( $echoOn ) unset echo
+   echo "RUNCOMMAND COMPLETE"
+   if ( $echoOn ) set echo
 
    if ( $status == 0 ) then
       if ( $echoOn ) unset echo
