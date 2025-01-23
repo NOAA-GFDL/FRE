@@ -3,19 +3,20 @@
 Bronx-23 was released on --------, 2025.
 
 ## New
-* Choice to use FRE 2025 for make and pp ("fre make" and "fre pp", with spaces), or contnue to use Bronx fremake and frepp
-  * Use FRE 2025.01 to create an executable or model container based off of a model, compile, and platform yaml configuration and run with Bronx-23 frerun. Details on how the yaml framework looks/built can be found in the FRE 2025 documentation (https://noaa-gfdl.github.io/fre-cli/usage.html#yaml-framework)
-    * Bare metal (traditional) or container (new)
-    * On gaea, module load FRE 2025 (module load fre/2025.01)
+* Compatibility with FRE 2025 'fre make'
+Use FRE 2025 to create an executable or model container based off of a model, compile, and platform yaml configuration and run with Bronx-23 frerun. Details on how the yaml framework looks/built can be found in the FRE 2025 documentation (https://noaa-gfdl.github.io/fre-cli/usage.html#yaml-framework)
+  * Choose between bare metal executable (traditional) executable or container with dependencies and the executable (new)
     * Step-by-step guide: https://noaa-gfdl.github.io/fre-cli/usage.html#guide
+    * On gaea, module load FRE 2025 (module load fre/2025.01 currently)
   * Use the FRE 2025-generated executable or container in Bronx-23
     * Make sure the created executable or container is on a gaea filesystem
-    * Bare metal: set path to executable created by 'fre make' with the <excutable> tag (within <experiment>). Then run frerun as usual.
-    * Container: set path to container created by 'fre make' with the <container> tag (also within <experiment>)
+    * For bare metal executables, set path to executable created by 'fre make' with the <excutable> tag (within <experiment>). Then run frerun as usual.
+    * For the model container, set path to container created by 'fre make' with the <container> tag (also within <experiment>)
          `<container file="[path/to/container]"/>` under the `experiment name` in an experiment.xml
-      Add --container to your frerun options.
-  * fre pp integration
-  * Recommendations
+      Then add --container to your frerun options.
+* Compatibility with FRE 2025 'fre pp'
+  * 
+Recommendations: Choice to use FRE 2025 for make and pp ("fre make" and "fre pp", with spaces), or contnue to use Bronx fremake and frepp. Both sets of compile and pp tools will be supported for some time. However, we encourage users to update, as FRE 2025 is being actively developed and Bronx is receiving only essential updates. In the next year, the MSD workflow team will work with the standard FMS model configurations and labwide model configurations to transition to FRE 2025 configurations for compiling and postprocessing, so that new FRE users can use FRE 2025 without creating all configuration files.
 * Proper support for rewritten FMS diag, field, data managers
   * Modular fms-yaml-tools, not part of FRE
   * baseDate expansion in diagyamls
