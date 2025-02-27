@@ -1512,6 +1512,7 @@ while ( $irun <= $segmentsPerJob && $currentSeg <= $segmentsPerSimulation )
       if ( ! $?MPI_FAIL ) then
          ls -1 | egrep "^[0-9][0-9][0-9][0-9][0-9][0-9].+$patternGrepHistory" | xargs -I'{}' mv --force '{}' $historyWorkDir/'{}'
          ls -1 | egrep "$patternGrepHistory" | xargs -I'{}' mv --force '{}' $historyWorkDir/$begindate.'{}'
+         cp -a diag_manifest.yaml $historyWorkDir/$begindate.diag_manifest.yaml
 
          if ( $?flagOutputXferOn ) then
             if ( $?flagRunTypeRegression || $?flagOutputTypeUnique  ) then
@@ -1551,10 +1552,6 @@ while ( $irun <= $segmentsPerJob && $currentSeg <= $segmentsPerSimulation )
                else
                   set ppStarterOptionsQueueAndRuntime = ( --constraint=$ppStarterCombineOffLargeOffConstraint --time=$ppStarterCombineOffLargeOffRuntime )
                endif
-            endif
-            # Chaco jobs require the pancylc queue on analysis
-            if ( $freCommandsVersionRemote =~ '*chaco*' ) then
-               set ppStarterOptionsQueueAndRuntime = `echo $ppStarterOptionsQueueAndRuntime | sed -r 's/-q \S+/-q pancylc/'`
             endif
             set ppStarterOptions = ( $submitOptionsPPStarter $submitOptionsProjectPP )
             set ppStarterOptions = ( $ppStarterOptions --job-name=$FRE_JOBID.pp.starter.$firstDate )
