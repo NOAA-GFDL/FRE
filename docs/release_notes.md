@@ -42,7 +42,7 @@ Recommendations: Choice to use FRE 2025 for make and pp ("fre make" and "fre pp"
   * Run work-dir cleaning jobs on the login nodes (to reduce load on DTNs)
 * ardiff updates from Uriel: compare metadata/data only and limit number of differences when force comparing. Use "ardiff -h" to see the options.
 * Updated set of mkmf templates, 2024.01
-* refineDiag pass thru Slurm options, e.g. for requesting nodes with certain qualities
+* refineDiag pass thru Slurm options, e.g. for requesting nodes with certain qualities. To use, add the desired Slurm sbatch directives to the `SlurmOptions` attribute within the `refineDiag` tag. For example, to submit refineDiag jobs with the `--constraint=bigmem` sbatch directive, use `<refineDiag script="/path/to/my/refinediag.csh" slurmOptions="--constraint=bigmem" />`. The frepp --verbose option will print the custom sbatch directives to stdout.
 
 ## FRE-NCtool updates
 * Recent deployment improvements
