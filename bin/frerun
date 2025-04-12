@@ -1838,6 +1838,8 @@ use Email::Valid;
                                 FRETemplate::setFlag( $fre, \$rtScript, 'flagOutputFillGrid',
                                     ( ! $o{'combine-history'} ? 'Off' :
                                       are_history_files_masked( $fre, $runInfo ) ? 'On' : 'Off' ) );
+                                FRETemplate::setFlag( $fre, \$rtScript, 'flagOutputCheckHistoryVariables',
+                                    is_using_modern_diag( $runInfo->{namelists} ) ? 'Off' : 'On' );
                                 ( $rc, $status )
                                     = frerun::outputScriptExecuteOrSubmit( \$rtScript, $z,
                                     $scriptName, $stdoutName, %o );
@@ -1943,6 +1945,8 @@ use Email::Valid;
                             FRETemplate::setFlag( $fre, \$runScript, 'flagOutputFillGrid',
                                 ( ! $o{'combine-history'} ? 'Off' :
                                   are_history_files_masked( $fre, $prdInfo ) ? 'On' : 'Off' ) );
+                            FRETemplate::setFlag( $fre, \$runScript, 'flagOutputCheckHistoryVariables',
+                                is_using_modern_diag( $prdInfo->{namelists} ) ? 'Off' : 'On' );
                             ( $rc, $status )
                                 = frerun::outputScriptExecuteOrSubmit( \$runScript, $z, $scriptName,
                                 $stdoutName, %o );
@@ -2018,6 +2022,19 @@ use Email::Valid;
         }
     }
 
+    # is_using_modern_diag -- tests whether experiment is using modern diag manager
+    sub is_using_modern_diag($)
+
+        # ------ arguments: $namelistsHandle
+    {
+        my $h = shift;
+        if ($h->namelistBooleanGet('diag_manager_nml', 'use_modern_diag')) {
+            return 1;
+        }
+        else {
+            return 0;
+        }
+    }
 }
 
 # //////////////////////////////////////////////////////////////////////////////
