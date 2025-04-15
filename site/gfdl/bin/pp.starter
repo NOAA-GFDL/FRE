@@ -244,9 +244,10 @@
   # If using FRE 2025 or later, attempt to start the postprocessing using an associated yaml and exit early
   echo $LOADEDMODULES | grep --quiet "fre/[0-9]"
   if ( $status == 0 ) then
-    # the yaml will be in the xml directory but may be in a subdirectory
+    # the yaml will be in the xml directory but may be two subdirectories deep
+    # e.g. to support awg_include/yaml_workflow/name.yaml type usage
     set yamlFileBasename = `echo $xmlFile:t | sed 's/.xml/.yaml/'`
-    set results = `find $xmlFile:h -maxdepth 2 -name $yamlFileBasename`
+    set results = `find $xmlFile:h -maxdepth 3 -name $yamlFileBasename`
     if ( $#results > 0 ) then
         set firstDateYear = `echo $firstDate | cut -c1-4`
         echo "NOTE: A plausible postprocessing YAML was located and will attempt to start postprocessing"
@@ -256,7 +257,7 @@
         fre pp wrapper --config-file $results[1] --experiment $expName --platform $platform --target $target --time $firstDateYear
         exit $status
     else
-        echo "NOTE: Could not locate a postprocessing YAML '$yamlFileBasename' in '$xmlFile:t'"
+        echo "NOTE: Could not locate a postprocessing YAML '$yamlFileBasename' in '$xmlFile:h'"
         exit 0
     endif
   endif
