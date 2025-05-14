@@ -4,6 +4,7 @@ Bronx-23 was released on --------, 2025.
 
 ## New
 * Compatibility with FRE 2025 'fre make'
+
 Use FRE 2025 to create an executable or model container based off of a model, compile, and platform yaml configuration and run with Bronx-23 frerun. Details on how the yaml framework looks/built can be found in the FRE 2025 documentation (https://noaa-gfdl.github.io/fre-cli/usage.html#yaml-framework)
   * Choose between bare metal executable (traditional) executable or container with dependencies and the executable (new)
     * Step-by-step guide: https://noaa-gfdl.github.io/fre-cli/usage.html#guide
@@ -15,16 +16,17 @@ Use FRE 2025 to create an executable or model container based off of a model, co
          `<container file="[path/to/container]"/>` under the `experiment name` in an experiment.xml
       Then add --container to your frerun options.
 * Compatibility with FRE 2025 'fre pp'
-  * 
 Recommendations: Choice to use FRE 2025 for make and pp ("fre make" and "fre pp", with spaces), or contnue to use Bronx fremake and frepp. Both sets of compile and pp tools will be supported for some time. However, we encourage users to update, as FRE 2025 is being actively developed and Bronx is receiving only essential updates. In the next year, the MSD workflow team will work with the standard FMS model configurations and labwide model configurations to transition to FRE 2025 configurations for compiling and postprocessing, so that new FRE users can use FRE 2025 without creating all configuration files.
 * Proper support for rewritten FMS diag, field, data managers
   * Modular fms-yaml-tools, not part of FRE
   * baseDate expansion in diagyamls
   * Validation and combining. Done in a $TMPDIR which is removed on success.
   * Errors. On error, the $TMPDIR is preseved for interactive inspection, with command showing problem. Please remove the tmpdir afterwards.
+Recommendations: Use Bronx-23 if you are using modern FMS yamls (diag, field, data).
 * End-to-end NetCDF4 support
   * mppnccombine tool update, and remove hard-coded -64
   * split_ncvars.pl tool update
+Recommendations: To use, set your diag manager namelists to save history files in NetCDF4 format, and the various FRE tools have been updated to respect the input format.
 
 ## Fixes
 * Removed subregional variable/dimension checking for restart files
@@ -51,5 +53,3 @@ Recommendations: Choice to use FRE 2025 for make and pp ("fre make" and "fre pp"
 ## `output.retry` Update
 ## SRUN Bug Fix
 ## FRE 2025 pp.starter 
-## Batch Scheduler Updates
-## FRE 2025 / FRE Bronx Integration Update
