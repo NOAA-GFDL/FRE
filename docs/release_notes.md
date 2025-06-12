@@ -1,97 +1,51 @@
-# Bronx-22 Release Notes
+# Bronx-23 Release Notes
 
-Bronx-22 was released on March 25, 2024 to support user management of gaea F5 scratch space by placing previously swept FRE gaea directories in a `volatile` subdirectory. F5 has no sweeper, and using the updated directory defaults will let you more easily distinguish the previously-swept and previously-unswept FRE-generated gaea output. Bronx-22 is exactly Bronx-21 but with these updated directory defaults, and FRE users can use either.
+Bronx-23 was released in January 2025, to provide better support for FMS YAML input files, NetCDF-4, and compatibility with the next-generation of FRE tools ("FRE 2025").
 
-**Reminders**
-* Both Bronx-21/22 remove the work directory on normal exit (i.e. no crash or error; to not do this, use `frerun --no-free`)
-* Interactive `ardiff` users must set `$TMPDIR` to your F5 scratch space when running on the gaea login hosts (otherwise, `/tmp` will be used which cannot handle such large usage)
+## New
+* Compatibility with FRE 2025 'fre make'
+  * Users may use FRE 2025 'fre make' to create a bare-metal executable or a model container with dependencies and executable, and run with Bronx-23 frerun.
+  * For bare metal executables, specify path to the executable in the `<experiment>/<executable>` tag and run frerun as usual.
+  * For the model container, specify path to the container in the `<experiment>/<container>` tag and run `frerun --container`
+  * FRE 2025 documentation available: https://noaa-gfdl.github.io/fre-cli/usage.html#build-fms-model
+  * More detailed [step-by-step instructions](run/model_container_integration.md) to use model containers is available.
+* Compatibility with FRE 2025 'fre pp'
+  * Configure by creating postprocessing YAMLs; FRE 2025 documentation available: https://noaa-gfdl.github.io/fre-cli/usage.html#postprocess-fms-history-output
+  * Set GFDL platform's FRE version (`<setup>/<platform>/<freVersion>`) to "2025.XX" (use the latest available)
 
-## Updated ncrc5 FRE default directories
-* Files previously in scrubbed locations are now in a `volatile` subdirectory in your F5 scratch:
-  * stdoutDir: `/gpfs/f5/$(project)/scratch/$USER/volatile/$(stem)/$(name)/stdout`
-  * archiveDir: `/gpfs/f5/$(project)/scratch/$USER/volatile/$(stem)/$(name)/$(platform)-$(target)`
-  * workDir: `/gpfs/f5/$(project)/scratch/$USER/volatile/$(stem)/$(name)/work/$FRE_JOBID`
-  * ptmpDir: `/gpfs/f5/$(project)/scratch/$USER/volatile/$(stem)/$(name)/ptmp`
-* Unchanged from Bronx-21:
-  * rootDir: `/gpfs/f5/$(project)/scratch/$USER/$(stem)`
-  * srcDir: `$(rootDir)/$(name)/src`
-  * execDir: `$(rootDir)/$(name)/$(platform)-$(target)/exec`
-  * scriptsDir: `$(rootDir)/$(name)/$(platform)-$(target)/scripts`
+**FRE users may use FRE 2025 for make and/or pp (i.e. "fre make" and "fre pp"), or continue to use Bronx fremake and frepp. Both sets of compile and postprocessing tools will be supported for some time. However, we encourage users to update, as FRE 2025 is being actively developed and Bronx is receiving only essential updates. Over time standard FMS model configurations and labwide model configurations will transition to FRE 2025 configurations for compiling and postprocessing.**
 
-**Recommendations**
-* Use Bronx-22 for new experiments, and continue to use Bronx-21 for existing experiments. (Bronx-21 and 22 will remain equal except for the directory default change.)
-* Occasionally clean out your `volatile` subdirectory for experiments you no longer need,
-or set up a personal F5 sweeper following the example below.
-* Reminder: F5 is not backed up. Consider keeping your `src` FRE directory on $HOME if you are developing.
+* Proper support for rewritten FMS diag, field, data manager YAML configuration
+  * The FMS diag manager, field manager, and data managers are being rewritten, and as part of the updates they accept YAML input instead of the traditional (legacy) table formats. Please refer to the FMS release notes for more details and how to configure which input format should be used (i.e. namelist flags).
+  * For each FMS manager (diag, field, data), choose either the legacy table format or the new YAML format. Specify YAML input files like tables: as external files (set Label to “diagYaml”, “fieldYaml”, or “dataYaml”), inline (use `<diagYaml>`, `<fieldYaml>`, or `<dataYaml>`), or “inline appended”.
+  * frerun will check that you have specified either the table or yaml format for each of the 3 FMS managers. Specifying both is a fatal error. `frelist --diagtable` prints out the diagtable or diagYaml, whichever frerun would use.
+  * If YAML formats are used, frerun will combine and validate them using fms-yaml-tools (developed on https://github.com/noaa-gfdl/fms_yaml_tools and module available at GFDL)
+  * The combined YAMLs are saved by the runscript in the workDir (diag_table.yaml, field_table.yaml, data_table.yaml), and also copied to the archived restart tarfile. If the YAMLs cannot be combined or are invalid, frerun will report a fatal error and leave the $TMPDIR for inspection. Please remove the tmpdir afterwards.
+  * FRE will not convert tables to YAMLs! Also included in fms-yaml-tools are conversion tools that you may use to update your XMLs offline.
 
-## Example of a scrontab/find-based personal F5 file sweeper
+**Use Bronx-23 if you are using modern FMS yaml (diag, field, data) input files.**
 
-1. **Form a find command.** Determine how you would like to target your `volatile` FRE-generated output that normally would have been transferred to GFDL and in the (F2) past would eventually be removed by the (F2) sweeper.
+* End-to-end NetCDF4 support
+  * NetCDF4 supports larger filesizes and other useful features (chunking and compression)
+  * Various tool usages updated to not output Netcdf-3 format (and instead respect the input format)
 
-"Remove files not accessed in 90 days" might be reasonable. To do that,
+**To use NetCDF4, set your diag manager namelists to save history files in NetCDF4 format (`netcdf_default_format = "netcdf4"`), and your postprocessed output will also be in NetCDF4 format.**
 
-`find /gpfs/f5/<project>/scratch/<user>/volatile -atime +90`
+## Fixes
+* Removed subregional variable/dimension checking for restart files.
+* Several tool updates and output.stager fixes for problems that can occur when the gaea filesystem is having problems (such as being unmounted while the staging job is running). The updates reduce the possibility of data loss in such scenarios.
+  * Output stager checks that history files are NetCDF files before processing them.
+  * mppnccombine and combine-ncc now sync output to filesystem for exiting
+* Reduce number of batch.scheduler.submit retries to 2. batch.scheduler.submit is a sbatch wrapper that includes some error and retry logic that was more valuable for MOAB than Slurm. Some heavy FRE users ran into unfortunate thrashing conditions where an output.stager job was trying to submit more stagers but could not due to the Slurm per-user running/pending job limit (currently 50).
+* add --export=ALL for non-coupler experiments
 
-replacing `<project>` and `<user>` with your project and user name.
-That `find` command will print the files. To delete and print the files, add `-delete -print`:
-
-`find /gpfs/f5/<project>/scratch/<user>/volatile -atime +90 -delete -print`
-
-Note that this will leave empty directories.
-
-You can try these find commands out interactively (please be careful!). To use other find-based approaches, refer to the manual (`man find`).
-
-2. **Create a scrontab entry.** Determine how often you would like to run your `find` command.
-
-One a day might be reasonable. To help avoid collective F5 stress at each midnight, please use "once daily at HH", where HH is `<userid> mod 24`. You can determine that by running this at your gaea login shell:
-
-```
-echo `id -u`%24 | bc
-```
-
-An scrontab entry for once a day at HH (replace `<HH>` below with what you get by typing the above, and replace `<project`> and `<user>` with your project and user names) would be:
-
-`00 <HH> * * * * find /gpfs/f5/<project>/scratch/<user>/volatile -atime +90`
-
-(Again, replace `<HH>`, `<project>`, and `<user>` before using that example.) See the scrontab manual for more (`man scrontab`).
-
-3. **Add the scrontab entry.** Add your find command do your scrontab with `scrontab -e` on the C5 DTNs (the jobs *must* be run on the DTNs, i.e. `--partition=ldtn_c5`, in order to protect F5 I/O on the compute and login nodes). When you do that, if you haven't created a scrontab before, you will see a commented template example. You can replace that with:
-
-```
-#SCRON --partition=ldtn_c5
-#SCRON --job-name=my-sweeper
-#SCRON --output=my-sweeper/log.%j
-# Once daily, list volatile FRE-generated files not accessed in last 90 days
-00 <HH> * * * * find /gpfs/f5/<project>/scratch/<user>/volatile -atime +90 && date
-```
-
-(Again, replace `<HH>`, `<project>`, and `<user>` before using that example.) Notes / explanation:
-* Output from the `find` and `date` commands are appended to `$HOME/my-sweeper/log.<JOBID>` each time the scrontab job runs.
-* Once installed or modified, a new `<JOBID>` is created for the recurring job, and the `<JOBID>` then remains the same each time it is run.
-* The `&& date` after the find command is optional, but useful to show something in the log (as otherwise if the `find` command finds no files, nothing is written to the log).
-* Refer to the [scrontab gaeadocs](https://gaeadocs.rdhpcs.noaa.gov/wiki/index.php?title=Cron) for more.
-
-When you are satisfied with the file list targeted for deletion, you can add `-delete -print` to your find command:
-
-```
-#SCRON --partition=ldtn_c5
-#SCRON --job-name=my-sweeper
-#SCRON --output=my-sweeper/log.%j
-# Once daily, remove volatile FRE-generated files not accessed in last 90 days
-00 <HH> * * * * find /gpfs/f5/<project>/scratch/<user>/volatile -atime +90 -delete -print && date
-```
-
-4. **Monitoring your find sweeper.**
-
-`squeue -u $USER` and `scontrol show <JOBID>` show the job if it is running or the next date it is scheduled to run.
-
-The `$HOME/my-sweeper/log.<JOBID>` file will contain the `find` and `date` output.
-
-5. **Changing your find sweeper.**
-
-Use `scrontab -e` to edit or remove/comment out the job.
-
-##
-
-## Updated HSM 1.2.9
-* Bug fix for unique hsmput pathology recently discovered, related to repeated hsmputs, hsmget with globbing, and a ptmp cache that is not up-to-date. (See https://gitlab.gfdl.noaa.gov/fre/hsm/-/issues/40)
+## Updates
+* The Bronx-23 module (fre/bronx-23) does not bring "ncdump" into the PATH. Traditionally, on gaea, the FRE modules loaded cray-netcdf in order to make "ncdump" available for users, scripts, and within fre-nctools; separately, the default platform cshell is maintained in fre-commands, which also contains cray-hdf5 and cray-netcdf module loads. Previously, we ensured that those versions are identical, which limited flexibility. FRE-NCtools is now more self-contained w.r.t dependencies such as NCO tools and ncdump, and removing the cray-netcdf module load from the FRE modules makes FRE more robust and easier to maintain.
+* Reduce load on gaea DTNs. gaea DTN policy currently limits the number of running/pending jobs to 50 per user. Users with multiple streams or ensembles can easily hit this limit, and FRE's output.stager is not designed to handle scenarios where a batch job cannot be submitted. Therefore, we sought to reduce the number of FRE-generated DTN jobs by about half:
+  * Regression runs are no longer transferred by default; use frerun --transfer to enable
+  * Combine output.stager ascii-save, ascii-transfer, and restart-save processing into one batch job with the "AR" label. The argFiles are still separate, though (i.e. H, R, A). If the initial job fails, output.retry will retry the jobs as separate jobs.
+  * Run work-dir cleaning jobs on the login nodes (to reduce load on DTNs)
+* ardiff updates: New options to compare metadata/data only and limit number of differences when force comparing. Use "ardiff -h" to see the options.
+* Updated set of mkmf templates, 2024.01
+* refineDiag pass thru Slurm options, e.g. for requesting nodes with certain qualities. To use, add the desired Slurm sbatch directives to the `SlurmOptions` attribute within the `refineDiag` tag. For example, to submit refineDiag jobs with the `--constraint=bigmem` sbatch directive, use `<refineDiag script="/path/to/my/refinediag.csh" slurmOptions="--constraint=bigmem" />`. The frepp --verbose option will print the custom sbatch directives to stdout.
+* Subregional variable/dimension checking (done by output.stager) is unnecessary if using the modern diag manager and is now skipped
