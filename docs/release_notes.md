@@ -45,7 +45,11 @@ Bronx-23 was released in January 2025, to provide better support for FMS YAML in
   * Regression runs are no longer transferred by default; use frerun --transfer to enable
   * Combine output.stager ascii-save, ascii-transfer, and restart-save processing into one batch job with the "AR" label. The argFiles are still separate, though (i.e. H, R, A). If the initial job fails, output.retry will retry the jobs as separate jobs.
   * Run work-dir cleaning jobs on the login nodes (to reduce load on DTNs)
+* New output.retry option `-o` to override transfer limits and submit staging jobs immediately
 * ardiff updates: New options to compare metadata/data only and limit number of differences when force comparing. Use "ardiff -h" to see the options.
 * Updated set of mkmf templates, 2024.01
 * refineDiag pass thru Slurm options, e.g. for requesting nodes with certain qualities. To use, add the desired Slurm sbatch directives to the `SlurmOptions` attribute within the `refineDiag` tag. For example, to submit refineDiag jobs with the `--constraint=bigmem` sbatch directive, use `<refineDiag script="/path/to/my/refinediag.csh" slurmOptions="--constraint=bigmem" />`. The frepp --verbose option will print the custom sbatch directives to stdout.
 * Subregional variable/dimension checking (done by output.stager) is unnecessary if using the modern diag manager and is now skipped
+
+## Patch notes
+* 2025-06-16 (patch 1): Default Cray Programming Environment update: PrgEnv 8.6.0, cray-hdf5/1.14.3.5, cray-netcdf/4.9.0.17. Updated mkmf templates (2025.02)
