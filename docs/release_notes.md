@@ -53,3 +53,4 @@ Bronx-23 was released in January 2025, to provide better support for FMS YAML in
 
 ## Patch notes
 * 2025-06-16 (patch 1): Default Cray Programming Environment update: PrgEnv 8.6.0, cray-hdf5/1.14.3.5, cray-netcdf/4.9.0.17. Updated mkmf templates (2025.02)
+* 2025-06-23 (patch 2): Downgrade cray-libsci for intel-classic in default C5 and C6 csh
