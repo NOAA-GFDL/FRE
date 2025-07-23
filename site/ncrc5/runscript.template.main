@@ -1083,7 +1083,9 @@ while ( $irun <= $segmentsPerJob && $currentSeg <= $segmentsPerSimulation )
       else
          set arOptions = ( $submitOptionsOutputStagerSave $submitOptionsProject )
       endif
-      set arOptions = ( $arOptions --job-name=$FRE_JOBID.output.stager.$begindate.AR )
+
+      set arJobName = $FRE_JOBID.output.stager.$begindate.AR
+      set arOptions = ( $arOptions --job-name=$arJobName )
       set arOptions = ( $arOptions --time=$outputStagerXferRuntimeAscii --mincpus=$outputStagerSaveCoreSpec )
 
       echo "set expName                   =   $name"                       > $asciiArgFile
@@ -1116,6 +1118,7 @@ while ( $irun <= $segmentsPerJob && $currentSeg <= $segmentsPerSimulation )
       echo "set xferToolModuleFilesDir    =   $xferToolModuleFilesDir"    >> $asciiArgFile
       echo "set xferToolVersion           =   $xferToolVersion"           >> $asciiArgFile
       echo "set actionXferForce           =   1"                          >> $asciiArgFile
+      echo "set alternateJobName          =   $arJobName"                 >> $asciiArgFile
 
       # Allow FRE_*TEST* variables to pass into output.stager jobs
       if ( ${freCommandsVersion} =~ "test" ) then
@@ -1315,6 +1318,9 @@ while ( $irun <= $segmentsPerJob && $currentSeg <= $segmentsPerSimulation )
       echo "set xferToolVersion           =   $xferToolVersion"           >> $restartArgFile
       echo "set mppnccombineOptString     =  '$mppnccombineOptsRestart'"  >> $restartArgFile
       echo "set ardiffTmpdir              =   $ardiffTmpdir"              >> $restartArgFile
+      if ( $#asciiFiles > 0 ) then
+         echo "set alternateJobName       =   $arJobName"                 >> $restartArgFile
+      endif
 
       # Allow FRE_*TEST* variables to pass into output.stager jobs
       if ( ${freCommandsVersion} =~ "test" ) then
@@ -1372,6 +1378,7 @@ while ( $irun <= $segmentsPerJob && $currentSeg <= $segmentsPerSimulation )
       # the ascii and restart-save processing are done by the same batch job
 
       unset restartJobName
+      unset arJobName
 
       unset paramCompressOn
       unset paramCheckSumOn
