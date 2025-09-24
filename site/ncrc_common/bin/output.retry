@@ -114,6 +114,7 @@ if ( $listStatus == 0 && $submitStatus == 0 && $outputStagerStatus == 0 ) then
                   unset actionSaveOk
                   unset actionXferOk
                   unset actionPPStartOk
+                  unset alternateJobName
 
                   if ( $echoOn ) unset echo
                   echo "<NOTE> : <<< $argFile:t >>> Beginning"
@@ -140,6 +141,9 @@ if ( $listStatus == 0 && $submitStatus == 0 && $outputStagerStatus == 0 ) then
                      if ( $stagingType == 'Staged' || $stagingType == 'Chained' ) then
                         if ( ${jobName}S != $callerJobName ) then
                            set saveJobInfo = ( `list --user=$USER --name=${jobName}S | sed 's/,,/,NA,/g' | tr ',' ' '` )
+                           if ( $?alternateJobName ) then
+                              set saveJobInfo = ( $saveJobInfo `list --user=$USER --name=$alternateJobName | sed 's/,,/,NA,/g' | tr ',' ' '` )
+                           endif
                         else
                            set saveJobInfo = ( )
                         endif
@@ -157,6 +161,9 @@ if ( $listStatus == 0 && $submitStatus == 0 && $outputStagerStatus == 0 ) then
                               if ( $actionCombineDone && $actionCheckDone && $actionSaveDone ) then
                                  if ( ${jobName}T != $callerJobName ) then
                                     set xferJobInfo = ( `list --user=$USER --name=${jobName}T | sed 's/,,/,NA,/g' | tr ',' ' '` )
+                                    if ( $?alternateJobName ) then
+                                       set xferJobInfo = ( $xferJobInfo `list --user=$USER --name=${alternateJobName} | sed 's/,,/,NA,/g' | tr ',' ' '` )
+                                    endif
                                  else
                                     set xferJobInfo = ( )
                                  endif
