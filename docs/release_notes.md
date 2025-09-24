@@ -54,7 +54,7 @@ Bronx-23 was released in January 2025, to provide better support for FMS YAML in
 ## Patch notes
 * 2025-06-16 (patch 1): Default Cray Programming Environment update: PrgEnv 8.6.0, cray-hdf5/1.14.3.5, cray-netcdf/4.9.0.17. Updated mkmf templates (2025.02)
 * 2025-06-23 (patch 2): Downgrade cray-libsci for intel-classic in default C5 and C6 csh
-* 2025-09-17 (patch 3)
+* 2025-09-24 (patch 3)
   * Downgrade cray-hdf5 to support debug compilation and support varying cray-hdf5 versions (between headers/library and non-default cray-hdf5).
     * Updated mkmf templates, 2025.03. HDF5 and Netcdf library directories set in rpath (to ensure the correct libraries are found at runtime).
     * run script template updates: prepend `$CRAY_LD_LIBRARY_PATH` to `$LD_LIBRARY_PATH` (to allow older executables to use a non-default cray-hdf5) and set `$HDF5_DISABLE_VERSION_CHECK` (allow header/library mismatches)
