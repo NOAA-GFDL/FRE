@@ -253,8 +253,12 @@
         echo "NOTE: A plausible postprocessing YAML was located and will attempt to start postprocessing"
         set echo
         which fre
-        fre --version
-        fre pp all --config-file $results[1] --experiment $expName --platform $platform --target $target --time $firstDateYear
+        if ( $?FRE_WORKFLOWS_VERSION ) then
+            set fre_branch_opt = "--branch $FRE_WORKFLOWS_VERSION"
+        else
+            set fre_branch_opt = "--branch `fre --version`"
+        endif
+        fre pp all --config-file $results[1] --experiment $expName --platform $platform --target $target --time $firstDateYear $fre_branch_opt
         exit $status
     else
         echo "NOTE: Could not locate a postprocessing YAML '$yamlFileBasename' in '$xmlFile:h'"
